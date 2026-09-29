@@ -27,27 +27,28 @@
 * *Ưu điểm:* Tiêu chuẩn doanh nghiệp quy mô lớn.
 * *Nhược điểm:* Chi phí đám mây đắt đỏ vượt quá ngân sách sinh viên; tốn hàng tuần lễ cấu hình hạ tầng mạng thay vì tập trung vào nghiệp vụ cốt lõi; rủi ro sự cố hạ tầng ngày bảo vệ.
 
-### Phương án C: Chiến lược Hybrid: Docker Compose Local + Cloud PaaS UAT (Được chọn)
-* **Môi trường Cục bộ:** Sử dụng Docker Compose đóng gói toàn bộ 6 dịch vụ (`web`, `api`, `worker`, `beat`, `db`, `redis`) trong một lệnh duy nhất (`docker compose up --build`), phục vụ phát triển hàng ngày và demo trực tiếp trước Hội đồng.
-* **Môi trường Cloud UAT:** Tận dụng hạ tầng PaaS hiện đại có gói miễn phí / sinh viên:
+### Phương án C: Chiến lược Hybrid: Docker Compose Local + Cloud PaaS Production-Ready (Được chọn)
+* **Môi trường Cục bộ:** Sử dụng Docker Compose đóng gói toàn bộ 6 dịch vụ (`web`, `api`, `worker`, `beat`, `db`, `redis`) trong một lệnh duy nhất (`docker compose up --build`), bảo vệ mật khẩu qua file `.env`, phục vụ phát triển hàng ngày và demo trực tiếp trước Hội đồng.
+* **Môi trường Cloud UAT (Thực chiến 7–14 ngày):**
+  * **Tên miền Gốc Hợp nhất:** Cấu hình tên miền `.focusflow.vn` để giải quyết triệt để rào cản Cross-Site Cookie: Frontend đặt tại `app.focusflow.vn` và Backend đặt tại `api.focusflow.vn`.
   * **Frontend:** Triển khai trên **Vercel** (Global Edge CDN, auto CI/CD từ GitHub).
-  * **Backend & Workers:** Triển khai trên **Render.com / Railway.app** (Web Service chạy FastAPI, Background Worker chạy Celery).
-  * **Database & Cache:** Sử dụng Managed PostgreSQL và Managed Upstash Redis có sẵn.
+  * **Backend & Workers:** Triển khai trên **Render Paid Web Service** (để loại bỏ hiện tượng ngủ sau 15 phút, không bị cold start 60s làm méo mó KPI UAT) kết hợp **Render Background Worker** (đảm bảo Celery worker và Celery beat chạy liên tục 24/7).
+  * **Database & Cache:** Sử dụng Managed PostgreSQL bền vững (không bị xóa sau 30 ngày) và Managed Upstash Redis.
 
 ---
 
 ## 3. Quyết định (Decision)
-**Chấp thuận Phương án C: Áp dụng Chiến lược Triển khai Hybrid (Docker Compose cho Hội đồng & Cloud PaaS cho UAT).**
+**Chấp thuận Phương án C: Áp dụng Chiến lược Triển khai Hybrid (Docker Compose cho Hội đồng & Cloud Production-Ready trên Tên miền Hợp nhất .focusflow.vn cho UAT).**
 
 ---
 
 ## 4. Lý do & Đánh đổi (Rationale & Trade-Offs)
 * **Bảo đảm An toàn Tuyệt đối Ngày Bảo vệ:** Không có bất kỳ rủi ro nào về mạng chập chờn hay server cloud bảo trì vào đúng giờ bảo vệ khóa luận; sinh viên hoàn toàn làm chủ hệ thống trên máy cá nhân với Docker Compose.
-* **Chi phí Tối ưu:** Khai thác tối đa các gói sinh viên / Free tier của Vercel và Render, hoàn toàn không phát sinh chi phí duy trì đắt đỏ.
+* **Khắc phục Giới hạn Gói Miễn phí:** Việc đầu tư tên miền và gói tài nguyên Render có trả phí cho giai đoạn UAT (7–14 ngày) đảm bảo hệ thống không bị cold start, duy trì Uptime $\ge 95\%$ (`NFR-AVAIL-001`), và cho phép HttpOnly Cookie hoạt động trơn tru giữa Frontend và API.
 * **Thỏa mãn 100% Rubric:** Vừa có quy chuẩn đóng gói Docker chuyên nghiệp (TC2.1), vừa có sản phẩm thực chiến trên Internet thu thập số liệu UAT thực chứng (TC2.7).
 
 ---
 
 ## 5. Hệ quả (Consequences)
-* **Tích cực:** Môi trường phát triển và môi trường nghiệm thu tách bạch, đồng nhất và đáng tin cậy.
+* **Tích cực:** Môi trường phát triển và môi trường nghiệm thu tách bạch, đồng nhất và đáng tin cậy. Bảo vệ trọn vẹn điểm số trải nghiệm người dùng (SUS $\ge 80$).
 * **Tài liệu hóa:** Nhóm bổ sung tệp `docker-compose.yml` hoàn chỉnh trong mã nguồn và tài liệu hướng dẫn triển khai `DEPLOYMENT.md` từng bước.

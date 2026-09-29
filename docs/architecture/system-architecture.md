@@ -116,7 +116,7 @@ flowchart TD
         FocusFlow["FocusFlow Platform<br>[Software System]<br>Lập kế hoạch & thực thi lộ trình tự học thích ứng tích hợp AI"]
     end
     
-    LLM["External LLM Provider<br>[External System]<br>Google Gemini 1.5 Flash / Pro API<br>(Dự phòng: OpenAI GPT-4o-mini)"]
+    LLM["External LLM Provider<br>[External System]<br>Google Gemini API<br>(Cấu hình qua GEMINI_MODEL, dự phòng OpenAI)"]
     ExtCal["External Calendar Applications<br>[External System]<br>Google Calendar, Apple Calendar, Outlook<br>(Định dạng iCalendar RFC 5545)"]
 
     User -->|1. Thiết lập mục tiêu, duyệt lịch, học tập Workspace| FocusFlow
@@ -136,7 +136,7 @@ Hệ thống FocusFlow gồm 6 vùng chứa (Containers) logic, giao tiếp thô
 flowchart TB
     UserBrowser["Web Browser (Client Device)<br>[Desktop / Mobile]"]
     ExtCalApp["Calendar Apps (External)<br>[Google / Apple Calendar]"]
-    LLMService["Google Gemini API<br>[External SaaS]"]
+    LLMService["Google Gemini API<br>[External SaaS - GEMINI_MODEL]"]
 
     subgraph ContainerSystem["FocusFlow Container Environment"]
         WebFrontend["Web Frontend Container<br>[Next.js 15, React 19, TypeScript]<br>App Router, Tailwind CSS, Shadcn UI, Zustand"]
@@ -147,7 +147,7 @@ flowchart TB
         PostgresDB["Primary Relational Database<br>[PostgreSQL 16 Alpine]<br>Lưu trữ bền vững 14 thực thể miền (Domain Data)"]
     end
 
-    UserBrowser -->|HTTPS / WSS / SSE<br>JSON API| WebFrontend
+    UserBrowser -->|HTTPS / SSE<br>JSON API| WebFrontend
     WebFrontend -->|REST API Calls & SSE Proxy<br>JSON / HTTP/2| BackendAPI
     ExtCalApp -->|HTTP GET /api/v1/calendar/feed/{token}.ics<br>RFC 5545 iCalendar| BackendAPI
     
@@ -336,47 +336,70 @@ Bảng ánh xạ các Cổng (Ports) và Bộ điều hợp (Adapters) chi tiế
 
 ## 6. Luồng Dữ liệu & Động lực Học Hệ thống (Data Flow & Dynamic Behavior)
 
-### 6.1. Luồng Phân rã Mục tiêu AI qua SSE (FR-PLAN-001..003)
-Khắc phục triệt để nguy cơ timeout kết nối bằng giao thức Server-Sent Events (SSE) 3 giai đoạn:
+### 6.1. Luồng Phân rã Mục tiêu AI qua Quy trình 2 Bước & SSE Idempotent (FR-PLAN-001..003)
+Khắc phục triệt để nguy cơ trừ quota 2 lần khi reconnect và đảm bảo tính bất biến (Idempotency) bằng quy trình 2 bước chuẩn RESTful kết hợp **Đường ống LLM 3 Chặng Tuần tự (3-Stage LLM Pipeline)** với cổng thẩm định Pydantic Schema ở mỗi chặng:
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Learner as Learner (Browser)
-    participant UI as Next.js Web Client
+    participant UI as Next.js Web Client (app.focusflow.vn)
     participant Router as RoadmapRouter (FastAPI)
-    participant Middleware as QuotaGuardMiddleware
+    participant QuotaService as QuotaService (Postgres + Redis)
     participant UC as GenerateProposalUseCase
     participant Sanitizer as PromptSanitizer
-    participant LLM as Google Gemini 1.5 API
-    participant Redis as Redis Quota Store
+    participant LLM as Google Gemini API (GEMINI_MODEL)
+    participant DB as PostgreSQL 16
 
+    Note over Learner,UI: BƯỚC 1: KHỞI TẠO JOB & TẠM GIỮ QUOTA (POST)
     Learner->>UI: Nhập mục tiêu & Quỹ giờ rảnh -> Bấm [Khởi tạo]
-    UI->>Router: HTTP POST /api/v1/roadmaps/generate-stream (SSE Request)
-    Router->>Middleware: Kiểm tra phiên đăng nhập & Quota khả dụng
-    Middleware->>Redis: Atomic Check & Reserve Token (Lua Script)
-    alt Quota hết (Quota Exceeded)
-        Redis-->>Middleware: Quota = 0
-        Middleware-->>UI: 403 Forbidden (Quota Exceeded -> Gợi ý Mock Sandbox)
-    else Quota hợp lệ
-        Redis-->>Middleware: OK (Reserved)
-        Middleware->>UC: Kích hoạt Use Case với Sanitized Input
-        UC->>Sanitizer: Lọc bỏ PII (Tên thật, email, password)
-        Sanitizer-->>UC: Clean Prompt Content
-        
-        Note over UC,UI: Giai đoạn 1: Stream SSE Step 1 (Clarify Goal)
-        UC-->>UI: event: step_update {"step": "CLARIFYING", "progress": 25%}
-        
-        UC->>LLM: Call Gemini 1.5 (Timeout 55s, Pydantic Schema Milestones)
-        LLM-->>UC: Valid Milestones JSON
-        Note over UC,UI: Giai đoạn 2: Stream SSE Step 2 (Milestones Generated)
-        UC-->>UI: event: milestones_ready {"milestones": [...], "progress": 60%}
-        
-        UC->>LLM: Call Gemini 1.5 (Sinh Tasks chi tiết cho Milestones)
-        LLM-->>UC: Valid Tasks Proposal JSON
-        Note over UC,UI: Giai đoạn 3: Stream SSE Step 3 (Hoàn thành Proposal)
+    UI->>Router: HTTP POST /api/v1/roadmaps/proposals (gửi kèm Idempotency-Key)
+    Router->>QuotaService: reserve_quota(user_id)
+    alt Hết hạn ngạch (used_calls >= monthly_limit)
+        QuotaService-->>Router: QuotaExceededError
+        Router-->>UI: 403 Forbidden (Hết quota -> Gợi ý Mock Sandbox)
+    else Quota hợp lệ (Tạm giữ thành công)
+        QuotaService-->>Router: Reservation Lock OK (pending_reservations + 1)
+        Router->>DB: INSERT INTO schedule_proposals (status='PROCESSING')
+        DB-->>Router: proposal_id = "prop_123"
+        Router-->>UI: 201 Created {"proposal_id": "prop_123", "stream_url": "/api/v1/roadmaps/proposals/prop_123/stream"}
+    end
+
+    Note over Learner,UI: BƯỚC 2: STREAM TIẾN TRÌNH THỜI GIAN THỰC (GET SSE NATIVE)
+    UI->>Router: HTTP GET /api/v1/roadmaps/proposals/prop_123/stream (EventSource withCredentials)
+    Note over UI,Router: Trình duyệt tự động gửi kèm HttpOnly Cookie (Domain=.focusflow.vn).<br>Nếu rớt mạng, EventSource tự reconnect theo Last-Event-ID mà KHÔNG tạo job mới!
+    
+    Router->>UC: ExecutePipeline(proposal_id, sanitized_input)
+    UC->>Sanitizer: Loại bỏ PII (Email, tên thật, mật khẩu)
+    Sanitizer-->>UC: Clean Prompt Content
+    
+    Note over UC,UI: Chặng 1: Làm rõ mục tiêu & Thẩm định Pydantic
+    UC->>LLM: Prompt 1: Clarify Goal Context
+    LLM-->>UC: Text Response
+    UC->>UC: Pydantic Validate (GoalClarificationSchema)
+    UC-->>UI: event: step_progress {"stage": "CLARIFYING", "progress": 25%}
+    
+    Note over UC,UI: Chặng 2: Sinh mốc kiến thức & Thẩm định Pydantic
+    UC->>LLM: Prompt 2: Generate Milestones
+    LLM-->>UC: JSON Response
+    UC->>UC: Pydantic Validate (MilestoneListSchema)
+    UC-->>UI: event: milestones_ready {"milestones": [...], "progress": 60%}
+    
+    Note over UC,UI: Chặng 3: Sinh nhiệm vụ chi tiết & Thẩm định Pydantic
+    UC->>LLM: Prompt 3: Generate Detailed Tasks
+    LLM-->>UC: JSON Response
+    UC->>UC: Pydantic Validate (ProposalPlanSchema)
+    
+    alt Thành công trọn vẹn (Success)
+        UC->>DB: UPDATE schedule_proposals SET proposal_data=..., status='DRAFT'
+        UC->>QuotaService: commit_quota(user_id) (Cập nhật used_calls + 1 vào DB)
         UC-->>UI: event: proposal_complete {"proposal_id": "prop_123", "data": {...}}
-        UI->>Learner: Hiển thị giao diện Preview Proposal (Chưa ghi đè DB!)
+        UI->>Learner: Hiển thị Preview Proposal (Chờ User bấm Apply!)
+    else Thất bại do Timeout 55s / Mã lỗi 429/503 / Lỗi Schema sau 2 lần retry
+        UC->>QuotaService: refund_quota(user_id) (Giải phóng lock, KHÔNG trừ used_calls)
+        UC->>DB: UPDATE schedule_proposals SET status='DISCARDED'
+        UC-->>UI: event: error {"code": "AI_TIMEOUT_FALLBACK", "message": "Chuyển sang chế độ tạo thủ công"}
+        UI->>Learner: Cảnh báo & Hiển thị Form Lập kế hoạch Thủ công (Fallback)
     end
 ```
 
@@ -452,8 +475,8 @@ sequenceDiagram
     UI->>Learner: Hiển thị trạng thái PAUSED; toàn bộ task tương lai đã được tự động dời lịch an toàn!
 ```
 
-### 6.4. Luồng Đồng bộ Phiên học Heartbeat & Quét Timeout (BUSR-09, OS-07)
-Bảo toàn từng phút thực học của người dùng khi mất mạng hoặc tắt trình duyệt đột ngột:
+### 6.4. Luồng Đồng bộ Phiên học Heartbeat & Quét Timeout Bền vững (BUSR-09, OS-07)
+Bảo toàn từng phút thực học của người dùng khi mất mạng hoặc tắt trình duyệt đột ngột bằng cách ghi trực tiếp vào PostgreSQL (ACID), không phụ thuộc vào TTL dễ mất mát của Redis:
 
 ```mermaid
 sequenceDiagram
@@ -461,35 +484,31 @@ sequenceDiagram
     actor Learner as Learner
     participant UI as Study Workspace (Next.js)
     participant API as SessionRouter (FastAPI)
-    participant Redis as Redis Cache (Heartbeat Store)
+    participant DB as PostgreSQL 16
     participant Beat as Celery Beat Scheduler
     participant Worker as Celery Worker
-    participant DB as PostgreSQL 16
 
     Note over UI: Learner đang trong phiên học Pomodoro
-    loop Mỗi 60 giây (OS-07 Heartbeat)
+    loop Mỗi 60 giây (OS-07 Heartbeat Ping)
         UI->>API: HTTP POST /api/v1/sessions/{id}/heartbeat {"actual_minutes": X}
-        API->>Redis: SET session:heartbeat:{id} = X (TTL = 360 giây / 6 phút)
-        API-->>UI: 200 OK (Heartbeat Ack)
+        API->>DB: UPDATE study_sessions SET actual_minutes = X, last_heartbeat_at = NOW() WHERE id = :id
+        Note over API,DB: Tải cực nhẹ (~0.33 writes/s cho 20 concurrent users).<br>Lưu trữ bền vững thời điểm ping thành công gần nhất, không sợ Redis restart!
+        API-->>UI: 200 OK {"ack": true, "synced_minutes": X}
     end
 
     alt Trường hợp 1: Learner bấm [Kết thúc Phiên học] bình thường
         UI->>API: HTTP POST /api/v1/sessions/{id}/finish
-        API->>DB: Cập nhật status = COMPLETED, lưu thời gian thực học, tick tasks
-        API->>Redis: Xóa session:heartbeat:{id}
-        API-->>UI: 200 OK (Hiển thị form đúc kết Key Takeaways)
+        API->>DB: Cập nhật status = 'COMPLETED', ended_at = NOW(), lưu phút thực học, tick tasks
+        API-->>UI: 200 OK (Chuyển sang form đúc kết Key Takeaways)
     else Trường hợp 2: Sự cố Crash trình duyệt / Rớt mạng kéo dài > 5 phút
-        Note over UI: Client bị ngắt kết nối hoàn toàn, không gửi heartbeat
-        Beat->>Worker: Kích hoạt job định kỳ mỗi 5 phút: CheckAbandonedSessionsTask
-        Worker->>DB: Tìm các session có status = IN_PROGRESS
-        loop Duyệt từng Active Session
-            Worker->>Redis: GET session:heartbeat:{id}
-            alt Key không tồn tại trong Redis (Đã quá 5 phút không có Heartbeat)
-                Worker->>DB: Lấy actual_minutes từ bản ghi DB gần nhất
-                Note over Worker: Áp dụng Quy tắc OS-01:<br>Nếu có >= 1 task COMPLETED HOẶC thực học >= 50% thời lượng -> PARTIAL_COMPLETED.<br>Ngược lại -> CANCELLED.
-                Worker->>DB: UPDATE study_sessions SET status = 'PARTIAL_COMPLETED' (hoặc 'CANCELLED')
-                Worker->>DB: Trả các task chưa hoàn thành về Backlog
-            end
+        Note over UI: Client bị ngắt kết nối hoàn toàn, không thể gửi heartbeat
+        Beat->>Worker: Kích hoạt cronjob định kỳ mỗi 5 phút: CheckAbandonedSessionsTask
+        Worker->>DB: SELECT id, planned_minutes, actual_minutes, last_heartbeat_at FROM study_sessions<br>WHERE status = 'IN_PROGRESS' AND last_heartbeat_at < NOW() - INTERVAL '5 minutes'
+        
+        loop Duyệt từng phiên quá hạn
+            Note over Worker: Áp dụng Quy tắc OS-01:<br>1. Nếu actual_minutes >= planned_minutes * 0.5 HOẶC có >= 1 task COMPLETED<br>   -> Chốt status = 'PARTIAL_COMPLETED'.<br>2. Ngược lại -> Chốt status = 'CANCELLED'.<br>3. Thời điểm kết thúc ended_at chốt đúng bằng last_heartbeat_at ghi nhận trong DB!
+            Worker->>DB: UPDATE study_sessions SET status = ..., ended_at = last_heartbeat_at WHERE id = :id
+            Worker->>DB: UPDATE tasks SET status = 'PENDING' (Trả các task dở dang về Backlog)
         end
     end
 ```
@@ -529,24 +548,30 @@ Hệ thống thiết lập 3 ranh giới tin cậy (Trust Boundaries) rõ rệt:
 +─────────────────────────────────────────────────────────────────────────────────+
 ```
 
-### 7.1. Xác thực & Quản trị Phiên (Auth & JWT Lifecycle)
+### 7.1. Xác thực & Quản trị Phiên (Auth & Cross-Subdomain JWT Lifecycle)
 * **Băm mật khẩu an toàn (`NFR-SEC-002`):** 100% mật khẩu người dùng được băm bằng thuật toán **Argon2id** (thuật toán đoạt giải Password Hashing Competition - PHC), kháng cự hoàn toàn các cuộc tấn công vét cạn bằng GPU/ASIC.
-* **Cơ chế Token Kép (Dual-Token Pattern):**
-  * **Access Token:** Định dạng JWT (JSON Web Token), thời hạn sống ngắn (**15 phút**), chứa `user_id` và quyền hạn (claims). Được lưu trữ an toàn trong **HttpOnly, Secure, SameSite=Lax Cookie**; JavaScript phía client không thể đọc được (phòng chống 100% tấn công XSS đánh cắp token).
-  * **Refresh Token:** Chuỗi ngẫu nhiên 64 ký tự mật mã, thời hạn **7 ngày**, lưu trong bảng `refresh_tokens` trong CSDL kèm cơ chế tự xoay vòng (Refresh Token Rotation - RTR). Khi phát hiện refresh token cũ bị tái sử dụng, hệ thống lập tức thu hồi toàn bộ phiên đăng nhập của người dùng (ngăn chặn Token Theft).
+* **Cơ chế Token Kép qua Tên miền Gốc Chung (Common Root Domain Cookie Pattern):**
+  * Nhằm giải quyết triệt để rào cản Cross-Site Cookie giữa Vercel và Render, hệ thống thiết lập tên miền gốc chung: Frontend đặt tại `app.focusflow.vn` và Backend API đặt tại `api.focusflow.vn`.
+  * **Access Token:** Định dạng JWT, thời hạn ngắn (**15 phút**), lưu trong Cookie được cấu hình:
+    `Set-Cookie: access_token=...; Domain=.focusflow.vn; Path=/; HttpOnly; Secure; SameSite=Lax`
+    Nhờ chia sẻ chung Root Domain `.focusflow.vn`, cả hai subdomain đều được trình duyệt công nhận là cùng Site (Same-Site). Trình duyệt tự động đính kèm cookie này trong mọi REST API và native SSE `EventSource` (`withCredentials: true`) mà JavaScript phía client không cần (và không thể) can thiệp trực tiếp, loại trừ 100% rủi ro tấn công XSS đánh cắp token.
+  * **Refresh Token:** Chuỗi ngẫu nhiên 64 ký tự mật mã, thời hạn **7 ngày**, lưu trong bảng `refresh_tokens` trong CSDL kèm cơ chế tự xoay vòng (Refresh Token Rotation - RTR).
 
 ### 7.2. Bảo mật Luồng Lịch Ngoại vi 1 Chiều WebCal (RFC 5545)
 * **Quy tắc Nghiệp vụ `BUSR-08`:** Chỉ hỗ trợ đồng bộ 1 chiều từ FocusFlow sang ứng dụng lịch cá nhân (Google/Apple Calendar); tuyệt đối không yêu cầu quyền ghi hay quyền truy cập vào tài khoản Google của người dùng.
-* **Mã Bảo mật WebCal Token (`OS-05`):** Sinh ngẫu nhiên bằng bộ tạo số giả ngẫu nhiên mật mã an toàn (**CSPRN 32-byte hex**, độ dài 64 ký tự hex).
-* **Vệ sinh Nhật ký Máy chủ (Log Hygiene - `NFR-SEC-004`):** URL WebCal có dạng `/api/v1/calendar/feed/{user_secure_token}.ics`. Middleware Backend tự động che giấu chuỗi token khỏi Access Log máy chủ (`GET /api/v1/calendar/feed/[REDACTED].ics`) để ngăn chặn việc rò rỉ token qua hệ thống giám sát log tập trung.
-* **Cơ chế Thu hồi Tức thì (Instant Revocation):** Khi người dùng bấm nút [Reset Token], token cũ bị đánh dấu `revoked` ngay trong DB; mọi request kế tiếp từ Google/Apple Calendar dùng token cũ sẽ nhận mã lỗi `401 Unauthorized` ngay lập tức.
+* **Mã Bảo mật WebCal Token (`OS-05`):** Sinh ngẫu nhiên bằng bộ tạo số giả ngẫu nhiên mật mã an toàn của Python: `secrets.token_hex(32)` (chuỗi hex 64 ký tự).
+* **Mô hình Lưu trữ Băm An toàn (Hashed Token Storage):** Cơ sở dữ liệu **tuyệt đối không lưu token thô**. Bảng `webcal_tokens` chỉ lưu bản băm **SHA-256** của token (`token_hash = hashlib.sha256(raw_token.encode()).hexdigest()`). Khi Google/Apple Calendar gửi request tới `/api/v1/calendar/feed/{raw_token}.ics`, Backend băm chuỗi `raw_token` nhận được và so khớp với `token_hash` trong DB. Kể cả khi CSDL bị rò rỉ, kẻ tấn công cũng không thể giả mạo URL lịch ngoại vi của người dùng.
+* **Vệ sinh Nhật ký Máy chủ (Log Hygiene - `NFR-SEC-004`):** Middleware Backend tự động che giấu chuỗi token khỏi Access Log máy chủ (`GET /api/v1/calendar/feed/[REDACTED].ics`).
+* **Cơ chế Thu hồi Tức thì (Instant Revocation):** Khi người dùng bấm nút [Reset Token], token cũ bị đánh dấu `is_active = FALSE` ngay trong DB; mọi request kế tiếp dùng token cũ sẽ nhận mã lỗi `401 Unauthorized` tức thì.
 
-### 7.3. Kiểm soát Hạn ngạch & Phòng chống Cạn kiệt AI (Quota Middleware)
-* **Quy tắc Nghiệp vụ `BUSR-10` & `OS-02`:**
-  * Gói **Free:** Tối đa 3 Roadmap hoạt động, 30 lượt gọi AI/tháng.
-  * Gói **Premium:** Tối đa 15 Roadmap hoạt động, 300 lượt gọi AI/tháng.
-* **Nguyên tử hóa Thao tác Kiểm tra Hạn ngạch (Atomic Check-and-Deduct):** Sử dụng **Redis Lua Script** để kiểm tra và trừ số lượt gọi AI trong 1 chu kỳ vi lệnh duy nhất. Triệt tiêu hoàn toàn nguy cơ tấn công Race Condition (gọi đồng thời nhiều request để vượt hạn ngạch).
-* **Chính sách Miễn trừ Hạn ngạch (Zero-Penalty Retry):** Nếu lệnh gọi LLM bị lỗi định dạng Schema hoặc timeout mạng và hệ thống kích hoạt cơ chế retry tự động (tối đa 2 lần theo `OS-08`), hệ thống **tuyệt đối không trừ thêm quota** của người dùng.
+### 7.3. Quản trị Hạn ngạch AI Hai Pha (Two-Phase Quota Lifecycle & Monthly Counter)
+* **Bản chất Nghiệp vụ Quota (`BUSR-10` & `OS-02`):** Quota trong FocusFlow là **Bộ đếm Định mức Hàng tháng (Monthly Allowance Counter)** được đặt lại vào ngày 01 mỗi tháng (Gói Free: 30 lượt/tháng, Gói Premium: 300 lượt/tháng), phân định hoàn toàn với bộ điều tiết tần suất tức thời (Rate Limiter phòng chống DDOS/Spam theo phút).
+* **Nguồn Chân lý Duy nhất (Single Source of Truth):** Bảng `ai_quotas` trong **PostgreSQL** là nguồn dữ liệu chuẩn ACID. Redis chỉ đóng vai trò bộ đệm đọc nhanh (Read-through Cache) và khóa tạm giữ hạn ngạch.
+* **Quy trình Quản trị Hạn ngạch Hai Pha (Two-Phase Lifecycle):**
+  1. **Pha 1 — Tạm giữ (Reserve Quota):** Khi nhận lệnh `POST /proposals`, hệ thống kiểm tra `used_calls + pending_reservations < monthly_limit`. Nếu thỏa mãn, tăng `pending_reservations` lên 1.
+  2. **Pha 2 — Xác nhận (Commit) hoặc Hoàn trả (Refund):**
+     * **Commit Quota (Thành công):** Khi toàn bộ 3 chặng LLM hoàn tất thành công và Proposal được sinh ra, hệ thống ghi nhận `used_calls = used_calls + 1` bền vững vào PostgreSQL và giảm `pending_reservations`.
+     * **Refund Quota (Thất bại / Miễn trừ):** Nếu xảy ra lỗi Hard Timeout 55s, lỗi quá tải LLM 429/503, hoặc lỗi sai lệch Schema sau 2 lần retry tự động (`OS-08`), hệ thống lập tức giải phóng `pending_reservations` mà **tuyệt đối không tăng `used_calls`**, bảo đảm đúng cam kết 100% trong SRS v1.0.
 * **Mock Upgrade Sandbox (`FR-QUOTA-002`):** Cung cấp môi trường giả lập nâng cấp tài khoản cho người dùng trải nghiệm mà không tích hợp cổng thanh toán tiền thật, bảo vệ tính khả thi và phạm vi của đồ án tốt nghiệp.
 
 ### 7.4. Vệ sinh Dữ liệu & Bảo mật Bí mật (Data Hygiene & Zero Secret Leak)
@@ -557,28 +582,32 @@ Hệ thống thiết lập 3 ranh giới tin cậy (Trust Boundaries) rõ rệt:
 
 ## 8. Kiến trúc Triển khai & Vận hành (Deployment & Operational Architecture)
 
-### 8.1. Mô hình Hybrid: Docker Compose Local & Cloud PaaS UAT
+### 8.1. Mô hình Hybrid: Docker Compose Local & Cloud Production-Ready UAT
 Nhằm thỏa mãn hoàn hảo cả hai mục tiêu: (1) Trình diễn bảo vệ đồ án trơn tru không phụ thuộc Internet trước Hội đồng chấm thi, và (2) Triển khai thực tế trên mạng Internet để người dùng thật tham gia đánh giá nghiệm thu UAT (`KPI 4, KPI 5`):
 
 ```
 +─────────────────────────────────────────────────────────────────────────────+
 |                             CHIẾN LƯỢC TRIỂN KHAI HYBRID                    |
 +──────────────────────────────────────┬──────────────────────────────────────+
-|  MÔI TRƯỜNG CỤC BỘ / BẢO VỆ ĐỒ ÁN   |  MÔI TRƯỜNG CLOUD PAAS (UAT THỰC TẾ) |
+|  MÔI TRƯỜNG CỤC BỘ / BẢO VỆ ĐỒ ÁN   |  MÔI TRƯỜNG CLOUD UAT (PRODUCTION)   |
 |  (Local Defense Environment)         |  (Public Testing Environment)        |
 +──────────────────────────────────────┼──────────────────────────────────────+
-| • 100% Container hóa bằng            | • Frontend: Vercel Edge Network      |
-|   Docker Compose Multi-Container.    |   (Tự động CI/CD từ nhánh main).     |
-| • Chạy trên máy laptop sinh viên     | • Backend API & Celery: Render.com / |
-|   hoặc máy trạm Hội đồng với lệnh:   |   Railway.app Web Service.           |
-|   `docker compose up --build`.       | • Database: Managed PostgreSQL.      |
-| • Độc lập, không sợ rớt mạng phòng   | • Redis: Managed Upstash Redis.      |
-|   bảo vệ, demo mượt mà 100%.         | • Người dùng thật truy cập qua URL.  |
+| • 100% Container hóa bằng            | • Tên miền hợp nhất: .focusflow.vn   |
+|   Docker Compose Multi-Container.    | • Frontend: Vercel (app.focusflow.vn)|
+| • Chạy trên máy laptop sinh viên     | • Backend Web: Render Paid Service   |
+|   hoặc máy trạm Hội đồng với lệnh:   |   (api.focusflow.vn - không ngủ)     |
+|   `docker compose up --build`.       | • Worker & Beat: Render Background   |
+| • Độc lập, không sợ rớt mạng phòng   |   Worker (chạy liên tục 24/7)        |
+|   bảo vệ, demo mượt mà 100%.         | • Database: Managed PostgreSQL (bền) |
 +──────────────────────────────────────┴──────────────────────────────────────+
 ```
 
+> [!IMPORTANT]
+> **Khắc phục Giới hạn Render Free Tier:**  
+> Gói Render Free có đặc tính tự ngủ (sleep) sau 15 phút không có request (gây cold start mất 50–60s làm hỏng chỉ số UAT), CSDL tự hết hạn sau 30 ngày, và không hỗ trợ Celery Background Worker chạy nền liên tục. Do đó, đối với đợt thử nghiệm UAT 7–14 ngày, nhóm sử dụng cấu hình Render Individual/Paid Web Service kết hợp Background Worker hoặc triển khai Docker Compose hoàn chỉnh trên một máy chủ Cloud VPS duy nhất (chi phí ~$5/tháng) trỏ tên miền `.focusflow.vn` để đảm bảo hệ thống vận hành liên tục 24/7, đạt cam kết Uptime $\ge 95\%$ (`NFR-AVAIL-001`).
+
 ### 8.2. Sơ đồ Cấu hình Docker Compose đa vùng chứa
-Tệp `docker-compose.yml` phân tách thành các mạng nội bộ biệt lập:
+Tệp `docker-compose.yml` phân tách thành các mạng nội bộ biệt lập, bảo vệ mật khẩu qua biến môi trường:
 
 ```yaml
 version: '3.8'
@@ -610,6 +639,10 @@ services:
       - "8000:8000"
     env_file:
       - ./backend/.env
+    environment:
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-1.5-flash}
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
     depends_on:
       db:
         condition: service_healthy
@@ -655,15 +688,16 @@ services:
     container_name: focusflow_db
     restart: always
     environment:
-      POSTGRES_DB: focusflow_db
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: secure_dev_password
+      POSTGRES_DB: ${POSTGRES_DB:-focusflow_db}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    # Trong môi trường production/UAT, bỏ công bố ports ra host để bảo mật tuyệt đối
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -674,13 +708,14 @@ services:
     image: redis:7-alpine
     container_name: focusflow_redis
     restart: always
-    command: redis-server --requirepass secure_redis_password
-    ports:
-      - "6379:6379"
+    command: redis-server --requirepass ${REDIS_PASSWORD}
     volumes:
       - redis_data:/data
+    # Chỉ mở nội bộ trong bridge network
+    ports:
+      - "127.0.0.1:6379:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "secure_redis_password", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -692,8 +727,6 @@ networks:
     driver: bridge
 
 volumes:
-  postgres_data:
-  redis_data:
 ```
 
 ### 8.3. Chiến lược Giám sát & Nhật ký (Monitoring, Health Check, Flower)

@@ -90,6 +90,7 @@ erDiagram
         varchar_255 email UK
         varchar_255 password_hash
         varchar_100 full_name
+        varchar_50 timezone
         varchar_20 tier
         timestamptz created_at
         timestamptz updated_at
@@ -256,6 +257,7 @@ Table users {
   email varchar(255) [unique, not null]
   password_hash varchar(255) [not null]
   full_name varchar(100) [not null]
+  timezone varchar(50) [not null, default: 'Asia/Ho_Chi_Minh', note: 'IANA timezone']
   tier varchar(20) [not null, default: 'FREE', note: 'FREE, PREMIUM']
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz [not null, default: `now()`]
@@ -264,7 +266,7 @@ Table users {
 Table webcal_tokens {
   id uuid [pk, default: `uuid_generate_v4()`]
   user_id uuid [unique, not null, ref: - users.id]
-  token_hash varchar(64) [unique, not null, note: '32-byte hex CSPRN']
+  token_hash varchar(64) [unique, not null, note: 'SHA-256 digest of 32-byte hex CSPRN']
   is_active boolean [not null, default: true]
   last_used_at timestamptz
   created_at timestamptz [not null, default: `now()`]
@@ -430,6 +432,7 @@ Table ai_reviews {
 | `email` | `VARCHAR(255)` | No | `UNIQUE` | Địa chỉ email đăng nhập chuẩn hóa viết thường. |
 | `password_hash` | `VARCHAR(255)` | No | | Chuỗi băm mật khẩu bằng thuật toán **Argon2id**. |
 | `full_name` | `VARCHAR(100)` | No | | Họ và tên hiển thị của người học. |
+| `timezone` | `VARCHAR(50)` | No | `'Asia/Ho_Chi_Minh'` | Múi giờ IANA chuẩn của người dùng (ví dụ: `Asia/Ho_Chi_Minh`). Toàn bộ mốc thời gian lưu trữ trong DB theo UTC (`TIMESTAMPTZ`) và được chuyển đổi theo múi giờ này khi hiển thị hoặc xếp lịch. |
 | `tier` | `VARCHAR(20)` | No | `'FREE'` / `CHECK (tier IN ('FREE', 'PREMIUM'))` | Phân tầng tài khoản theo `OS-02`. |
 | `created_at` | `TIMESTAMPTZ` | No | `NOW()` | Thời điểm khởi tạo tài khoản. |
 | `updated_at` | `TIMESTAMPTZ` | No | `NOW()` | Thời điểm cập nhật thông tin gần nhất. |
@@ -442,7 +445,7 @@ Table ai_reviews {
 |---|---|---|---|---|
 | `id` | `UUID` | No | `uuid_generate_v4()` (PK) | Khóa chính. |
 | `user_id` | `UUID` | No | `UNIQUE`, `FK -> users(id) ON DELETE CASCADE` | Quan hệ 1-1 với người dùng. |
-| `token_hash` | `VARCHAR(64)` | No | `UNIQUE` | Chuỗi 32-byte hex CSPRN (64 ký tự ngẫu nhiên). |
+| `token_hash` | `VARCHAR(64)` | No | `UNIQUE` | Mã băm SHA-256 (64 ký tự hex) của token ngẫu nhiên 32-byte sinh bằng `secrets.token_hex(32)`. Server chỉ lưu digest hash này, không lưu token gốc. |
 | `is_active` | `BOOLEAN` | No | `TRUE` | Trạng thái kích hoạt của token. |
 | `last_used_at` | `TIMESTAMPTZ` | Yes | `NULL` | Thời điểm ứng dụng lịch ngoại vi kéo dữ liệu gần nhất. |
 | `created_at` | `TIMESTAMPTZ` | No | `NOW()` | Thời điểm sinh token. |
@@ -838,6 +841,7 @@ CREATE TABLE users (
     email VARCHAR(255) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
     full_name VARCHAR(100) NOT NULL,
+    timezone VARCHAR(50) NOT NULL DEFAULT 'Asia/Ho_Chi_Minh',
     tier VARCHAR(20) NOT NULL DEFAULT 'FREE' CHECK (tier IN ('FREE', 'PREMIUM')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -846,6 +850,7 @@ CREATE TABLE users (
 -- -----------------------------------------------------------------------------
 -- 2. BẢNG WEBCAL_TOKENS
 -- -----------------------------------------------------------------------------
+-- Lưu SHA-256 digest của 32-byte hex CSPRN sinh bởi secrets.token_hex(32)
 CREATE TABLE webcal_tokens (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,

@@ -33,7 +33,7 @@ Hệ thống FocusFlow có các nghiệp vụ không thể hoặc không nên x�
 * *Ưu điểm:*
   * **Tiêu chuẩn công nghiệp:** Thư viện hàng đầu, tài liệu đầy đủ và độ tin cậy tuyệt đối trong môi trường Python.
   * **Celery Beat:** Cơ chế lập lịch cron-like chuẩn xác, cấu hình linh hoạt.
-  * **Giám sát trực quan (Flower Dashboard):** Cung cấp giao diện web theo dõi tình trạng worker, danh sách task và thống kê hiệu năng để trình chiếu thực chứng ấn tượng trước Hội đồng bảo vệ đồ án tốt nghiệp.
+  * **Giám sát trực quan:** Có thể tích hợp Flower Dashboard theo dõi trực quan trạng thái hàng đợi và tỷ lệ task phục vụ trình chiếu thực chứng trước Hội đồng.
 
 ---
 
@@ -43,7 +43,7 @@ Hệ thống FocusFlow có các nghiệp vụ không thể hoặc không nên x�
 ---
 
 ## 4. Lý do & Đánh đổi (Rationale & Trade-Offs)
-* **Cô lập Rủi ro và Tách biệt Trách nhiệm:** Quá trình quét timeout hàng ngàn phiên học hoặc tính toán báo cáo tuần được đẩy hoàn toàn sang tiến trình worker độc lập, bảo đảm Backend API chính luôn nhẹ nhàng và giữ vững cam kết phản hồi $\le 200$ms (`NFR-PERF-002`).
+* **Cô lập Rủi ro và Tách biệt Trách nhiệm:** Quá trình quét timeout định kỳ của các phiên học đang hoạt động và tính toán báo cáo tuần được đẩy hoàn toàn sang tiến trình worker độc lập, bảo đảm Backend API chính luôn nhẹ nhàng và giữ vững cam kết phản hồi $\le 200$ms (`NFR-PERF-002`) cho 20 concurrent users.
 * **Tính Bền vững (Durability & Retries):** Hỗ trợ cơ chế retry tự động với exponential backoff khi gặp sự cố CSDL tạm thời.
 
 ---
