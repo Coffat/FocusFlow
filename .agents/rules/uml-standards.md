@@ -94,22 +94,19 @@ Do not add classes without a responsibility or modeling reason.
 
 ---
 
-## Database / ERD
+## Physical Database Schema Diagram (DB Diagram)
 
-Database diagrams are data/persistence models.
+Database schema diagrams are physical data/persistence models (Physical Database Schema Diagram).
 
-Do not treat ERD and Class Diagram as identical artifacts.
+Per academic thesis guidance (see `docs/database/database-schema-design.md` section 1.1), do not use abstract conceptual Chen ERD notation (diamonds/ovals). Use Physical Database Schema Diagrams (Crow's Foot notation) reflecting executable DBMS structures:
+- Explicit table names and SQL column data types (`UUID`, `VARCHAR`, `TIMESTAMPTZ`, `JSONB`, `BOOLEAN`)
+- Primary keys (`PK`) and Foreign keys (`FK`)
+- Cardinality and optionality (Crow's Foot: 1:1, 1:N, N:M decomposed into junction tables)
+- Constraints (`NOT NULL`, `UNIQUE`, `CHECK`)
+- Referential actions (`ON DELETE CASCADE`, `ON DELETE RESTRICT`, `ON DELETE SET NULL`)
+- Normalization (3NF/BCNF) and Indexing strategy
 
-Validate:
-
-- Primary keys
-- Foreign keys
-- Cardinality
-- Optionality
-- Constraints
-- Uniqueness
-- Normalization
-- Indexing requirements
+Do not treat Database Schema Diagram and Class Diagram as identical artifacts.
 
 Database design must remain traceable to domain and business requirements.
 
