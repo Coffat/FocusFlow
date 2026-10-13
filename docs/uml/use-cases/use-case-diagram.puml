@@ -1,0 +1,160 @@
+@startuml FocusFlow_UseCase_Diagram
+title FocusFlow — Sơ đồ Ca sử dụng Tổng thể Hệ thống (Use Case Diagram)\nTiêu chuẩn: OMG UML 2.5.1 | Phương pháp luận: Alistair Cockburn, Craig Larman, Martin Fowler
+
+left to right direction
+skinparam packageStyle rectangle
+skinparam roundcorner 10
+skinparam monochrome false
+skinparam shadowing false
+skinparam defaultFontName "Helvetica", "Arial", sans-serif
+
+skinparam actor {
+    BackgroundColor #E8F4FD
+    BorderColor #2B6CB0
+}
+
+skinparam usecase {
+    BackgroundColor #FFFFFF
+    BorderColor #2B6CB0
+    ArrowColor #4A5568
+}
+
+skinparam package {
+    BackgroundColor #F7FAFC
+    BorderColor #CBD5E0
+    FontColor #2D3748
+    FontStyle bold
+}
+
+' ========================================================
+' 1. TÁC NHÂN CHÍNH (PRIMARY ACTORS - BÊN TRÁI)
+' Biểu diễn bằng Stick Figure theo chuẩn Craig Larman
+' ========================================================
+actor "Learner\n(Người học)" as Learner #EBF8FF
+actor "System Administrator\n(Quản trị viên)" as Admin #FEFCBF
+
+' ========================================================
+' 2. RANH GIỚI HỆ THỐNG (SYSTEM UNDER DESIGN - SuD)
+' Khung hình chữ nhật bao bọc toàn bộ các Use Case
+' ========================================================
+rectangle "Hệ thống FocusFlow (System Under Design - SuD)" as FocusFlowSystem {
+
+    ' PHÂN HỆ 1: XÁC THỰC & QUẢN LÝ TÀI KHOẢN
+    package "Xác thực & Quản lý Tài khoản" as P_Auth {
+        usecase "Đăng ký tài khoản mới\n(UC-AUTH-01)" as UC_Auth_01
+        usecase "Đăng nhập hệ thống\n(UC-AUTH-02)" as UC_Auth_02
+        usecase "Đăng xuất hệ thống\n(UC-AUTH-03)" as UC_Auth_03
+        usecase "Thử nghiệm nâng cấp gói học tập\n(UC-QUOTA-01)" as UC_Quota_01
+    }
+
+    ' PHÂN HỆ 2: KHỞI TẠO LỘ TRÌNH (AI & FALLBACK)
+    package "Khởi tạo Lộ trình (AI & Fallback)" as P_Plan {
+        usecase "Khởi tạo mục tiêu & Làm rõ ngữ cảnh\n(UC-PLAN-01)" as UC_Plan_01
+        usecase "Cấu hình thời gian rảnh khả dụng\n(UC-AVAIL-01)" as UC_Avail_01
+        usecase "Phê duyệt các cột mốc học tập\n(UC-PLAN-02)" as UC_Plan_02
+        usecase "Tạo đề xuất & Áp dụng lịch trình\n(UC-PLAN-03)" as UC_Plan_03
+        usecase "Tự lập kế hoạch học tập thủ công\n(UC-PLAN-04)" as UC_Plan_04
+    }
+
+    ' PHÂN HỆ 3: QUẢN LÝ LỘ TRÌNH & LỊCH TRÌNH
+    package "Quản lý Lộ trình & Lịch trình" as P_Sched {
+        usecase "Điều phối & Chuyển đổi lộ trình\n(UC-ROADMAP-01)" as UC_Roadmap_01
+        usecase "Theo dõi & Điều hướng lịch trình\n(UC-SCHED-01)" as UC_Sched_01
+        usecase "Tái xếp lịch nhiệm vụ từ Backlog\n(UC-TASK-02)" as UC_Task_02
+    }
+
+    ' PHÂN HỆ 4: KHÔNG GIAN THỰC THI (STUDY WORKSPACE)
+    package "Không gian Thực thi & Theo dõi" as P_Sess {
+        usecase "Thực hiện phiên học tập trung\n(UC-SESS-01)\n---\nextension points:\nSession Interrupted" as UC_Sess_01
+        usecase "Xử lý gián đoạn phiên học\n(UC-SESS-02)" as UC_Sess_02
+        usecase "Đánh dấu hoàn thành nhiệm vụ\n(UC-TASK-01)" as UC_Task_01
+    }
+
+    ' PHÂN HỆ 5: THÍCH ỨNG BIẾN CỐ & BÁO CÁO TIẾN ĐỘ
+    package "Thích ứng Biến cố & Báo cáo" as P_Adapt {
+        usecase "Thiết lập tạm dừng lộ trình\n(UC-PAUSE-01)" as UC_Pause_01
+        usecase "Quét phát hiện nhiệm vụ quá hạn\n(UC-ADAPT-01)" as UC_Adapt_01
+        usecase "Yêu cầu AI tái cấu trúc nhiệm vụ\n(UC-ADAPT-02)" as UC_Adapt_02
+        usecase "Theo dõi báo cáo tiến độ định lượng\n(UC-REP-01)\n---\nextension points:\nWeekly Evaluation Request" as UC_Rep_01
+        usecase "Yêu cầu nhận xét từ AI Review\n(UC-REP-02)" as UC_Rep_02
+    }
+
+    ' PHÂN HỆ 6: TÍCH HỢP LỊCH NGOẠI VI
+    package "Tích hợp Lịch Ngoại vi" as P_Cal {
+        usecase "Xuất tệp lịch tĩnh .ics\n(UC-CAL-01)" as UC_Cal_01
+        usecase "Đăng ký & Quản lý WebCal feed\n(UC-CAL-02)" as UC_Cal_02
+    }
+
+    ' PHÂN HỆ 7: PHÂN HỆ QUẢN TRỊ VIÊN (ADMIN PORTAL)
+    package "Phân hệ Quản trị viên (Admin Portal)" as P_Admin {
+        usecase "Đăng nhập cổng quản trị RBAC\n(UC-ADM-01)" as UC_Adm_01
+        usecase "Quản lý người dùng & Hạn ngạch AI\n(UC-ADM-02)" as UC_Adm_02
+        usecase "Giám sát chỉ số vận hành hệ thống\n(UC-ADM-03)" as UC_Adm_03
+    }
+}
+
+' ========================================================
+' 3. TÁC NHÂN HỖ TRỢ / HỆ THỐNG NGOÀI (SUPPORTING ACTORS - BÊN PHẢI)
+' Biểu diễn bằng khung chữ nhật «system» theo chuẩn Craig Larman
+' ========================================================
+rectangle "«system»\nExternal LLM Service\n(Google Gemini API)" as LLM #EDF2F7
+rectangle "«system»\nCalendar Application\n(Google / Apple Calendar)" as CalApp #EDF2F7
+rectangle "«temporal»\nSystem Clock / Celery Beat\n(Bộ lập lịch định kỳ)" as TimeActor #EDF2F7
+
+' ========================================================
+' 4. QUAN HỆ GIAO TIẾP VỚI TÁC NHÂN CHÍNH (ASSOCIATIONS)
+' Đường nét liền không có đầu mũi tên theo chuẩn Martin Fowler
+' ========================================================
+Learner -- UC_Auth_01
+Learner -- UC_Auth_02
+Learner -- UC_Auth_03
+Learner -- UC_Quota_01
+
+Learner -- UC_Plan_01
+Learner -- UC_Avail_01
+Learner -- UC_Plan_02
+Learner -- UC_Plan_03
+Learner -- UC_Plan_04
+
+Learner -- UC_Roadmap_01
+Learner -- UC_Sched_01
+Learner -- UC_Task_02
+
+Learner -- UC_Sess_01
+Learner -- UC_Task_01
+
+Learner -- UC_Pause_01
+Learner -- UC_Adapt_02
+Learner -- UC_Rep_01
+
+Learner -- UC_Cal_01
+Learner -- UC_Cal_02
+
+' Tác nhân thời gian kích hoạt các tác vụ nền định kỳ
+TimeActor -- UC_Adapt_01
+TimeActor -- UC_Sess_02
+
+' Quan hệ của Quản trị viên (Administrator)
+Admin -- UC_Adm_01
+Admin -- UC_Adm_02
+Admin -- UC_Adm_03
+Admin -- UC_Auth_03
+
+' ========================================================
+' 5. QUAN HỆ GIAO TIẾP VỚI TÁC NHÂN HỖ TRỢ (SUPPORTING ASSOCIATIONS)
+' ========================================================
+UC_Plan_01 -- LLM
+UC_Plan_03 -- LLM
+UC_Adapt_02 -- LLM
+UC_Rep_02 -- LLM
+
+UC_Cal_02 -- CalApp
+
+' ========================================================
+' 6. QUAN HỆ PHỤ THUỘC GIỮA CÁC USE CASE (<<extend>>)
+' Mũi tên nét đứt trỏ ngược từ Ca mở rộng về Ca cơ sở
+' ========================================================
+UC_Sess_02 .> UC_Sess_01 : <<extend>>
+UC_Rep_02 .> UC_Rep_01 : <<extend>>
+
+@enduml
