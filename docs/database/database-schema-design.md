@@ -16,7 +16,7 @@
 2. [Sơ đồ Lược đồ Cơ sở Dữ liệu Vật lý (Physical Database Schema Diagram)](#2-sơ-đồ-lược-đồ-cơ-sở-dữ-liệu-vật-lý-physical-database-schema-diagram)
    - 2.1 [Sơ đồ Mermaid Database Schema (Quan hệ Bảng & Kiểu dữ liệu)](#21-sơ-đồ-mermaid-database-schema-quan-hệ-bảng--kiểu-dữ-liệu)
    - 2.2 [Mã nguồn DBML (Database Markup Language cho dbdiagram.io)](#22-mã-nguồn-dbml-database-markup-language-cho-dbdiagramio)
-3. [Đặc tả Chi tiết 14 Bảng Dữ liệu & Bảng Liên kết (Physical Tables Specification)](#3-đặc-tả-chi-tiết-14-bảng-dữ-liệu--bảng-liên-kết-physical-tables-specification)
+3. [Đặc tả Chi tiết 15 Bảng Dữ liệu & Bảng Liên kết (Physical Tables Specification)](#3-đặc-tả-chi-tiết-15-bảng-dữ-liệu--bảng-liên-kết-physical-tables-specification)
    - 3.1 [Nhóm Người dùng, Xác thực & Hạn ngạch (users, webcal_tokens, ai_quotas)](#31-nhóm-người-dùng-xác-thực--hạn-ngạch-users-webcal_tokens-ai_quotas)
    - 3.2 [Nhóm Cấu hình Thời gian rảnh (availabilities)](#32-nhóm-cấu-hình-thời-gian-rảnh-availabilities)
    - 3.3 [Nhóm Mục tiêu, Lộ trình & Mốc kiến thức (goals, roadmaps, milestones)](#33-nhóm-mục-tiêu-lộ-trình--mốc-kiến-thức-goals-roadmaps-milestones)
@@ -43,8 +43,13 @@ Theo yêu cầu trực tiếp từ Giảng viên Hướng dẫn Đồ án Tốt 
 > **Định hướng Học thuật:** Không sử dụng biểu đồ ERD khái niệm hình thoi (Chen notation) mang tính trừu tượng sơ lược. Bắt buộc xây dựng **Sơ đồ Lược đồ Cơ sở Dữ liệu Vật lý (Physical Database Schema Diagram / DB Diagram)** phản ánh chính xác cấu trúc bảng thực tế trong hệ quản trị PostgreSQL 16, thể hiện rõ tên bảng, tên cột, kiểu dữ liệu vật lý chuẩn (`UUID`, `VARCHAR`, `TIMESTAMP WITH TIME ZONE`, `JSONB`, `BOOLEAN`), các chỉ định Khóa chính (`PK`), Khóa ngoại (`FK`), Ràng buộc duy nhất (`UQ`), Ràng buộc kiểm tra (`CHECK`) và các quan hệ 1:1, 1:N, N:M với ký hiệu Crow's Foot chuẩn mực.
 
 ### 1.2. Chiến lược Khóa & Quy ước Định danh
-* **Chiến lược Khóa chính (Surrogate Key):** Toàn bộ các bảng trong CSDL sử dụng **UUID v4** làm khóa chính (`id UUID PRIMARY KEY DEFAULT uuid_generate_v4()`).
-  * *Lý do kỹ thuật:* Ngăn chặn hoàn toàn tấn công vét cạn và đoán định tài nguyên (ID Enumeration Attack) qua REST API; cho phép sinh ID độc lập phía client/worker trước khi lưu xuống CSDL; bảo mật tối đa cho WebCal Token và mã chia sẻ lịch.
+* **Chiến lược Khóa chính Tuần tự Thời gian (UUIDv7 - RFC 9562):** Toàn bộ các bảng trong hệ thống FocusFlow sử dụng kiểu dữ liệu `UUID` cho khóa chính.
+  * **Sinh khóa tại Backend:** Giá trị khóa chính được **sinh trực tiếp tại tầng Backend Application (Python FastAPI sử dụng thư viện `uuid6`/`uuid_utils` theo chuẩn RFC 9562 - UUIDv7 Time-Ordered)** trước khi chèn xuống CSDL.
+  * **Fallback CSDL:** Tại tầng CSDL PostgreSQL 16, các bảng khai báo `id UUID PRIMARY KEY DEFAULT gen_random_uuid()` đóng vai trò Fallback an toàn khi thực thi chèn trực tiếp bằng SQL script ngoài tầng Application.
+  * **Luận cứ Kỹ thuật & Học thuật (Rubric TC2.3):**
+    1. *Khắc phục nhược điểm phân mảnh trang của UUIDv4:* UUIDv4 ngẫu nhiên hoàn toàn làm cho các chỉ mục B-Tree Primary Key bị phân mảnh trang dữ liệu (B-Tree Page Splitting), làm suy giảm hiệu năng ghi đệm (Buffer Cache) và I/O khi dữ liệu tăng trưởng.
+    2. *Ưu điểm vượt trội của UUIDv7:* Do chứa 48-bit timestamp ở phần đầu (Time-Ordered Monotonic), UUIDv7 tự động sắp xếp tăng dần theo thời gian, giúp cây B-Tree luôn được ghi tuần tự vào các trang cuối (Append-only behavior), triệt tiêu phân mảnh trang và tăng tốc độ tra cứu clustered index.
+    3. *Bảo mật cao:* Vẫn chứa 74 bits ngẫu nhiên mã hóa mạnh, loại bỏ 100% rủi ro tấn công đoán số thứ tự (ID Enumeration Attack) như khóa tự tăng `SERIAL`/`BIGINT`.
 * **Quy ước Định danh (Naming Conventions):**
   * Tên bảng: Chữ thường, số nhiều, nối bằng dấu gạch dưới (`snake_case`), ví dụ: `users`, `roadmaps`, `study_sessions`.
   * Tên cột: Chữ thường, `snake_case`, ví dụ: `scheduled_date`, `created_at`.
@@ -65,11 +70,11 @@ erDiagram
     users ||--o{ availabilities : "configures (1:1)"
     users ||--o{ goals : "creates (1:N)"
     users ||--o{ roadmaps : "owns (1:N)"
-    users ||--o{ study_sessions : "performs (1:N)"
+    users ||--o{ study_sessions : "performs (1:N, 1 active)"
     
     goals ||--o{ roadmaps : "originates (1:N)"
     
-    roadmaps ||--o{ milestones : "contains (1:N)"
+    roadmaps ||--o{ milestones : "contains (1:N, seq ordered)"
     roadmaps ||--o{ tasks : "aggregates (1:N)"
     roadmaps ||--o{ schedule_proposals : "generates (1:N)"
     roadmaps ||--o{ official_schedules : "activates (1:1 active)"
@@ -78,12 +83,10 @@ erDiagram
     
     milestones ||--o{ tasks : "decomposes into (1:N)"
     
-    official_schedules ||--o{ tasks : "schedules (1:N)"
-    
     study_sessions ||--o{ session_tasks : "includes (1:N)"
     tasks ||--o{ session_tasks : "participates in (1:N)"
     
-    study_sessions ||--o{ study_notes : "contains (1:N)"
+    study_sessions ||--o{ study_notes : "contains (1:N, max 2 types)"
 
     users {
         uuid id PK
@@ -91,6 +94,7 @@ erDiagram
         varchar_255 password_hash
         varchar_100 full_name
         varchar_50 timezone
+        varchar_20 role
         varchar_20 tier
         timestamptz created_at
         timestamptz updated_at
@@ -111,6 +115,7 @@ erDiagram
         uuid user_id FK,UK
         integer monthly_limit
         integer used_calls
+        integer reserved_calls
         integer tokens_consumed
         timestamptz cycle_start
         timestamptz cycle_end
@@ -156,6 +161,7 @@ erDiagram
         text description
         varchar_20 status
         timestamptz created_at
+        timestamptz updated_at
     }
 
     schedule_proposals {
@@ -165,6 +171,7 @@ erDiagram
         jsonb proposal_data
         varchar_20 status
         timestamptz created_at
+        timestamptz updated_at
     }
 
     official_schedules {
@@ -180,7 +187,6 @@ erDiagram
         uuid id PK
         uuid roadmap_id FK
         uuid milestone_id FK
-        uuid official_schedule_id FK
         varchar_255 title
         text description
         integer estimated_minutes
@@ -190,6 +196,7 @@ erDiagram
         varchar_20 status
         timestamptz completed_at
         timestamptz created_at
+        timestamptz updated_at
     }
 
     study_sessions {
@@ -203,12 +210,14 @@ erDiagram
         varchar_20 status
         timestamptz last_heartbeat_at
         timestamptz created_at
+        timestamptz updated_at
     }
 
     session_tasks {
         uuid id PK
         uuid session_id FK
         uuid task_id FK
+        integer allocated_minutes
         boolean is_completed_in_session
         integer time_spent_minutes
         timestamptz created_at
@@ -253,18 +262,19 @@ Sinh viên có thể sao chép đoạn mã DBML dưới đây và dán trực ti
 // Target DBMS: PostgreSQL 16
 
 Table users {
-  id uuid [pk, default: `uuid_generate_v4()`]
+  id uuid [pk, default: `gen_random_uuid()`]
   email varchar(255) [unique, not null]
   password_hash varchar(255) [not null]
   full_name varchar(100) [not null]
   timezone varchar(50) [not null, default: 'Asia/Ho_Chi_Minh', note: 'IANA timezone']
+  role varchar(20) [not null, default: 'LEARNER', note: 'LEARNER, ADMIN']
   tier varchar(20) [not null, default: 'FREE', note: 'FREE, PREMIUM']
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz [not null, default: `now()`]
 }
 
 Table webcal_tokens {
-  id uuid [pk, default: `uuid_generate_v4()`]
+  id uuid [pk, default: `gen_random_uuid()`]
   user_id uuid [unique, not null, ref: - users.id]
   token_hash varchar(64) [unique, not null, note: 'SHA-256 digest of 32-byte hex CSPRN']
   is_active boolean [not null, default: true]
@@ -274,10 +284,11 @@ Table webcal_tokens {
 }
 
 Table ai_quotas {
-  id uuid [pk, default: `uuid_generate_v4()`]
+  id uuid [pk, default: `gen_random_uuid()`]
   user_id uuid [unique, not null, ref: - users.id]
   monthly_limit int [not null, default: 30, note: 'OS-02: Free=30, Premium=300']
   used_calls int [not null, default: 0]
+  reserved_calls int [not null, default: 0, note: 'Reserve-Commit-Release concurrency check']
   tokens_consumed int [not null, default: 0]
   cycle_start timestamptz [not null]
   cycle_end timestamptz [not null]
@@ -285,7 +296,7 @@ Table ai_quotas {
 }
 
 Table availabilities {
-  id uuid [pk, default: `uuid_generate_v4()`]
+  id uuid [pk, default: `gen_random_uuid()`]
   user_id uuid [unique, not null, ref: - users.id]
   mode varchar(10) [not null, default: 'MODE_A', note: 'MODE_A, MODE_B']
   weekly_schedule jsonb [not null, note: 'Daily bounds per OS-06: 0.5h to 14h']
@@ -293,7 +304,7 @@ Table availabilities {
 }
 
 Table goals {
-  id uuid [pk, default: `uuid_generate_v4()`]
+  id uuid [pk, default: `gen_random_uuid()`]
   user_id uuid [not null, ref: > users.id]
   title text [not null]
   raw_description text [not null]
@@ -303,12 +314,12 @@ Table goals {
 }
 
 Table roadmaps {
-  id uuid [pk, default: `uuid_generate_v4()`]
+  id uuid [pk, default: `gen_random_uuid()`]
   user_id uuid [not null, ref: > users.id]
   goal_id uuid [not null, ref: > goals.id]
   title varchar(255) [not null]
   description text
-  status varchar(20) [not null, default: 'INITIALIZED', note: 'INITIALIZED, ACTIVE, PAUSED, COMPLETED']
+  status varchar(20) [not null, default: 'INITIALIZED', note: 'INITIALIZED, ACTIVE, PAUSED, COMPLETED, ARCHIVED']
   start_date date
   target_date date
   created_at timestamptz [not null, default: `now()`]
@@ -316,26 +327,33 @@ Table roadmaps {
 }
 
 Table milestones {
-  id uuid [pk, default: `uuid_generate_v4()`]
+  id uuid [pk, default: `gen_random_uuid()`]
   roadmap_id uuid [not null, ref: > roadmaps.id]
   sequence_order int [not null]
   title varchar(255) [not null]
   description text
   status varchar(20) [not null, default: 'PENDING', note: 'PENDING, APPROVED']
   created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    (roadmap_id, sequence_order) [unique]
+    (id, roadmap_id) [unique]
+  }
 }
 
 Table schedule_proposals {
-  id uuid [pk, default: `uuid_generate_v4()`]
+  id uuid [pk, default: `gen_random_uuid()`]
   roadmap_id uuid [not null, ref: > roadmaps.id]
   user_id uuid [not null, ref: > users.id]
   proposal_data jsonb [not null]
   status varchar(20) [not null, default: 'DRAFT', note: 'DRAFT, APPLIED, DISCARDED']
   created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
 }
 
 Table official_schedules {
-  id uuid [pk, default: `uuid_generate_v4()`]
+  id uuid [pk, default: `gen_random_uuid()`]
   roadmap_id uuid [unique, not null, ref: - roadmaps.id]
   total_sessions int [not null, default: 0]
   total_hours int [not null, default: 0]
@@ -344,23 +362,23 @@ Table official_schedules {
 }
 
 Table tasks {
-  id uuid [pk, default: `uuid_generate_v4()`]
+  id uuid [pk, default: `gen_random_uuid()`]
   roadmap_id uuid [not null, ref: > roadmaps.id]
-  milestone_id uuid [not null, ref: > milestones.id]
-  official_schedule_id uuid [ref: > official_schedules.id]
+  milestone_id uuid [not null, note: 'Composite FK (milestone_id, roadmap_id) ref milestones']
   title varchar(255) [not null]
   description text
-  estimated_minutes int [not null, note: 'Default 25 to 60 mins']
+  estimated_minutes int [not null, note: '15 to 240 mins']
   scheduled_date date [note: 'NULL indicates Backlog item']
   start_time time
   end_time time
-  status varchar(20) [not null, default: 'PENDING', note: 'PENDING, COMPLETED']
+  status varchar(20) [not null, default: 'TODO', note: 'TODO, IN_PROGRESS, COMPLETED, CANCELLED']
   completed_at timestamptz
   created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
 }
 
 Table study_sessions {
-  id uuid [pk, default: `uuid_generate_v4()`]
+  id uuid [pk, default: `gen_random_uuid()`]
   user_id uuid [not null, ref: > users.id]
   roadmap_id uuid [not null, ref: > roadmaps.id]
   started_at timestamptz [not null, default: `now()`]
@@ -370,12 +388,18 @@ Table study_sessions {
   status varchar(20) [not null, default: 'IN_PROGRESS', note: 'IN_PROGRESS, COMPLETED, PARTIAL_COMPLETED, CANCELLED']
   last_heartbeat_at timestamptz [not null, default: `now()`]
   created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    user_id [note: 'Partial Unique on user_id where status = IN_PROGRESS']
+  }
 }
 
 Table session_tasks {
-  id uuid [pk, default: `uuid_generate_v4()`]
+  id uuid [pk, default: `gen_random_uuid()`]
   session_id uuid [not null, ref: > study_sessions.id]
   task_id uuid [not null, ref: > tasks.id]
+  allocated_minutes int [not null, default: 0]
   is_completed_in_session boolean [not null, default: false]
   time_spent_minutes int [not null, default: 0]
   created_at timestamptz [not null, default: `now()`]
@@ -386,15 +410,19 @@ Table session_tasks {
 }
 
 Table study_notes {
-  id uuid [pk, default: `uuid_generate_v4()`]
+  id uuid [pk, default: `gen_random_uuid()`]
   session_id uuid [not null, ref: > study_sessions.id]
   note_type varchar(20) [not null, note: 'SCRATCHPAD, TAKEAWAY']
   content text [not null]
   updated_at timestamptz [not null, default: `now()`]
+
+  Indexes {
+    (session_id, note_type) [unique]
+  }
 }
 
 Table pause_records {
-  id uuid [pk, default: `uuid_generate_v4()`]
+  id uuid [pk, default: `gen_random_uuid()`]
   roadmap_id uuid [not null, ref: > roadmaps.id]
   pause_start_date date [not null]
   pause_end_date date [not null]
@@ -404,7 +432,7 @@ Table pause_records {
 }
 
 Table ai_reviews {
-  id uuid [pk, default: `uuid_generate_v4()`]
+  id uuid [pk, default: `gen_random_uuid()`]
   roadmap_id uuid [not null, ref: > roadmaps.id]
   user_id uuid [not null, ref: > users.id]
   review_cycle varchar(20) [not null, note: 'WEEKLY, MILESTONE']
@@ -418,7 +446,7 @@ Table ai_reviews {
 
 ---
 
-## 3. Đặc tả Chi tiết 14 Bảng Dữ liệu & Bảng Liên kết (Physical Tables Specification)
+## 3. Đặc tả Chi tiết 15 Bảng Dữ liệu & Bảng Liên kết (Physical Tables Specification)
 
 ### 3.1. Nhóm Người dùng, Xác thực & Hạn ngạch
 
@@ -428,11 +456,12 @@ Table ai_reviews {
 
 | Tên Cột | Kiểu Dữ liệu Vật lý | Nullable | Mặc định / Ràng buộc | Mô tả & Giải trình Kỹ thuật |
 |---|---|---|---|---|
-| `id` | `UUID` | No | `uuid_generate_v4()` (PK) | Định danh duy nhất người dùng. |
+| `id` | `UUID` | No | `gen_random_uuid()` (PK, Fallback) / UUIDv7 sinh tại App | Định danh duy nhất người dùng. |
 | `email` | `VARCHAR(255)` | No | `UNIQUE` | Địa chỉ email đăng nhập chuẩn hóa viết thường. |
 | `password_hash` | `VARCHAR(255)` | No | | Chuỗi băm mật khẩu bằng thuật toán **Argon2id**. |
 | `full_name` | `VARCHAR(100)` | No | | Họ và tên hiển thị của người học. |
 | `timezone` | `VARCHAR(50)` | No | `'Asia/Ho_Chi_Minh'` | Múi giờ IANA chuẩn của người dùng (ví dụ: `Asia/Ho_Chi_Minh`). Toàn bộ mốc thời gian lưu trữ trong DB theo UTC (`TIMESTAMPTZ`) và được chuyển đổi theo múi giờ này khi hiển thị hoặc xếp lịch. |
+| `role` | `VARCHAR(20)` | No | `'LEARNER'` / `CHECK (role IN ('LEARNER', 'ADMIN'))` | Phân quyền vai trò người dùng (LEARNER: người học thông thường; ADMIN: quản trị viên hệ thống có quyền truy cập Admin Portal). |
 | `tier` | `VARCHAR(20)` | No | `'FREE'` / `CHECK (tier IN ('FREE', 'PREMIUM'))` | Phân tầng tài khoản theo `OS-02`. |
 | `created_at` | `TIMESTAMPTZ` | No | `NOW()` | Thời điểm khởi tạo tài khoản. |
 | `updated_at` | `TIMESTAMPTZ` | No | `NOW()` | Thời điểm cập nhật thông tin gần nhất. |
@@ -443,7 +472,7 @@ Table ai_reviews {
 
 | Tên Cột | Kiểu Dữ liệu Vật lý | Nullable | Mặc định / Ràng buộc | Mô tả & Giải trình Kỹ thuật |
 |---|---|---|---|---|
-| `id` | `UUID` | No | `uuid_generate_v4()` (PK) | Khóa chính. |
+| `id` | `UUID` | No | `gen_random_uuid()` (PK, Fallback) / UUIDv7 sinh tại App | Khóa chính. |
 | `user_id` | `UUID` | No | `UNIQUE`, `FK -> users(id) ON DELETE CASCADE` | Quan hệ 1-1 với người dùng. |
 | `token_hash` | `VARCHAR(64)` | No | `UNIQUE` | Mã băm SHA-256 (64 ký tự hex) của token ngẫu nhiên 32-byte sinh bằng `secrets.token_hex(32)`. Server chỉ lưu digest hash này, không lưu token gốc. |
 | `is_active` | `BOOLEAN` | No | `TRUE` | Trạng thái kích hoạt của token. |
@@ -452,19 +481,24 @@ Table ai_reviews {
 | `reset_at` | `TIMESTAMPTZ` | No | `NOW()` | Thời điểm đặt lại token gần nhất (hủy token cũ). |
 
 #### Bảng `ai_quotas` (Quản trị hạn ngạch gọi LLM)
-* Mục đích: Giám sát số lượt gọi AI và hạn ngạch hàng tháng để bảo vệ ngân sách.
+* Mục đích: Giám sát số lượt gọi AI và hạn ngạch hàng tháng để bảo vệ ngân sách; hỗ trợ cơ chế 2 pha (Reserve -> Commit/Release) chống Race Condition.
 * Ánh xạ yêu cầu: `FR-QUOTA-001`, `BUSR-10`, `OS-02`.
 
 | Tên Cột | Kiểu Dữ liệu Vật lý | Nullable | Mặc định / Ràng buộc | Mô tả & Giải trình Kỹ thuật |
 |---|---|---|---|---|
-| `id` | `UUID` | No | `uuid_generate_v4()` (PK) | Khóa chính. |
+| `id` | `UUID` | No | `gen_random_uuid()` (PK) | Khóa chính. |
 | `user_id` | `UUID` | No | `UNIQUE`, `FK -> users(id) ON DELETE CASCADE` | Quan hệ 1-1 với người dùng trong chu kỳ. |
 | `monthly_limit` | `INTEGER` | No | `30` / `CHECK (monthly_limit > 0)` | Hạn ngạch chu kỳ (Free=30, Premium=300 theo `OS-02`). |
-| `used_calls` | `INTEGER` | No | `0` / `CHECK (used_calls >= 0)` | Số lượt gọi AI thành công đã tiêu thụ. |
+| `used_calls` | `INTEGER` | No | `0` / `CHECK (used_calls >= 0)` | Số lượt gọi AI thành công đã tiêu thụ chính thức. |
+| `reserved_calls` | `INTEGER` | No | `0` / `CHECK (reserved_calls >= 0)` | Số lượt gọi AI đang giữ chỗ tạm thời trong quá trình streaming. |
 | `tokens_consumed` | `INTEGER` | No | `0` / `CHECK (tokens_consumed >= 0)` | Tổng số lượng tokens AI đã tiêu thụ. |
 | `cycle_start` | `TIMESTAMPTZ` | No | | Thời điểm bắt đầu chu kỳ (ngày 01 hàng tháng). |
 | `cycle_end` | `TIMESTAMPTZ` | No | | Thời điểm kết thúc chu kỳ (cuối tháng). |
 | `updated_at` | `TIMESTAMPTZ` | No | `NOW()` | Cập nhật thời điểm biến động hạn ngạch. |
+
+*Ràng buộc toàn vẹn hạn ngạch:*
+- `CONSTRAINT chk_ai_quota_limit CHECK (used_calls + reserved_calls <= monthly_limit)`: Ngăn chặn triệt để tình trạng hai request gọi AI đồng thời vượt quá hạn ngạch.
+- `CONSTRAINT chk_ai_quota_cycle CHECK (cycle_end > cycle_start)`.
 
 ---
 
@@ -476,7 +510,7 @@ Table ai_reviews {
 
 | Tên Cột | Kiểu Dữ liệu Vật lý | Nullable | Mặc định / Ràng buộc | Mô tả & Giải trình Kỹ thuật |
 |---|---|---|---|---|
-| `id` | `UUID` | No | `uuid_generate_v4()` (PK) | Khóa chính. |
+| `id` | `UUID` | No | `gen_random_uuid()` (PK, Fallback) / UUIDv7 sinh tại App | Khóa chính. |
 | `user_id` | `UUID` | No | `UNIQUE`, `FK -> users(id) ON DELETE CASCADE` | Quan hệ 1-1 với người dùng. |
 | `mode` | `VARCHAR(10)` | No | `'MODE_A'` / `CHECK (mode IN ('MODE_A', 'MODE_B'))` | Chế độ giờ rảnh (Mode A: quỹ giờ, Mode B: khung giờ). |
 | `weekly_schedule` | `JSONB` | No | | Cấu hình 7 ngày trong tuần. Ràng buộc cận `0.5h` đến `14h` theo `OS-06`. |
@@ -501,7 +535,7 @@ Table ai_reviews {
 
 | Tên Cột | Kiểu Dữ liệu Vật lý | Nullable | Mặc định / Ràng buộc | Mô tả & Giải trình Kỹ thuật |
 |---|---|---|---|---|
-| `id` | `UUID` | No | `uuid_generate_v4()` (PK) | Khóa chính. |
+| `id` | `UUID` | No | `gen_random_uuid()` (PK, Fallback) / UUIDv7 sinh tại App | Khóa chính. |
 | `user_id` | `UUID` | No | `FK -> users(id) ON DELETE CASCADE` | Thuộc sở hữu của User. |
 | `title` | `TEXT` | No | | Tên tóm tắt mục tiêu (ví dụ: "Tự học Golang Backend"). |
 | `raw_description` | `TEXT` | No | | Văn bản mô tả mục tiêu ban đầu do người dùng nhập. |
@@ -515,7 +549,7 @@ Table ai_reviews {
 
 | Tên Cột | Kiểu Dữ liệu Vật lý | Nullable | Mặc định / Ràng buộc | Mô tả & Giải trình Kỹ thuật |
 |---|---|---|---|---|
-| `id` | `UUID` | No | `uuid_generate_v4()` (PK) | Khóa chính. |
+| `id` | `UUID` | No | `gen_random_uuid()` (PK, Fallback) / UUIDv7 sinh tại App | Khóa chính. |
 | `user_id` | `UUID` | No | `FK -> users(id) ON DELETE CASCADE` | Người học sở hữu lộ trình. |
 | `goal_id` | `UUID` | No | `FK -> goals(id) ON DELETE RESTRICT` | Mục tiêu gốc sinh ra lộ trình này. |
 | `title` | `VARCHAR(255)` | No | | Tên lộ trình hoàn chỉnh sau khi AI chuẩn hóa. |
@@ -532,13 +566,17 @@ Table ai_reviews {
 
 | Tên Cột | Kiểu Dữ liệu Vật lý | Nullable | Mặc định / Ràng buộc | Mô tả & Giải trình Kỹ thuật |
 |---|---|---|---|---|
-| `id` | `UUID` | No | `uuid_generate_v4()` (PK) | Khóa chính. |
+| `id` | `UUID` | No | `gen_random_uuid()` (PK) | Khóa chính. |
 | `roadmap_id` | `UUID` | No | `FK -> roadmaps(id) ON DELETE CASCADE` | Thuộc về lộ trình nào. |
 | `sequence_order` | `INTEGER` | No | `CHECK (sequence_order >= 1)` | Thứ tự tuần tự của mốc kiến thức (1, 2, 3...). |
 | `title` | `VARCHAR(255)` | No | | Tiêu đề mốc kiến thức (ví dụ: "Cơ bản về Concurrency"). |
 | `description` | `TEXT` | Yes | | Diễn giải chi tiết kiến thức cần đạt được. |
 | `status` | `VARCHAR(20)` | No | `'PENDING'` / `CHECK (status IN ('PENDING', 'APPROVED'))` | Trạng thái xem xét của người học. |
 | `created_at` | `TIMESTAMPTZ` | No | `NOW()` | Thời điểm khởi tạo. |
+
+*Ràng buộc duy nhất:* 
+- `CONSTRAINT uq_milestone_roadmap_sequence UNIQUE (roadmap_id, sequence_order)` bảo đảm không bao giờ có 2 milestone trùng số thứ tự trong cùng 1 roadmap.
+- `CONSTRAINT uq_milestone_id_roadmap UNIQUE (id, roadmap_id)` tạo siêu khóa phục vụ ràng buộc toàn vẹn khóa ngoại phức hợp từ bảng `tasks`.
 
 ---
 
@@ -550,7 +588,7 @@ Table ai_reviews {
 
 | Tên Cột | Kiểu Dữ liệu Vật lý | Nullable | Mặc định / Ràng buộc | Mô tả & Giải trình Kỹ thuật |
 |---|---|---|---|---|
-| `id` | `UUID` | No | `uuid_generate_v4()` (PK) | Khóa chính. |
+| `id` | `UUID` | No | `gen_random_uuid()` (PK) | Khóa chính. |
 | `roadmap_id` | `UUID` | No | `FK -> roadmaps(id) ON DELETE CASCADE` | Lộ trình được đề xuất lịch. |
 | `user_id` | `UUID` | No | `FK -> users(id) ON DELETE CASCADE` | Người dùng sở hữu đề xuất. |
 | `proposal_data` | `JSONB` | No | | Toàn bộ danh sách task dự thảo và ngày đề xuất từ LLM. |
@@ -563,7 +601,7 @@ Table ai_reviews {
 
 | Tên Cột | Kiểu Dữ liệu Vật lý | Nullable | Mặc định / Ràng buộc | Mô tả & Giải trình Kỹ thuật |
 |---|---|---|---|---|
-| `id` | `UUID` | No | `uuid_generate_v4()` (PK) | Khóa chính. |
+| `id` | `UUID` | No | `gen_random_uuid()` (PK) | Khóa chính. |
 | `roadmap_id` | `UUID` | No | `UNIQUE`, `FK -> roadmaps(id) ON DELETE CASCADE` | Mỗi Roadmap tại một thời điểm chỉ có 1 Official Schedule. |
 | `total_sessions` | `INTEGER` | No | `0` | Tổng số buổi học đã được lên lịch. |
 | `total_hours` | `INTEGER` | No | `0` | Tổng số giờ học dự kiến toàn bộ lộ trình. |
@@ -576,10 +614,9 @@ Table ai_reviews {
 
 | Tên Cột | Kiểu Dữ liệu Vật lý | Nullable | Mặc định / Ràng buộc | Mô tả & Giải trình Kỹ thuật |
 |---|---|---|---|---|
-| `id` | `UUID` | No | `uuid_generate_v4()` (PK) | Khóa chính. |
+| `id` | `UUID` | No | `gen_random_uuid()` (PK) | Khóa chính. |
 | `roadmap_id` | `UUID` | No | `FK -> roadmaps(id) ON DELETE CASCADE` | Thuộc Roadmap nào. |
-| `milestone_id` | `UUID` | No | `FK -> milestones(id) ON DELETE CASCADE` | Thuộc mốc kiến thức nào. |
-| `official_schedule_id` | `UUID` | Yes | `FK -> official_schedules(id) ON DELETE SET NULL` | Thuộc lịch chính thức nào (nếu `NULL` là task trong Backlog). |
+| `milestone_id` | `UUID` | No | `FK -> milestones(id, roadmap_id) ON DELETE CASCADE` | Khóa ngoại phức hợp đảm bảo Task thuộc đúng Milestone của Roadmap. |
 | `title` | `VARCHAR(255)` | No | | Tên nhiệm vụ cụ thể (ví dụ: "Đọc tài liệu Goroutines"). |
 | `description` | `TEXT` | Yes | | Hướng dẫn chi tiết hoặc tài liệu tham khảo đính kèm. |
 | `estimated_minutes` | `INTEGER` | No | `CHECK (estimated_minutes BETWEEN 15 AND 240)` | Thời lượng ước tính (15 đến 240 phút). |
@@ -589,6 +626,11 @@ Table ai_reviews {
 | `status` | `VARCHAR(20)` | No | `'PENDING'` / `CHECK (status IN ('PENDING', 'COMPLETED'))` | Trạng thái thực hiện bền vững. |
 | `completed_at` | `TIMESTAMPTZ` | Yes | | Thời điểm tick hoàn thành task. |
 | `created_at` | `TIMESTAMPTZ` | No | `NOW()` | Thời điểm tạo task. |
+
+*Ràng buộc bảo vệ tính nhất quán & toàn vẹn:*
+- `CONSTRAINT fk_tasks_milestone_roadmap FOREIGN KEY (milestone_id, roadmap_id) REFERENCES milestones(id, roadmap_id) ON DELETE CASCADE`.
+- `CONSTRAINT chk_task_time_window CHECK (start_time IS NULL OR end_time IS NULL OR start_time < end_time)`.
+- `CONSTRAINT chk_task_completed_at CHECK ((status = 'COMPLETED' AND completed_at IS NOT NULL) OR (status = 'PENDING' AND completed_at IS NULL))`.
 
 > [!NOTE]
 > **Quy tắc Nghiệp vụ `BUSR-06` về Trạng thái Quá hạn (OVERDUE):**  
@@ -604,7 +646,7 @@ Table ai_reviews {
 
 | Tên Cột | Kiểu Dữ liệu Vật lý | Nullable | Mặc định / Ràng buộc | Mô tả & Giải trình Kỹ thuật |
 |---|---|---|---|---|
-| `id` | `UUID` | No | `uuid_generate_v4()` (PK) | Khóa chính phiên học. |
+| `id` | `UUID` | No | `gen_random_uuid()` (PK) | Khóa chính phiên học. |
 | `user_id` | `UUID` | No | `FK -> users(id) ON DELETE CASCADE` | Người học thực hiện phiên. |
 | `roadmap_id` | `UUID` | No | `FK -> roadmaps(id) ON DELETE CASCADE` | Phiên học thuộc lộ trình nào. |
 | `started_at` | `TIMESTAMPTZ` | No | `NOW()` | Thời điểm bắt đầu bấm giờ phiên học. |
@@ -615,13 +657,18 @@ Table ai_reviews {
 | `last_heartbeat_at` | `TIMESTAMPTZ` | No | `NOW()` | Thời điểm client gửi ping nhịp tim gần nhất (`OS-07`). |
 | `created_at` | `TIMESTAMPTZ` | No | `NOW()` | Thời điểm khởi tạo bản ghi. |
 
+*Ràng buộc bảo vệ tính toàn vẹn phiên học:*
+- `CONSTRAINT chk_session_times CHECK (ended_at IS NULL OR ended_at >= started_at)`.
+- `CONSTRAINT chk_session_status_ended CHECK ((status = 'IN_PROGRESS' AND ended_at IS NULL) OR (status != 'IN_PROGRESS' AND ended_at IS NOT NULL))`.
+- **Bất biến đồng thời:** `CREATE UNIQUE INDEX uq_user_single_active_session ON study_sessions(user_id) WHERE status = 'IN_PROGRESS'` (Một user tại một thời điểm chỉ có tối đa 1 phiên đang diễn ra).
+
 #### Bảng `session_tasks` (Bảng liên kết Nhiều-Nhiều giữa Phiên học và Nhiệm vụ)
 * Mục đích: Cho phép một phiên học chọn nhiều task, hoặc một task được học trong nhiều phiên; ghi nhận task hoàn thành trong phiên.
 * Ánh xạ yêu cầu: `FR-SESSION-002`, `BUSR-09`.
 
 | Tên Cột | Kiểu Dữ liệu Vật lý | Nullable | Mặc định / Ràng buộc | Mô tả & Giải trình Kỹ thuật |
 |---|---|---|---|---|
-| `id` | `UUID` | No | `uuid_generate_v4()` (PK) | Khóa chính. |
+| `id` | `UUID` | No | `gen_random_uuid()` (PK) | Khóa chính. |
 | `session_id` | `UUID` | No | `FK -> study_sessions(id) ON DELETE CASCADE` | Khóa ngoại tới phiên học. |
 | `task_id` | `UUID` | No | `FK -> tasks(id) ON DELETE CASCADE` | Khóa ngoại tới nhiệm vụ. |
 | `is_completed_in_session` | `BOOLEAN` | No | `FALSE` | Đánh dấu task đã được tick xong ngay trong phiên học này. |
@@ -636,11 +683,13 @@ Table ai_reviews {
 
 | Tên Cột | Kiểu Dữ liệu Vật lý | Nullable | Mặc định / Ràng buộc | Mô tả & Giải trình Kỹ thuật |
 |---|---|---|---|---|
-| `id` | `UUID` | No | `uuid_generate_v4()` (PK) | Khóa chính. |
+| `id` | `UUID` | No | `gen_random_uuid()` (PK) | Khóa chính. |
 | `session_id` | `UUID` | No | `FK -> study_sessions(id) ON DELETE CASCADE` | Ghi chú gắn với phiên học nào. |
 | `note_type` | `VARCHAR(20)` | No | `CHECK (note_type IN ('SCRATCHPAD', 'TAKEAWAY'))` | Phân loại ghi chú (Nháp tự do hoặc Đúc kết). |
 | `content` | `TEXT` | No | `''` | Nội dung văn bản ghi chép của người học. |
 | `updated_at` | `TIMESTAMPTZ` | No | `NOW()` | Thời điểm cập nhật nội dung gần nhất. |
+
+*Ràng buộc duy nhất:* `CONSTRAINT uq_session_note_type UNIQUE (session_id, note_type)` đảm bảo mỗi phiên học chỉ có đúng 1 bản nháp Scratchpad và 1 bản đúc kết Takeaway.
 
 ---
 
@@ -652,7 +701,7 @@ Table ai_reviews {
 
 | Tên Cột | Kiểu Dữ liệu Vật lý | Nullable | Mặc định / Ràng buộc | Mô tả & Giải trình Kỹ thuật |
 |---|---|---|---|---|
-| `id` | `UUID` | No | `uuid_generate_v4()` (PK) | Khóa chính. |
+| `id` | `UUID` | No | `gen_random_uuid()` (PK) | Khóa chính. |
 | `roadmap_id` | `UUID` | No | `FK -> roadmaps(id) ON DELETE CASCADE` | Lộ trình được tạm dừng. |
 | `pause_start_date` | `DATE` | No | | Ngày bắt đầu tạm dừng lộ trình. |
 | `pause_end_date` | `DATE` | No | | Ngày kết thúc tạm dừng (ngày học trở lại). |
@@ -668,7 +717,7 @@ Table ai_reviews {
 
 | Tên Cột | Kiểu Dữ liệu Vật lý | Nullable | Mặc định / Ràng buộc | Mô tả & Giải trình Kỹ thuật |
 |---|---|---|---|---|
-| `id` | `UUID` | No | `uuid_generate_v4()` (PK) | Khóa chính. |
+| `id` | `UUID` | No | `gen_random_uuid()` (PK) | Khóa chính. |
 | `roadmap_id` | `UUID` | No | `FK -> roadmaps(id) ON DELETE CASCADE` | Lộ trình được đánh giá. |
 | `user_id` | `UUID` | No | `FK -> users(id) ON DELETE CASCADE` | Người học nhận đánh giá. |
 | `review_cycle` | `VARCHAR(20)` | No | `CHECK (review_cycle IN ('WEEKLY', 'MILESTONE'))` | Chu kỳ đánh giá (Hàng tuần hoặc Sau mỗi cột mốc). |
@@ -702,36 +751,51 @@ Hệ thống FocusFlow được thiết kế bảo đảm đạt **Dạng Chuẩ
 ## 5. Thiết kế Chỉ mục Hiệu năng & Ràng buộc Toàn vẹn (Indexing & Constraints Strategy)
 
 ### 5.1. Chiến lược B-Tree & Partial Indexes
-Nhằm đáp ứng yêu cầu `NFR-PERF-002` (API phản hồi $\le 200$ms cho 20 concurrent users), các chỉ mục (Indexes) được thiết kế có chủ đích bám sát các mẫu truy vấn (Query Patterns) thực tế:
+Nhằm đáp ứng yêu cầu `NFR-PERF-002` (API phản hồi $\le 200$ms cho 20 concurrent users), các chỉ mục (Indexes) được thiết kế có chủ đích bám sát các mẫu truy vấn (Query Patterns) thực tế và bảo vệ bất biến đồng thời:
 
 ```sql
--- 1. Tối ưu hóa truy vấn đăng nhập & xác thực
-CREATE UNIQUE INDEX idx_users_email ON users(email);
+-- 1. Bất biến duy nhất 1 Active Study Session cho mỗi User tại một thời điểm (Chống race condition)
+CREATE UNIQUE INDEX uq_user_single_active_session ON study_sessions(user_id) WHERE status = 'IN_PROGRESS';
 
--- 2. Tối ưu hóa truy vấn xác thực WebCal Feed (Tra cứu theo chuỗi token cực nhanh)
-CREATE UNIQUE INDEX idx_webcal_tokens_token_hash ON webcal_tokens(token_hash) WHERE is_active = TRUE;
+-- 2. Truy vấn nóng lịch sử học tập & Dashboard của User
+CREATE INDEX idx_study_sessions_user_started ON study_sessions(user_id, started_at DESC);
 
--- 3. Tối ưu hóa truy vấn tác vụ theo ngày của người học (Lịch trình Kanban / Calendar view)
+-- 3. Truy vấn các Roadmap của User theo trạng thái
+CREATE INDEX idx_roadmaps_user_status ON roadmaps(user_id, status);
+
+-- 4. Tối ưu hóa truy vấn tác vụ theo ngày của người học (Lịch trình Kanban / Calendar view)
 CREATE INDEX idx_tasks_roadmap_scheduled_date ON tasks(roadmap_id, scheduled_date);
 
--- 4. Tối ưu hóa truy vấn phát hiện tác vụ quá hạn tất định (BUSR-06)
+-- 5. Tối ưu hóa truy vấn phát hiện tác vụ quá hạn tất định (BUSR-06)
 -- Partial Index: Chỉ lập chỉ mục các task chưa xong và có ngày lên lịch
 CREATE INDEX idx_tasks_pending_overdue ON tasks(scheduled_date) 
 WHERE status = 'PENDING' AND scheduled_date IS NOT NULL;
 
--- 5. Tối ưu hóa truy vấn kiểm tra nhịp tim phiên học của Celery Worker (OS-07)
+-- 6. Tối ưu hóa truy vấn kiểm tra nhịp tim phiên học của Celery Worker (OS-07)
 -- Partial Index: Chỉ quét các phiên học đang diễn ra
 CREATE INDEX idx_study_sessions_in_progress ON study_sessions(last_heartbeat_at) 
 WHERE status = 'IN_PROGRESS';
 
--- 6. Tối ưu hóa truy vấn đếm hạn ngạch gọi AI trong chu kỳ
+-- 7. Tối ưu hóa truy vấn đếm hạn ngạch gọi AI trong chu kỳ
 CREATE INDEX idx_ai_quotas_user_cycle ON ai_quotas(user_id, cycle_start, cycle_end);
+
+-- 8. Truy vấn Proposal theo trạng thái để kích hoạt (Strict Apply)
+CREATE INDEX idx_schedule_proposals_roadmap_status ON schedule_proposals(roadmap_id, status);
+
+-- 9. Báo cáo đánh giá AI Review định kỳ theo lộ trình
+CREATE INDEX idx_ai_reviews_roadmap_cycle ON ai_reviews(roadmap_id, review_cycle, generated_at DESC);
+
+-- 10. Tối ưu hóa thống kê giờ học theo Roadmap & bảo vệ Cascade Delete
+CREATE INDEX idx_study_sessions_roadmap_id ON study_sessions(roadmap_id);
+
+-- 11. Tối ưu hóa tra cứu lịch sử phiên của Task & bảo vệ Cascade Delete
+CREATE INDEX idx_session_tasks_task_id ON session_tasks(task_id);
 ```
 
 ### 5.2. Ràng buộc Toàn vẹn Tham chiếu (Foreign Key Actions)
 * **Xóa theo tầng (`ON DELETE CASCADE`):** Áp dụng cho các quan hệ sở hữu phụ thuộc (Composition): Khi xóa 1 `User`, toàn bộ `roadmaps`, `availabilities`, `study_sessions`, `ai_quotas` liên quan sẽ tự động bị xóa sạch, bảo vệ tính sạch sẽ của CSDL và tuân thủ quyền được quên (Right to be Forgotten). Tương tự, khi xóa 1 `Roadmap`, các `milestones`, `tasks`, `pause_records` bị xóa theo.
 * **Chặn xóa (`ON DELETE RESTRICT`):** Áp dụng cho `goals -> roadmaps`: Không cho phép xóa một mục tiêu (`Goal`) nếu mục tiêu đó đã sinh ra các lộ trình học tập đang hoạt động (`Roadmap`), bảo đảm tính toàn vẹn nguồn gốc truy vết.
-* **Gán `NULL` (`ON DELETE SET NULL`):** Áp dụng cho `official_schedules -> tasks`: Khi một lịch chính thức bị xóa hoặc lưu trữ, các task chưa học không bị xóa mà được chuyển về trạng thái `official_schedule_id = NULL` để người dùng tái sử dụng trong Backlog.
+* **Bảo toàn Hàng đợi Backlog (`scheduled_date IS NULL`):** Đối với các tác vụ chưa được xếp lịch cụ thể hoặc được hoàn trả về từ phiên học gián đoạn, hệ thống đặt `scheduled_date = NULL` thay vì xóa bỏ, bảo toàn 100% dữ liệu bài học cho người học theo `FR-TASK-002`.
 
 ---
 
@@ -760,7 +824,7 @@ BEGIN TRANSACTION;
       updated_at = NOW();
 
   -- 4. Chèn hàng loạt (Batch Insert) các task mới từ Proposal
-  INSERT INTO tasks (roadmap_id, milestone_id, official_schedule_id, title, estimated_minutes, scheduled_date, start_time, end_time, status)
+  INSERT INTO tasks (roadmap_id, milestone_id, title, estimated_minutes, scheduled_date, start_time, end_time, status)
   VALUES (...);
 
   -- 5. Đánh dấu Schedule Proposal đã được áp dụng
@@ -827,32 +891,27 @@ Tệp mã nguồn SQL DDL chuẩn hóa, sẵn sàng khởi tạo schema trong Po
 ```sql
 -- =============================================================================
 -- FocusFlow Relational Database Schema DDL (PostgreSQL 16)
--- Generated: 29/09/2026
+-- Standards: ISO/IEC 9075 SQL, 3NF/BCNF, Defense-in-Depth Constraints
+-- Engine: PostgreSQL 16+ (Sử dụng hàm gen_random_uuid() ANSI/Core)
 -- =============================================================================
 
--- Kích hoạt tiện ích mở rộng sinh UUID v4
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- -----------------------------------------------------------------------------
 -- 1. BẢNG USERS
--- -----------------------------------------------------------------------------
 CREATE TABLE users (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email VARCHAR(255) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
     full_name VARCHAR(100) NOT NULL,
     timezone VARCHAR(50) NOT NULL DEFAULT 'Asia/Ho_Chi_Minh',
+    role VARCHAR(20) NOT NULL DEFAULT 'LEARNER' CHECK (role IN ('LEARNER', 'ADMIN')),
     tier VARCHAR(20) NOT NULL DEFAULT 'FREE' CHECK (tier IN ('FREE', 'PREMIUM')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- -----------------------------------------------------------------------------
 -- 2. BẢNG WEBCAL_TOKENS
--- -----------------------------------------------------------------------------
 -- Lưu SHA-256 digest của 32-byte hex CSPRN sinh bởi secrets.token_hex(32)
 CREATE TABLE webcal_tokens (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
     token_hash VARCHAR(64) NOT NULL UNIQUE,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -861,36 +920,35 @@ CREATE TABLE webcal_tokens (
     reset_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- -----------------------------------------------------------------------------
 -- 3. BẢNG AI_QUOTAS
--- -----------------------------------------------------------------------------
+-- Hỗ trợ cơ chế 2 pha: Reserve -> Commit / Release chống Race Condition
 CREATE TABLE ai_quotas (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
     monthly_limit INTEGER NOT NULL DEFAULT 30 CHECK (monthly_limit > 0),
     used_calls INTEGER NOT NULL DEFAULT 0 CHECK (used_calls >= 0),
+    reserved_calls INTEGER NOT NULL DEFAULT 0 CHECK (reserved_calls >= 0),
     tokens_consumed INTEGER NOT NULL DEFAULT 0 CHECK (tokens_consumed >= 0),
     cycle_start TIMESTAMPTZ NOT NULL,
     cycle_end TIMESTAMPTZ NOT NULL,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT chk_ai_quota_limit CHECK (used_calls + reserved_calls <= monthly_limit),
+    CONSTRAINT chk_ai_quota_cycle CHECK (cycle_end > cycle_start)
 );
 
--- -----------------------------------------------------------------------------
 -- 4. BẢNG AVAILABILITIES
--- -----------------------------------------------------------------------------
+-- Mỗi User có duy nhất 1 cấu hình quỹ thời gian rảnh
 CREATE TABLE availabilities (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
     mode VARCHAR(10) NOT NULL DEFAULT 'MODE_A' CHECK (mode IN ('MODE_A', 'MODE_B')),
     weekly_schedule JSONB NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- -----------------------------------------------------------------------------
 -- 5. BẢNG GOALS
--- -----------------------------------------------------------------------------
 CREATE TABLE goals (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
     raw_description TEXT NOT NULL,
@@ -899,53 +957,52 @@ CREATE TABLE goals (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- -----------------------------------------------------------------------------
 -- 6. BẢNG ROADMAPS
--- -----------------------------------------------------------------------------
+-- Cho phép nhiều Roadmap ACTIVE song song phục vụ đa mục tiêu học tập
 CREATE TABLE roadmaps (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     goal_id UUID NOT NULL REFERENCES goals(id) ON DELETE RESTRICT,
     title VARCHAR(255) NOT NULL,
     description TEXT,
     status VARCHAR(20) NOT NULL DEFAULT 'INITIALIZED' 
-        CHECK (status IN ('INITIALIZED', 'ACTIVE', 'PAUSED', 'COMPLETED')),
+        CHECK (status IN ('INITIALIZED', 'ACTIVE', 'PAUSED', 'COMPLETED', 'ARCHIVED')),
     start_date DATE,
     target_date DATE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT chk_roadmap_dates CHECK (target_date IS NULL OR start_date IS NULL OR target_date >= start_date)
 );
 
--- -----------------------------------------------------------------------------
 -- 7. BẢNG MILESTONES
--- -----------------------------------------------------------------------------
+-- Thứ tự tuần tự sequence_order là duy nhất trong cùng một Roadmap
 CREATE TABLE milestones (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     roadmap_id UUID NOT NULL REFERENCES roadmaps(id) ON DELETE CASCADE,
     sequence_order INTEGER NOT NULL CHECK (sequence_order >= 1),
     title VARCHAR(255) NOT NULL,
     description TEXT,
     status VARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'APPROVED')),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_milestone_roadmap_sequence UNIQUE (roadmap_id, sequence_order),
+    CONSTRAINT uq_milestone_id_roadmap UNIQUE (id, roadmap_id)
 );
 
--- -----------------------------------------------------------------------------
 -- 8. BẢNG SCHEDULE_PROPOSALS
--- -----------------------------------------------------------------------------
 CREATE TABLE schedule_proposals (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     roadmap_id UUID NOT NULL REFERENCES roadmaps(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     proposal_data JSONB NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'APPLIED', 'DISCARDED')),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- -----------------------------------------------------------------------------
 -- 9. BẢNG OFFICIAL_SCHEDULES
--- -----------------------------------------------------------------------------
 CREATE TABLE official_schedules (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     roadmap_id UUID NOT NULL UNIQUE REFERENCES roadmaps(id) ON DELETE CASCADE,
     total_sessions INTEGER NOT NULL DEFAULT 0 CHECK (total_sessions >= 0),
     total_hours INTEGER NOT NULL DEFAULT 0 CHECK (total_hours >= 0),
@@ -953,30 +1010,34 @@ CREATE TABLE official_schedules (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- -----------------------------------------------------------------------------
 -- 10. BẢNG TASKS
--- -----------------------------------------------------------------------------
+-- Bảo vệ tính nhất quán khung giờ và trạng thái hoàn thành
+-- Khóa ngoại phức hợp (milestone_id, roadmap_id) ngăn chặn hoàn toàn lệch lộ trình
 CREATE TABLE tasks (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     roadmap_id UUID NOT NULL REFERENCES roadmaps(id) ON DELETE CASCADE,
-    milestone_id UUID NOT NULL REFERENCES milestones(id) ON DELETE CASCADE,
-    official_schedule_id UUID REFERENCES official_schedules(id) ON DELETE SET NULL,
+    milestone_id UUID NOT NULL,
     title VARCHAR(255) NOT NULL,
     description TEXT,
     estimated_minutes INTEGER NOT NULL CHECK (estimated_minutes BETWEEN 15 AND 240),
     scheduled_date DATE,
     start_time TIME,
     end_time TIME,
-    status VARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'COMPLETED')),
+    status VARCHAR(20) NOT NULL DEFAULT 'TODO' 
+        CHECK (status IN ('TODO', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED')),
     completed_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT fk_tasks_milestone_roadmap FOREIGN KEY (milestone_id, roadmap_id) 
+        REFERENCES milestones(id, roadmap_id) ON DELETE CASCADE,
+    CONSTRAINT chk_task_time_window CHECK (start_time IS NULL OR end_time IS NULL OR start_time < end_time),
+    CONSTRAINT chk_task_completed_at CHECK ((status = 'COMPLETED' AND completed_at IS NOT NULL) OR (status != 'COMPLETED' AND completed_at IS NULL))
 );
 
--- -----------------------------------------------------------------------------
 -- 11. BẢNG STUDY_SESSIONS
--- -----------------------------------------------------------------------------
+-- Bảo vệ toàn vẹn thời gian học và trạng thái kết thúc phiên
 CREATE TABLE study_sessions (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     roadmap_id UUID NOT NULL REFERENCES roadmaps(id) ON DELETE CASCADE,
     started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -986,38 +1047,39 @@ CREATE TABLE study_sessions (
     status VARCHAR(20) NOT NULL DEFAULT 'IN_PROGRESS' 
         CHECK (status IN ('IN_PROGRESS', 'COMPLETED', 'PARTIAL_COMPLETED', 'CANCELLED')),
     last_heartbeat_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT chk_session_times CHECK (ended_at IS NULL OR ended_at >= started_at),
+    CONSTRAINT chk_session_status_ended CHECK ((status = 'IN_PROGRESS' AND ended_at IS NULL) OR (status != 'IN_PROGRESS' AND ended_at IS NOT NULL))
 );
 
--- -----------------------------------------------------------------------------
 -- 12. BẢNG SESSION_TASKS
--- -----------------------------------------------------------------------------
+-- Bảng liên kết quan hệ N:M giữa phiên học và các task thực hiện trong phiên
 CREATE TABLE session_tasks (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     session_id UUID NOT NULL REFERENCES study_sessions(id) ON DELETE CASCADE,
     task_id UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    allocated_minutes INTEGER NOT NULL DEFAULT 0 CHECK (allocated_minutes >= 0),
     is_completed_in_session BOOLEAN NOT NULL DEFAULT FALSE,
     time_spent_minutes INTEGER NOT NULL DEFAULT 0 CHECK (time_spent_minutes >= 0),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT uq_session_task UNIQUE (session_id, task_id)
 );
 
--- -----------------------------------------------------------------------------
 -- 13. BẢNG STUDY_NOTES
--- -----------------------------------------------------------------------------
+-- Mỗi phiên học có duy nhất 1 Scratchpad và 1 Takeaway
 CREATE TABLE study_notes (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     session_id UUID NOT NULL REFERENCES study_sessions(id) ON DELETE CASCADE,
     note_type VARCHAR(20) NOT NULL CHECK (note_type IN ('SCRATCHPAD', 'TAKEAWAY')),
     content TEXT NOT NULL DEFAULT '',
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT uq_session_note_type UNIQUE (session_id, note_type)
 );
 
--- -----------------------------------------------------------------------------
 -- 14. BẢNG PAUSE_RECORDS
--- -----------------------------------------------------------------------------
 CREATE TABLE pause_records (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     roadmap_id UUID NOT NULL REFERENCES roadmaps(id) ON DELETE CASCADE,
     pause_start_date DATE NOT NULL,
     pause_end_date DATE NOT NULL,
@@ -1027,11 +1089,9 @@ CREATE TABLE pause_records (
     CONSTRAINT chk_pause_dates CHECK (pause_end_date >= pause_start_date)
 );
 
--- -----------------------------------------------------------------------------
 -- 15. BẢNG AI_REVIEWS
--- -----------------------------------------------------------------------------
 CREATE TABLE ai_reviews (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     roadmap_id UUID NOT NULL REFERENCES roadmaps(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     review_cycle VARCHAR(20) NOT NULL CHECK (review_cycle IN ('WEEKLY', 'MILESTONE')),
@@ -1043,15 +1103,59 @@ CREATE TABLE ai_reviews (
 );
 
 -- =============================================================================
--- TỐI ƯU HÓA CHỈ MỤC HIỆU NĂNG (INDEXES)
+-- CHỈ MỤC HIỆU NĂNG & BẢO VỆ ĐỒNG THỜI (INDEXES & CONCURRENCY CONSTRAINTS)
 -- =============================================================================
-CREATE UNIQUE INDEX idx_webcal_tokens_token_hash ON webcal_tokens(token_hash) WHERE is_active = TRUE;
+
+-- 1. Bất biến duy nhất 1 Active Study Session cho mỗi User tại một thời điểm (Chống race condition)
+CREATE UNIQUE INDEX uq_user_single_active_session ON study_sessions(user_id) WHERE status = 'IN_PROGRESS';
+
+-- 2. Truy vấn nóng lịch sử học tập & Dashboard của User
+CREATE INDEX idx_study_sessions_user_started ON study_sessions(user_id, started_at DESC);
+
+-- 3. Truy vấn các Roadmap của User theo trạng thái
+CREATE INDEX idx_roadmaps_user_status ON roadmaps(user_id, status);
+
+-- 4. Truy vấn Task theo Roadmap và ngày xếp lịch
 CREATE INDEX idx_tasks_roadmap_scheduled_date ON tasks(roadmap_id, scheduled_date);
-CREATE INDEX idx_tasks_pending_overdue ON tasks(scheduled_date) WHERE status = 'PENDING' AND scheduled_date IS NOT NULL;
+
+-- 5. Phát hiện Task quá hạn tất định (Deterministic Overdue Formula - BUSR-06)
+CREATE INDEX idx_tasks_todo_overdue ON tasks(scheduled_date) WHERE status = 'TODO' AND scheduled_date IS NOT NULL;
+
+-- 6. Monitor Heartbeat phiên học gián đoạn (Celery Beat Background Job - BUSR-09)
 CREATE INDEX idx_study_sessions_in_progress ON study_sessions(last_heartbeat_at) WHERE status = 'IN_PROGRESS';
+
+-- 7. Kiểm tra Quota AI theo chu kỳ của User
 CREATE INDEX idx_ai_quotas_user_cycle ON ai_quotas(user_id, cycle_start, cycle_end);
-CREATE INDEX idx_milestones_roadmap_seq ON milestones(roadmap_id, sequence_order);
-CREATE INDEX idx_study_notes_session ON study_notes(session_id);
+
+-- 8. Truy vấn Proposal theo trạng thái để kích hoạt (Strict Apply)
+CREATE INDEX idx_schedule_proposals_roadmap_status ON schedule_proposals(roadmap_id, status);
+
+-- 9. Báo cáo đánh giá AI Review định kỳ theo lộ trình
+CREATE INDEX idx_ai_reviews_roadmap_cycle ON ai_reviews(roadmap_id, review_cycle, generated_at DESC);
+
+-- 10. Tối ưu hóa thống kê giờ học theo Roadmap & bảo vệ Cascade Delete
+CREATE INDEX idx_study_sessions_roadmap_id ON study_sessions(roadmap_id);
+
+-- 11. Tối ưu hóa tra cứu lịch sử phiên của Task & bảo vệ Cascade Delete
+CREATE INDEX idx_session_tasks_task_id ON session_tasks(task_id);
+
+-- 12. Tối ưu hóa truy vấn tác vụ theo mốc học tập & bảo vệ Cascade Delete (FIND-DB-02)
+CREATE INDEX idx_tasks_milestone_id ON tasks(milestone_id);
+
+-- 13. Tối ưu hóa tra cứu mục tiêu của người dùng & bảo vệ Cascade Delete (FIND-DB-03)
+CREATE INDEX idx_goals_user_id ON goals(user_id);
+
+-- 14. Tối ưu hóa kiểm tra RESTRICT khi xóa mục tiêu & tra cứu lộ trình (FIND-DB-03)
+CREATE INDEX idx_roadmaps_goal_id ON roadmaps(goal_id);
+
+-- 15. Tối ưu hóa tra cứu đề xuất lịch của người dùng & bảo vệ Cascade Delete (FIND-DB-03)
+CREATE INDEX idx_schedule_proposals_user_id ON schedule_proposals(user_id);
+
+-- 16. Tối ưu hóa tra cứu lịch sử tạm dừng của lộ trình & bảo vệ Cascade Delete (FIND-DB-03)
+CREATE INDEX idx_pause_records_roadmap_id ON pause_records(roadmap_id);
+
+-- 17. Tối ưu hóa tra cứu báo cáo AI của người dùng & bảo vệ Cascade Delete (FIND-DB-03)
+CREATE INDEX idx_ai_reviews_user_id ON ai_reviews(user_id);
 ```
 
 ---
