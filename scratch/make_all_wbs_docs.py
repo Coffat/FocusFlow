@@ -461,24 +461,24 @@ def build_wbs_1_3():
 # ==============================================================================
 def build_wbs_2_1():
     elements = []
-    elements.append(make_para("HỒ SƠ ĐẶC TẢ YÊU CẦU PHẦN MỀM (SRS v1.0)", style="Title", bold=True, align="center", size=32, space_before=120, space_after=60))
-    elements.append(make_para("WBS 2.1 — SOFTWARE REQUIREMENTS SPECIFICATION THEO CHUẨN ISO/IEC/IEEE 29148:2018", style="Subtitle", italic=True, align="center", size=22, space_after=180))
+    elements.append(make_para("HỒ SƠ ĐẶC TẢ YÊU CẦU PHẦN MỀM (SRS v1.1)", style="Title", bold=True, align="center", size=32, space_before=120, space_after=60))
+    elements.append(make_para("WBS 2.1 — SOFTWARE REQUIREMENTS SPECIFICATION THEO CHUẨN ISO/IEC/IEEE 29148:2018 (PHIÊN BẢN v1.1)", style="Subtitle", italic=True, align="center", size=22, space_after=180))
     
     meta = [
         ("Tên Dự Án", "FocusFlow — Hệ thống hỗ trợ lập kế hoạch và thực thi lộ trình tự học thích ứng tích hợp AI"),
-        ("Hạng Mục WBS", "WBS 2.1: Soạn thảo hồ sơ SRS v1.0 theo chuẩn ISO/IEC/IEEE 29148:2018"),
+        ("Hạng Mục WBS", "WBS 2.1: Soạn thảo hồ sơ SRS v1.1 theo chuẩn ISO/IEC/IEEE 29148:2018"),
         ("Sinh Viên Phụ Trách", "Vũ Toàn Thắng (Lead BA / System Analyst)"),
-        ("Thời Gian Thực Hiện", "06/09/2026 – 12/09/2026 (Theo kế hoạch WBS Gantt Chart)"),
+        ("Thời Gian Thực Hiện", "06/09/2026 – 30/09/2026 (Cập nhật sau thẩm định & chuẩn hóa Actor)"),
         ("Chuẩn Mực Kỹ Thuật", "ISO/IEC/IEEE 29148:2018 (Systems and software engineering — Requirements engineering)"),
         ("Giảng Viên Hướng Dẫn", "Thầy/Cô Bộ môn Công nghệ Phần mềm — Khoa Công nghệ Thông tin"),
-        ("Phiên Bản & Trạng Thái", "Phiên bản 1.0 — Chuẩn Cơ sở Đã Đóng Băng (Baseline Frozen)")
+        ("Phiên Bản & Trạng Thái", "Phiên bản 1.1 — Chuẩn Cơ sở Sau Thẩm định (Baseline Post-Audit)")
     ]
     elements.append(make_metadata_table(meta))
     elements.append(make_para("", space_after=180))
     
     elements.append(make_heading("1. GIỚI THIỆU TỔNG QUAN & PHẠM VI SẢN PHẨM", level=1))
-    elements.append(make_para("Hồ sơ SRS v1.0 đặc tả đầy đủ các yêu cầu cho nền tảng FocusFlow — Hệ thống hỗ trợ lập kế hoạch và thực thi lộ trình tự học thích ứng tích hợp AI, giải quyết triệt để 3 nút thắt của người tự học (Rào cản phân rã, Phân mảnh công cụ, Đứt gãy kỷ luật khi có biến cố)."))
-    elements.append(make_para("Hệ thống quản lý vòng đời học tập qua 4 giai đoạn logic khép kín: (1) Khởi tạo lộ trình & Duyệt lịch 2 cấp; (2) Không gian thực thi phiên học tập trung; (3) Thích ứng & Quản trị lịch; (4) Tổng kết & Cải tiến chu kỳ."))
+    elements.append(make_para("Hồ sơ SRS v1.1 đặc tả đầy đủ các yêu cầu cho nền tảng FocusFlow — Hệ thống hỗ trợ lập kế hoạch và thực thi lộ trình tự học thích ứng tích hợp AI, giải quyết triệt để 3 nút thắt của người tự học (Rào cản phân rã, Phân mảnh công cụ, Đứt gãy kỷ luật khi có biến cố)."))
+    elements.append(make_para("Hệ thống quản lý vòng đời học tập qua 4 giai đoạn logic khép kín: (1) Khởi tạo lộ trình & Duyệt lịch 2 cấp; (2) Không gian thực thi phiên học tập trung; (3) Thích ứng & Quản trị lịch; (4) Tổng kết & Cải tiến chu kỳ (Supporting Subdomain). Hệ thống bổ sung Phân hệ Quản trị viên (Admin Portal tối giản) nhằm phục vụ quản trị phân tầng tài khoản và giám sát tài nguyên AI."))
     
     elements.append(make_heading("2. DANH MỤC CA SỬ DỤNG CẤP YÊU CẦU (USE CASE INVENTORY)", level=1))
     uc_headers = ["Mã UC", "Tên Use Case", "Tác nhân chính", "Tác nhân hỗ trợ", "Mô tả tóm tắt"]
@@ -500,18 +500,22 @@ def build_wbs_2_1():
         ["UC-CAL-02", "Đăng ký luồng WebCal", "Learner", "External Cal", "Lấy URL Secure Token dán vào Google/Apple Calendar"],
         ["UC-REP-01", "Xem thống kê định lượng", "Learner", "Hệ thống", "Biểu đồ toán học tổng thời gian học, tỷ lệ hoàn thành"],
         ["UC-REP-02", "Yêu cầu AI Review", "Learner", "External LLM", "AI đọc thống kê và Takeaways để nhận xét chu kỳ"],
-        ["UC-QUOTA-01", "Mock Upgrade Sandbox", "Learner", "Hệ thống", "Mô phỏng nâng cấp tài khoản, mở rộng quota gọi AI"]
+        ["UC-QUOTA-01", "Mock Upgrade Sandbox", "Learner", "Hệ thống", "Mô phỏng nâng cấp tài khoản, mở rộng quota gọi AI"],
+        ["UC-ADM-01", "Đăng nhập Quản trị viên", "Administrator", "Hệ thống", "Xác thực tài khoản Admin, phân quyền RBAC (role = 'ADMIN')"],
+        ["UC-ADM-02", "Quản lý User & Quota", "Administrator", "Hệ thống", "Quản lý danh sách người dùng, đổi Tier (Free/Premium), reset quota"],
+        ["UC-ADM-03", "Giám sát Chỉ số Vận hành", "Administrator", "Hệ thống", "Dashboard giám sát người dùng, token AI tiêu thụ, tỷ lệ API & uptime"]
     ]
     elements.append(make_table([1400, 2200, 1400, 1600, 2760], uc_headers, uc_data))
     
     elements.append(make_heading("3. ĐẶC TẢ YÊU CẦU CHỨC NĂNG CỐT LÕI (FUNCTIONAL REQUIREMENTS)", level=1))
-    elements.append(make_para("SRS v1.0 định nghĩa 13 phân hệ chức năng chi tiết với cấu trúc tiền điều kiện, luồng chính, luồng ngoại lệ và tiêu chí chấp nhận:"))
+    elements.append(make_para("SRS v1.1 định nghĩa 14 phân hệ chức năng chi tiết với cấu trúc tiền điều kiện, luồng chính, luồng ngoại lệ và tiêu chí chấp nhận:"))
     elements.append(make_bullet("FR-AUTH-001 & 002: Bắt buộc Onboarding định danh trước khi dùng AI; 100% mật khẩu được băm mã hóa.", bold_prefix="Phân hệ Xác thực: "))
     elements.append(make_bullet("FR-PLAN-001 đến 003: Phân rã 2 cấp (Milestones & Proposal); Cổng kiểm duyệt Backend Validation Gate ngăn chặn xếp lịch quá tải trước khi lưu Official Schedule.", bold_prefix="Phân hệ Lập kế hoạch AI: "))
     elements.append(make_bullet("FR-AVAIL-001 đến 003: Hỗ trợ Mode A (0.5h - 14h/ngày), Mode B (tràn giờ mềm tối đa 30 phút có cảnh báo), và kiểm tra dung lượng khi học đa lộ trình.", bold_prefix="Phân hệ Thời gian rảnh: "))
     elements.append(make_bullet("FR-SESSION-001 đến 003: Study Workspace tích hợp Pomodoro/Stopwatch, Scratchpad và Key Takeaways; bảo toàn số phút thực học khi bị dừng sớm.", bold_prefix="Phân hệ Phiên học: "))
     elements.append(make_bullet("FR-ADAPT-001 & FR-PAUSE-001..002: Phát hiện quá hạn tất định thuần túy backend; Tạm dừng lộ trình kích hoạt Domino Shift dời lùi đúng số ngày tương ứng, vô hiệu hóa cảnh báo quá hạn khi Pause.", bold_prefix="Phân hệ Thích ứng & Lịch trình: "))
     elements.append(make_bullet("FR-AI-001..002 & FR-QUOTA-001..002: Hard Timeout 55s, auto-retry schema tối đa 2 lần không tính quota, kiểm tra quota nguyên tử tại middleware, Mock Upgrade Sandbox.", bold_prefix="Phân hệ An toàn AI & Quota: "))
+    elements.append(make_bullet("FR-ADM-001 đến 003: Xác thực RBAC (role = 'ADMIN'), bảo vệ route /admin/*; Quản trị danh sách người dùng, chuyển đổi Tier/Quota tức thời; Dashboard giám sát vận hành và tiêu thụ token AI.", bold_prefix="Phân hệ Quản trị viên (Admin Portal): "))
     
     elements.append(make_heading("4. ĐẶC TẢ YÊU CẦU PHI CHỨC NĂNG ĐỊNH LƯỢNG (NFRs)", level=1))
     elements.append(make_bullet("NFR-PERF-001: Timeout AI 55s, trần hiển thị 60s. NFR-PERF-002: Thao tác UI <= 500ms, API backend <= 200ms ở mức tải 20 concurrent users.", bold_prefix="Hiệu năng (NFR-PERF): "))
@@ -545,7 +549,7 @@ def build_wbs_2_2():
     elements.append(make_heading("1. NGUYÊN TẮC QUẢN TRỊ QUY TẮC NGHIỆP VỤ", level=1))
     elements.append(make_para("Quy tắc nghiệp vụ (Business Rules - BUSR) là các ràng buộc hoặc công thức tính toán mang tính bắt buộc, định hình hành vi hệ thống và bảo vệ tính toàn vẹn dữ liệu. Toàn bộ quy tắc trong FocusFlow được thiết kế độc lập với giải pháp hiện thực (công nghệ cơ sở dữ liệu hay ngôn ngữ lập trình cụ thể)."))
     
-    elements.append(make_heading("2. CHI TIẾT 10 QUY TẮC NGHIỆP VỤ CỐT LÕI (BUSR-01 ĐẾN BUSR-10)", level=1))
+    elements.append(make_heading("2. CHI TIẾT 12 QUY TẮC NGHIỆP VỤ CỐT LÕI (BUSR-01 ĐẾN BUSR-12)", level=1))
     busr_headers = ["Mã BUSR", "Tên Quy tắc Nghiệp vụ", "Mô tả Logic & Ràng buộc Kỹ thuật", "Mã FR chi phối"]
     busr_data = [
         ["BUSR-01", "Định danh bắt buộc (Onboarding First)", "Bắt buộc Đăng ký/Đăng nhập trước khi tạo kế hoạch; Roadmap, Session, Quota gắn chặt với User ID.", "FR-AUTH-001, FR-GOAL-001"],
@@ -557,7 +561,9 @@ def build_wbs_2_2():
         ["BUSR-07", "Tịnh tiến dây chuyền khi tạm dừng (Domino Shift)", "Pause từ ngày A đến B: Tự động dời toàn bộ lịch từ A lùi về sau đúng số ngày khả dụng, giữ nguyên thứ tự task.", "FR-PAUSE-001, FR-PAUSE-002"],
         ["BUSR-08", "Bảo mật lịch ngoại vi (1-Way WebCal)", "WebCal chỉ đọc 1 chiều; chỉ xuất Official Schedule; Reset Token hủy ngay token cũ; che giấu URL khỏi server log.", "FR-CALENDAR-002, 003"],
         ["BUSR-09", "Bảo toàn dữ liệu khi gián đoạn phiên học", "Dừng sớm: Lưu phút thực học; task xong giữ nguyên COMPLETED; task dở dang về Backlog; phân định PARTIAL vs CANCELLED.", "FR-SESSION-003"],
-        ["BUSR-10", "Kiểm soát hạn ngạch & An toàn AI", "Middleware giữ chỗ Quota nguyên tử; không trừ quota khi retry lỗi schema/timeout; sanitization prompt.", "FR-QUOTA-001, FR-AI-001"]
+        ["BUSR-10", "Kiểm soát hạn ngạch & An toàn AI", "Middleware giữ chỗ Quota nguyên tử; không trừ quota khi retry lỗi schema/timeout; sanitization prompt.", "FR-QUOTA-001, FR-AI-001"],
+        ["BUSR-11", "Phân quyền Quản trị viên (Admin RBAC Gate)", "Route /admin/* và API /api/v1/admin/* bắt buộc kiểm tra JWT có claim role = 'ADMIN'; chặn 403 Forbidden.", "FR-ADM-001, FR-ADM-002"],
+        ["BUSR-12", "Tính độc lập của AI Review (Supporting)", "AI Review là Supporting Subdomain phản tư (Zimmerman SRL); nhận xét định tính không tự ý sửa đổi lộ trình.", "FR-REPORT-002"]
     ]
     elements.append(make_table([1200, 2200, 4460, 1500], busr_headers, busr_data))
     
@@ -600,15 +606,16 @@ def build_wbs_2_3():
         ["Nỗi đau 2: Phân mảnh công cụ (WBS 1.1)", "BR-002", "BUSR-09", "FR-SESSION-001..003, FR-TASK-001..002", "NFR-PERF-002, NFR-UX-001..002 (Lighthouse >= 90)", "EVAL-02: Hiệu quả >= 80%. EVAL-04: TSR >= 90%. EVAL-05: SUS >= 80."],
         ["Nỗi đau 3: Đứt gãy kế hoạch (WBS 1.1)", "BR-003", "BUSR-06, 07", "FR-ADAPT-001, FR-ADAPT-002, FR-PAUSE-001..002", "NFR-PERF-002, NFR-AVAIL-001 (>= 95%)", "EVAL-03: Duy trì >= 70%. AC: Quét date < TODAY; Domino Shift dời lùi."],
         ["Tích hợp Lịch ngoại vi (WBS 1.3)", "BR-004", "BUSR-08", "FR-CALENDAR-001 (.ics), FR-CALENDAR-002..003 (WebCal)", "NFR-SEC-004 (Secure Token & Log Hygiene)", "AC: Chỉ xuất Official Schedule; WebCal 1 chiều; Reset hủy token cũ."],
-        ["Báo cáo & AI Review (WBS 1.1)", "BR-002, 003", "BUSR-10", "FR-REPORT-001 (Toán học), FR-REPORT-002 (AI Review)", "NFR-PERF-002, NFR-SEC-003 (Sanitization)", "AC: Thống kê toán học chính xác 100%; AI Review đọc đúng Takeaways."],
-        ["Quản trị Chi phí & AI (WBS 1.2)", "BR-005", "BUSR-10", "FR-QUOTA-001..002 (Mock Sandbox), FR-AI-001..002", "NFR-PERF-001 (Timeout 55s), NFR-SEC-001, NFR-AI-001", "AC: Kiểm tra Quota nguyên tử; Retry <= 2 lần không tính quota; Sandbox."]
+        ["Báo cáo & AI Review (WBS 1.1)", "BR-002, 003", "BUSR-10, 12", "FR-REPORT-001 (Toán học), FR-REPORT-002 (AI Review)", "NFR-PERF-002, NFR-SEC-003 (Sanitization)", "AC: Thống kê toán học chính xác 100%; AI Review đọc đúng Takeaways."],
+        ["Quản trị Chi phí & AI (WBS 1.2)", "BR-005", "BUSR-10", "FR-QUOTA-001..002 (Mock Sandbox), FR-AI-001..002", "NFR-PERF-001 (Timeout 55s), NFR-SEC-001, NFR-AI-001", "AC: Kiểm tra Quota nguyên tử; Retry <= 2 lần không tính quota; Sandbox."],
+        ["Quản trị & Phân quyền RBAC (WBS 1.3)", "BR-006", "BUSR-11, 10", "FR-ADM-001 (RBAC Auth), FR-ADM-002 (User/Quota), FR-ADM-003 (Dashboard)", "NFR-SEC-002, NFR-PERF-002 (<= 500ms)", "AC: 100% chặn user thường vào /admin; Cập nhật Tier/Quota <= 500ms; Dashboard trung thực."]
     ]
     elements.append(make_table([1400, 800, 1100, 2460, 1600, 2000], rtm_headers, rtm_data))
     
     elements.append(make_heading("3. BÁO CÁO PHÂN TÍCH ĐỘ PHỦ YÊU CẦU (COVERAGE & ORPHAN AUDIT)", level=1))
-    elements.append(make_bullet("100% (Tất cả 13 nhóm FR và 5 nhóm NFR đều bắt nguồn từ bài toán thực tế và nghiên cứu đối sánh tại Báo cáo WBS 1.1).", bold_prefix="Độ phủ nguồn gốc (Origin Traceability): "))
+    elements.append(make_bullet("100% (Tất cả 14 nhóm FR và 5 nhóm NFR đều bắt nguồn từ bài toán thực tế, quản trị phân quyền và đối sánh giải pháp tại Báo cáo WBS 1.1).", bold_prefix="Độ phủ nguồn gốc (Origin Traceability): "))
     elements.append(make_bullet("100% (Tất cả yêu cầu đều có tiêu chí chấp nhận cụ thể hoặc chỉ số định lượng EVAL kiểm chứng được).", bold_prefix="Độ phủ kiểm chứng (Verification Coverage): "))
-    elements.append(make_bullet("0 Orphan Requirements (Không có tính năng thừa thãi nằm ngoài phạm vi); 0 Orphan Rules (Mọi quy tắc nghiệp vụ đều có ca sử dụng và luồng mã nguồn bảo vệ).", bold_prefix="Kiểm toán phần tử mồ côi: "))
+    elements.append(make_bullet("0 Orphan Requirements (Không có tính năng thừa thãi nằm ngoài phạm vi); 0 Orphan Rules; 0 Orphan Actors (Administrator được bao phủ đầy đủ qua UC-ADM-01..03 và FR-ADM-001..003).", bold_prefix="Kiểm toán phần tử mồ côi: "))
     
     save_docx(elements, "WBS 2.3 - Thiết lập ma trận truy vết yêu cầu (RTM).docx")
 
