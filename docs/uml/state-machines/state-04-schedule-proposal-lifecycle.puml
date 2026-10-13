@@ -1,0 +1,29 @@
+@startuml Schedule_Proposal_Lifecycle
+skinparam monochrome false
+skinparam roundcorner 10
+skinparam state {
+    BackgroundColor LightYellow
+    BorderColor DarkGoldenRod
+    ArrowColor Navy
+}
+
+title FocusFlow — Máy trạng thái Đề xuất Lịch trình (Schedule Proposal Lifecycle)
+
+state "Schedule Proposal Lifecycle" as ProposalMachine {
+    [*] --> DRAFT
+
+    state DRAFT {
+        [*] --> PreviewMode
+        PreviewMode --> PreviewMode : AdjustTasks / user_reorders_or_edits()
+    }
+
+    DRAFT --> DISCARDED : UserDiscard / discard_proposal()
+    DRAFT --> DISCARDED : RegenerateProposal / create_new_draft()
+
+    DRAFT --> APPLIED : UserApply [passes_backend_validation_gate] / begin_tx(), persist_schedule(), batch_insert_tasks(), update_roadmap('ACTIVE'), commit()
+
+    APPLIED --> [*]
+    DISCARDED --> [*]
+}
+
+@enduml

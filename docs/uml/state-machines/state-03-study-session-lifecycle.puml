@@ -1,0 +1,33 @@
+@startuml Study_Session_Lifecycle
+skinparam monochrome false
+skinparam roundcorner 10
+skinparam state {
+    BackgroundColor LightYellow
+    BorderColor DarkGoldenRod
+    ArrowColor Navy
+}
+
+title FocusFlow — Máy trạng thái Phiên học & Phân định Gián đoạn (Study Session Lifecycle)
+
+state "Study Session Lifecycle" as SessionMachine {
+    [*] --> IN_PROGRESS
+
+    state IN_PROGRESS {
+        [*] --> ActiveStudying
+        ActiveStudying --> ActiveStudying : HeartbeatPing [interval = 60s] / update_heartbeat(), add_actual_minutes()
+    }
+
+    IN_PROGRESS --> COMPLETED : FinishSessionNormal [all_tasks_completed or timer_expired] / record_ended_at(), save_notes()
+
+    state "OS-01 Threshold\nEvaluation" as check_threshold <<choice>>
+
+    IN_PROGRESS --> check_threshold : StopOrTimeout [UserStopEarly / CeleryBeatSweep]
+    check_threshold --> PARTIAL_COMPLETED : [completed_tasks >= 1 OR actual_minutes >= 0.5 * planned_minutes] / record_ended_at(), return_unfinished_to_backlog()
+    check_threshold --> CANCELLED : [else] / record_ended_at(), return_all_to_backlog()
+
+    COMPLETED --> [*]
+    PARTIAL_COMPLETED --> [*]
+    CANCELLED --> [*]
+}
+
+@enduml

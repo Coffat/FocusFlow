@@ -1,0 +1,41 @@
+@startuml Roadmap_Lifecycle
+skinparam monochrome false
+skinparam roundcorner 10
+skinparam state {
+    BackgroundColor LightYellow
+    BorderColor DarkGoldenRod
+    ArrowColor Navy
+}
+
+title FocusFlow — Máy trạng thái Vòng đời Lộ trình (Roadmap Lifecycle)
+
+state "Roadmap Lifecycle" as RoadmapMachine {
+    [*] --> INITIALIZED
+
+    note right of INITIALIZED
+      Trạng thái khởi tạo:
+      Người học và AI thiết lập mục tiêu,
+      soạn thảo cột mốc và tạo đề xuất lịch.
+    end note
+
+    INITIALIZED --> ACTIVE : ApplyOfficialSchedule [passes_validation_gate] / persist_official_schedule()
+    INITIALIZED --> ARCHIVED : AbandonGoal / archive_roadmap()
+
+    state ACTIVE {
+        [*] --> TrackingSchedule
+        TrackingSchedule --> TrackingSchedule : TaskUpdated / recalculate_progress()
+    }
+
+    ACTIVE --> PAUSED : RequestPause [valid_pause_range] / execute_domino_shift(), disable_alerts()
+    PAUSED --> ACTIVE : ResumeEarly [user_confirmed] / reactivate_schedule()
+    PAUSED --> ACTIVE : PauseExpired [current_date > PauseEnd] / reactivate_schedule()
+
+    ACTIVE --> COMPLETED : AllTasksCompleted [count(tasks.status != 'COMPLETED') == 0] / record_completion_time()
+    ACTIVE --> ARCHIVED : ArchiveRoadmap / archive_roadmap()
+    PAUSED --> ARCHIVED : AbandonRoadmap / archive_roadmap()
+
+    COMPLETED --> [*]
+    ARCHIVED --> [*]
+}
+
+@enduml

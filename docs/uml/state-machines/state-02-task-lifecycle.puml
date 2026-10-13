@@ -1,0 +1,53 @@
+@startuml Task_Lifecycle
+skinparam monochrome false
+skinparam roundcorner 10
+skinparam state {
+    BackgroundColor LightYellow
+    BorderColor DarkGoldenRod
+    ArrowColor Navy
+}
+
+title FocusFlow — Máy trạng thái Nhiệm vụ & Overdue Động (Task Lifecycle)
+
+state "Task Lifecycle" as TaskMachine {
+    [*] --> TODO
+
+    state "TODO" as TODO {
+        [*] --> Scheduled : [scheduled_date IS NOT NULL]
+        [*] --> Backlog : [scheduled_date IS NULL]
+
+        state "Scheduled" as Scheduled {
+            [*] --> NormalScheduled
+            NormalScheduled --> NormalScheduled : DominoShift / update_scheduled_date()
+            NormalScheduled --> NormalScheduled : Reschedule / change_date()
+            NormalScheduled --> OverdueScheduled : DailyEvaluation [CURRENT_DATE > scheduled_date]
+            OverdueScheduled --> NormalScheduled : Reschedule [new_date >= CURRENT_DATE]
+        }
+
+        state "OverdueScheduled\n<<derived>>" as OverdueScheduled
+        note right of OverdueScheduled
+          Trạng thái phái sinh logic (Runtime Evaluation):
+          CURRENT_DATE > scheduled_date AND status = 'TODO'
+          Không lưu cột enum riêng trong CSDL.
+        end note
+
+        Scheduled --> Backlog : ReturnToBacklog / set_scheduled_date_null()
+        Backlog --> Scheduled : ScheduleTask [valid_date] / set_scheduled_date()
+    }
+
+    TODO --> IN_PROGRESS : StartSession [selected_for_session] / bind_to_session()
+    IN_PROGRESS --> TODO : SessionInterrupted [task_unfinished] / unbind_and_return_to_backlog()
+
+    IN_PROGRESS --> COMPLETED : FinishSession [task_done] / set_completed_at(NOW())
+    TODO --> COMPLETED : ManualTickComplete [roadmap.status != 'COMPLETED'] / set_completed_at(NOW())
+
+    COMPLETED --> TODO : UntickComplete [roadmap.status == 'ACTIVE'] / set_completed_at(NULL)
+
+    TODO --> CANCELLED : ReapplySchedulePolicy [OS-03: scheduled_date >= CURRENT_DATE] / cancel_task()
+    TODO --> CANCELLED : UserCancel / cancel_task()
+
+    COMPLETED --> [*]
+    CANCELLED --> [*]
+}
+
+@enduml
