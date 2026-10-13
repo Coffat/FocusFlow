@@ -1,0 +1,155 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: focusflow-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-focusflow_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-focusflow_secure_password}
+      POSTGRES_DB: ${POSTGRES_DB:-focusflow_db}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./docs/database/schema.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-focusflow_user} -d ${POSTGRES_DB:-focusflow_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - focusflow-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: focusflow-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - focusflow-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: focusflow-backend
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - ./backend:/app
+    environment:
+      - ENVIRONMENT=development
+      - DEBUG=True
+      - POSTGRES_SERVER=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-focusflow_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-focusflow_secure_password}
+      - POSTGRES_DB=${POSTGRES_DB:-focusflow_db}
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-focusflow_user}:${POSTGRES_PASSWORD:-focusflow_secure_password}@postgres:5432/${POSTGRES_DB:-focusflow_db}
+      - DATABASE_URL_SYNC=postgresql://${POSTGRES_USER:-focusflow_user}:${POSTGRES_PASSWORD:-focusflow_secure_password}@postgres:5432/${POSTGRES_DB:-focusflow_db}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - SECRET_KEY=${SECRET_KEY:-change_this_to_a_super_secret_64_character_hex_key_for_jwt_signing}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-1.5-flash}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - focusflow-network
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: focusflow-worker
+    restart: unless-stopped
+    command: ["uv", "run", "celery", "-A", "src.infrastructure.workers.celery_app", "worker", "-l", "info"]
+    volumes:
+      - ./backend:/app
+    environment:
+      - ENVIRONMENT=development
+      - POSTGRES_SERVER=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-focusflow_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-focusflow_secure_password}
+      - POSTGRES_DB=${POSTGRES_DB:-focusflow_db}
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-focusflow_user}:${POSTGRES_PASSWORD:-focusflow_secure_password}@postgres:5432/${POSTGRES_DB:-focusflow_db}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - focusflow-network
+
+  beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: focusflow-beat
+    restart: unless-stopped
+    command: ["uv", "run", "celery", "-A", "src.infrastructure.workers.celery_app", "beat", "-l", "info"]
+    volumes:
+      - ./backend:/app
+    environment:
+      - ENVIRONMENT=development
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - focusflow-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: focusflow-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+    networks:
+      - focusflow-network
+
+volumes:
+  pg_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  focusflow-network:
+    driver: bridge
