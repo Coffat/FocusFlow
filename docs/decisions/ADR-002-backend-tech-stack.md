@@ -4,7 +4,7 @@
 * **Ngày quyết định:** 29/09/2026
 * **Người quyết định:** Vũ Toàn Thắng (Lead BA / System Architect), Phan Đình Duẩn (Senior BA / Quality Lead)
 * **Căn cứ đánh giá:** Khung Rubric Đồ án Tốt nghiệp CNTT — Tiêu chí TC2.1 & TC2.3 (Mức 5)
-* **Yêu cầu liên quan:** NFR-PERF-001, NFR-PERF-002, NFR-AI-001
+* **Yêu cầu liên quan:** NFR-PERF-001, NFR-PERF-002, NFR-AI-001, NFR-SEC-001, NFR-SEC-002, BUSR-10
 
 ---
 

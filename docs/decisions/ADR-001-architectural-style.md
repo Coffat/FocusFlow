@@ -4,7 +4,7 @@
 * **Ngày quyết định:** 29/09/2026
 * **Người quyết định:** Vũ Toàn Thắng (Lead BA / System Architect), Phan Đình Duẩn (Senior BA / Quality Lead)
 * **Căn cứ đánh giá:** Khung Rubric Đồ án Tốt nghiệp CNTT — Tiêu chí TC2.1 & TC2.3 (Mức 5)
-* **Yêu cầu liên quan:** Toàn bộ SRS v1.0, BUSR-01 đến BUSR-10
+* **Yêu cầu liên quan:** Toàn bộ SRS v1.1, BUSR-01 đến BUSR-12, FR-ADM-001..003, UC-ADM-01..03
 
 ---
 

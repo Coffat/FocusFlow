@@ -1,56 +1,62 @@
-# ADR-005: Lựa chọn Giao thức Tương tác AI: Quy trình 2 Bước RESTful kết hợp Server-Sent Events (SSE) & Đường ống LLM 3 Chặng
+# ADR-005: Lựa chọn Giao thức Tương tác AI: Quy trình SSE Hai Chặng Đồng nhất kết hợp Cổng Duyệt Con người 2 Cấp độ (Human-in-the-Loop)
 
-* **Trạng thái:** Được chấp thuận (Approved)
-* **Ngày quyết định:** 29/09/2026
+* **Trạng thái:** Được chấp thuận (Approved — Đã chuẩn hóa theo SRS v1.1)
+* **Ngày quyết định:** 29/09/2026 (Cập nhật chuẩn hóa: 30/09/2026)
 * **Người quyết định:** Vũ Toàn Thắng (Lead BA / System Architect), Phan Đình Duẩn (Senior BA / Quality Lead)
 * **Căn cứ đánh giá:** Khung Rubric Đồ án Tốt nghiệp CNTT — Tiêu chí TC2.1 & TC2.3 (Mức 5)
-* **Yêu cầu liên quan:** FR-PLAN-001, FR-PLAN-002, FR-PLAN-003, NFR-PERF-001, BUSR-10
+* **Yêu cầu liên quan:** FR-PLAN-001, FR-PLAN-002, FR-PLAN-003, FR-QUOTA-001, NFR-PERF-001, NFR-AI-001, BUSR-02, BUSR-10
 
 ---
 
 ## 1. Ngữ cảnh & Đặt vấn đề (Context)
-Quá trình phân rã mục tiêu tự học bằng mô hình ngôn ngữ lớn (Google Gemini API, mô hình cấu hình linh hoạt qua biến môi trường `GEMINI_MODEL`, mặc định `gemini-1.5-flash`) đòi hỏi AI thực hiện suy luận qua 3 chặng tuần tự:
-1. Chặng 1: Làm rõ mục tiêu và ngữ cảnh kiến thức nền (Clarifying Goal Context).
-2. Chặng 2: Phân tích cấu trúc môn học và sinh các mốc kiến thức Cấp 1 (Milestones).
-3. Chặng 3: Phân bổ các đầu việc Cấp 2 chi tiết (Tasks) khớp với quỹ thời gian rảnh.
+Theo đặc tả nghiệp vụ SRS v1.1, quá trình phân rã mục tiêu tự học bằng mô hình ngôn ngữ lớn (Google Gemini API, cấu hình qua `GEMINI_MODEL`, mặc định `gemini-1.5-flash`) bắt buộc phải tuân thủ nguyên tắc **Cổng Kiểm duyệt Con người (Human-in-the-Loop Gate - BUSR-02)** qua 2 cấp độ độc lập:
+1. **Cấp 1 — Cột mốc Tổng quan (Milestones - FR-PLAN-001):** AI sinh danh sách 3–7 cột mốc kiến thức; Learner có toàn quyền xem xét, chỉnh sửa tên/thứ tự, thêm/xóa milestone và bấm **"Duyệt Milestones (Approve Milestones)"**.
+2. **Cấp 2 — Đề xuất Nhiệm vụ Chi tiết (Tasks & Schedule Proposal - FR-PLAN-002):** Dựa trên danh sách Milestones đã duyệt và quỹ thời gian rảnh (Availability), AI phân rã thành các tasks chi tiết (30–120 phút) và xếp vào khung giờ trống thành bản nháp `Schedule Proposal` (trạng thái `DRAFT`) trước khi Learner bấm **"Apply"** (`FR-PLAN-003`).
 
-Tổng thời gian xử lý chuỗi tác vụ này kéo dài từ **15 đến 35 giây**. 
-Nếu sử dụng giao thức HTTP POST đồng bộ hoặc POST streaming đơn lẻ:
-* Dễ gặp rủi ro rớt kết nối mạng ở giây thứ 55 (`NFR-PERF-001`).
-* Khi rớt mạng và kết nối lại, nếu client tự động gửi lại lệnh POST sẽ tạo thành một job mới và trừ thêm hạn ngạch AI của người dùng (vi phạm cam kết Quota trong SRS v1.0).
+Đồng thời, hệ thống đòi hỏi:
+* **Chống rớt mạng & Chống trừ Quota 2 lần:** Tổng thời gian suy luận có thể kéo dài 15–35s. Nếu client mất kết nối và tự động gửi lại lệnh POST, tuyệt đối không được tạo job trùng lặp hay trừ thêm hạn ngạch của người dùng (`BUSR-10`).
+* **Trải nghiệm giao diện đồng nhất:** Người dùng cần theo dõi tiến trình trực quan theo thời gian thực thay vì chờ đợi màn hình trắng (blank screen).
 
 ---
 
 ## 2. Các phương án xem xét (Alternatives)
 
-### Phương án A: HTTP REST API Đồng bộ (Standard JSON POST / Response)
-* Client gửi POST request, chờ 30s và nhận về trọn vẹn khối JSON Proposal.
-* *Ưu điểm:* Hiện thực đơn giản nhất.
-* *Nhược điểm:* Trải nghiệm rất kém; người dùng phải chờ lâu trong vô định; dễ bị gateway timeout.
+### Phương án A: Gộp Toàn bộ 1 Mạch trong 1 SSE Stream Duy nhất
+* Client gửi 1 request, AI tự động chạy liên tục từ Mục tiêu -> Milestones -> Tasks trong 1 kết nối SSE duy nhất.
+* *Ưu điểm:* 1 kết nối duy nhất, hoàn thành nhanh về mặt kỹ thuật.
+* *Nhược điểm:* **Vi phạm nghiêm trọng nguyên tắc Human-in-the-Loop (`BUSR-02`) và `FR-PLAN-001` trong SRS v1.1**. Người học bị tước mất quyền kiểm soát cấu trúc vĩ mô (Milestones); nếu AI hiểu sai mục tiêu, toàn bộ 40 tasks sinh ra đều vô nghĩa, gây quá tải nhận thức (Cognitive Overload) khi phải sửa một danh sách task khổng lồ.
 
-### Phương án B: WebSocket Hai chiều (Bidirectional WebSockets)
-* Mở một kết nối TCP socket hai chiều liên tục giữa Browser và Backend.
-* *Ưu điểm:* Giao tiếp hai chiều tốc độ cao.
-* *Nhược điểm:* Phức tạp không cần thiết; WebSocket khó quản trị qua HTTP load balancer và serverless; luồng sinh lộ trình thực chất chỉ là luồng 1 chiều (Server gửi tiến trình cho Client).
+### Phương án B: Tách 2 Bước bằng HTTP REST API Đồng bộ (Standard JSON POST)
+* Bước 1 gọi POST nhận Milestones; Bước 2 gọi POST nhận Tasks.
+* *Ưu điểm:* Dễ cài đặt.
+* *Nhược điểm:* Bước sinh Tasks chi tiết mất từ 15–30s rất dễ bị gateway timeout (ở giây thứ 55 `NFR-PERF-001`); không hiển thị được thanh phần trăm tiến trình thời gian thực.
 
-### Phương án C: Quy trình 2 Bước Chuẩn RESTful: POST Tạo Job -> GET SSE Native (Được chọn)
-* **Bước 1 — Khởi tạo Job (POST):** Client gửi `POST /api/v1/roadmaps/proposals` kèm `Idempotency-Key`. Backend tạm giữ quota (`reserve_quota`), tạo bản ghi `schedule_proposals` với trạng thái `PROCESSING`, và trả về `proposal_id`.
-* **Bước 2 — Stream Tiến trình (GET SSE):** Client mở kết nối native `GET /api/v1/roadmaps/proposals/{id}/stream` qua `EventSource` (với `withCredentials: true`). Trình duyệt tự động gửi cookie HttpOnly qua tên miền chung `.focusflow.vn`.
-* **Bản chất Đường ống LLM (3-Stage LLM Pipeline):** Thay vì parse JSON dở dang, hệ thống gọi tuần tự 3 lệnh LLM; sau mỗi chặng, kết quả được thẩm định toàn vẹn bằng **Pydantic Schema** (`GoalClarificationSchema` -> `MilestoneListSchema` -> `ProposalPlanSchema`) trước khi phát sự kiện SSE tương ứng đến Client.
+### Phương án C: Quy trình SSE Hai Chặng Đồng nhất (Uniform 2-Stage SSE) kết hợp Cổng Duyệt 2 Cấp độ (Được chọn)
+* Áp dụng thống nhất mô hình **2 bước chuẩn RESTful (POST khởi tạo job -> GET SSE stream tiến trình)** cho cả 2 cấp độ phân rã:
+  * **Giai đoạn 1 — Phân rã & Duyệt Milestones (FR-PLAN-001):**
+    1. Client gửi `POST /api/v1/roadmaps/milestones/generate` kèm `Idempotency-Key`. Hệ thống tạm giữ (Reserve) 1 AI Credit (`FR-QUOTA-001`) và trả về `job_id`.
+    2. Client mở `GET /api/v1/roadmaps/milestones/jobs/{job_id}/stream` qua `EventSource` để nhận phản hồi stream tiến trình; LLM sinh và thẩm định cấu trúc qua `MilestoneListSchema` (Pydantic v2).
+    3. Giao diện dừng lại hiển thị danh sách Milestones; Learner chỉnh sửa và bấm **"Duyệt Milestones"**.
+  * **Giai đoạn 2 — Phân rã Tasks Chi tiết & Xếp Lịch (FR-PLAN-002):**
+    1. Learner bấm "Tạo Đề xuất Lịch trình" -> Client gửi `POST /api/v1/roadmaps/proposals` truyền ID của Milestones đã duyệt.
+    2. Client mở `GET /api/v1/roadmaps/proposals/{proposal_id}/stream` qua `EventSource`; Backend phân bổ thời gian rảnh, gọi LLM sinh tasks, thẩm định bằng `ProposalPlanSchema`.
+    3. Hoàn tất thành công: Hệ thống chính thức trừ (Commit) 1 AI Credit vào CSDL, lưu bản nháp Proposal `DRAFT`, và gửi sự kiện `completed` kết thúc stream.
+    4. Learner xem bảng lịch, tinh chỉnh và bấm "Apply" (`FR-PLAN-003`).
 
 ---
 
 ## 3. Quyết định (Decision)
-**Chấp thuận Phương án C: Quy trình 2 bước RESTful (POST tạo job & tạm giữ Quota -> GET SSE stream tiến trình) kết hợp Đường ống LLM 3 chặng thẩm định bởi Pydantic Schema.**
+**Chấp thuận Phương án C: Áp dụng Quy trình SSE Hai Chặng Đồng nhất (POST tạo job & Reserve Quota -> GET SSE stream) gắn liền với Cổng Phê duyệt Con người 2 cấp độ chuẩn mực theo SRS v1.1.**
 
 ---
 
 ## 4. Lý do & Đánh đổi (Rationale & Trade-Offs)
-* **Tính Bất biến & Chống trừ Quota 2 lần (Idempotency):** Vì bước stream sử dụng phương thức `GET`, nếu kết nối mạng bị gián đoạn, trình duyệt có thể tự động reconnect với header `Last-Event-ID` mà hoàn toàn không kích hoạt lại lệnh gọi AI mới và không bị trừ thêm quota.
-* **Chứng minh Trình độ Kỹ thuật (Rubric TC2.3 Mức 5):** Thể hiện rõ năng lực kiểm soát từng bước trạng thái của LLM, có cổng kiểm tra schema ở từng nấc, và áp dụng cơ chế Quota Hai pha (Reserve -> Commit khi thành công, Refund khi lỗi).
+* **Khớp 100% với Mô hình Tâm lý Tự điều chỉnh Học tập (Zimmerman SRL & SRS v1.1):** Tách bạch rõ giữa giai đoạn hoạch định chiến lược vĩ mô (Milestones) và kế hoạch hành động vi mô (Tasks), giảm tải nhận thức cho sinh viên.
+* **Chính sách Hạn ngạch Nhân văn & Bảo mật (Rubric TC2.3 Mức 5):** Gói trọn toàn bộ quy trình tạo lộ trình hoàn chỉnh (Cả Milestones lẫn Tasks) chỉ tính là **1 lượt gọi AI (1 AI Credit)**. Cơ chế Quota 2 Pha (Reserve tại Giai đoạn 1 -> Commit khi kết thúc Giai đoạn 2; tự động Refund nếu người dùng hủy hoặc gặp lỗi timeout 55s) bảo vệ quyền lợi tối đa cho người học.
+* **Tính Bất biến Tuyệt đối (Idempotency):** Kênh truyền GET SSE native cho phép trình duyệt tự động kết nối lại (`Last-Event-ID`) khi mạng chập chờn mà không bao giờ kích hoạt gọi lại LLM hoặc trừ trùng quota.
 
 ---
 
 ## 5. Hệ quả (Consequences)
-* **Tích cực:** Giao diện Next.js hiển thị thanh tiến trình 3 chặng mượt mà, người dùng nắm rõ AI đang làm gì. Cookie HttpOnly được gửi tự nhiên qua kết nối GET native.
-* **Kỹ thuật:** Phía FastAPI sử dụng `StreamingResponse` cho endpoint GET stream. Phía Next.js sử dụng `EventSource` native của trình duyệt.
+* **Tích cực:** Đáp ứng xuất sắc toàn bộ ca sử dụng `UC-PLAN-01`, `UC-PLAN-02`, `UC-PLAN-03`; bảo vệ nghiêm ngặt các quy tắc `BUSR-02`, `BUSR-10`, `NFR-AI-001` và `NFR-PERF-001`.
+* **Kỹ thuật:** Frontend (Next.js) triển khai 2 màn hình/modal tương tác kế tiếp nhau, mỗi màn hình sử dụng một hook `useSSE` tái sử dụng được; Backend tổ chức 2 Router endpoints tương ứng trong `roadmap_router.py`.
