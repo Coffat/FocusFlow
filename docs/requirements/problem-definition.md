@@ -52,19 +52,23 @@ Người tự học gặp phải chuỗi đứt gãy liên hoàn từ giai đo�
 
 ## 3. Current Situation & Benchmarking (Hiện trạng & Đối sánh giải pháp)
 
-Đáp ứng tiêu chí **TC1 (Mức 5: So sánh $\ge 3$ giải pháp hiện có, nêu rõ khoảng trống với phân tích thực tế khách quan)**:
+Đáp ứng tiêu chí **TC1 (Mức 5: So sánh $\ge 3$ giải pháp hiện có, nêu rõ khoảng trống với phân tích thực tế khách quan)**:  
+> *Chi tiết phân tích sâu 8 giải pháp và số liệu thực chứng xem tại:* [Khảo sát Nhu cầu Tự học & Đối sánh Giải pháp](user-survey-and-benchmarking.md) và hồ sơ môn học [WBS 1.1 — Khảo sát & Benchmarking](../../docs_ute/WBS%201.1%20-%20Kh%E1%BA%A3o%20s%C3%A1t%20nhu%20c%E1%BA%A7u%20t%E1%BB%B1%20h%E1%BB%8Dc%20v%C3%A0%20nghi%C3%AAn%20c%E1%BB%A9u%20%C4%91%E1%BB%91i%20s%C3%A1nh%20gi%E1%BA%A3i%20ph%C3%A1p%20%28Benchmarking%29.md).
 
-| Tiêu chí so sánh | Google Calendar | Notion | Chatbots độc lập (ChatGPT/Claude) | **FocusFlow (Hệ thống đề xuất)** |
-|---|---|---|---|---|
-| **Bản chất công cụ** | Quản lý lịch thời gian tĩnh (Time-blocking) | Không gian ghi chú & quản lý cơ sở dữ liệu tự do | Mô hình ngôn ngữ lớn dạng hội thoại văn bản | Nền tảng chuyên biệt quản lý lộ trình học tập thích ứng |
-| **Phân rã mục tiêu tự động** | ❌ Không hỗ trợ | ❌ Không hỗ trợ (phải tự nhập) | ⚠️ Có sinh văn bản gợi ý nhưng không tạo thành đối tượng task có vòng đời | ✅ **Hỏi-đáp làm rõ ngữ cảnh $\rightarrow$ Phân rã 2 cấp (Milestones & Tasks Proposal)** |
-| **Tính liên kết ngữ cảnh học tập** | ⚠️ Có mốc giờ và checklist (Google Tasks) nhưng thiếu liên kết mục tiêu học tập, timer, note | ⚠️ Có thể liên kết note và nhúng widget timer độc lập, nhưng phải tự dựng template thủ công | ❌ Văn bản trôi theo lịch sử chat, không lưu thành data entities quản trị được | ✅ **Liên kết khép kín 2 chiều: Lộ trình $\leftrightarrow$ Task $\leftrightarrow$ Timer $\leftrightarrow$ Note $\leftrightarrow$ Review** |
-| **Cơ chế thích ứng khi trễ hạn** | ❌ Thụ động, người dùng phải tự kéo thả/sửa từng event thủ công | ❌ Người dùng phải tự lọc và sửa đổi thủ công trong database | ❌ Không có ngữ cảnh tiến độ thực tế để tự tính toán bù lịch | ✅ **Thuật toán tất định phát hiện task tồn đọng $\rightarrow$ Tự động đề xuất lịch bù thông minh** |
-| **Không gian thực thi phiên học** | ❌ Không có | ⚠️ Phụ thuộc vào widget ngoại lai, không ghi nhận dữ liệu thời gian thực vào task | ❌ Không có | ✅ **Study Tool Suite tích hợp (Pomodoro/Stopwatch, Scratchpad, Key Takeaways)** |
-| **Tổng kết & Đánh giá định kỳ** | ❌ Không có | ⚠️ Phải tự viết công thức Rollup/Formula phức tạp | ❌ Không tự động tổng kết theo chu kỳ thời gian thực | ✅ **Thống kê định lượng toán học chính xác kết hợp nhận xét định tính từ AI Review** |
+| Tiêu chí so sánh | Google Calendar | Notion | Todoist | Reclaim.ai / Motion | Chatbots độc lập (ChatGPT/Claude) | **FocusFlow (Hệ thống đề xuất)** |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| **Bản chất công cụ** | Quản lý lịch tĩnh | Workspace tự do | Quản lý task phẳng (GTD) | AI tự động xếp lịch công sở | Mô hình hội thoại văn bản | **Nền tảng quản lý lộ trình học tập thích ứng khép kín** |
+| **Phân rã mục tiêu tự động** | ❌ Không hỗ trợ | ❌ Không hỗ trợ | ❌ Không hỗ trợ | ⚠️ Task công việc văn phòng | ⚠️ Văn bản tự do, không cấu trúc | ✅ **Làm rõ ngữ cảnh $\rightarrow$ Phân rã 2 cấp (JSON Schema Gate)** |
+| **Tính liên kết ngữ cảnh học tập** | ⚠️ Chỉ có mốc giờ | ⚠️ Phải dựng template | ❌ Ghi chú rất ngắn | ❌ Định hướng lịch họp | ❌ Trôi theo lịch sử chat | ✅ **Khép kín: Lộ trình $\leftrightarrow$ Task $\leftrightarrow$ Timer $\leftrightarrow$ Scratchpad $\leftrightarrow$ Review** |
+| **Cơ chế thích ứng khi trễ hạn** | ❌ Thụ động, kéo thả tay | ❌ Lọc sửa thủ công | ❌ Kéo thả tay | ⚠️ AI hộp đen xáo trộn | ❌ Không nắm được tiến độ | ✅ **Celery Beat tự động dời việc tất định $\rightarrow$ Domino Shift khi tạm dừng** |
+| **Không gian thực thi phiên học** | ❌ Không có | ⚠️ Widget bên ngoài | ❌ Không có | ❌ Không có | ❌ Không có | ✅ **Study Tool Suite tích hợp (Pomodoro/Stopwatch, Checklist, Takeaways)** |
+| **Tổng kết & Đánh giá định kỳ** | ❌ Không có | ⚠️ Formula phức tạp | ⚠️ Karma điểm | ⚠️ Thống kê thời gian họp | ❌ Hỏi đáp rời rạc | ✅ **Thống kê định lượng toán học + AI Nhận xét định tính dựa trên Takeaways** |
+| **Chi phí với Sinh viên** | Miễn phí | Miễn phí / $8+ | Miễn phí / $5 | Đắt ($10–$34/tháng) | Miễn phí / $20 | ✅ **Miễn phí cho tính năng cốt lõi / Open-source** |
 
-### Khoảng trống chiến lược (The Strategic Gap)
-Thị trường thiếu một giải pháp khép kín toàn bộ chu trình học tập: **Lập kế hoạch thông minh $\rightarrow$ Thực thi tập trung trong phiên $\rightarrow$ Tự động thích ứng khi có sự cố $\rightarrow$ Đánh giá hiệu suất định kỳ**. FocusFlow ra đời để lấp đầy khoảng trống này mà không bắt người học phải làm "thư ký dữ liệu" thủ công.
+### 3 Khoảng trống chiến lược (The 3 Strategic Gaps)
+1. **Khoảng trống Quy trình khép kín (Workflow Gap):** Thị trường chỉ giải quyết từng mẩu rời rạc (ChatGPT gợi ý ý tưởng, Calendar giữ giờ, Pomodoro bấm giờ, Notion lưu trữ). Thiếu một nền tảng kết nối khép kín toàn bộ chu trình học tập 3 pha theo Thuyết SRL (Zimmerman).
+2. **Khoảng trống Thích ứng tất định (Deterministic Adaptation Gap):** Lịch truyền thống quá tĩnh (không tự dời), trong khi AI xếp lịch thương mại lại quá phụ thuộc vào mô hình hộp đen đắt đỏ và tiềm ẩn ảo giác. FocusFlow áp dụng giải pháp thích ứng lai: Dùng AI gợi ý tri thức ban đầu, toàn bộ giải thuật dời ngày quá hạn và tạm dừng do Backend tất định xử lý với độ chính xác 100%.
+3. **Khoảng trống Kiểm duyệt có kiểm soát (Human-in-the-Loop Approval Gap):** Người học mất niềm tin nếu AI tự ý ghi đè lịch trình. FocusFlow thiết lập cơ chế kiểm duyệt minh bạch: Kế hoạch AI sinh ra ở trạng thái Đề xuất (Schedule Proposal); người học có quyền tùy biến trước khi bấm "Apply" để kích hoạt thành Lịch chính thức.
 
 ---
 
@@ -158,6 +162,7 @@ Nhằm bảo đảm tính khả thi, hoàn thành 100% khối lượng cam kết
 
 ### 6.1. Trong phạm vi (In-Scope — Core MVP)
 - **Module Quản lý tài khoản & Hồ sơ:** Đăng ký, đăng nhập, bảo vệ phiên, cấu hình thời gian rảnh lai (Mode A / Mode B).
+- **Module Quản trị viên Tối giản (Minimal Web Admin Portal):** Cung cấp 3 màn hình cốt lõi với kiểm soát truy cập theo vai trò (RBAC `role='ADMIN'`): (1) Giám sát danh sách người dùng và trạng thái tài khoản; (2) Khóa/mở khóa tài khoản khi phát hiện dấu hiệu bất thường; (3) Giám sát tổng quan tiêu thụ hạn ngạch AI toàn hệ thống.
 - **Module Lập kế hoạch AI:** Luồng tương tác hỏi-đáp, sinh Milestone, sinh Schedule Proposal, giao diện review/edit, nút Apply kèm Backend Validation Gate.
 - **Module Không gian phiên học:** Bảng task, Study Tool Suite (Pomodoro timer/Stopwatch), Scratchpad note, Key Takeaways, xử lý phiên bị gián đoạn.
 - **Module Thích ứng & Lịch trình:** Thuật toán phát hiện quá hạn tất định, tính năng Tạm dừng lộ trình (Domino Shift), xuất file `.ics` và cung cấp URL WebCal Feed bảo mật.
@@ -167,7 +172,7 @@ Nhằm bảo đảm tính khả thi, hoàn thành 100% khối lượng cam kết
 ### 6.2. Ngoài phạm vi (Out-of-Scope — Tuyệt đối không làm trong đồ án này)
 - **Đồng bộ 2 chiều phức tạp với Google Calendar:** Không làm cơ chế giải quyết xung đột lịch 2 chiều từ Google Calendar ngược lại FocusFlow (đưa vào Future Work).
 - **Cổng thanh toán thực tế (Production Payment Gateway):** Không kết nối cổng thanh toán thật (VNPay, Momo, Stripe) nhằm tránh rủi ro pháp lý và phụ thuộc hạ tầng bên ngoài.
-- **Giao diện Dashboard Quản trị viên (Admin Portal):** Quản trị hạn ngạch được thực hiện tại tầng dịch vụ/cấu hình, không dựng trang web admin riêng biệt.
+- **Hệ thống Quản trị Doanh nghiệp Mở rộng (Enterprise Admin / Multi-tenant CMS):** Không triển khai các tính năng quản trị quy mô doanh nghiệp phức tạp như CMS biên tập khóa học, quản lý tổ chức đa cấp độ, xuất hóa đơn VAT hay phân quyền động tùy biến (chỉ tập trung Minimal Web Admin Portal 3 màn hình phục vụ đồ án).
 - **Ứng dụng Native Mobile (iOS/Android):** Không viết app native, chỉ tập trung hoàn thiện Web Application responsive đa thiết bị.
 - **Tính năng mạng xã hội / Nhóm học tập:** Không làm tính năng kết bạn, chat, chia sẻ lộ trình giữa các người dùng.
 

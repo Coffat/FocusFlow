@@ -84,13 +84,14 @@ Theo kiến trúc phân tầng trong [SRS v1.0 (Mục 3.1)](../srs/srs-v1.0.md#1
 
 ---
 
-### 2.2 Tác nhân Quản trị viên (Administrator - Platform Service Role)
-- **Bản chất:** Vai trò kỹ thuật vận hành nền tảng (Service Role / Infrastructure Role).
-- **Ranh giới tương tác:** Tầng middleware dịch vụ và cấu hình hệ thống (file cấu hình / biến môi trường), **không xây dựng giao diện Web Admin riêng biệt** nhằm tối ưu phạm vi đồ án theo [SRS Mục 2.5](../srs/srs-v1.0.md#182-188).
+### 2.2 Tác nhân Quản trị viên (Administrator - Platform & Operational Administrator)
+- **Bản chất:** Tác nhân người dùng nội bộ (Internal Human Actor) thực hiện quản trị nền tảng và vận hành hệ thống.
+- **Ranh giới tương tác:** Giao diện Web Admin Portal tối giản (3 màn hình nghiệp vụ chính: Đăng nhập RBAC, Quản lý Người dùng & Hạn ngạch Quota, Dashboard Giám sát chỉ số vận hành & tiêu thụ AI), được bảo vệ nghiêm ngặt bằng cơ chế kiểm soát truy cập dựa trên vai trò (Role-Based Access Control - RBAC với `role = 'ADMIN'`).
 - **Trách nhiệm chính:**
-  - Cấu hình hạn mức gọi AI (Tokens / Requests quota) cho phân tầng tài khoản `FREE` và `PREMIUM` tại Quota Service Middleware.
-  - Giám sát trạng thái hoạt động, chỉ số độ sẵn sàng (Uptime Monitor) và độ trễ hệ thống.
-  - Quản trị các biến môi trường nhạy cảm (API Keys, JWT Secrets).
+  - Xác thực phiên làm việc quản trị viên an toàn, bảo vệ các endpoint và route quản trị `/admin/*`.
+  - Quản trị danh sách người dùng, phân tầng tài khoản (`FREE` / `PREMIUM`), điều chỉnh và thiết lập lại định mức hạn ngạch gọi AI (Tokens / Requests quota) theo chính sách dịch vụ.
+  - Giám sát trạng thái hoạt động, chỉ số độ sẵn sàng (Uptime Monitor), tỷ lệ lỗi API và tổng lượng tài nguyên AI đã tiêu thụ trên toàn hệ thống.
+  - Quản trị các tham số cấu hình hệ thống nhạy cảm (API Keys, JWT Secrets).
 
 ---
 
@@ -118,15 +119,18 @@ Theo kiến trúc phân tầng trong [SRS v1.0 (Mục 3.1)](../srs/srs-v1.0.md#1
 
 | Chức năng & Nghiệp vụ Hệ thống | Learner | Administrator | External LLM | External Calendar |
 |---|:---:|:---:|:---:|:---:|
-| Đăng ký, đăng nhập & quản lý phiên | **Chủ trì** | Giám sát | - | - |
+| Đăng ký, đăng nhập & quản lý phiên | **Chủ trì** | - | - | - |
+| Xác thực Admin & Kiểm soát RBAC | - | **Chủ trì** | - | - |
 | Cấu hình thời gian rảnh (Mode A / B) | **Chủ trì** | - | - | - |
 | Sinh đề xuất Milestones & Proposal | Kích hoạt & Phê duyệt | - | **Thực thi** | - |
-| Chặn vượt quỹ giờ (Backend Ceiling) | Chịu ảnh hưởng | Cấu hình | - | - |
+| Chặn vượt quỹ giờ (Backend Ceiling) | Chịu ảnh hưởng | - | - | - |
 | Thực thi phiên học trong Workspace | **Chủ trì** | - | - | - |
 | Quét quá hạn tất định (Deterministic) | Nhận thông báo | - | - | - |
 | Tạm dừng lộ trình (Domino Shift) | **Chủ trì** | - | - | - |
 | Đăng ký theo dõi WebCal Feed | Cấp & Đổi Token | - | - | **Đọc (GET)** |
-| Quản lý Hạn ngạch Quota & Mock Sandbox | Người dùng | **Cấu hình** | - | - |
+| Quản lý Hạn ngạch Quota & Mock Sandbox | Người dùng | **Quản trị toàn cục** | - | - |
+| Quản lý Danh sách Người dùng & Tier | - | **Chủ trì** | - | - |
+| Giám sát Chỉ số Vận hành & Tiêu thụ AI | - | **Chủ trì** | - | - |
 | Tổng kết định kỳ & AI Review | Yêu cầu & Đọc | - | **Phân tích** | - |
 
 ---
@@ -286,9 +290,9 @@ Bảng đối chiếu chứng minh thiết kế hệ thống FocusFlow giải qu
 > *1. **System Actor là khái niệm kiến trúc kỹ thuật:** Dùng để trả lời câu hỏi 'Hệ thống có những vai trò logic nào tương tác qua API và cơ chế phân quyền bảo mật ra sao?'. Hệ thống của em có 4 tác nhân kỹ thuật (`Learner`, `Administrator`, `External LLM`, `External Calendar`).*  
 > *2. **User Persona là công cụ thiết kế hành vi và tâm lý học:** Dùng để trả lời câu hỏi 'Người dùng thực tế là ai, họ có nỗi đau gì và họ sử dụng hệ thống trong ngữ cảnh nào?'. Cả 3 Persona An, Hùng và Mai ngoài đời đều đóng vai trò là `Learner Actor` khi đăng nhập, nhưng họ có quỹ thời gian khác nhau (Mode A vs Mode B) và thói quen khác nhau (WebCal vs Workspace Pomodoro). Sự phân định này giúp hệ thống vừa chặt chẽ về mặt kiến trúc phần mềm, vừa tối ưu công thái học cho người dùng thật."*
 
-### Câu hỏi Phản biện 2: "Tại sao Administrator lại không có giao diện Web Admin riêng? Liệu điều này có làm giảm tính hoàn thiện của đồ án tốt nghiệp không?"
+### Câu hỏi Phản biện 2: "Tại sao hệ thống chỉ thiết kế Web Admin Portal tối giản (3 màn hình) mà không xây dựng một hệ thống CMS/Admin đồ sộ? Thiết kế này có đáp ứng tiêu chuẩn đồ án không?"
 > **Gợi ý trả lời bảo vệ:**  
-> *"Thưa Thầy/Cô, đây là một **Quyết định Thiết kế có chủ đích (Deliberate Architectural Decision)** nhằm bảo vệ phạm vi cốt lõi của đồ án theo khuyến nghị của ngành Kỹ thuật Phần mềm:*  
-> *1. Trọng tâm cốt lõi của FocusFlow là giải quyết bài toán tự học thích ứng cho người dùng cá nhân (End-User Value), không phải là hệ thống quản trị nội dung (CMS/ERP).*  
-> *2. Vai trò Administrator trong hệ thống FocusFlow là **Platform Service Role**: quản trị hạn ngạch gọi AI (Tokens / Request Quota) và giám sát hạ tầng. Những tác vụ này được xử lý tối ưu và bảo mật nhất tại tầng middleware cấp dịch vụ và biến môi trường.*  
-> *3. Để phục vụ việc đánh giá và nghiệm thu tính năng quản trị hạn ngạch, nhóm đã xây dựng **Mock Upgrade Sandbox** trực quan trên giao diện người dùng. Việc không dàn trải nguồn lực vào trang Admin Portal giúp nhóm tập trung 100% hoàn thiện Study Workspace, thuật toán Domino Shift và tích hợp an toàn AI đạt điểm tối đa ở các tiêu chí chất lượng kỹ thuật cao nhất."*
+> *"Thưa Thầy/Cô, đây là một **Quyết định Thiết kế có chủ đích (Deliberate Architectural Decision)** nhằm bảo vệ phạm vi cốt lõi của đồ án và tuân thủ nghiêm ngặt chuẩn mực Kỹ thuật Phần mềm:*  
+> *1. Trọng tâm cốt lõi của FocusFlow là giải quyết bài toán tự học thích ứng cho người dùng cá nhân (End-User Value với Core Domain là Adaptive Planning & Focus Execution), không phải là hệ thống thương mại điện tử hay CMS tổng hợp.*  
+> *2. Để đảm bảo tính hoàn thiện và chuẩn mực UML (tránh lỗi Orphan Actor), hệ thống đã xây dựng **Web Admin Portal tối giản với đầy đủ 3 màn hình nghiệp vụ thiết yếu**: (a) Xác thực phân quyền RBAC (`role = 'ADMIN'`), (b) Quản trị danh sách người dùng, chuyển đổi Tier và cấp phát Quota AI, và (c) Dashboard giám sát chỉ số vận hành và tổng lượng token AI tiêu thụ.*  
+> *3. Quyết định giới hạn phạm vi quản trị ở mức tối giản này giúp nhóm vừa đảm bảo tính trọn vẹn của hệ thống, vừa bảo vệ tiến độ 15 tuần của đồ án, tập trung 100% nguồn lực hoàn thiện Study Workspace, thuật toán Domino Shift và tích hợp an toàn AI đạt điểm chất lượng cao nhất."*

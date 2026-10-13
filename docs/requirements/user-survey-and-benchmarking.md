@@ -4,7 +4,7 @@
 > **Chuyên ngành:** Công nghệ Phần mềm — Khoa Công nghệ Thông tin  
 > **Cấp độ tài liệu:** Báo cáo Nghiên cứu Tiền khả thi, Khảo sát Thực chứng & Phân tích Đối sánh (Research, Empirical Survey & Benchmarking Artifact)  
 > **Mã tài liệu:** `DOC-REQ-SURVEY-01`  
-> **Tài liệu liên kết:** `docs/requirements/problem-definition.md`, `docs/srs/srs-v1.0.md`  
+> **Tài liệu liên kết:** `docs/requirements/problem-definition.md`, `docs/srs/srs-v1.0.md`, `docs_ute/WBS 1.1 - Khảo sát nhu cầu tự học và nghiên cứu đối sánh giải pháp (Benchmarking).md`  
 > **Căn cứ đánh giá học thuật:** Khung Rubric Chấm Đồ án Tốt nghiệp / Khóa luận CNTT:
 > - **Tiêu chí TC1 (Mức 5):** "Tính cấp thiết rõ ràng; So sánh $\ge 3$ giải pháp hiện có, nêu rõ khoảng trống với phân tích thực tế khách quan; Xác định rõ $\ge 5$ mục tiêu/KPI cụ thể định lượng ngay từ đầu."
 > - **Tiêu chí TC2.1 (Mức 5):** "Đặc tả đầy đủ yêu cầu chức năng & $\ge 5$ yêu cầu phi chức năng định lượng."
@@ -309,18 +309,20 @@ Nghiên cứu thiết lập hệ thống **4 chiều tiêu chí đánh giá khoa
 
 Bảng đối sánh tổng hợp giữa các giải pháp hiện hữu và **Hệ thống Đề xuất FocusFlow**:
 
-| Tiêu chí Đánh giá & Kỹ thuật | Google Calendar | Notion | ChatGPT / Claude | Reclaim.ai / Motion | Roadmap.sh | **FocusFlow (Hệ thống đề xuất)** |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|
-| **Phân rã mục tiêu lớn bằng AI** | ❌ Không | ❌ Không | ⚠️ Sinh text tự do, không cấu trúc | ⚠️ Phân rã task công việc, không theo học tập | ❌ Cây tĩnh cố định | ✅ **Làm rõ ngữ cảnh $\rightarrow$ Milestones $\rightarrow$ Schedule Proposal** |
-| **Cấu hình thời gian rảnh linh hoạt** | ⚠️ Tạo event rảnh thủ công | ❌ Phải tự dựng database | ❌ Hoàn toàn mù thời gian | ✅ Tự động đọc lịch trống | ❌ Không hỗ trợ | ✅ **Hybrid Availability (Mode A: Quỹ giờ / Mode B: Khung giờ)** |
-| **Phê duyệt lộ trình có kiểm soát (Human-in-the-loop)** | ❌ Không có đề xuất | ❌ Tự nhập | ❌ Copy paste thủ công | ⚠️ AI tự động xếp, khó kiểm soát | ❌ Không có | ✅ **Bản đề xuất (Proposal) $\rightarrow$ Edit $\rightarrow$ Validate Gate $\rightarrow$ Official Schedule** |
-| **Không gian thực thi phiên học (Study Workspace)** | ❌ Không | ⚠️ Nhúng widget bên thứ 3 | ❌ Không | ❌ Không | ❌ Không | ✅ **Tích hợp khép kín: Task Checklist + Pomodoro/Timer + Scratchpad + Takeaways** |
-| **Phát hiện quá hạn học tập** | ❌ Không (Sự kiện trôi mất) | ⚠️ Phải viết công thức Formula | ❌ Không biết tiến độ thực tế | ✅ Tự động dời lịch | ❌ Không | ✅ **Thuật toán tất định (Deterministic Logic): `scheduled_date < TODAY`** |
-| **Cơ chế Thích ứng khi có biến cố (Adaptation)** | ❌ Kéo thả từng event thủ công | ❌ Lọc và sửa date thủ công | ❌ Phải gõ prompt xin lại lịch mới từ đầu | ⚠️ Thuật toán hộp đen, xáo trộn lịch | ❌ Không hỗ trợ | ✅ **Tạm dừng lộ trình (Pause Roadmap) & Tịnh tiến dây chuyền (Domino Shift)** |
-| **Đồng bộ Lịch ngoại vi an toàn** | Có sẵn | ⚠️ Phụ thuộc tích hợp bên thứ ba (Zapier) | ❌ Không có | Có sẵn (OAuth 2 chiều) | ❌ Không có | ✅ **Secure Token WebCal 1-Chiều (.ics Feed) & Tải file .ics tĩnh** |
-| **Đánh giá & Review định kỳ** | ❌ Không | ⚠️ Phải tự tổng kết | ❌ Hỏi đáp rời rạc | ⚠️ Thống kê thời gian họp | ❌ Không | ✅ **Thống kê định lượng toán học + AI Nhận xét định tính dựa trên Takeaways** |
-| **Chi phí đối với Sinh viên** | Miễn phí | Miễn phí / $8+ | Miễn phí / $20 | Đắt đỏ ($10 - $34/tháng) | Miễn phí | ✅ **Miễn phí cho tính năng cốt lõi / Phân tầng Quota kiểm soát** |
-| **Tải nhận thức & Chuyển đổi ngữ cảnh** | Thấp cho việc chung, Rất cao khi tự học | Rất cao (Overhead setup & format) | Cao (Phải tự mang kết quả đi nơi khác) | Trung bình (Tập trung công việc) | Thấp (Chỉ đọc tài liệu) | ✅ **Tối ưu tối đa: 1 Nền tảng duy nhất cho toàn bộ chu trình học** |
+| Tiêu chí Đánh giá & Kỹ thuật | Google Calendar | Notion | Todoist | Reclaim.ai / Motion | Sunsama / FlowSavvy | ChatGPT / Claude | Roadmap.sh | **FocusFlow (Đề xuất)** |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **1. Phân rã mục tiêu bằng AI** | ❌ Không | ❌ Không | ❌ Không | ⚠️ Task công việc | ❌ Không | ⚠️ Text tự do | ❌ Cây tĩnh | ✅ **AI 2 cấp qua JSON Schema Gate** |
+| **2. Cấu hình quỹ thời gian lai** | ⚠️ Tạo event rảnh | ❌ Dựng DB thủ công | ❌ Không | ⚠️ Theo lịch họp | ⚠️ Timebox thủ công | ❌ Mù thời gian | ❌ Không | ✅ **Mode A Quota & Mode B Slots** |
+| **3. Cổng duyệt lịch có kiểm soát** | ❌ Không có đề xuất | ❌ Tự nhập | ❌ Tự nhập | ❌ AI tự xếp, khó can thiệp | ❌ Kéo thả tay | ❌ Không | ❌ Không | ✅ **Proposal $\rightarrow$ Strict Apply Gate** |
+| **4. Không gian phiên học tích hợp** | ❌ Không | ⚠️ Nhúng widget ngoài | ❌ Không | ❌ Không | ⚠️ Timer cơ bản | ❌ Không | ❌ Không | ✅ **Timer, Checklist, Scratchpad & Takeaways** |
+| **5. Thu thập Key Takeaways đúc kết** | ❌ Không | ⚠️ Phải tự ghi | ❌ Không | ❌ Không | ❌ Không | ❌ Không | ❌ Không | ✅ **Modal đúc kết bắt buộc sau phiên** |
+| **6. Phục hồi phiên học gián đoạn** | ❌ Không | ❌ Không | ❌ Không | ❌ Không | ❌ Không | ❌ Không | ❌ Không | ✅ **Crash Recovery tự động** |
+| **7. Tự động thích ứng khi quá hạn** | ❌ Thủ công | ❌ Lọc sửa thủ công | ❌ Thủ công | ⚠️ AI hộp đen | ⚠️ Đẩy việc dở dang | ❌ Không | ❌ Không | ✅ **Celery Beat Auto-shift tất định** |
+| **8. Tạm dừng lộ trình (Domino Shift)**| ❌ Kéo thả tay | ❌ Sửa date tay | ❌ Kéo thả tay | ❌ Không | ❌ Không | ❌ Không | ❌ Không | ✅ **Tịnh tiến ngày tự động 100%** |
+| **9. Đồng bộ Lịch ngoại vi an toàn** | Gốc | ⚠️ Qua Zapier | ⚠️ iCal cơ bản | Gốc (OAuth 2 chiều)| Gốc | ❌ Không | ❌ Không | ✅ **Secure Token WebCal (RFC 5545)** |
+| **10. Báo cáo định lượng & AI Review** | ❌ Không | ⚠️ Formula phức tạp | ⚠️ Karma điểm | ⚠️ Báo cáo họp | ⚠️ Báo cáo ngày | ❌ Hỏi đáp rời rạc | ❌ Không | ✅ **Thống kê toán học + AI Review tuần** |
+| **11. Phù hợp túi tiền sinh viên** | Miễn phí | Miễn phí / $8+ | Miễn phí / $5 | Đắt ($10–$34/tháng) | Đắt ($16–$20/tháng)| Miễn phí / $20 | Miễn phí | ✅ **Miễn phí cho tính năng cốt lõi / Open-source** |
+| **12. Kiểm soát rủi ro & Quota AI** | Không có AI | Không có AI | Không có AI | Đóng kín | Không có AI | Không kiểm soát | Không có AI | ✅ **Quota Guard + Redis Rate Limit + RBAC** |
 
 ---
 
