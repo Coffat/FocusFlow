@@ -1,0 +1,326 @@
+@startuml FocusFlow_Class_Diagram
+title FocusFlow — Sơ đồ Lớp Thiết kế Chi tiết Toàn diện (Class Diagram / DCD)\nTiêu chuẩn: OMG UML 2.5.1 Superstructure & Craig Larman | Trích xuất Phương thức từ Sequence Diagrams & Áp dụng GRASP
+
+skinparam roundcorner 10
+skinparam monochrome false
+skinparam shadowing false
+skinparam defaultFontName "Helvetica", "Arial", sans-serif
+
+skinparam class {
+    BackgroundColor #FFFFFF
+    BorderColor #2B6CB0
+    ArrowColor #2D3748
+    FontStyle bold
+}
+
+skinparam enum {
+    BackgroundColor #FFF5F5
+    BorderColor #C53030
+}
+
+' ========================================================
+' 1. CÁC LỚP THỰC THỂ THIẾT KẾ (DESIGN ENTITY CLASSES)
+' Chuẩn Encapsulation: Thuộc tính private (-), Phương thức public (+)
+' ========================================================
+
+class User {
+    - id: UUID
+    - fullName: String
+    - email: String
+    - timezone: String
+    - role: UserRole
+    - tier: UserTier
+    --
+    + canUseAI(): Boolean
+}
+
+class Goal {
+    - id: UUID
+    - title: String
+    - targetDate: Date
+    - context: String
+    - status: GoalStatus
+    --
+    + getDaysRemaining(): Integer
+    + archive(): void
+}
+
+class Roadmap {
+    - id: UUID
+    - title: String
+    - startDate: Date
+    - targetDate: Date
+    - status: RoadmapStatus
+    --
+    + activate(): void
+    + applyOfficialSchedule(schedule: OfficialSchedule): void
+    + pause(startDate: Date, resumeDate: Date, reason: String): void
+    + resume(): void
+    + archive(): void
+}
+
+class OfficialSchedule {
+    - id: UUID
+    - roadmapId: UUID
+    - totalSessions: Integer
+    - totalHours: Float
+    - activatedAt: DateTime
+    --
+    + getSummary(): String
+}
+
+class Milestone {
+    - id: UUID
+    - title: String
+    - description: String
+    - sequenceOrder: Integer
+    - estimatedHours: Float
+    - status: MilestoneStatus
+    --
+    + approve(): void
+}
+
+class Task {
+    - id: UUID
+    - title: String
+    - estimatedMinutes: Integer
+    - scheduledDate: Date [0..1]
+    - status: TaskStatus
+    --
+    + markCompleted(): void
+    + isOverdue(currentDate: Date): Boolean
+    + reschedule(newDate: Date): void
+}
+
+class StudySession {
+    - id: UUID
+    - targetDurationMinutes: Integer
+    - startedAt: DateTime
+    - endedAt: DateTime [0..1]
+    - status: SessionStatus
+    - lastHeartbeatAt: DateTime
+    --
+    + start(): void
+    + finish(): void
+    + interrupt(reason: String): void
+    + recordHeartbeat(): void
+    + markAbandoned(): void
+}
+
+class SessionTask {
+    - id: UUID
+    - sessionId: UUID
+    - taskId: UUID
+    - allocatedMinutes: Integer
+    - timeSpentMinutes: Integer
+    - isCompletedInSession: Boolean
+    --
+    + recordProgress(minutes: Integer, completed: Boolean): void
+}
+
+class AvailabilityProfile {
+    - id: UUID
+    - mode: AvailabilityMode
+    - maxDailyMinutes: Integer
+    - preferredBreakMinutes: Integer
+    --
+    + getDailyCeiling(): Integer
+}
+
+class ScheduleProposal {
+    - id: UUID
+    - proposalVersion: Integer
+    - status: ProposalStatus
+    --
+    + apply(): void
+    + reject(): void
+}
+
+class PauseRecord {
+    - id: UUID
+    - pauseStartDate: Date
+    - resumeDate: Date
+    - shiftDays: Integer
+    - reason: String
+    --
+    + calculateShiftDays(): Integer
+}
+
+class StudyNote {
+    - id: UUID
+    - content: String
+    - noteType: NoteType
+}
+
+class AIReview {
+    - id: UUID
+    - reviewType: ReviewType
+    - qualitativeFeedback: String
+}
+
+class WebCalSubscription {
+    - id: UUID
+    - isActive: Boolean
+    - lastSyncedAt: DateTime [0..1]
+    --
+    + resetToken(): void
+    + revoke(): void
+}
+
+class AIQuota {
+    - id: UUID
+    - monthlyLimit: Integer
+    - usedCalls: Integer
+    - reservedCalls: Integer
+    - cycleStart: Date
+    - cycleEnd: Date
+    --
+    + hasRemainingQuota(): Boolean
+    + reserve(calls: Integer): Boolean
+    + commit(calls: Integer): void
+    + release(calls: Integer): void
+    + resetCycle(): void
+}
+
+' ========================================================
+' 2. CÁC LỚP DỊCH VỤ MIỀN (DOMAIN SERVICES - GRASP PURE FABRICATION)
+' Trích xuất trực tiếp từ các thông điệp trong Sequence Diagrams
+' ========================================================
+
+class DominoShiftCalculator <<domain service>> {
+    + calculateShiftedDates(pendingTasks: List<Task>, pauseDuration: Integer, profile: AvailabilityProfile): List<Task>
+}
+
+class AvailabilityValidator <<domain service>> {
+    + validateDailyCeiling(duration: Integer, profile: AvailabilityProfile): Boolean
+    + validateScheduleSlots(proposal: ScheduleProposal, profile: AvailabilityProfile): Boolean
+}
+
+class PromptSanitizer <<domain service>> {
+    + sanitizeInput(rawText: String): String
+    + detectInjection(rawText: String): Boolean
+}
+
+class AbandonmentEvaluator <<domain service>> {
+    + isAbandoned(lastHeartbeat: DateTime, timeoutMinutes: Integer): Boolean
+}
+
+' ========================================================
+' 3. CÁC TẬP KIỂU LIỆT KÊ (ENUMERATIONS)
+' ========================================================
+
+enum UserRole {
+    LEARNER
+    ADMIN
+}
+
+enum UserTier {
+    FREE
+    PREMIUM
+}
+
+enum GoalStatus {
+    ACTIVE
+    ARCHIVED
+}
+
+enum RoadmapStatus {
+    INITIALIZED
+    ACTIVE
+    PAUSED
+    COMPLETED
+    ARCHIVED
+}
+
+enum MilestoneStatus {
+    PENDING
+    APPROVED
+}
+
+enum TaskStatus {
+    TODO
+    IN_PROGRESS
+    COMPLETED
+    CANCELLED
+}
+
+enum SessionStatus {
+    IN_PROGRESS
+    COMPLETED
+    PARTIAL_COMPLETED
+    CANCELLED
+}
+
+enum AvailabilityMode {
+    MODE_A_WEEKLY_RECURRING
+    MODE_B_DYNAMIC_SLOTS
+}
+
+enum ProposalStatus {
+    DRAFT
+    APPLIED
+    DISCARDED
+}
+
+enum NoteType {
+    SCRATCHPAD
+    TAKEAWAY
+}
+
+enum ReviewType {
+    WEEKLY
+    MILESTONE
+}
+
+' ========================================================
+' 4. QUAN HỆ VÀ BẢN SỐ (ASSOCIATIONS, COMPOSITION & DEPENDENCY)
+' ========================================================
+
+User "1" -- "0..*" Goal : "thiết lập"
+User "1" -- "0..*" Roadmap : "sở hữu"
+User "1" *-- "1" AvailabilityProfile : "cấu hình"
+User "1" *-- "1" AIQuota : "sở hữu"
+User "1" -- "0..1" WebCalSubscription : "cấp phát"
+User "1" -- "0..*" StudySession : "thực hiện"
+
+Goal "1" -- "0..*" Roadmap : "phân rã thành"
+
+Roadmap "1" *-- "3..7" Milestone : "gồm các mốc"
+Roadmap "1" *-- "0..1" OfficialSchedule : "áp dụng lịch chính thức"
+Roadmap "1" o-- "0..*" ScheduleProposal : "có đề xuất lịch"
+Roadmap "1" *-- "0..*" PauseRecord : "lưu vết tạm dừng"
+Roadmap "1" -- "0..*" AIReview : "nhận đánh giá"
+
+Milestone "1" *-- "1..*" Task : "chia nhỏ thành"
+
+StudySession "0..*" -- "1..*" Task : "học nhiệm vụ"
+(StudySession, Task) .. SessionTask
+
+StudySession "1" *-- "0..*" StudyNote : "ghi chép"
+
+' Quan hệ Dependency với Domain Services (Từ Sequence Diagrams)
+Roadmap ..> DominoShiftCalculator : "<<use>> (seq-06)"
+ScheduleProposal ..> AvailabilityValidator : "<<use>> (seq-04)"
+Goal ..> PromptSanitizer : "<<use>> (seq-02)"
+StudySession ..> AbandonmentEvaluator : "<<use>> (seq-08)"
+
+' Phụ thuộc vào Enumerations
+User ..> UserRole
+User ..> UserTier
+Goal ..> GoalStatus
+Roadmap ..> RoadmapStatus
+Milestone ..> MilestoneStatus
+Task ..> TaskStatus
+StudySession ..> SessionStatus
+AvailabilityProfile ..> AvailabilityMode
+ScheduleProposal ..> ProposalStatus
+StudyNote ..> NoteType
+AIReview ..> ReviewType
+
+note "BUSR-02 (Human-in-the-Loop Cấp 1):\nMột Roadmap bao gồm từ 3 đến 7 Milestone,\nphải được phê duyệt trước khi phân rã Task." as N_MilestoneRule
+Milestone .. N_MilestoneRule
+
+note "BUSR-07 (Domino Shift):\nKhi Roadmap tạm dừng (PAUSED), thuật toán\nDominoShiftCalculator tịnh tiến tất định toàn bộ\nTask chưa xong mà không gọi lại AI." as N_DominoRule
+DominoShiftCalculator .. N_DominoRule
+
+@enduml
