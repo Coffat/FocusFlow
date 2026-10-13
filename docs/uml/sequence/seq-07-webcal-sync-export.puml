@@ -1,0 +1,89 @@
+@startuml SD7_WebCal_Sync_Export
+!theme plain
+autonumber
+skinparam BoxPadding 10
+skinparam ParticipantPadding 10
+skinparam ResponseMessageBelowArrow true
+
+title UC-CAL-02: Đăng ký & Đồng bộ Luồng Lịch WebCal 1 Chiều RFC 5545 (Use-Case Realization)
+
+actor "External Calendar App\n(Google / Apple Calendar)" as ExtCal
+box "Presentation Layer" #E9ECEF
+    participant "LogSanitizerMiddleware\n(Security Filter)" as LogMid
+    participant "CalendarRouter\n(FastAPI)" as Router
+end box
+box "Application Layer" #DEE2E6
+    participant "ExportCalendarFeedUC\n(Use Case)" as CalUC
+end box
+box "Infrastructure & Security" #CED4DA
+    participant "SqlWebCalRepo\n(WebCalRepoPort)" as WebCalRepo
+    participant "SqlTaskRepo\n(TaskRepoPort)" as TaskRepo
+    participant "IcalGeneratorAdapter\n(CalendarExportPort)" as IcalGen
+    participant "PostgreSQL 16\n(Database)" as DB
+end box
+
+ExtCal -> LogMid: GET /api/v1/calendar/feed/{raw_token}.ics (HTTP Polling định kỳ)
+activate LogMid
+
+note over LogMid: Log Sanitizer Middleware (NFR-SEC-004):\nGhi Access Log: "GET /api/v1/calendar/feed/[REDACTED].ics"\nĐảm bảo bí mật token không bị rò rỉ vào file log!
+LogMid -> Router: forward_sanitized_request(raw_token)
+activate Router
+
+Router -> CalUC: export_feed_by_token(raw_token)
+activate CalUC
+
+note over CalUC: Băm SHA-256 token thô:\ntoken_hash = hash_sha256(raw_token)
+CalUC -> WebCalRepo: find_active_subscription_by_hash(token_hash)
+activate WebCalRepo
+WebCalRepo -> DB: query_active_webcal_token(token_hash)
+activate DB
+DB --> WebCalRepo: tokenRecord
+deactivate DB
+
+alt [Token không hợp lệ hoặc đã bị vô hiệu hóa]
+    WebCalRepo --> CalUC: null
+    deactivate WebCalRepo
+    CalUC --> Router: throw InvalidCalendarTokenException
+    deactivate CalUC
+    Router --> ExtCal: 401 Unauthorized {"error": "INVALID_CALENDAR_TOKEN"}
+    deactivate Router
+    deactivate LogMid
+else [Token hợp lệ (ACTIVE)]
+    WebCalRepo --> CalUC: webCalSubscriptionEntity
+    deactivate WebCalRepo
+
+    CalUC -> WebCalRepo: record_feed_access(token_hash)
+    activate WebCalRepo
+    WebCalRepo -> DB: update_last_accessed_timestamp(token_hash)
+    activate DB
+    DB --> WebCalRepo: OK
+    deactivate DB
+    WebCalRepo --> CalUC: OK
+    deactivate WebCalRepo
+
+    CalUC -> TaskRepo: get_active_scheduled_tasks(userId)
+    activate TaskRepo
+    TaskRepo -> DB: query_tasks_for_calendar_feed(userId)
+    activate DB
+    DB --> TaskRepo: taskRecords
+    deactivate DB
+    TaskRepo --> CalUC: taskEntities
+    deactivate TaskRepo
+
+    CalUC -> IcalGen: generate_ical_stream(taskEntities)
+    activate IcalGen
+    note over IcalGen: Chuẩn hóa dữ liệu theo chuẩn RFC 5545:\n- Khởi tạo VCALENDAR chuẩn UTF-8\n- Tạo VEVENT với UID, DTSTART, DTEND, SUMMARY, DESCRIPTION\n- Tương thích 100% Google Calendar và Apple Calendar
+    IcalGen --> CalUC: icalContentStream (.ics)
+    deactivate IcalGen
+
+    CalUC --> Router: CalendarFeedDTO(content=icalContentStream, mime_type="text/calendar")
+    deactivate CalUC
+
+    Router --> ExtCal: 200 OK (Content-Type: text/calendar; charset=utf-8)
+    deactivate Router
+    deactivate LogMid
+
+    note over ExtCal: Ứng dụng Lịch tự động nạp sự kiện và hiển thị trên Lịch cá nhân của người học
+end
+
+@enduml

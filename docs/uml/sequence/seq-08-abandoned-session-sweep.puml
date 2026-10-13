@@ -1,0 +1,98 @@
+@startuml SD8_Abandoned_Session_Sweep
+!theme plain
+autonumber
+skinparam BoxPadding 10
+skinparam ParticipantPadding 10
+skinparam ResponseMessageBelowArrow true
+
+title UC-SESS-02: Tự động Quét & Chốt Phiên Gián đoạn (Use-Case Realization)
+
+actor "Celery Beat\n(Periodic Timer)" as Beat
+box "Message Broker & Queue" #FFF3CD
+    participant "Redis 7.2\n(Message Broker)" as Broker
+end box
+box "Background Processing" #F8F9FA
+    participant "SessionSweepWorker\n(Celery Task)" as Worker
+end box
+box "Application Layer" #DEE2E6
+    participant "SweepAbandonedSessionsUC\n(Use Case)" as SweepUC
+end box
+box "Domain Layer" #E2E3E5
+    participant "AbandonmentEvaluator\n(Domain Service - OS-01)" as Evaluator
+    participant "StudySession\n(Domain Entity)" as SessionEntity
+end box
+box "Infrastructure & Persistence" #CED4DA
+    participant "SqlSessionRepo\n(SessionRepoPort)" as SessionRepo
+    participant "SqlTaskRepo\n(TaskRepoPort)" as TaskRepo
+    participant "PostgreSQL 16\n(Database)" as DB
+end box
+
+note over Beat,DB: Tác vụ nền chạy định kỳ mỗi 5 phút để bảo vệ dữ liệu khi người học mất kết nối mạng hoặc đóng trình duyệt đột ngột
+
+Beat ->> Broker: enqueue_task("sweep_abandoned_sessions", args=[threshold=5])
+note over Beat: Celery Beat đẩy task bất đồng bộ vào hàng đợi Redis rồi tiếp tục chu kỳ hẹn giờ mà không đợi kết quả
+
+Broker ->> Worker: dispatch_task("sweep_abandoned_sessions", args=[threshold=5])
+activate Worker
+
+Worker -> SweepUC: execute(threshold_minutes=5)
+activate SweepUC
+
+SweepUC -> SessionRepo: find_stale_in_progress_sessions(interval_minutes=5)
+activate SessionRepo
+SessionRepo -> DB: query_sessions_heartbeat_older_than(interval_minutes=5)
+activate DB
+DB --> SessionRepo: staleSessionRecords
+deactivate DB
+SessionRepo --> SweepUC: List[staleSessions]
+deactivate SessionRepo
+
+loop [Với mỗi staleSession trong danh sách]
+    SweepUC -> TaskRepo: get_completed_tasks_count_in_session(sessionId)
+    activate TaskRepo
+    TaskRepo -> DB: query_completed_task_count(sessionId)
+    activate DB
+    DB --> TaskRepo: completedCount
+    deactivate DB
+    TaskRepo --> SweepUC: completedCount
+    deactivate TaskRepo
+
+    SweepUC -> Evaluator: evaluate_disposition(staleSession, completedCount)
+    activate Evaluator
+    note over Evaluator: Áp dụng Quy tắc Phân định OS-01:\n- actualMinutes >= plannedMinutes * 0.5 HOẶC completedCount >= 1\n  => PARTIAL_COMPLETED (Công nhận thời gian nỗ lực)\n- Ngược lại => CANCELLED (Hủy phiên học)\n* ended_at chốt chính xác tại mốc last_heartbeat_at!
+    Evaluator --> SweepUC: evaluationResult (status, dispositionReason)
+    deactivate Evaluator
+
+    SweepUC -> SessionEntity: mark_abandoned(evaluationResult.status, staleSession.lastHeartbeatAt)
+    activate SessionEntity
+    SessionEntity --> SweepUC: finalizedSession
+    deactivate SessionEntity
+
+    SweepUC -> SessionRepo: finalize_abandoned_session(finalizedSession)
+    activate SessionRepo
+
+    alt [Thỏa mãn ngưỡng công nhận: PARTIAL_COMPLETED]
+        note over SessionRepo,DB: Transaction Commit:\n1. UPDATE study_sessions SET status = 'PARTIAL_COMPLETED', ended_at = last_heartbeat_at\n2. UPDATE tasks SET status = 'TODO', scheduled_date = NULL (Task dở dang trả về Backlog)
+        SessionRepo -> DB: execute_atomic_partial_finalize(sessionData)
+        activate DB
+        DB --> SessionRepo: OK
+        deactivate DB
+    else [Dưới ngưỡng công nhận: CANCELLED]
+        note over SessionRepo,DB: Transaction Commit:\n1. UPDATE study_sessions SET status = 'CANCELLED', ended_at = last_heartbeat_at\n2. UPDATE tasks SET status = 'TODO' (Toàn bộ task dở dang trả về TODO)
+        SessionRepo -> DB: execute_atomic_cancel_finalize(sessionData)
+        activate DB
+        DB --> SessionRepo: OK
+        deactivate DB
+    end
+
+    SessionRepo --> SweepUC: sessionFinalizedAck
+    deactivate SessionRepo
+end
+
+SweepUC --> Worker: SweepSummaryDTO(processed_count, partial_count, cancelled_count)
+deactivate SweepUC
+
+Worker -> Worker: log_summary_and_metrics(SweepSummaryDTO)
+deactivate Worker
+
+@enduml

@@ -1,0 +1,184 @@
+@startuml SD5_Study_Session_Pomodoro
+!theme plain
+autonumber
+skinparam BoxPadding 10
+skinparam ParticipantPadding 10
+skinparam ResponseMessageBelowArrow true
+
+title UC-SESS-01: Thực thi Phiên học Tập trung (Study Session Execution)\nTuân thủ: DDD Aggregate Root Separation & BUSR-08 (Concurrency Check 409)
+
+actor "Learner" as User
+box "FrontendDMZ" #F8F9FA
+    participant "Study Workspace\n(Next.js Client)" as UI
+end box
+box "Presentation Layer" #E9ECEF
+    participant "SessionRouter\n(FastAPI)" as Router
+end box
+box "Application Layer" #DEE2E6
+    participant "StudySessionUC\n(Use Case)" as SessionUC
+end box
+box "Domain Layer" #E2E3E5
+    participant "StudySession\n(Domain Entity)" as SessionEntity
+    participant "Task\n(Domain Entity)" as TaskEntity
+    participant "SessionTask\n(Association Entity)" as SessionTaskEntity
+end box
+box "Infrastructure & Persistence" #CED4DA
+    participant "SqlSessionRepo\n(SessionRepoPort)" as SessionRepo
+    participant "SqlTaskRepo\n(TaskRepoPort)" as TaskRepo
+    participant "PostgreSQL 16\n(Database)" as DB
+end box
+
+== 1. Khởi tạo Phiên học (Start Session) ==
+User -> UI: Chọn Task & Bấm [Bắt đầu Phiên học]
+activate UI
+UI -> Router: POST /api/v1/sessions\n{"task_ids": ["task_1"], "planned_minutes": 50}
+activate Router
+
+Router -> SessionUC: start_session(cmd: StartSessionCommand)
+activate SessionUC
+
+SessionUC -> SessionRepo: find_active_session_by_user(userId)
+activate SessionRepo
+SessionRepo -> DB: query_active_session(userId)
+activate DB
+DB --> SessionRepo: active_session_record (hoặc null)
+deactivate DB
+
+alt [Người học đang có phiên học dở dang (BUSR-08 Violated)]
+    SessionRepo --> SessionUC: existingActiveSession
+    deactivate SessionRepo
+    SessionUC --> Router: throw ActiveSessionConflictException
+    deactivate SessionUC
+    Router --> UI: 409 Conflict {"error": "ACTIVE_SESSION_EXISTS", "active_session_id": "sess_099"}
+    deactivate Router
+    UI --> User: Cảnh báo "Bạn đang có phiên học chưa kết thúc! Vui lòng hoàn thành hoặc hủy phiên trước."
+else [Không có phiên dở dang - Khởi tạo phiên mới]
+    SessionRepo --> SessionUC: null
+    deactivate SessionRepo
+
+    SessionUC -> SessionEntity: start(userId, roadmapId, plannedMinutes)
+    activate SessionEntity
+    SessionEntity --> SessionUC: sessionEntity (status="IN_PROGRESS")
+    deactivate SessionEntity
+
+    SessionUC -> SessionRepo: save_session(sessionEntity)
+    activate SessionRepo
+    SessionRepo -> DB: insert_study_session(sessionData)
+    activate DB
+    DB --> SessionRepo: session_id = "sess_101"
+    deactivate DB
+    SessionRepo --> SessionUC: persistedSession
+    deactivate SessionRepo
+
+    SessionUC --> Router: SessionStartedDTO(session_id="sess_101", status="IN_PROGRESS")
+    deactivate SessionUC
+
+    Router --> UI: 201 Created {"session_id": "sess_101"}
+    deactivate Router
+
+    UI --> User: Mở giao diện Pomodoro Workspace, đếm ngược thời gian
+end
+deactivate UI
+
+== 2. Đồng bộ Nhịp tim định kỳ (Mỗi 60s bảo vệ thời lượng) ==
+loop Mỗi 60 giây trong phiên (Heartbeat Sync)
+    UI -> Router: POST /api/v1/sessions/sess_101/heartbeat\n{"actual_minutes": X}
+    activate Router
+    Router -> SessionUC: record_heartbeat(session_id="sess_101", actual_minutes=X)
+    activate SessionUC
+    SessionUC -> SessionRepo: find_by_id("sess_101")
+    activate SessionRepo
+    SessionRepo -> DB: query_session_by_id("sess_101")
+    activate DB
+    DB --> SessionRepo: sessionRecord
+    deactivate DB
+    SessionRepo --> SessionUC: sessionEntity
+    deactivate SessionRepo
+
+    SessionUC -> SessionEntity: recordHeartbeat()
+    activate SessionEntity
+    SessionEntity --> SessionUC: updatedSession
+    deactivate SessionEntity
+
+    SessionUC -> SessionRepo: update_heartbeat(sessionEntity)
+    activate SessionRepo
+    SessionRepo -> DB: update_session_heartbeat("sess_101", X, timestamp)
+    activate DB
+    DB --> SessionRepo: OK
+    deactivate DB
+    SessionRepo --> SessionUC: OK
+    deactivate SessionRepo
+
+    SessionUC --> Router: HeartbeatAckDTO(synced_minutes=X)
+    deactivate SessionUC
+    Router --> UI: 200 OK {"ack": true, "synced_minutes": X}
+    deactivate Router
+end
+
+== 3. Hoàn tất Phiên học (Finish Session - DDD Boundary Compliance) ==
+User -> UI: Đánh dấu Task hoàn thành & Bấm [Kết thúc Phiên]
+activate UI
+UI -> Router: POST /api/v1/sessions/sess_101/finish\n{"completed_task_ids": ["task_1"], "takeaways": "..."}
+activate Router
+
+Router -> SessionUC: finish_session(cmd: FinishSessionCommand)
+activate SessionUC
+
+SessionUC -> SessionRepo: find_by_id("sess_101")
+activate SessionRepo
+SessionRepo -> DB: query_session_by_id("sess_101")
+activate DB
+DB --> SessionRepo: sessionRecord
+deactivate DB
+SessionRepo --> SessionUC: sessionEntity
+deactivate SessionRepo
+
+SessionUC -> SessionEntity: finish(takeaways)
+activate SessionEntity
+SessionEntity --> SessionUC: sessionEntity (status="COMPLETED")
+deactivate SessionEntity
+
+SessionUC -> TaskRepo: find_tasks_by_ids(["task_1"])
+activate TaskRepo
+TaskRepo -> DB: query_tasks_by_ids(["task_1"])
+activate DB
+DB --> TaskRepo: taskRecords
+deactivate DB
+TaskRepo --> SessionUC: taskEntities
+deactivate TaskRepo
+
+SessionUC -> TaskEntity: markCompleted()
+activate TaskEntity
+TaskEntity --> SessionUC: updatedTaskEntity (status="COMPLETED")
+deactivate TaskEntity
+
+' Phân tách ranh giới Aggregate Root qua Application Transaction
+note over SessionUC, DB: Giao dịch nguyên tử điều phối tại Application Layer (Unit of Work):\n1. SessionRepo cập nhật aggregate StudySession\n2. TaskRepo cập nhật aggregate Task\n3. SessionRepo cập nhật liên kết session_tasks
+SessionUC -> SessionRepo: save_session(sessionEntity)
+activate SessionRepo
+SessionRepo -> DB: update_study_session_status(session_id, 'COMPLETED', ended_at)
+activate DB
+DB --> SessionRepo: OK
+deactivate DB
+SessionRepo --> SessionUC: OK
+deactivate SessionRepo
+
+SessionUC -> TaskRepo: save_tasks([taskEntity])
+activate TaskRepo
+TaskRepo -> DB: update_tasks_status([task_id], 'COMPLETED', completed_at)
+activate DB
+DB --> TaskRepo: OK
+deactivate DB
+TaskRepo --> SessionUC: OK
+deactivate TaskRepo
+
+SessionUC --> Router: SessionFinishedDTO(session_id="sess_101", status="COMPLETED")
+deactivate SessionUC
+
+Router --> UI: 200 OK {"status": "COMPLETED", "message": "Session finished"}
+deactivate Router
+
+UI --> User: Hiển thị màn hình Tổng kết thành tựu & Chúc mừng hoàn thành!
+deactivate UI
+
+@enduml

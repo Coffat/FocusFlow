@@ -1,0 +1,105 @@
+@startuml SD4_Apply_Official_Schedule
+!theme plain
+autonumber
+skinparam BoxPadding 10
+skinparam ParticipantPadding 10
+skinparam ResponseMessageBelowArrow true
+
+title UC-PLAN-03: Áp dụng Lịch học Chính thức & Kiểm tra Trần Giờ rảnh (Use-Case Realization)\nTuân thủ: Craig Larman Rich Domain Model & Alistair Cockburn Hexagonal Architecture
+
+actor "Learner" as User
+box "FrontendDMZ" #F8F9FA
+    participant "Next.js Web Client" as UI
+end box
+box "Presentation Layer" #E9ECEF
+    participant "RoadmapRouter\n(FastAPI)" as Router
+end box
+box "Application Layer" #DEE2E6
+    participant "ApplyProposalUC\n(Use Case)" as ApplyUC
+end box
+box "Domain Layer" #E2E3E5
+    participant "AvailabilityValidator\n(Domain Service)" as Val
+    participant "ScheduleProposal\n(Domain Entity)" as ProposalEntity
+    participant "Roadmap\n(Domain Entity)" as RoadmapEntity
+end box
+box "Infrastructure & Persistence" #CED4DA
+    participant "SqlRoadmapRepo\n(RoadmapRepoPort)" as Repo
+    participant "PostgreSQL 16\n(Database)" as DB
+end box
+
+User -> UI: Xem xét Bản xem trước Đề xuất -> Bấm [Áp dụng Lịch]
+activate UI
+UI -> Router: POST /api/v1/roadmaps/{id}/apply\n{"proposal_id": "prop_456"}
+activate Router
+
+Router -> ApplyUC: execute(userId, roadmapId, proposalId)
+activate ApplyUC
+
+' --- Nạp dữ liệu ---
+ApplyUC -> Repo: get_user_availability(userId)
+activate Repo
+Repo -> DB: query_user_availability(userId)
+activate DB
+DB --> Repo: availabilityRecord
+deactivate DB
+Repo --> ApplyUC: UserAvailabilityProfile
+deactivate Repo
+
+ApplyUC -> Repo: find_roadmap_and_proposal(roadmapId, proposalId)
+activate Repo
+Repo -> DB: query_roadmap_and_proposal(roadmapId, proposalId)
+activate DB
+DB --> Repo: (roadmapRecord, proposalRecord)
+deactivate DB
+Repo --> ApplyUC: (roadmapEntity, proposalEntity)
+deactivate Repo
+
+' --- Kiểm tra trần giờ rảnh ---
+ApplyUC -> Val: validate_schedule_ceiling(proposalEntity.tasks, availabilityProfile)
+activate Val
+
+alt [Tổng thời lượng task vượt quá Quỹ giờ rảnh (Hard Ceiling Violated)]
+    Val --> ApplyUC: HardCeilingViolationError(exceededDate, totalMinutes, quotaMinutes)
+    deactivate Val
+    ApplyUC --> Router: throw HardCeilingViolationError
+    deactivate ApplyUC
+    Router --> UI: 422 Unprocessable Entity {"error": "HARD_CEILING_VIOLATED", "date": "..."}
+    deactivate Router
+    UI --> User: Cảnh báo đỏ: Quá tải giờ rảnh ngày chỉ định! Vui lòng điều chỉnh trước khi lưu.
+else [Thỏa mãn trần giờ rảnh]
+    Val --> ApplyUC: ValidationResult(valid=true)
+    deactivate Val
+
+    ' --- Rich Domain Model: Kích hoạt nghiệp vụ trên Domain Entities ---
+    ApplyUC -> ProposalEntity: apply()
+    activate ProposalEntity
+    ProposalEntity --> ApplyUC: status="APPLIED"
+    deactivate ProposalEntity
+
+    ApplyUC -> RoadmapEntity: activate()
+    activate RoadmapEntity
+    RoadmapEntity --> ApplyUC: status="ACTIVE"
+    deactivate RoadmapEntity
+
+    ' --- Lưu trữ qua Repository trong ACID Transaction ---
+    ApplyUC -> Repo: persist_active_schedule(roadmapEntity, proposalEntity, proposalTasks)
+    activate Repo
+    note over Repo,DB: Giao dịch nguyên tử (ACID Transaction):\n1. Khóa dòng: lock_roadmap_for_update(roadmapId)\n2. Dọn dẹp: delete_pending_future_tasks(roadmapId)\n3. Batch Insert: insert_official_tasks(proposalTasks)\n4. Kích hoạt: update_roadmap_status(roadmapId, 'ACTIVE')\n5. Cập nhật official_schedules (total_sessions, total_hours)\n6. Đóng Proposal: mark_proposal_applied(proposalId)
+    Repo -> DB: execute_atomic_schedule_persist(roadmapId, proposalTasks)
+    activate DB
+    DB --> Repo: transaction_success
+    deactivate DB
+    Repo --> ApplyUC: OfficialScheduleEntity
+    deactivate Repo
+
+    ApplyUC --> Router: ApplyResponseDTO(status="ACTIVE")
+    deactivate ApplyUC
+
+    Router --> UI: 200 OK {"status": "ACTIVE", "message": "Schedule activated"}
+    deactivate Router
+
+    UI --> User: Thông báo kích hoạt thành công! Điều hướng vào Màn hình Lịch làm việc.
+end
+deactivate UI
+
+@enduml

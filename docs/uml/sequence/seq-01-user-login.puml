@@ -1,0 +1,98 @@
+@startuml SD1_User_Login
+!theme plain
+autonumber
+skinparam BoxPadding 10
+skinparam ParticipantPadding 10
+skinparam ResponseMessageBelowArrow true
+
+title UC-AUTH-02: Đăng nhập Hệ thống (Use-Case Realization)
+
+actor "Learner" as User
+box "FrontendDMZ" #F8F9FA
+    participant "Next.js Web Client" as UI
+end box
+box "Presentation Layer" #E9ECEF
+    participant "AuthRouter\n(FastAPI)" as Router
+end box
+box "Application Layer" #DEE2E6
+    participant "AuthenticateUserUC\n(Use Case)" as AuthUC
+end box
+box "Domain Layer" #E2E3E5
+    participant "PasswordHasher\n(Domain Service)" as Hasher
+    participant "User\n(Domain Entity)" as UserEntity
+end box
+box "Infrastructure & Security" #CED4DA
+    participant "JwtTokenProvider\n(TokenPort)" as TokenService
+    participant "SqlUserRepo\n(UserRepoPort)" as Repo
+    participant "PostgreSQL 16\n(Database)" as DB
+end box
+
+User -> UI: Nhập Email, Mật khẩu & Bấm [Đăng nhập]
+activate UI
+UI -> Router: POST /api/v1/auth/login\n{"email": "user@example.com", "password": "***"}
+activate Router
+
+Router -> AuthUC: execute(cmd: LoginCommand)
+activate AuthUC
+
+AuthUC -> Repo: find_by_email(email)
+activate Repo
+Repo -> DB: query_user_by_email(email)
+activate DB
+DB --> Repo: user_record
+deactivate DB
+
+alt [Không tìm thấy User (user_record == null)]
+    Repo --> AuthUC: null
+    deactivate Repo
+    AuthUC --> Router: throw InvalidCredentialsError
+    deactivate AuthUC
+    Router --> UI: 401 Unauthorized {"error": "INVALID_CREDENTIALS"}
+    deactivate Router
+    UI --> User: Hiển thị thông báo "Email hoặc mật khẩu không chính xác"
+else [Tìm thấy User]
+    Repo --> AuthUC: userEntity
+    deactivate Repo
+
+    AuthUC -> Hasher: verify_password(raw_password, userEntity.password_hash)
+    activate Hasher
+    Hasher --> AuthUC: is_password_valid: bool
+    deactivate Hasher
+
+    alt [Mật khẩu sai (is_password_valid == false)]
+        AuthUC --> Router: throw InvalidCredentialsError
+        deactivate AuthUC
+        Router --> UI: 401 Unauthorized {"error": "INVALID_CREDENTIALS"}
+        deactivate Router
+        UI --> User: Hiển thị thông báo "Email hoặc mật khẩu không chính xác"
+    else [Mật khẩu chính xác (is_password_valid == true)]
+        AuthUC -> UserEntity: is_locked()
+        activate UserEntity
+        UserEntity --> AuthUC: is_locked: bool
+        deactivate UserEntity
+
+        alt [Tài khoản bị khóa (is_locked == true)]
+            AuthUC --> Router: throw AccountLockedError
+            deactivate AuthUC
+            Router --> UI: 403 Forbidden {"error": "ACCOUNT_LOCKED"}
+            deactivate Router
+            UI --> User: Cảnh báo "Tài khoản của bạn đã bị tạm khóa"
+        else [Tài khoản hoạt động (ACTIVE)]
+            AuthUC -> TokenService: create_token_pair(userEntity.id, userEntity.role)
+            activate TokenService
+            TokenService --> AuthUC: TokenPair(access_token, refresh_token)
+            deactivate TokenService
+
+            AuthUC --> Router: AuthSuccessDTO(user_info, token_pair)
+            deactivate AuthUC
+
+            Router --> UI: 200 OK + Set-Cookie (HttpOnly JWT)
+            deactivate Router
+
+            UI --> User: Điều hướng vào Màn hình Chính (Dashboard)
+        end
+    end
+end
+deactivate UI
+
+@enduml

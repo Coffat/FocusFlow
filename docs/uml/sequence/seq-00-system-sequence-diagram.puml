@@ -1,0 +1,74 @@
+@startuml FocusFlow_SSD
+!theme plain
+autonumber
+skinparam BoxPadding 10
+skinparam ParticipantPadding 10
+skinparam ResponseMessageBelowArrow true
+
+title FocusFlow — Sơ đồ Tuần tự Hệ thống Tổng quan (System Sequence Diagram - SSD)
+
+actor "Learner (Người học)" as User
+participant ":FocusFlow System\n(Black-box)" as System
+
+== Giai đoạn 1: Thiết lập Mục tiêu & Lập kế hoạch (Forethought Phase) ==
+User -> System: createGoal(goal_title, target_date)
+activate System
+
+alt [Đủ hạn ngạch Quota AI]
+    System --> User: milestonesList (3-7 Cột mốc cấp 1)
+    deactivate System
+
+    User -> System: approveMilestonesAndSetAvailability(milestones, availability_config)
+    activate System
+    System --> User: scheduleProposal (Kế hoạch nhiệm vụ chi tiết cấp 2)
+    deactivate System
+
+    User -> System: applyOfficialSchedule(proposal_id)
+    activate System
+
+    alt [Quỹ giờ rảnh hợp lệ (Thỏa mãn trần giờ)]
+        System --> User: scheduleActivatedAck (Lịch chính thức được kích hoạt)
+    else [Vi phạm trần giờ rảnh (Hard Ceiling Violated)]
+        System --> User: scheduleRejectedError (Cảnh báo quá tải, yêu cầu chỉnh sửa)
+    end
+    deactivate System
+else [Hết hạn ngạch Quota AI]
+    System --> User: quotaExceededError (Cảnh báo hết hạn ngạch AI, gợi ý Mock Sandbox)
+    deactivate System
+end
+
+== Giai đoạn 2: Thực thi Phiên học & Giám sát (Performance Phase) ==
+User -> System: startStudySession(task_id)
+activate System
+System --> User: sessionStartedAck (Mở Study Workspace)
+deactivate System
+
+opt [Nhịp tim định kỳ trong lúc học]
+    User -> System: sendHeartbeat(session_id)
+    activate System
+    System --> User: heartbeatAck
+    deactivate System
+end
+
+alt [Hoàn thành phiên bình thường]
+    User -> System: finishStudySession(session_id, completed_tasks, takeaways)
+    activate System
+    System --> User: sessionSummaryDTO (Cập nhật tiến độ & Chuỗi ngày học)
+    deactivate System
+else [Bỏ ngang / Mất kết nối > 5 phút]
+    note over System: Hệ thống chạy tác vụ nền quét tự động\nchốt phiên gián đoạn sau 5 phút không có heartbeat (OS-07)
+    User -> System: getSessionStatus(session_id)
+    activate System
+    System --> User: sessionFinalizedAck (Thông báo phiên đã đóng gián đoạn, bảo toàn giờ học)
+    deactivate System
+end
+
+== Giai đoạn 3: Tự suy ngẫm & Thích ứng Biến cố (Self-Reflection & Adaptation) ==
+opt [Người học có biến cố cần hoãn hoặc dời lịch]
+    User -> System: pauseRoadmap(roadmap_id, start_date, resume_date, reason)
+    activate System
+    System --> User: dominoShiftResult (Lịch học tịnh tiến tất định an toàn)
+    deactivate System
+end
+
+@enduml

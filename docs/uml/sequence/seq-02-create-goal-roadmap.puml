@@ -1,0 +1,76 @@
+@startuml SD2_Create_Goal_Roadmap
+!theme plain
+autonumber
+skinparam BoxPadding 10
+skinparam ParticipantPadding 10
+skinparam ResponseMessageBelowArrow true
+
+title UC-PLAN-01: Khởi tạo Mục tiêu & Đăng ký Lộ trình (Use-Case Realization)
+
+actor "Learner" as User
+box "FrontendDMZ" #F8F9FA
+    participant "Next.js Web Client" as UI
+end box
+box "Presentation Layer" #E9ECEF
+    participant "RoadmapRouter\n(FastAPI)" as Router
+end box
+box "Application Layer" #DEE2E6
+    participant "CreateGoalAndRoadmapUC\n(Use Case)" as CreateUC
+end box
+box "Domain Layer" #E2E3E5
+    participant "Goal\n(Domain Entity)" as GoalEntity
+    participant "Roadmap\n(Domain Entity)" as RoadmapEntity
+end box
+box "Infrastructure & Persistence" #CED4DA
+    participant "SqlRoadmapRepo\n(RoadmapRepoPort)" as Repo
+    participant "PostgreSQL 16\n(Database)" as DB
+end box
+
+User -> UI: Nhập Mục tiêu học tập, Ngày hoàn thành & Bấm [Bắt đầu Lộ trình]
+activate UI
+UI -> Router: POST /api/v1/roadmaps/goals\n{"title": "AWS SAA-C03", "target_date": "2026-12-31", "context": "..."}
+activate Router
+
+Router -> CreateUC: execute(cmd: CreateGoalCommand)
+activate CreateUC
+
+CreateUC -> GoalEntity: create(userId, title, targetDate, context)
+activate GoalEntity
+
+alt [targetDate <= currentDate (Thời hạn không hợp lệ)]
+    GoalEntity --> CreateUC: throw InvalidTargetDateException("Target date must be in future")
+    deactivate GoalEntity
+    CreateUC --> Router: throw ValidationException
+    deactivate CreateUC
+    Router --> UI: 422 Unprocessable Entity {"error": "INVALID_TARGET_DATE"}
+    deactivate Router
+    UI --> User: Hiển thị lỗi "Thời hạn hoàn thành mục tiêu phải lớn hơn ngày hiện tại"
+else [targetDate hợp lệ]
+    GoalEntity --> CreateUC: goalEntity (status=ACTIVE)
+    deactivate GoalEntity
+
+    CreateUC -> RoadmapEntity: create(goalId, userId, title, targetDate)
+    activate RoadmapEntity
+    RoadmapEntity --> CreateUC: roadmapEntity (status=INITIALIZED)
+    deactivate RoadmapEntity
+
+    CreateUC -> Repo: save_goal_and_roadmap(goalEntity, roadmapEntity)
+    activate Repo
+    Repo -> DB: insert_goal_and_roadmap_records(goalData, roadmapData)
+    activate DB
+    DB --> Repo: (goal_id, roadmap_id)
+    deactivate DB
+    Repo --> CreateUC: PersistedRoadmapDTO
+    deactivate Repo
+
+    CreateUC --> Router: RoadmapCreatedDTO(goal_id, roadmap_id, status="INITIALIZED")
+    deactivate CreateUC
+
+    Router --> UI: 201 Created {"roadmap_id": "road_123", "goal_id": "goal_123"}
+    deactivate Router
+
+    UI --> User: Điều hướng đến Màn hình Lập kế hoạch (Chọn AI hoặc Lập thủ công)
+end
+deactivate UI
+
+@enduml

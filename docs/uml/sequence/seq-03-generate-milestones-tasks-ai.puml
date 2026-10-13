@@ -1,0 +1,145 @@
+@startuml SD3_Generate_Milestones_Tasks_AI
+!theme plain
+autonumber
+skinparam BoxPadding 10
+skinparam ParticipantPadding 10
+skinparam ResponseMessageBelowArrow true
+
+title UC-PLAN-02: Sinh Cột mốc & Phân rã Nhiệm vụ AI qua SSE Streaming (Use-Case Realization)\nTuân thủ: Alistair Cockburn Hexagonal Architecture & ADR-005 (Server-Sent Events)
+
+actor "Learner" as User
+box "FrontendDMZ" #F8F9FA
+    participant "Next.js Web Client" as UI
+end box
+box "Presentation Layer" #E9ECEF
+    participant "RoadmapRouter\n(FastAPI SSE)" as Router
+end box
+box "Application Layer" #DEE2E6
+    participant "GenerateProposalUC\n(Use Case)" as GenUC
+end box
+box "Domain Layer" #E2E3E5
+    participant "PromptSanitizer\n(Domain Service)" as Sanitizer
+end box
+box "Infrastructure & Adapters" #CED4DA
+    participant "RedisQuotaAdapter\n(AIQuotaPort)" as Quota
+    participant "GeminiLLMAdapter\n(LLMPort)" as LLMAdapter
+    participant "SqlProposalRepo\n(ProposalRepoPort)" as Repo
+end box
+box "External & Persistence" #D8D8D8
+    participant "Redis 7.2\n(Token Bucket)" as Redis
+    participant "Google Gemini API\n(LLM)" as LLM
+    participant "PostgreSQL 16\n(Database)" as DB
+end box
+
+User -> UI: Cấu hình Giờ rảnh & Bấm [Sinh Đề xuất Lịch học bằng AI]
+activate UI
+UI -> Router: POST /api/v1/roadmaps/{id}/proposals/stream\n{"availability_config": {...}} [Accept: text/event-stream]
+activate Router
+
+Router -> GenUC: stream_generation(cmd: GenerateProposalCommand)
+activate GenUC
+
+' --- Bước 1: Kiểm tra & Tạm giữ Hạn ngạch (Quota 2-phase) ---
+GenUC -> Quota: reserve_quota(userId)
+activate Quota
+Quota -> Redis: EVAL reserve_quota.lua (userId, cycle_key)
+activate Redis
+Redis --> Quota: quota_status (RESERVED / EXCEEDED)
+deactivate Redis
+
+alt [Hết hạn ngạch Quota AI]
+    Quota --> GenUC: QuotaExceededError
+    deactivate Quota
+    GenUC --> Router: throw QuotaExceededError
+    deactivate GenUC
+    Router --> UI: 403 Forbidden {"error": "AI_QUOTA_EXCEEDED"}
+    deactivate Router
+    UI --> User: Cảnh báo hết hạn ngạch, gợi ý chuyển sang Lập kế hoạch thủ công (UC-PLAN-04)
+else [Quota hợp lệ - Bắt đầu SSE Streaming (ADR-005)]
+    Quota --> GenUC: reservation_token
+    deactivate Quota
+
+    Router --> UI: 200 OK (Content-Type: text/event-stream)
+    Router --> UI: event: status\ndata: {"step": "SANITIZING_PROMPT", "progress": 10}
+
+    ' --- Bước 2: Khử khuẩn Prompt ---
+    GenUC -> Sanitizer: sanitize_prompt(rawContext)
+    activate Sanitizer
+    Sanitizer --> GenUC: cleanPrompt (PII-stripped)
+    deactivate Sanitizer
+
+    Router --> UI: event: status\ndata: {"step": "CALLING_GEMINI_API", "progress": 30}
+
+    ' --- Bước 3: Gọi LLM Streaming ---
+    GenUC -> LLMAdapter: stream_schedule_proposal(cleanPrompt, availability) [Timeout 55s]
+    activate LLMAdapter
+    LLMAdapter -> LLM: generate_content_stream(request)
+    activate LLM
+
+    alt [Lỗi Timeout 55s / Service Error]
+        LLM --> LLMAdapter: TimeoutError
+        deactivate LLM
+        LLMAdapter --> GenUC: LLMTimeoutException
+        deactivate LLMAdapter
+
+        GenUC -> Quota: release_quota(userId)
+        activate Quota
+        Quota -> Redis: EVAL release_quota.lua (userId)
+        activate Redis
+        Redis --> Quota: OK
+        deactivate Redis
+        Quota --> GenUC: OK
+        deactivate Quota
+
+        GenUC --> Router: throw AIPlanGenerationTimeoutException
+        deactivate GenUC
+        Router --> UI: event: error\ndata: {"code": "AI_TIMEOUT", "message": "AI generation exceeded 55s"}
+        deactivate Router
+        UI --> User: Thông báo AI quá tải, hoàn trả hạn ngạch thành công, gợi ý thử lại
+    else [Thành công - Nhận Stream Chunks]
+        loop [Nhận các đoạn phân rã từ Gemini]
+            LLM --> LLMAdapter: stream_chunk (milestones & tasks)
+            LLMAdapter --> GenUC: partial_proposal_chunk
+            GenUC --> Router: stream_event(partial_data)
+            Router --> UI: event: chunk\ndata: {"milestone": "...", "tasks": [...]}
+        end
+        deactivate LLM
+        deactivate LLMAdapter
+
+        ' --- Bước 4: Kiểm tra Schema & Lưu DB ---
+        GenUC -> GenUC: validate_schema(fullProposalData) [tasks 15-240m]
+        GenUC -> Repo: create_draft_proposal(roadmapId, userId, fullProposalData)
+        activate Repo
+        Repo -> DB: insert_schedule_proposal(record, status='DRAFT')
+        activate DB
+        DB --> Repo: proposal_id
+        deactivate DB
+        Repo --> GenUC: proposalEntity (status="DRAFT")
+        deactivate Repo
+
+        ' --- Bước 5: Commit Quota vào Redis & Lưu PostgreSQL ---
+        GenUC -> Quota: commit_quota(userId)
+        activate Quota
+        Quota -> Redis: EVAL commit_quota.lua (userId)
+        activate Redis
+        Redis --> Quota: OK
+        deactivate Redis
+        Quota -> DB: log_quota_consumption(userId, tokens_used)
+        activate DB
+        DB --> Quota: OK
+        deactivate DB
+        Quota --> GenUC: OK
+        deactivate Quota
+
+        GenUC --> Router: ProposalCompletedEvent(proposal_id)
+        deactivate GenUC
+
+        Router --> UI: event: complete\ndata: {"proposal_id": "prop_456", "status": "DRAFT"}
+        deactivate Router
+
+        UI --> User: Hiển thị Bản xem trước Đề xuất (Preview Proposal, chờ người học duyệt)
+    end
+end
+deactivate UI
+
+@enduml

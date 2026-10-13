@@ -1,0 +1,128 @@
+@startuml SD6_Pause_Domino_Shift
+!theme plain
+autonumber
+skinparam BoxPadding 10
+skinparam ParticipantPadding 10
+skinparam ResponseMessageBelowArrow true
+
+title UC-ADAPT-02: Thiết lập Tạm dừng Lộ trình & Tịnh tiến Tất định (Domino Shift)\nTuân thủ: Craig Larman Rich Domain Model & BUSR-07 (Deterministic Shift)
+
+actor "Learner" as User
+box "FrontendDMZ" #F8F9FA
+    participant "Next.js Web Client" as UI
+end box
+box "Presentation Layer" #E9ECEF
+    participant "RoadmapRouter\n(FastAPI)" as Router
+end box
+box "Application Layer" #DEE2E6
+    participant "PauseRoadmapUC\n(Use Case)" as PauseUC
+end box
+box "Domain Layer" #E2E3E5
+    participant "Roadmap\n(Domain Entity)" as RoadmapEntity
+    participant "Task\n(Domain Entity)" as TaskEntity
+    participant "PauseRecord\n(Domain Entity)" as PauseEntity
+    participant "DominoShiftCalculator\n(Domain Service)" as Domino
+end box
+box "Infrastructure & Persistence" #CED4DA
+    participant "SqlRoadmapRepo\n(RoadmapRepoPort)" as Repo
+    participant "SqlTaskRepo\n(TaskRepoPort)" as TaskRepo
+    participant "PostgreSQL 16\n(Database)" as DB
+end box
+
+User -> UI: Bấm [Tạm dừng Lộ trình] -> Nhập ngày tạm dừng, ngày tiếp tục & lý do
+activate UI
+UI -> Router: POST /api/v1/roadmaps/{id}/pause\n{"start_date": "2026-10-15", "resume_date": "2026-10-20", "reason": "Bận thi"}
+activate Router
+
+Router -> PauseUC: execute(cmd: PauseRoadmapCommand)
+activate PauseUC
+
+alt [startDate >= resumeDate (Khoảng thời gian không hợp lệ)]
+    PauseUC --> Router: throw InvalidPauseDateRangeException
+    deactivate PauseUC
+    Router --> UI: 422 Unprocessable Entity {"error": "INVALID_DATE_RANGE"}
+    deactivate Router
+    UI --> User: Báo lỗi: Ngày tiếp tục học phải sau ngày bắt đầu tạm dừng
+else [Khoảng thời gian hợp lệ]
+    PauseUC -> Repo: find_roadmap_by_id(roadmapId)
+    activate Repo
+    Repo -> DB: query_roadmap_by_id(roadmapId)
+    activate DB
+    DB --> Repo: roadmapRecord
+    deactivate DB
+    Repo --> PauseUC: roadmapEntity
+    deactivate Repo
+
+    alt [roadmapEntity.status != 'ACTIVE' (Lộ trình không ở trạng thái hoạt động)]
+        PauseUC --> Router: throw InvalidRoadmapStateException
+        deactivate PauseUC
+        Router --> UI: 409 Conflict {"error": "ROADMAP_NOT_ACTIVE"}
+        deactivate Router
+        UI --> User: Cảnh báo: Chỉ có thể tạm dừng lộ trình đang hoạt động (ACTIVE)
+    else [Lộ trình ACTIVE hợp lệ]
+        PauseUC -> TaskRepo: get_pending_tasks_from_date(roadmapId, startDate)
+        activate TaskRepo
+        TaskRepo -> DB: query_pending_tasks_from_date(roadmapId, startDate)
+        activate DB
+        DB --> TaskRepo: pendingTaskRecords
+        deactivate DB
+        TaskRepo --> PauseUC: pendingTaskEntities
+        deactivate TaskRepo
+
+        PauseUC -> Repo: get_user_availability(userId)
+        activate Repo
+        Repo -> DB: query_user_availability(userId)
+        activate DB
+        DB --> Repo: availabilityRecord
+        deactivate DB
+        Repo --> PauseUC: availabilityProfile
+        deactivate Repo
+
+        ' Tính toán ngày dời bằng Domain Service thuần túy
+        PauseUC -> Domino: calculateShiftedDates(pendingTaskEntities, pauseDuration, availabilityProfile)
+        activate Domino
+        note over Domino: Thuật toán tất định thuần túy trong Domain:\n1. Tính khoảng dời = resumeDate - startDate\n2. Tịnh tiến ngày học sang các ngày rảnh kế tiếp theo availabilityProfile\n3. Bảo toàn 100% quan hệ tiên quyết (prerequisites)\n4. Thực thi tức thời (< 50ms), không phụ thuộc AI!
+        Domino --> PauseUC: shiftedDateMap
+        deactivate Domino
+
+        ' Rich Domain Model: Gọi nghiệp vụ trực tiếp trên các Domain Entities
+        loop qua từng task bị ảnh hưởng
+            PauseUC -> TaskEntity: reschedule(newScheduledDate)
+            activate TaskEntity
+            TaskEntity --> PauseUC: updatedTask
+            deactivate TaskEntity
+        end
+
+        PauseUC -> PauseEntity: create(roadmapId, startDate, resumeDate, shiftDays, reason)
+        activate PauseEntity
+        PauseEntity --> PauseUC: pauseRecordEntity
+        deactivate PauseEntity
+
+        PauseUC -> RoadmapEntity: pause(startDate, resumeDate, reason)
+        activate RoadmapEntity
+        RoadmapEntity --> PauseUC: updatedRoadmap (status="PAUSED")
+        deactivate RoadmapEntity
+
+        ' Lưu trữ nguyên tử qua Repository trong ACID Transaction
+        PauseUC -> Repo: persist_pause_and_shifted_tasks(roadmapEntity, pauseRecordEntity, shiftedTasks)
+        activate Repo
+        note over Repo,DB: Giao dịch nguyên tử Domino Shift (ACID Persistence):\n1. Tạo bản ghi pause_records\n2. Cập nhật roadmap status = 'PAUSED'\n3. Batch UPDATE scheduled_date mới cho các task\n4. Commit Transaction (< 50ms)
+        Repo -> DB: execute_atomic_domino_shift_tx(roadmapData, pauseData, taskUpdates)
+        activate DB
+        DB --> Repo: transaction_success
+        deactivate DB
+        Repo --> PauseUC: success_ack
+        deactivate Repo
+
+        PauseUC --> Router: PauseResultDTO(status="PAUSED", shifted_count=shiftedCount)
+        deactivate PauseUC
+
+        Router --> UI: 200 OK {"status": "PAUSED", "shifted_count": shiftedCount}
+        deactivate Router
+
+        UI --> User: Cập nhật giao diện: Lộ trình đã TẠM DỪNG, các nhiệm vụ đã được tịnh tiến an toàn!
+    end
+end
+deactivate UI
+
+@enduml
