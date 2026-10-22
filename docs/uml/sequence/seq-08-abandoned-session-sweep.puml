@@ -47,7 +47,7 @@ deactivate DB
 SessionRepo --> SweepUC: List[staleSessions]
 deactivate SessionRepo
 
-loop [Với mỗi staleSession trong danh sách]
+loop Với mỗi staleSession trong danh sách
     SweepUC -> TaskRepo: get_completed_tasks_count_in_session(sessionId)
     activate TaskRepo
     TaskRepo -> DB: query_completed_task_count(sessionId)
@@ -71,13 +71,13 @@ loop [Với mỗi staleSession trong danh sách]
     SweepUC -> SessionRepo: finalize_abandoned_session(finalizedSession)
     activate SessionRepo
 
-    alt [Thỏa mãn ngưỡng công nhận: PARTIAL_COMPLETED]
+    alt Thỏa mãn ngưỡng công nhận: PARTIAL_COMPLETED
         note over SessionRepo,DB: Transaction Commit:\n1. UPDATE study_sessions SET status = 'PARTIAL_COMPLETED', ended_at = last_heartbeat_at\n2. UPDATE tasks SET status = 'TODO', scheduled_date = NULL (Task dở dang trả về Backlog)
         SessionRepo -> DB: execute_atomic_partial_finalize(sessionData)
         activate DB
         DB --> SessionRepo: OK
         deactivate DB
-    else [Dưới ngưỡng công nhận: CANCELLED]
+    else Dưới ngưỡng công nhận: CANCELLED
         note over SessionRepo,DB: Transaction Commit:\n1. UPDATE study_sessions SET status = 'CANCELLED', ended_at = last_heartbeat_at\n2. UPDATE tasks SET status = 'TODO' (Toàn bộ task dở dang trả về TODO)
         SessionRepo -> DB: execute_atomic_cancel_finalize(sessionData)
         activate DB

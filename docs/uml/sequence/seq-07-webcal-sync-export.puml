@@ -40,7 +40,7 @@ activate DB
 DB --> WebCalRepo: tokenRecord
 deactivate DB
 
-alt [Token không hợp lệ hoặc đã bị vô hiệu hóa]
+alt Token không hợp lệ hoặc đã bị vô hiệu hóa
     WebCalRepo --> CalUC: null
     deactivate WebCalRepo
     CalUC --> Router: throw InvalidCalendarTokenException
@@ -48,7 +48,7 @@ alt [Token không hợp lệ hoặc đã bị vô hiệu hóa]
     Router --> ExtCal: 401 Unauthorized {"error": "INVALID_CALENDAR_TOKEN"}
     deactivate Router
     deactivate LogMid
-else [Token hợp lệ (ACTIVE)]
+else Token hợp lệ (ACTIVE)
     WebCalRepo --> CalUC: webCalSubscriptionEntity
     deactivate WebCalRepo
 

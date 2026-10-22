@@ -7,10 +7,14 @@ skinparam state {
     ArrowColor Navy
 }
 
-title FocusFlow — Máy trạng thái Nhiệm vụ & Overdue Động (Task Lifecycle)
+title FocusFlow — Máy trạng thái Nhiệm vụ & Các trạng thái Phái sinh (Task Lifecycle & Derived States)
 
 state "Task Lifecycle" as TaskMachine {
-    [*] --> TODO
+    [*] --> PENDING : AIDecompose [milestone_pending]
+    [*] --> TODO : DirectManualCreate / ActiveMilestone
+
+    PENDING --> TODO : ApplySchedule / ActivateMilestone
+    PENDING --> CANCELLED : DiscardProposal / CancelTask
 
     state "TODO" as TODO {
         [*] --> Scheduled : [scheduled_date IS NOT NULL]
@@ -19,23 +23,40 @@ state "Task Lifecycle" as TaskMachine {
         state "Scheduled" as Scheduled {
             [*] --> NormalScheduled
             NormalScheduled --> NormalScheduled : DominoShift / update_scheduled_date()
-            NormalScheduled --> NormalScheduled : Reschedule / change_date()
+            NormalScheduled --> NormalScheduled : Reschedule [reschedule_count < 3] / increment_reschedule_count()
             NormalScheduled --> OverdueScheduled : DailyEvaluation [CURRENT_DATE > scheduled_date]
-            OverdueScheduled --> NormalScheduled : Reschedule [new_date >= CURRENT_DATE]
+            OverdueScheduled --> NormalScheduled : RescheduleCommit [reschedule_count = 0]
+            OverdueScheduled --> StalledScheduled : ConsecutiveFailureLimit [reschedule_count >= 3] / trigger_intervention()
+            StalledScheduled --> NormalScheduled : UserResolveIntervention [commit_fixed_date] / reset_reschedule_count()
+            StalledScheduled --> Backlog : UserMoveToBacklog / set_scheduled_date_null()
         }
 
         state "OverdueScheduled\n<<derived>>" as OverdueScheduled
+        state "StalledScheduled\n<<derived>>" as StalledScheduled
+        state "BlockedExecution\n<<derived>>" as BlockedExecution
+
         note right of OverdueScheduled
           Trạng thái phái sinh logic (Runtime Evaluation):
           CURRENT_DATE > scheduled_date AND status = 'TODO'
-          Không lưu cột enum riêng trong CSDL.
+        end note
+
+        note right of StalledScheduled
+          Trạng thái phái sinh chống lặp (ADR-010):
+          reschedule_count >= 3 -> khóa tự động dời lịch,
+          kích hoạt hộp thoại can thiệp người học.
+        end note
+
+        note right of BlockedExecution
+          Trạng thái phái sinh tiên quyết (ADR-009):
+          Tồn tại task tiền đề chưa COMPLETED ->
+          khóa nút Start Session.
         end note
 
         Scheduled --> Backlog : ReturnToBacklog / set_scheduled_date_null()
         Backlog --> Scheduled : ScheduleTask [valid_date] / set_scheduled_date()
     }
 
-    TODO --> IN_PROGRESS : StartSession [selected_for_session] / bind_to_session()
+    TODO --> IN_PROGRESS : StartSession [selected_for_session AND NOT has_unmet_prerequisites] / bind_to_session()
     IN_PROGRESS --> TODO : SessionInterrupted [task_unfinished] / unbind_and_return_to_backlog()
 
     IN_PROGRESS --> COMPLETED : FinishSession [task_done] / set_completed_at(NOW())

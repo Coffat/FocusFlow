@@ -14,7 +14,7 @@ participant ":FocusFlow System\n(Black-box)" as System
 User -> System: createGoal(goal_title, target_date)
 activate System
 
-alt [Đủ hạn ngạch Quota AI]
+alt Đủ hạn ngạch Quota AI
     System --> User: milestonesList (3-7 Cột mốc cấp 1)
     deactivate System
 
@@ -26,13 +26,13 @@ alt [Đủ hạn ngạch Quota AI]
     User -> System: applyOfficialSchedule(proposal_id)
     activate System
 
-    alt [Quỹ giờ rảnh hợp lệ (Thỏa mãn trần giờ)]
+    alt Quỹ giờ rảnh hợp lệ (Thỏa mãn trần giờ)
         System --> User: scheduleActivatedAck (Lịch chính thức được kích hoạt)
-    else [Vi phạm trần giờ rảnh (Hard Ceiling Violated)]
+    else Vi phạm trần giờ rảnh (Hard Ceiling Violated)
         System --> User: scheduleRejectedError (Cảnh báo quá tải, yêu cầu chỉnh sửa)
     end
     deactivate System
-else [Hết hạn ngạch Quota AI]
+else Hết hạn ngạch Quota AI
     System --> User: quotaExceededError (Cảnh báo hết hạn ngạch AI, gợi ý Mock Sandbox)
     deactivate System
 end
@@ -43,19 +43,19 @@ activate System
 System --> User: sessionStartedAck (Mở Study Workspace)
 deactivate System
 
-opt [Nhịp tim định kỳ trong lúc học]
+opt Tự động gửi tín hiệu Heartbeat duy trì phiên (mỗi 60s)
     User -> System: sendHeartbeat(session_id)
     activate System
     System --> User: heartbeatAck
     deactivate System
 end
 
-alt [Hoàn thành phiên bình thường]
+alt Hoàn thành phiên bình thường
     User -> System: finishStudySession(session_id, completed_tasks, takeaways)
     activate System
     System --> User: sessionSummaryDTO (Cập nhật tiến độ & Chuỗi ngày học)
     deactivate System
-else [Bỏ ngang / Mất kết nối > 5 phút]
+else Bỏ ngang / Mất kết nối > 5 phút
     note over System: Hệ thống chạy tác vụ nền quét tự động\nchốt phiên gián đoạn sau 5 phút không có heartbeat (OS-07)
     User -> System: getSessionStatus(session_id)
     activate System
@@ -64,7 +64,7 @@ else [Bỏ ngang / Mất kết nối > 5 phút]
 end
 
 == Giai đoạn 3: Tự suy ngẫm & Thích ứng Biến cố (Self-Reflection & Adaptation) ==
-opt [Người học có biến cố cần hoãn hoặc dời lịch]
+opt Người học có biến cố cần hoãn hoặc dời lịch
     User -> System: pauseRoadmap(roadmap_id, start_date, resume_date, reason)
     activate System
     System --> User: dominoShiftResult (Lịch học tịnh tiến tất định an toàn)

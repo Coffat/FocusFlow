@@ -5,11 +5,11 @@ skinparam BoxPadding 10
 skinparam ParticipantPadding 10
 skinparam ResponseMessageBelowArrow true
 
-title UC-SESS-01: Thực thi Phiên học Tập trung (Study Session Execution)\nTuân thủ: DDD Aggregate Root Separation & BUSR-08 (Concurrency Check 409)
+title UC-SESS-01: Thực thi Phiên học Tập trung (Study Session Execution)
 
 actor "Learner" as User
 box "FrontendDMZ" #F8F9FA
-    participant "Study Workspace\n(Next.js Client)" as UI
+    participant "Study Workspace\n(Angular Client)" as UI
 end box
 box "Presentation Layer" #E9ECEF
     participant "SessionRouter\n(FastAPI)" as Router
@@ -44,7 +44,7 @@ activate DB
 DB --> SessionRepo: active_session_record (hoặc null)
 deactivate DB
 
-alt [Người học đang có phiên học dở dang (BUSR-08 Violated)]
+alt Người học đang có phiên học dở dang (BUSR-08 Violated)
     SessionRepo --> SessionUC: existingActiveSession
     deactivate SessionRepo
     SessionUC --> Router: throw ActiveSessionConflictException
@@ -52,7 +52,7 @@ alt [Người học đang có phiên học dở dang (BUSR-08 Violated)]
     Router --> UI: 409 Conflict {"error": "ACTIVE_SESSION_EXISTS", "active_session_id": "sess_099"}
     deactivate Router
     UI --> User: Cảnh báo "Bạn đang có phiên học chưa kết thúc! Vui lòng hoàn thành hoặc hủy phiên trước."
-else [Không có phiên dở dang - Khởi tạo phiên mới]
+else Không có phiên dở dang - Khởi tạo phiên mới
     SessionRepo --> SessionUC: null
     deactivate SessionRepo
 
@@ -63,6 +63,7 @@ else [Không có phiên dở dang - Khởi tạo phiên mới]
 
     SessionUC -> SessionRepo: save_session(sessionEntity)
     activate SessionRepo
+    note over SessionRepo, DB: Bảo vệ CSDL đa tầng (Defense-in-Depth):\n- Composite FK (roadmap_id, user_id) ngăn chặn IDOR chéo tenant\n- Partial Unique Index uq_user_single_active_session chặn race condition mở 2 session song song
     SessionRepo -> DB: insert_study_session(sessionData)
     activate DB
     DB --> SessionRepo: session_id = "sess_101"
@@ -80,7 +81,7 @@ else [Không có phiên dở dang - Khởi tạo phiên mới]
 end
 deactivate UI
 
-== 2. Đồng bộ Nhịp tim định kỳ (Mỗi 60s bảo vệ thời lượng) ==
+== 2. Đồng bộ Tín hiệu Duy trì Phiên (Heartbeat Ping mỗi 60s bảo toàn thời lượng) ==
 loop Mỗi 60 giây trong phiên (Heartbeat Sync)
     UI -> Router: POST /api/v1/sessions/sess_101/heartbeat\n{"actual_minutes": X}
     activate Router
@@ -153,7 +154,7 @@ TaskEntity --> SessionUC: updatedTaskEntity (status="COMPLETED")
 deactivate TaskEntity
 
 ' Phân tách ranh giới Aggregate Root qua Application Transaction
-note over SessionUC, DB: Giao dịch nguyên tử điều phối tại Application Layer (Unit of Work):\n1. SessionRepo cập nhật aggregate StudySession\n2. TaskRepo cập nhật aggregate Task\n3. SessionRepo cập nhật liên kết session_tasks
+note over SessionUC, DB: Giao dịch nguyên tử điều phối tại Application Layer (Unit of Work):\n1. SessionRepo cập nhật aggregate StudySession (status='COMPLETED', ended_at)\n2. TaskRepo cập nhật aggregate Task (status='COMPLETED', completed_at)\n3. SessionRepo cập nhật liên kết session_tasks với composite FK kép;\n   ràng buộc ON DELETE RESTRICT trên tasks bảo toàn 100% dữ liệu lịch sử học tập.
 SessionUC -> SessionRepo: save_session(sessionEntity)
 activate SessionRepo
 SessionRepo -> DB: update_study_session_status(session_id, 'COMPLETED', ended_at)

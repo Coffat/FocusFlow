@@ -5,8 +5,8 @@
 * **Mốc kiểm toán:** Milestone 2 (M2) — Hoàn thành Phân tích UML & Thiết kế Kiến trúc, Database Diagram
 * **Thời điểm thực hiện:** 05/10/2026 — 08/10/2026
 * **Hội đồng Thẩm định & Kiểm toán:**
-  * Vũ Toàn Thắng (Project Manager / Lead Architect) — Chịu trách nhiệm Kiến trúc & CSDL
-  * Phan Đình Duẩn (Senior BA / Quality Assurance Lead) — Chịu trách nhiệm Yêu cầu, UML & Ma trận Truy vết
+  * Vũ Toàn Thắng — Chịu trách nhiệm Kiến trúc & CSDL
+  * Phan Đình Duẩn — Chịu trách nhiệm Yêu cầu, UML & Ma trận Truy vết
   * Giảng viên Hướng dẫn: ThS. Vũ Đình Bảo (Khoa Công nghệ Thông tin, HCMUTE)
 * **Tiêu chuẩn kỹ thuật áp dụng:**
   * ISO/IEC/IEEE 29148:2018 (Requirements Engineering)
@@ -48,7 +48,7 @@ Trước khi chính thức phê duyệt đóng băng cơ sở thiết kế (Desi
 | **FR-GOAL** (Mục tiêu học tập) | `FR-GOAL-001..002` | Use Case `UC-GOAL-01`, Activity Diagram Khởi tạo | **Khớp 100%**. Thu thập mục tiêu tự do và ngữ cảnh người học trước khi chuyển cho AI phân rã. |
 | **FR-PLAN** (Lập lộ trình 2 chặng) | `FR-PLAN-001..003` | Sequence `M2-WF-01` & `M2-WF-02`, State Machine Proposal | **Khớp 100%**. Tuân thủ nghiêm ngặt Cổng duyệt Human-in-the-Loop 2 cấp: Duyệt Milestones -> Duyệt Tasks (Proposal). |
 | **FR-TASK** (Quản lý Nhiệm vụ) | `FR-TASK-001..003` | State Machine Task (`PENDING` $\leftrightarrow$ `COMPLETED`), Backlog Pool | **Khớp 100%**. Quy tắc Pomodoro 15–240 phút; task không ngày lên lịch tự động quy về Backlog (`BUSR-09`). |
-| **FR-SESSION** (Phiên học tập trung) | `FR-SESSION-001..003` | State Machine Study Session, Sequence Heartbeat Flow | **Khớp 100%**. Quản trị 4 trạng thái; cơ chế nhịp tim định kỳ và chốt phiên tự động sau 5 phút mất mạng. |
+| **FR-SESSION** (Phiên học tập trung) | `FR-SESSION-001..003` | State Machine Study Session, Sequence Heartbeat Flow | **Khớp 100%**. Quản trị 4 trạng thái; cơ chế tín hiệu Heartbeat duy trì phiên định kỳ và chốt phiên tự động sau 5 phút mất mạng. |
 | **FR-ADAPT** (Thích ứng & Dời lịch) | `FR-PAUSE-001..002`, `FR-ADAPT-001` | Sequence `M2-WF-03` (Deterministic Overdue Shift) | **Khớp 100%**. Giải thuật Domino Shift tịnh tiến $N$ ngày và quét quá hạn lúc 00:01 tất định. |
 | **FR-CALENDAR** (Xuất Lịch 1 chiều) | `FR-CALENDAR-001..003` | Sequence `M2-WF-04` (WebCal iCalendar Export) | **Khớp 100%**. Xuất chuẩn RFC 5545, bảo mật token ngẫu nhiên qua URL (chống rò rỉ cookie/CORS). |
 | **FR-REPORT** (Báo cáo & Phản tư AI) | `FR-REPORT-001..002` | Celery Beat Weekly Pipeline, Sequence AI Review | **Khớp 100%**. Thống kê số học chính xác (Deterministic Metrics) tách rời khỏi văn phong nhận xét của AI. |
@@ -66,9 +66,9 @@ Tất cả 4 máy trạng thái trong `docs/uml/state-machines.md` đều khớp
 
 ```mermaid
 flowchart TD
-    subgraph Presentation["Tầng Giao diện (Presentation Layer - Next.js 15)"]
-        UI_Dash["Dashboard (Server Components)"]
-        UI_WS["Study Workspace (Client Components)"]
+    subgraph Presentation["Tầng Giao diện (Presentation Layer - Angular 19 SPA)"]
+        UI_Dash["Dashboard (Standalone Components)"]
+        UI_WS["Study Workspace (Signals & Spartan UI)"]
     end
 
     subgraph Inbound["Inbound Adapters (FastAPI HTTP / SSE)"]
@@ -167,7 +167,7 @@ Tất cả 14 chỉ mục được chứng minh có ít nhất 1 câu truy vấn
 
 | Tiêu chí Rubric Đồ án | Mức Yêu cầu (Rubric TC) | Tạo tác Chứng minh (Evidence Artifacts) | Kết luận Kiểm toán |
 |---|---|---|---|
-| **TC2.1: Phân tích & Thiết kế Hệ thống** | **Mức 5 (Xuất sắc):** Kiến trúc phân tầng rõ ràng, mô hình hóa UML chính xác, giải quyết trọn vẹn yêu cầu phi chức năng. | * `ADR-001`: Kiến trúc Lục giác (Hexagonal Architecture).<br>* `ADR-003`: Next.js 15 App Router & Server/Client Components.<br>* `ADR-006`: Chiến lược Triển khai Hybrid (Docker & Cloud).<br>* `docs/uml/`: 4 kịch bản Sequence và 4 State Machines UML 2.5.1. | **Đạt Mức 5 Tuyệt đối** |
+| **TC2.1: Phân tích & Thiết kế Hệ thống** | **Mức 5 (Xuất sắc):** Kiến trúc phân tầng rõ ràng, mô hình hóa UML chính xác, giải quyết trọn vẹn yêu cầu phi chức năng. | * `ADR-001`: Kiến trúc Lục giác (Hexagonal Architecture).<br>* `ADR-003`: Angular 19 Standalone, Signals, Spartan UI & Reactive Services.<br>* `ADR-006`: Chiến lược Triển khai Hybrid (Docker & Cloud).<br>* `docs/uml/`: 4 kịch bản Sequence và 4 State Machines UML 2.5.1. | **Đạt Mức 5 Tuyệt đối** |
 | **TC2.3: Công nghệ, CSDL & Tích hợp AI** | **Mức 5 (Xuất sắc):** Áp dụng công nghệ hiện đại, chuẩn hóa CSDL tối thiểu 3NF/BCNF, kiểm soát toàn vẹn và giải quyết bài toán AI có chiều sâu. | * `ADR-002`: FastAPI, Python 3.12, SQLAlchemy 2.0 Async, uv.<br>* `ADR-004`: Celery, Celery Beat và **Ghi nhận Heartbeat trực tiếp PostgreSQL 16 (`study_sessions.last_heartbeat_at`)** theo ADR-004 v1.1.<br>* `ADR-005`: Quy trình SSE 2 chặng & Cổng duyệt Human-in-the-Loop.<br>* `docs/database/`: 15 bảng chuẩn BCNF, 38 Named Constraints, UUIDv7, Index Matrix che phủ toàn diện. | **Đạt Mức 5 Tuyệt đối** |
 | **TC2.7: Thử nghiệm UAT & Đo lường KPI** | **Mức 5 (Xuất sắc):** Đo lường thực nghiệm khách quan trên người dùng thật, minh chứng đạt các mục tiêu KPI đề ra. | * `ADR-006`: Môi trường Cloud PaaS công khai cho 10–15 người dùng thử UAT.<br>* `docs/requirements/business-goals-and-kpis.md`: 5 chỉ số định lượng (`TSR \ge 90\%`, `SUS \ge 80`). | **Sẵn sàng cho Phase 3** |
 
@@ -183,6 +183,6 @@ Tất cả 14 chỉ mục được chứng minh có ít nhất 1 câu truy vấn
 ### 7.2. Biên bản Ký duyệt Đóng băng Cơ sở Thiết kế (Sign-Off Record)
 * **Thời điểm đóng băng:** 08/10/2026
 * **Đại diện Nhóm Phát triển:**
-  * Vũ Toàn Thắng (Lead Architect / PM) — *Đã ký duyệt và xác nhận tính toàn vẹn kỹ thuật*
-  * Phan Đình Duẩn (Quality Lead / BA) — *Đã ký duyệt và xác nhận ma trận truy vết*
+  * Vũ Toàn Thắng — *Đã ký duyệt và xác nhận tính toàn vẹn kỹ thuật*
+  * Phan Đình Duẩn — *Đã ký duyệt và xác nhận ma trận truy vết*
 * **Kế hoạch tiếp theo (Next Step):** Khởi động **WBS 5.1** — Khởi tạo cấu trúc dự án chuẩn, cấu hình Docker Compose đa dịch vụ và thiết lập hạ tầng kiểm thử tự động (Phase 3: Implementation).

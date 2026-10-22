@@ -9,7 +9,7 @@
 - Sơ đồ ca sử dụng & Mô hình hành vi: [`docs/uml/UC_Dia.drawio`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/UC_Dia.drawio), [`docs/uml/sequence-diagrams.md`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/sequence-diagrams.md), [`docs/uml/state-machines.md`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/state-machines.md)
 - Biểu đồ Lớp (Domain Model & DCD): [`docs/uml/class-diagrams.md`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/class-diagrams.md)
 - Thiết kế cơ sở dữ liệu: [`docs/database/database-schema-design.md`](file:///Users/vuthang/Documents/FocusFlow/docs/database/database-schema-design.md), [`docs/database/schema.sql`](file:///Users/vuthang/Documents/FocusFlow/docs/database/schema.sql)
-- Các bản ghi quyết định kiến trúc: [`docs/decisions/`](file:///Users/vuthang/Documents/FocusFlow/docs/decisions) (ADR-001 đến ADR-006)
+- Các bản ghi quyết định kiến trúc: [`docs/decisions/`](file:///Users/vuthang/Documents/FocusFlow/docs/decisions) (ADR-001 đến ADR-010)
 
 ---
 
@@ -103,7 +103,7 @@ flowchart TD
 |---|---|---|
 | Đảm bảo tính toàn vẹn nghiệp vụ, dễ kiểm thử độc lập mà không bị dính chặt vào framework | Áp dụng **Kiến trúc Lục giác (Hexagonal Architecture / Ports & Adapters)** trong mô hình **Modular Monolith**. Tách biệt 4 tầng: Domain, Application, Infrastructure, Presentation. | **ADR-001** |
 | Phản hồi nhanh, hỗ trợ xử lý dữ liệu AI và JSON Schema an toàn cao | Backend sử dụng **Python 3.12 + FastAPI + Pydantic v2 + SQLAlchemy 2.0 Async (asyncpg)**. | **ADR-002** |
-| Giao diện công thái học cao, chuẩn tiếp cận Lighthouse A11y $\ge 90$ | Frontend sử dụng **Next.js 15 (App Router) + React 19 + TypeScript + Tailwind CSS + Shadcn UI**. Quản trị trạng thái tách biệt: **TanStack Query** (Server State) và **Zustand** (Local Workspace State). | **ADR-003** |
+| Giao diện công thái học cao, chuẩn tiếp cận Lighthouse A11y $\ge 90$ | Frontend sử dụng **Angular 19 (Standalone Components, Signals) + TypeScript + Tailwind CSS v4 + Spartan UI**. Quản trị trạng thái tách biệt: **Reactive Services & RxJS** (Server State) và **Angular Signals** (Local Workspace State). | **ADR-003** |
 | Chống nghẽn I/O khi gọi LLM trễ 5–40s; bảo toàn Quota khi mạng gián đoạn | Giao thức **Server-Sent Events (SSE)** hai chặng đồng nhất kết hợp **Quản trị Quota 2 pha (Reserve/Commit)** và Hard Timeout 55s. | **ADR-005** |
 | Xử lý tác vụ nền nặng, quét timeout phiên mất mạng, tính toán định kỳ | Bộ đôi **Celery 5.6 + Redis 7 + Celery Beat** chạy cô lập, thực thi tác vụ idempotency. | **ADR-004** |
 | Khắc phục gián đoạn đột ngột (mất mạng/tắt trình duyệt) trong phiên học | Cơ chế **Heartbeat Ping mỗi 60 giây ghi trực tiếp vào PostgreSQL**, kết hợp Celery Beat quét quá hạn 5 phút theo quy tắc phân định kết quả **OS-01**. | **BUSR-09**, **OS-07** |
@@ -122,7 +122,7 @@ flowchart TB
     LLMService["Google Gemini API<br>[External AI SaaS]"]
 
     subgraph ContainerBoundary["Hạ tầng Vùng chứa FocusFlow"]
-        Frontend["Web Frontend Container<br>[Next.js 15, TypeScript, TailwindCSS]<br>Port: 3000"]
+        Frontend["Web Frontend Container<br>[Angular 19, TypeScript, Nginx]<br>Port: 80 / 3000"]
         Backend["Backend API Container<br>[FastAPI, Python 3.12, Uvicorn ASGI]<br>Port: 8000"]
         Worker["Worker Queue Container<br>[Celery Worker, Python 3.12]"]
         Beat["Periodic Scheduler Container<br>[Celery Beat]"]
@@ -280,7 +280,7 @@ Dự án FocusFlow quản trị kiến trúc thông qua 8 bản ghi quyết đ�
 |---|---|---|
 | **ADR-001** | Phong cách Kiến trúc Phân tầng | Lựa chọn **Modular Monolith kết hợp Kiến trúc Lục giác (Hexagonal Architecture)**. Bảo vệ Domain độc lập, tối ưu hóa nguồn lực 2 sinh viên, loại bỏ rủi ro vận hành phân tán của Microservices. |
 | **ADR-002** | Ngăn xếp Công nghệ Backend | Lựa chọn **Python 3.12 + FastAPI + Pydantic v2 + SQLAlchemy 2.0 Async**. Tận dụng tối đa hệ sinh thái AI, xác thực schema bằng Rust core, hiệu năng I/O bất đồng bộ cao. |
-| **ADR-003** | Ngăn xếp Công nghệ Frontend | Lựa chọn **Next.js 15 (App Router) + TypeScript + Tailwind CSS + Shadcn UI**. Phân tách Server/Client Components, quản trị state tách bạch bằng TanStack Query và Zustand. |
+| **ADR-003** | Ngăn xếp Công nghệ Frontend | Lựa chọn **Angular 19 (Standalone Components, Signals) + TypeScript + Tailwind CSS v4 + Spartan UI**. Đóng gói SPA tĩnh qua Nginx, quản trị state tách bạch bằng Reactive Services (RxJS) và Angular Signals. |
 | **ADR-004** | Xử lý Tác vụ Nền & Định kỳ | Lựa chọn **Celery 5.6 + Redis 7 + Celery Beat**. Tách biệt các tác vụ quét timeout phiên học, tính toán báo cáo tuần ra khỏi vòng đời HTTP Request. |
 | **ADR-005** | Giao thức Luồng Dữ liệu AI | Lựa chọn **Server-Sent Events (SSE)** hai chặng đồng nhất chuẩn RESTful. Phản hồi mượt mà không treo UI, giải quyết triệt để lỗi trừ quota lặp khi reconnect. |
 | **ADR-006** | Chiến lược Triển khai Hệ thống | Lựa chọn **Mô hình Hybrid**: Docker Compose Local (phục vụ bảo vệ đồ án offline) và Cloud PaaS (Vercel + Render Paid + Managed DB phục vụ UAT). |

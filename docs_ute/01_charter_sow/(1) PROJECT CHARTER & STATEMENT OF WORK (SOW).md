@@ -10,8 +10,8 @@
 **Đơn Vị Chủ Quản:** Trường Đại học Sư phạm Kỹ thuật TP.HCM (HCMUTE) — Khoa Công nghệ Thông tin  
 **Giảng Viên Hướng Dẫn:** ThS. Vũ Đình Bảo  
 **Nhóm Sinh Viên Thực Hiện:**  
-- Vũ Toàn Thắng (MSSV: 23110329 — Project Manager / Lead Software Architect)  
-- Phan Đình Duẩn (MSSV: 23110192 — Senior Business Analyst / Quality & DevOps Lead)  
+- Vũ Toàn Thắng (MSSV: 23110329)  
+- Phan Đình Duẩn (MSSV: 23110192)  
 
 ---
 

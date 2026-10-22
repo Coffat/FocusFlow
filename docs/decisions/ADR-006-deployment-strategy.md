@@ -2,7 +2,7 @@
 
 * **Trạng thái:** Được chấp thuận (Approved)
 * **Ngày quyết định:** 29/09/2026
-* **Người quyết định:** Vũ Toàn Thắng (Lead BA / System Architect), Phan Đình Duẩn (Senior BA / Quality Lead)
+* **Người quyết định:** Vũ Toàn Thắng, Phan Đình Duẩn
 * **Căn cứ đánh giá:** Khung Rubric Đồ án Tốt nghiệp CNTT — Tiêu chí TC2.1 & TC2.7 (Mức 5)
 * **Yêu cầu liên quan:** NFR-AVAIL-001, NFR-SEC-001, EVAL-04, EVAL-05, Ràng buộc Kiến trúc CON-04 (system-architecture.md)
 

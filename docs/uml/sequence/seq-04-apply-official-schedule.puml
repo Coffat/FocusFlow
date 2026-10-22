@@ -5,11 +5,11 @@ skinparam BoxPadding 10
 skinparam ParticipantPadding 10
 skinparam ResponseMessageBelowArrow true
 
-title UC-PLAN-03: Áp dụng Lịch học Chính thức & Kiểm tra Trần Giờ rảnh (Use-Case Realization)\nTuân thủ: Craig Larman Rich Domain Model & Alistair Cockburn Hexagonal Architecture
+title UC-PLAN-03: Áp dụng Lịch học Chính thức & Kiểm tra Trần Giờ rảnh (Use-Case Realization)
 
 actor "Learner" as User
 box "FrontendDMZ" #F8F9FA
-    participant "Next.js Web Client" as UI
+    participant "Angular Web Client" as UI
 end box
 box "Presentation Layer" #E9ECEF
     participant "RoadmapRouter\n(FastAPI)" as Router
@@ -58,7 +58,7 @@ deactivate Repo
 ApplyUC -> Val: validate_schedule_ceiling(proposalEntity.tasks, availabilityProfile)
 activate Val
 
-alt [Tổng thời lượng task vượt quá Quỹ giờ rảnh (Hard Ceiling Violated)]
+alt Tổng thời lượng task vượt quá Quỹ giờ rảnh (Hard Ceiling Violated)
     Val --> ApplyUC: HardCeilingViolationError(exceededDate, totalMinutes, quotaMinutes)
     deactivate Val
     ApplyUC --> Router: throw HardCeilingViolationError
@@ -66,7 +66,7 @@ alt [Tổng thời lượng task vượt quá Quỹ giờ rảnh (Hard Ceiling V
     Router --> UI: 422 Unprocessable Entity {"error": "HARD_CEILING_VIOLATED", "date": "..."}
     deactivate Router
     UI --> User: Cảnh báo đỏ: Quá tải giờ rảnh ngày chỉ định! Vui lòng điều chỉnh trước khi lưu.
-else [Thỏa mãn trần giờ rảnh]
+else Thỏa mãn trần giờ rảnh
     Val --> ApplyUC: ValidationResult(valid=true)
     deactivate Val
 
@@ -84,7 +84,7 @@ else [Thỏa mãn trần giờ rảnh]
     ' --- Lưu trữ qua Repository trong ACID Transaction ---
     ApplyUC -> Repo: persist_active_schedule(roadmapEntity, proposalEntity, proposalTasks)
     activate Repo
-    note over Repo,DB: Giao dịch nguyên tử (ACID Transaction):\n1. Khóa dòng: lock_roadmap_for_update(roadmapId)\n2. Dọn dẹp: delete_pending_future_tasks(roadmapId)\n3. Batch Insert: insert_official_tasks(proposalTasks)\n4. Kích hoạt: update_roadmap_status(roadmapId, 'ACTIVE')\n5. Cập nhật official_schedules (total_sessions, total_hours)\n6. Đóng Proposal: mark_proposal_applied(proposalId)
+    note over Repo,DB: Giao dịch nguyên tử (ACID Transaction):\n1. Khóa dòng: lock_roadmap_for_update(roadmapId)\n2. Dọn dẹp: delete_pending_future_tasks(roadmapId)\n3. Batch Insert: insert_official_tasks(proposalTasks) với composite FK (milestone_id, roadmap_id)\n4. Kích hoạt: update_roadmap_status(roadmapId, 'ACTIVE')\n5. Cập nhật official_schedules (total_sessions, total_planned_minutes, activated_at)\n6. Đóng Proposal: mark_proposal_applied(proposalId, applied_at=NOW())
     Repo -> DB: execute_atomic_schedule_persist(roadmapId, proposalTasks)
     activate DB
     DB --> Repo: transaction_success

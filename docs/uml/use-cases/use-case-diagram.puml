@@ -1,5 +1,5 @@
 @startuml FocusFlow_UseCase_Diagram
-title FocusFlow — Sơ đồ Ca sử dụng Tổng thể Hệ thống (Use Case Diagram)\nTiêu chuẩn: OMG UML 2.5.1 | Phương pháp luận: Alistair Cockburn, Craig Larman, Martin Fowler
+title FocusFlow — Sơ đồ Ca sử dụng Tổng thể Hệ thống (Use Case Diagram)
 
 left to right direction
 skinparam packageStyle rectangle
@@ -45,6 +45,7 @@ rectangle "Hệ thống FocusFlow (System Under Design - SuD)" as FocusFlowSyste
         usecase "Đăng nhập hệ thống\n(UC-AUTH-02)" as UC_Auth_02
         usecase "Đăng xuất hệ thống\n(UC-AUTH-03)" as UC_Auth_03
         usecase "Thử nghiệm nâng cấp gói học tập\n(UC-QUOTA-01)" as UC_Quota_01
+        usecase "Quét dọn & hoàn trả hạn ngạch AI quá hạn\n(UC-QUOTA-02)" as UC_Quota_02
     }
 
     ' PHÂN HỆ 2: KHỞI TẠO LỘ TRÌNH (AI & FALLBACK)
@@ -133,6 +134,7 @@ Learner -- UC_Cal_02
 ' Tác nhân thời gian kích hoạt các tác vụ nền định kỳ
 TimeActor -- UC_Adapt_01
 TimeActor -- UC_Sess_02
+TimeActor -- UC_Quota_02
 
 ' Quan hệ của Quản trị viên (Administrator)
 Admin -- UC_Adm_01

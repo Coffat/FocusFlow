@@ -2,7 +2,7 @@
 
 * **Trạng thái:** Được chấp thuận (Approved)
 * **Ngày quyết định:** 29/09/2026
-* **Người quyết định:** Vũ Toàn Thắng (Lead BA / System Architect), Phan Đình Duẩn (Senior BA / Quality Lead)
+* **Người quyết định:** Vũ Toàn Thắng, Phan Đình Duẩn
 * **Căn cứ đánh giá:** Khung Rubric Đồ án Tốt nghiệp CNTT — Tiêu chí TC2.1 & TC2.3 (Mức 5)
 * **Yêu cầu liên quan:** NFR-PERF-001, NFR-PERF-002, NFR-AI-001, NFR-SEC-001, NFR-SEC-002, BUSR-10
 
@@ -31,7 +31,7 @@ Hệ thống đòi hỏi:
   * **Hệ sinh thái AI Tối thượng:** Python là ngôn ngữ số 1 về Trí tuệ Nhân tạo.
   * **Pydantic v2:** Nhân Rust cực nhanh, hỗ trợ xuất và thẩm định JSON Schema nguyên bản cho LLM Structured Outputs.
   * **Async I/O:** Xử lý hàng ngàn kết nối đồng thời với độ trễ thấp, tích hợp hoàn hảo với Server-Sent Events (SSE).
-* *Nhược điểm:* Khác ngôn ngữ với Frontend (Next.js/TypeScript).
+* *Nhược điểm:* Khác ngôn ngữ với Frontend (Angular/TypeScript).
 
 ---
 
@@ -42,7 +42,7 @@ Hệ thống đòi hỏi:
 
 ## 4. Lý do & Đánh đổi (Rationale & Trade-Offs)
 * **Khả năng kiểm soát rủi ro AI (Rubric TC2.3 Mức 5):** Pydantic v2 cho phép định nghĩa các Schema nghiêm ngặt (`ProposalPlanSchema`, `MilestoneListSchema`). Khi Gemini trả về kết quả, Pydantic tự động thẩm định và bóc tách dữ liệu; nếu có sai sót cấu trúc, hệ thống kích hoạt retry tự động ngay lập tức mà không gây crash ứng dụng.
-* **Tài liệu hóa API tự động:** FastAPI tự động sinh tài liệu Swagger UI / OpenAPI Spec tương tác trực quan tại `/docs`, giúp đội ngũ Frontend (Next.js) tích hợp API nhanh chóng và dễ dàng demo trước Hội đồng.
+* **Tài liệu hóa API tự động:** FastAPI tự động sinh tài liệu Swagger UI / OpenAPI Spec tương tác trực quan tại `/docs`, giúp đội ngũ Frontend (Angular) tích hợp API nhanh chóng và dễ dàng demo trước Hội đồng.
 
 ---
 

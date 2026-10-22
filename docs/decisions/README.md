@@ -4,7 +4,7 @@
 * **Dự án:** FocusFlow — Hệ thống hỗ trợ lập kế hoạch và thực thi lộ trình tự học thích ứng tích hợp AI
 * **Tiêu chuẩn tài liệu:** Markdown Architectural Decision Records (MADR v3.0) & arc42 Section 9
 * **Căn cứ đánh giá học thuật:** Khung Rubric Đồ án Tốt nghiệp CNTT — Tiêu chí TC2.1 & TC2.3 (Mức 5)
-* **Người chịu trách nhiệm kiến trúc:** Vũ Toàn Thắng (Lead BA / System Architect), Phan Đình Duẩn (Senior BA / Quality Lead)
+* **Người chịu trách nhiệm kiến trúc:** Vũ Toàn Thắng, Phan Đình Duẩn
 * **Giảng viên Hướng dẫn:** ThS. Vũ Đình Bảo (Khoa Công nghệ Thông tin, HCMUTE)
 
 ---
@@ -25,12 +25,14 @@ Hồ sơ Quyết định Kiến trúc (Architecture Decision Records - ADR) ghi 
 |---|---|---|---|---|---|
 | [`ADR-001`](ADR-001-architectural-style.md) | Kiến trúc Lục giác (Hexagonal Architecture / Ports & Adapters) cho Backend | Approved | 29/09/2026 | Backend Architectural Style | `FR-PLAN-001`, `FR-PLAN-002`, `NFR-MAINT-001`, `TC2.1` |
 | [`ADR-002`](ADR-002-backend-tech-stack.md) | Ngăn xếp Công nghệ Backend: Python 3.12, FastAPI, SQLAlchemy 2.0 Async, Pydantic v2 | Approved | 29/09/2026 | Backend Framework & Data Access | `FR-AUTH-001`, `NFR-PERF-002`, `TC2.3` |
-| [`ADR-003`](ADR-003-frontend-tech-stack.md) | Ngăn xếp Công nghệ Frontend: Next.js 15 App Router, React 19, TypeScript, Tailwind v4, TanStack Query | Approved | 29/09/2026 | Frontend Framework & State Management | `FR-PLAN-003`, `FR-SESSION-001`, `NFR-UX-002`, `TC2.1` |
+| [`ADR-003`](ADR-003-frontend-tech-stack.md) | Ngăn xếp Công nghệ Frontend: Angular 19 Standalone, TypeScript, Tailwind v4, Spartan UI & Reactive Services | Approved | 29/09/2026 | Frontend Framework & State Management | `FR-PLAN-003`, `FR-SESSION-001`, `NFR-UX-002`, `TC2.1` |
 | [`ADR-004`](ADR-004-worker-and-scheduled-jobs.md) | Giải pháp Tác vụ Nền & Tác vụ Định kỳ: Celery 5.6, Redis 7 (Broker & Backend), Celery Beat | Approved | 29/09/2026 | Background Workers & Persistent Heartbeat | `FR-SESSION-003`, `FR-ADAPT-001`, `OS-01`, `OS-07`, `TC2.3` |
 | [`ADR-005`](ADR-005-ai-streaming-protocol.md) | Giao thức Tương tác AI: Quy trình SSE Hai Chặng kết hợp Cổng Duyệt Con người 2 Cấp độ | Approved | 30/09/2026 | AI Integration & Streaming Protocol | `FR-PLAN-001`, `FR-PLAN-002`, `BUSR-02`, `BUSR-10`, `TC2.3` |
 | [`ADR-006`](ADR-006-deployment-strategy.md) | Chiến lược Triển khai Hybrid: Docker Compose Local cho Bảo vệ & Cloud PaaS cho UAT | Approved | 29/09/2026 | Infrastructure & Deployment | `NFR-AVAIL-001`, `TC2.1`, `TC2.7` |
 | [`ADR-007`](ADR-007-database-schema-and-persistence.md) | Kiến trúc Cơ sở Dữ liệu Quan hệ, Chuẩn hóa 3NF/BCNF và Ràng buộc Toàn vẹn ACID (PostgreSQL 16) | Approved | 30/09/2026 | Database Persistence & Integrity | `FR-TASK-001`, `BUSR-02`, `BUSR-06`, `BUSR-07`, `TC2.3` |
 | [`ADR-008`](ADR-008-security-architecture-and-tokens.md) | Kiến trúc Bảo mật Đa tầng: Xác thực Cookie JWT SameSite, Băm Mật khẩu Argon2id và Bảo mật WebCal Token SHA-256 | Approved | 30/09/2026 | Security & Data Protection | `FR-AUTH-001`, `FR-EXT-001`, `BUSR-08`, `OS-05`, `NFR-SEC-001..004` |
+| [`ADR-009`](ADR-009-ai-constraint-validation-and-evaluation-harness.md) | Xác thực Đề xuất Lịch trình Đa tầng (Hybrid Validation Gate) và Bộ khung AI Evaluation Harness (100+ Scenarios) | Approved | 16/10/2026 | AI Planning & Scientific Evaluation | `FR-PLAN-005`, `NFR-AI-003`, `EVAL-06..08`, `BUSR-03..05`, `TC2.3` |
+| [`ADR-010`](ADR-010-learner-profile-memory-and-anti-loop.md) | Hồ sơ Người học (Learner Profile Memory) theo Zimmerman SRL và Ngắt mạch Chống lặp Quá hạn (Overdue Anti-Loop) | Approved | 16/10/2026 | Personalization & Overdue Adaptation | `FR-PROFILE-001`, `FR-ADAPT-003`, `BUSR-06`, `BUSR-07`, `TC2.3` |
 
 ---
 
@@ -46,33 +48,37 @@ flowchart TD
         TC27["TC2.7: Thử nghiệm UAT & Đo lường KPI"]
     end
 
-    subgraph ADRs["Bộ 8 Quyết định Kiến trúc (ADRs)"]
+    subgraph ADRs["Bộ 10 Quyết định Kiến trúc (ADRs)"]
         A1["ADR-001: Hexagonal Architecture"]
         A2["ADR-002: Backend FastAPI Async"]
-        A3["ADR-003: Frontend Next.js 15 & TanStack"]
+        A3["ADR-003: Frontend Angular 19 & Signals"]
         A4["ADR-004: Celery, Beat & PostgreSQL Persistence"]
         A5["ADR-005: 2-Stage SSE & Human-in-the-Loop"]
         A6["ADR-006: Hybrid Docker & Cloud PaaS UAT"]
         A7["ADR-007: PostgreSQL 3NF & Partial Indexes"]
         A8["ADR-008: Cookie JWT SameSite & WebCal SHA-256"]
+        A9["ADR-009: Hybrid Validation Gate & Eval Harness"]
+        A10["ADR-010: Learner Profile & Overdue Anti-Loop"]
     end
 
     TC21 --> A1
     TC21 --> A3
     TC21 --> A6
     TC21 --> A8
-
+    TC21 --> A9
     TC23 --> A2
     TC23 --> A4
     TC23 --> A5
     TC23 --> A7
-
+    TC23 --> A9
+    TC23 --> A10
     TC27 --> A6
+    TC27 --> A9
 ```
 
 ### 3.1. Đối chiếu Tiêu chí Rubric TC2.1 (Kiến trúc Hệ thống)
 * **ADR-001:** Kiến trúc Lục giác phân tách Domain nghiệp vụ (Lập kế hoạch, Học tập, Thích ứng) khỏi Adapter công nghệ bên ngoài (FastAPI Router, PostgreSQL, Google Gemini API). Cho phép viết Unit Test cô lập 100% không phụ thuộc database hay network.
-* **ADR-003:** Kiến trúc Next.js App Router phân chia rạch ròi giữa Server Components (tối ưu tải trang và SEO cho Dashboard) và Client Components (quản lý trạng thái phiên học tương tác cao trong Study Workspace).
+* **ADR-003:** Kiến trúc Angular 19 Standalone Components & Signals phân chia rạch ròi giữa Server State (quản lý bởi Reactive Services & RxJS) và Client Workspace State (quản lý bởi Angular Signals phản ứng tức thì cho bộ đếm Pomodoro). Spartan UI trên nền Angular CDK bảo đảm điểm số Lighthouse A11y $\ge 90$.
 * **ADR-008:** Mô hình chia sẻ chung Root Domain `.focusflow.vn` bảo vệ xác thực phiên trước các cuộc tấn công XSS/CSRF mà không gặp rào cản Cross-Site Cookies.
 
 ### 3.2. Đối chiếu Tiêu chí Rubric TC2.3 (Giải pháp Công nghệ & CSDL)

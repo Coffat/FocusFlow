@@ -2,7 +2,7 @@
 
 * **Trạng thái:** Được chấp thuận (Approved — Đã chuẩn hóa theo SRS v1.1)
 * **Ngày quyết định:** 29/09/2026 (Cập nhật chuẩn hóa: 30/09/2026)
-* **Người quyết định:** Vũ Toàn Thắng (Lead BA / System Architect), Phan Đình Duẩn (Senior BA / Quality Lead)
+* **Người quyết định:** Vũ Toàn Thắng, Phan Đình Duẩn
 * **Căn cứ đánh giá:** Khung Rubric Đồ án Tốt nghiệp CNTT — Tiêu chí TC2.1 & TC2.3 (Mức 5)
 * **Yêu cầu liên quan:** FR-PLAN-001, FR-PLAN-002, FR-PLAN-003, FR-QUOTA-001, NFR-PERF-001, NFR-AI-001, BUSR-02, BUSR-10
 
@@ -59,4 +59,4 @@ Theo đặc tả nghiệp vụ SRS v1.1, quá trình phân rã mục tiêu tự 
 
 ## 5. Hệ quả (Consequences)
 * **Tích cực:** Đáp ứng xuất sắc toàn bộ ca sử dụng `UC-PLAN-01`, `UC-PLAN-02`, `UC-PLAN-03`; bảo vệ nghiêm ngặt các quy tắc `BUSR-02`, `BUSR-10`, `NFR-AI-001` và `NFR-PERF-001`.
-* **Kỹ thuật:** Frontend (Next.js) triển khai 2 màn hình/modal tương tác kế tiếp nhau, mỗi màn hình sử dụng một hook `useSSE` tái sử dụng được; Backend tổ chức 2 Router endpoints tương ứng trong `roadmap_router.py`.
+* **Kỹ thuật:** Frontend (Angular 19) triển khai 2 màn hình/modal tương tác kế tiếp nhau, sử dụng `AiStreamingService` (RxJS/ReadableStream) chuyển đổi các sự kiện SSE thành Angular Signals hiển thị tiến trình mượt mà; Backend tổ chức 2 Router endpoints tương ứng trong `roadmap_router.py`.

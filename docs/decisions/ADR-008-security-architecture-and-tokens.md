@@ -2,7 +2,7 @@
 
 * **Trạng thái:** Được chấp thuận (Approved)
 * **Ngày quyết định:** 30/09/2026 (Hoàn thiện hồ sơ: 07/10/2026)
-* **Người quyết định:** Vũ Toàn Thắng (Lead BA / System Architect), Phan Đình Duẩn (Senior BA / Quality Lead)
+* **Người quyết định:** Vũ Toàn Thắng, Phan Đình Duẩn
 * **Căn cứ đánh giá:** Khung Rubric Đồ án Tốt nghiệp CNTT — Tiêu chí TC2.1 & TC2.3 (Mức 5)
 * **Yêu cầu liên quan:** FR-AUTH-001, FR-AUTH-002, FR-CALENDAR-001, FR-CALENDAR-002, BUSR-08, OS-05, NFR-SEC-001..004
 * **Tài liệu đối chiếu:** `docs/srs/srs-v1.0.md`, `docs/architecture/system-architecture.md`, `docs/uml/sequence-diagrams.md`
@@ -56,7 +56,7 @@ FocusFlow là nền tảng web phục vụ việc học tập cá nhân, đòi h
 
 ## 4. Lý do & Đánh đổi (Rationale & Trade-Offs)
 * **Bảo vệ Tính Riêng tư Tối đa (Privacy by Design):** Ngay cả khi hacker có được bản sao lưu cơ sở dữ liệu PostgreSQL, họ không thể khôi phục mật khẩu (nhờ Argon2id) và không thể suy luận ra URL WebCal thực tế của người dùng (nhờ tính một chiều của SHA-256).
-* **Trải nghiệm Đăng nhập Liền mạch (Seamless UX):** Cơ chế chia sẻ Root Domain `.focusflow.vn` cho phép Next.js frontend tại `app.focusflow.vn` và FastAPI backend tại `api.focusflow.vn` giao tiếp mượt mà mà không gặp lỗi CORS hay bị chặn cookie bên thứ ba.
+* **Trải nghiệm Đăng nhập Liền mạch (Seamless UX):** Cơ chế chia sẻ Root Domain `.focusflow.vn` cho phép Angular frontend tại `app.focusflow.vn` và FastAPI backend tại `api.focusflow.vn` giao tiếp mượt mà mà không gặp lỗi CORS hay bị chặn cookie bên thứ ba.
 * **Tối ưu Hóa Hiệu năng & Lưu trữ:** Việc lưu trữ Refresh Token Rotation trên Redis với TTL 7 ngày giúp giảm tải I/O trên PostgreSQL, tra cứu O(1) < 2ms, loại bỏ thao tác định kỳ dọn rác bản ghi token hết hạn trong CSDL chính.
 * **Chi phí Đánh đổi:** Đòi hỏi cấu hình tên miền chung khi triển khai UAT (sử dụng tên miền phụ hoặc proxy nội bộ). Trong môi trường phát triển cục bộ (localhost), hệ thống cấu hình cookie linh hoạt để chạy thuận tiện.
 

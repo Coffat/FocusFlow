@@ -2,15 +2,15 @@
 ## (Báo Cáo Kiểm Toán Kế Hoạch Phân Rã Công Việc & Biểu Đồ Gantt)
 
 **Mã Tạo Tác:** AUDIT-PLAN-WBS  
-**Tài Liệu Kiểm Toán:** `docs_ute/(2) FocusFlow-Work-Breakdown-Structure-with-Gantt-Chart.xlsx`  
+**Tài Liệu Kiểm Toán:** `docs_ute/02_wbs_gantt/(2) FocusFlow-Work-Breakdown-Structure-with-Gantt-Chart.xlsx`  
 **Tài Liệu Đối Chiếu:** 
-- `docs_ute/(1) PROJECT CHARTER & STATEMENT OF WORK (SOW).docx`
+- `docs_ute/01_charter_sow/(1) PROJECT CHARTER & STATEMENT OF WORK (SOW).docx`
 - `docs/requirements/software-requirements-specification.md` (SRS v1.0)
 - `docs/engineering/milestone-2-consistency-audit.md` (M2 Consistency Audit)
-- `docs_ute/PROJECT STATUS REPORT - Week 01.docx` đến `Week 06.docx`
+- `docs_ute/03_status_reports/PROJECT STATUS REPORT - Week 01.docx` đến `Week 06.docx`
 
 **Ngày Kiểm Toán:** 09/10/2026  
-**Chuyên Viên Đánh Giá:** Independent Software Engineering Reviewer (Antigravity Agent) & Ban Quản trị Dự án FocusFlow  
+**Chuyên Viên Đánh Giá:** Independent Software Engineering Reviewer & Ban Quản trị Dự án FocusFlow  
 **Phương Pháp:** Kỹ năng `document-review`, `kiem-tra-nhat-quan-tai-lieu`, quy trình phỏng vấn quyết định `/grill-me`  
 
 ---
@@ -68,7 +68,7 @@ Toàn bộ các vấn đề trên đã được đưa ra phỏng vấn, thống 
 
 ### 2.5. Phát Hiện 5 — Sự Không Nhất Quán Giữa Project Charter (12 Tuần) Và WBS (15 Tuần)
 - **Mức độ:** `Minor`
-- **Hiện trạng:** Bảng Milestones trong `docs_ute/(1) PROJECT CHARTER & STATEMENT OF WORK (SOW).docx` trước đây thiết kế theo khung mẫu 12 tuần (Tuần 1 Kick-off -> Tuần 12 Bảo vệ), mâu thuẫn với khung 15 tuần chính thức của WBS và các Báo cáo Tuần 1–6.
+- **Hiện trạng:** Bảng Milestones trong `docs_ute/01_charter_sow/(1) PROJECT CHARTER & STATEMENT OF WORK (SOW).docx` trước đây thiết kế theo khung mẫu 12 tuần (Tuần 1 Kick-off -> Tuần 12 Bảo vệ), mâu thuẫn với khung 15 tuần chính thức của WBS và các Báo cáo Tuần 1–6.
 - **Biện pháp đã thực hiện:** Cập nhật bảng Milestones Table 1 trong Project Charter đồng bộ hoàn toàn với 5 Phase của WBS:
   - Phase 1 (Tuần 1–3, hạn 17/09/2026): Chốt yêu cầu (Requirements Baseline Freeze)
   - Phase 2 (Tuần 4–6, hạn 08/10/2026): Phê duyệt thiết kế & Đóng băng cơ sở kiến trúc (M2 Baseline Freeze)
@@ -82,8 +82,8 @@ Toàn bộ các vấn đề trên đã được đưa ra phỏng vấn, thống 
 
 | Mã FR | Tên Nhóm Chức Năng SRS | WBS Tương Ứng Trong Phase 3 | Người Phụ Trách | Thời Hạn |
 | :---: | :--- | :---: | :---: | :---: |
-| **FR-AUTH** | Xác thực & Quản trị tài khoản, Phân quyền RBAC | **WBS 5.2** | Phan Đình Duẩn | 18/10/2026 |
-| **FR-AVAIL** | Cấu hình thời gian rảnh lai (Mode A Quota & Mode B Fixed) | **WBS 5.3** | Phan Đình Duẩn | 22/10/2026 |
+| **FR-AUTH** | Xác thực & Quản trị tài khoản, Phân quyền RBAC | **WBS 5.4** | Phan Đình Duẩn | 22/10/2026 |
+| **FR-AVAIL** | Cấu hình thời gian rảnh lai (Mode A Quota & Mode B Fixed) | **WBS 5.5** | Vũ Toàn Thắng | 22/10/2026 |
 | **FR-ROADMAP** | Quản lý lộ trình & Trạng thái | **WBS 6.2, 7.4** | Vũ Toàn Thắng | 12/11/2026 |
 | **FR-AI-PLAN** | Sinh lộ trình 2 cấp tích hợp LLM Structured Outputs | **WBS 6.1, 6.2** | Vũ Toàn Thắng | 01/11/2026 |
 | **FR-AI-APPROVAL** | Cổng kiểm duyệt kế hoạch & Cơ chế Strict Validation | **WBS 6.3** | Vũ Toàn Thắng | 06/11/2026 |

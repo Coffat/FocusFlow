@@ -4,7 +4,7 @@
 > **Chuyên ngành:** Công nghệ Phần mềm — Khoa Công nghệ Thông tin  
 > **Cấp độ tài liệu:** Báo cáo Nghiên cứu Tiền khả thi, Khảo sát Thực chứng & Phân tích Đối sánh (Research, Empirical Survey & Benchmarking Artifact)  
 > **Mã tài liệu:** `DOC-REQ-SURVEY-01`  
-> **Tài liệu liên kết:** `docs/requirements/problem-definition.md`, `docs/srs/srs-v1.0.md`, `docs_ute/WBS 1.1 - Khảo sát nhu cầu tự học và nghiên cứu đối sánh giải pháp (Benchmarking).md`  
+> **Tài liệu liên kết:** `docs/requirements/problem-definition.md`, `docs/srs/srs-v1.0.md`, `docs_ute/04_wbs_deliverables/WBS 1.1 - Khảo sát nhu cầu tự học và nghiên cứu đối sánh giải pháp (Benchmarking).md`  
 > **Căn cứ đánh giá học thuật:** Khung Rubric Chấm Đồ án Tốt nghiệp / Khóa luận CNTT:
 > - **Tiêu chí TC1 (Mức 5):** "Tính cấp thiết rõ ràng; So sánh $\ge 3$ giải pháp hiện có, nêu rõ khoảng trống với phân tích thực tế khách quan; Xác định rõ $\ge 5$ mục tiêu/KPI cụ thể định lượng ngay từ đầu."
 > - **Tiêu chí TC2.1 (Mức 5):** "Đặc tả đầy đủ yêu cầu chức năng & $\ge 5$ yêu cầu phi chức năng định lượng."

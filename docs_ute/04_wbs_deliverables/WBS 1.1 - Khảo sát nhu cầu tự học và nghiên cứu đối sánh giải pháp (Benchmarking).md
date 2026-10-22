@@ -9,7 +9,7 @@
 | **Hạng Mục WBS** | WBS 1.1: Khảo sát nhu cầu tự học và nghiên cứu đối sánh giải pháp (Benchmarking) |
 | **Cấp Độ Tài Liệu** | Báo cáo Nghiên cứu Tiền khả thi, Khảo sát Thực chứng & Phân tích Đối sánh |
 | **Mã Tạo Tác** | `DOC-WBS-1.1-SURVEY-BENCHMARK` |
-| **Sinh Viên Phụ Trách** | Phan Đình Duẩn (MSSV: 23110192 — Senior BA / Requirements Lead)<br>Vũ Toàn Thắng (MSSV: 23110329 — Lead Software Architect / PM) |
+| **Sinh Viên Phụ Trách** | Phan Đình Duẩn (MSSV: 23110192)<br>Vũ Toàn Thắng (MSSV: 23110329) |
 | **Giảng Viên Hướng Dẫn** | ThS. Vũ Đình Bảo (Khoa Công nghệ Thông tin, HCMUTE) |
 | **Ngày Hoàn Thành** | 12/09/2026 |
 | **Phiên Bản & Trạng Thái**| v1.0 — Chuẩn Cơ sở Đóng băng (Requirements Inception Baseline Frozen) |

@@ -2,7 +2,7 @@
 
 * **Trạng thái:** Được chấp thuận (Approved)
 * **Ngày quyết định:** 29/09/2026
-* **Người quyết định:** Vũ Toàn Thắng (Lead BA / System Architect), Phan Đình Duẩn (Senior BA / Quality Lead)
+* **Người quyết định:** Vũ Toàn Thắng, Phan Đình Duẩn
 * **Căn cứ đánh giá:** Khung Rubric Đồ án Tốt nghiệp CNTT — Tiêu chí TC2.1 & TC2.3 (Mức 5)
 * **Yêu cầu liên quan:** Toàn bộ SRS v1.1, BUSR-01 đến BUSR-12, FR-ADM-001..003, UC-ADM-01..03
 
@@ -38,7 +38,7 @@ Nhóm phát triển cần một phong cách kiến trúc đảm bảo:
 * *Nhược điểm:* Quá phức tạp cho đồ án tốt nghiệp (Over-engineering). Gây phát sinh các bài toán khó giải: giao dịch phân tán (Distributed Transactions), mạng chập chờn giữa các service (Network Latency), triển khai phức tạp và khó debug.
 
 ### Phương án C: Modular Monolith kết hợp Kiến trúc Lục giác (Hexagonal / Ports & Adapters) (Được chọn)
-* Tách biệt Web Frontend (Next.js) và Backend API (Python/FastAPI).
+* Tách biệt Web Frontend (Angular 19) và Backend API (Python/FastAPI).
 * Phía Backend tổ chức theo mô hình Ports & Adapters (Lục giác):
   * **Domain Layer (Lõi):** Chứa thực thể và dịch vụ miền thuần túy Python, 0 phụ thuộc thư viện ngoài.
   * **Application Layer:** Chứa ca sử dụng (Use Cases) và khai báo các Cổng (Ports - Abstract Base Classes).

@@ -9,7 +9,7 @@ title UC-PLAN-01: Khởi tạo Mục tiêu & Đăng ký Lộ trình (Use-Case Re
 
 actor "Learner" as User
 box "FrontendDMZ" #F8F9FA
-    participant "Next.js Web Client" as UI
+    participant "Angular Web Client" as UI
 end box
 box "Presentation Layer" #E9ECEF
     participant "RoadmapRouter\n(FastAPI)" as Router
@@ -37,7 +37,7 @@ activate CreateUC
 CreateUC -> GoalEntity: create(userId, title, targetDate, context)
 activate GoalEntity
 
-alt [targetDate <= currentDate (Thời hạn không hợp lệ)]
+alt targetDate <= currentDate (Thời hạn không hợp lệ)
     GoalEntity --> CreateUC: throw InvalidTargetDateException("Target date must be in future")
     deactivate GoalEntity
     CreateUC --> Router: throw ValidationException
@@ -45,7 +45,7 @@ alt [targetDate <= currentDate (Thời hạn không hợp lệ)]
     Router --> UI: 422 Unprocessable Entity {"error": "INVALID_TARGET_DATE"}
     deactivate Router
     UI --> User: Hiển thị lỗi "Thời hạn hoàn thành mục tiêu phải lớn hơn ngày hiện tại"
-else [targetDate hợp lệ]
+else targetDate hợp lệ
     GoalEntity --> CreateUC: goalEntity (status=ACTIVE)
     deactivate GoalEntity
 

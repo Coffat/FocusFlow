@@ -83,7 +83,7 @@ flowchart TB
     GeminiSaaS["Google Gemini API<br>[External SaaS]"]
 
     subgraph Containers["Môi trường Vùng chứa FocusFlow"]
-        WebFrontend["Web Frontend App<br>[Container: Next.js 15, React 19, TypeScript]<br>Single Page App, Server & Client Components, Tailwind CSS, Shadcn UI, Zustand<br>Cổng: 3000"]
+        WebFrontend["Web Frontend App<br>[Container: Angular 19, TypeScript, Nginx]<br>Single Page App (CSR), Standalone Components, Signals, Tailwind CSS v4, Spartan UI<br>Cổng: 80 / 3000"]
         
         BackendAPI["Backend API Engine<br>[Container: Python 3.12, FastAPI, Uvicorn ASGI]<br>Kiến trúc Lục giác (Hexagonal), xử lý REST API, SSE streaming, thực thi quy tắc nghiệp vụ<br>Cổng: 8000"]
         
@@ -134,10 +134,12 @@ flowchart TB
 
     subgraph ApplicationLayer["Application Layer (Use Cases & Ports - backend/src/application)"]
         direction TB
-        GenerateProposalUC["GenerateProposalUseCase<br>[Use Case]<br>Điều phối SSE streaming, gọi AI, xác thực schema"]
+        GenerateProposalUC["GenerateProposalUseCase<br>[Use Case]<br>Điều phối SSE streaming, gọi AI, kích hoạt Hybrid Validation"]
+        ConstraintEngine["ConstraintValidationEngine<br>[Service]<br>Điều phối Hybrid Validation Gate: Pydantic + Rule Engine + LLM Judge"]
+        LearnerProfileMgr["LearnerProfileManager<br>[Service]<br>Tính toán và quản lý hồ sơ người học theo Zimmerman SRL"]
         ApplyProposalUC["ApplyProposalUseCase<br>[Use Case]<br>Kiểm tra Hard Ceiling, kích hoạt Lịch chính thức"]
         PauseRoadmapUC["PauseRoadmapUseCase<br>[Use Case]<br>Tạm dừng lộ trình, kích hoạt tịnh tiến lịch"]
-        SessionUC["SessionUseCase<br>[Use Case]<br>Quản lý vòng đời phiên học, lưu vết nhịp tim"]
+        SessionUC["SessionUseCase<br>[Use Case]<br>Quản lý vòng đời phiên học, lưu vết tín hiệu Heartbeat ping"]
         CalendarUC["CalendarExportUseCase<br>[Use Case]<br>Quản lý WebCal token băm SHA-256, chuẩn hóa VCALENDAR"]
         AdminUC["AdminUseCase<br>[Use Case]<br>Kiểm tra quyền ADMIN, điều phối khóa/mở khóa và thống kê hệ thống"]
     end
@@ -146,14 +148,17 @@ flowchart TB
         direction TB
         DominoCalc["DominoShiftCalculator<br>[Domain Service]<br>Giải thuật tất định tịnh tiến lịch lùi N ngày khả dụng (< 50ms)"]
         AvailValidator["AvailabilityValidator<br>[Domain Service]<br>Thẩm định trần giờ rảnh: Mode A (Hard Ceiling), Mode B (Soft Overflow)"]
-        DomainEntities["Core Domain Entities<br>[Pure Python Classes]<br>Roadmap, Milestone, Task, StudySession, AvailabilityProfile"]
+        CycleDetector["CycleDetector<br>[Domain Service]<br>Thuật toán DFS/Kahn phát hiện chu trình trong quan hệ tiên quyết"]
+        DomainEntities["Core Domain Entities<br>[Pure Python Classes]<br>Roadmap, Milestone, Task, StudySession, AvailabilityProfile, LearnerProfile"]
     end
 
     subgraph InfrastructureLayer["Infrastructure Layer (Driven Adapters - backend/src/infrastructure)"]
         direction TB
-        SqlRoadmapRepo["SqlRoadmapRepository<br>[PostgreSQL Adapter]<br>Quản lý bảng roadmaps, milestones, tasks, proposals"]
+        SqlRoadmapRepo["SqlRoadmapRepository<br>[PostgreSQL Adapter]<br>Quản lý bảng roadmaps, milestones, tasks, task_dependencies, proposals"]
         SqlSessionRepo["SqlSessionRepository<br>[PostgreSQL Adapter]<br>Quản lý bảng study_sessions, session_tasks, study_notes"]
+        SqlProfileRepo["SqlLearnerProfileRepository<br>[PostgreSQL Adapter]<br>Quản lý bảng learner_profiles và audit logs"]
         GeminiAdapter["GeminiAdapter<br>[AI SaaS Adapter]<br>Gọi SDK google-genai, retry jitter, ngắt cứng 55s"]
+        PedagogicalJudgeAdapter["PedagogicalJudgeAdapter<br>[AI Judge Adapter]<br>Đánh giá độ dốc nhận thức và tính khả thi sư phạm"]
         PromptSanitizer["PromptSanitizer<br>[Security Filter]<br>Loại bỏ PII nhạy cảm khỏi văn bản trước khi gọi LLM"]
         RedisQuotaAdapter["RedisQuotaAdapter<br>[Cache Adapter]<br>Tạm giữ và trừ hạn ngạch AI bằng Redis Lua script"]
         IcalGenerator["IcalGeneratorAdapter<br>[RFC 5545 Adapter]<br>Chuyển đổi danh sách Task thành tệp lịch .ics chuẩn"]
@@ -178,6 +183,10 @@ flowchart TB
     GenerateProposalUC --> PromptSanitizer
     GenerateProposalUC --> GeminiAdapter
     GenerateProposalUC --> RedisQuotaAdapter
+    GenerateProposalUC --> ConstraintEngine
+    ConstraintEngine --> AvailValidator
+    ConstraintEngine --> CycleDetector
+    ConstraintEngine --> PedagogicalJudgeAdapter
     GenerateProposalUC --> SqlRoadmapRepo
 
     ApplyProposalUC --> AvailValidator
@@ -198,44 +207,48 @@ flowchart TB
 
 ## 5. C4 Level 3: Biểu đồ Thành phần Web Frontend (Frontend Component Diagram)
 
-Biểu đồ thành phần bên trong **Web Frontend Container (Next.js 15 App Router)** tại `frontend/src/`:
+Biểu đồ thành phần bên trong **Web Frontend Container (Angular 19 Standalone SPA)** tại `frontend/src/app/`:
 
 ```mermaid
 flowchart TB
-    subgraph NextPages["Next.js App Router (frontend/src/app)"]
-        HomePage["Landing / Root Page<br>[Server Component: /page.tsx]<br>Giới thiệu, chuyển hướng điều hướng Onboarding"]
-        AuthPages["Auth Pages<br>[Client Components: /login, /register]<br>Xác thực người dùng, lưu cookie JWT SameSite"]
-        AdminPages["Admin Portal Pages<br>[Client Components: /admin/*]<br>Bảng điều khiển quản trị, giám sát người dùng, khóa/mở khóa"]
-        DashboardPage["Roadmap Dashboard<br>[Client Component: /dashboard]<br>Xem tiến độ tổng thể, quản lý mốc học tập, nút tạm dừng"]
-        WorkspacePage["Study Workspace Page<br>[Client Component: /workspace]<br>Không gian học toàn màn hình (Pomodoro, Tasks, Notes)"]
-        CalendarSettingsPage["Calendar Settings Page<br>[Client Component: /calendar]<br>Quản lý URL WebCal bí mật, nút tải file .ics"]
+    subgraph AngularFeatures["Feature Components & Routes (src/app/features)"]
+        HomePage["Landing / Root Component<br>[Standalone: /home]<br>Giới thiệu, chuyển hướng Onboarding"]
+        AuthPages["Auth Components<br>[Standalone: /login, /register]<br>Xác thực người dùng, xử lý cookie JWT SameSite"]
+        AdminPages["Admin Portal Components<br>[Standalone: /admin/*]<br>Bảng điều khiển quản trị, giám sát người dùng, khóa/mở khóa"]
+        DashboardPage["Roadmap Dashboard Component<br>[Standalone: /dashboard]<br>Xem tiến độ tổng thể, quản lý mốc học tập, nút tạm dừng"]
+        WorkspacePage["Study Workspace Component<br>[Standalone: /workspace]<br>Không gian học toàn màn hình (Pomodoro, Tasks, Notes)"]
+        CalendarSettingsPage["Calendar Settings Component<br>[Standalone: /calendar]<br>Quản lý URL WebCal bí mật, nút tải file .ics"]
     end
 
-    subgraph ClientStateAndHooks["Quản trị Trạng thái & Client Hooks (frontend/src/stores)"]
-        ZustandWorkspaceStore["Zustand WorkspaceStore<br>[Local Client Store]<br>Quản lý đếm ngược Pomodoro/Stopwatch, nháp Scratchpad tức thời"]
-        TanStackRoadmapQueries["TanStack Query (React Query)<br>[Server State Cache]<br>Cache danh sách Roadmap, Task, tự động revalidate khi đổi trạng thái"]
-        SSEStreamHook["useAIStream Hook<br>[Client Hook]<br>Quản lý EventSource connection, render dữ liệu streaming thời gian thực"]
-        HeartbeatHook["useSessionHeartbeat Hook<br>[Client Hook]<br>Gửi HTTP POST định kỳ mỗi 60 giây ghi nhận số phút thực học"]
+    subgraph CoreServicesAndSignals["Quản trị Trạng thái & Services (src/app/core)"]
+        WorkspaceSignalStore["Workspace Signal Store<br>[Angular Signals]<br>Quản lý đếm ngược Pomodoro/Stopwatch (1s tick), nháp Scratchpad tức thời"]
+        RoadmapApiService["Roadmap & Task Service<br>[Reactive Service & HttpClient]<br>Quản lý gọi API, cache dữ liệu với RxJS và cập nhật Signals"]
+        AiStreamingService["AI Streaming Service<br>[RxJS / ReadableStream]<br>Xử lý kênh SSE streaming, chuyển đổi sự kiện AI thành Signal hiển thị"]
+        HeartbeatService["Session Heartbeat Service<br>[RxJS interval(60000)]<br>Gửi HTTP POST định kỳ mỗi 60 giây ghi nhận số phút thực học"]
+        AuthInterceptor["Auth Interceptor<br>[HttpInterceptorFn]<br>Tự động đính kèm withCredentials và tự xoay vòng refresh token khi nhận 401"]
     end
 
-    subgraph UIComponentLibrary["Giao diện Công thái học (frontend/src/components/ui)"]
-        ShadcnUI["Shadcn UI (Radix UI Primitive)<br>[Accessible UI Components]<br>Dialog, Popover, Progress Bar, Tooltip đạt chuẩn Lighthouse A11y >= 90"]
+    subgraph UIComponentLibrary["Giao diện Công thái học (src/app/shared/ui)"]
+        SpartanUI["Spartan UI & Angular CDK<br>[Accessible UI Components]<br>Dialog, Popover, Progress Bar, Tooltip đạt chuẩn Lighthouse A11y >= 90"]
     end
 
-    HomePage --> ShadcnUI
-    AuthPages --> ShadcnUI
-    AdminPages --> TanStackRoadmapQueries
-    AdminPages --> ShadcnUI
-    DashboardPage --> TanStackRoadmapQueries
-    DashboardPage --> SSEStreamHook
-    DashboardPage --> ShadcnUI
+    HomePage --> SpartanUI
+    AuthPages --> SpartanUI
+    AdminPages --> RoadmapApiService
+    AdminPages --> SpartanUI
+    DashboardPage --> RoadmapApiService
+    DashboardPage --> AiStreamingService
+    DashboardPage --> SpartanUI
 
-    WorkspacePage --> ZustandWorkspaceStore
-    WorkspacePage --> HeartbeatHook
-    WorkspacePage --> ShadcnUI
+    WorkspacePage --> WorkspaceSignalStore
+    WorkspacePage --> HeartbeatService
+    WorkspacePage --> SpartanUI
 
-    CalendarSettingsPage --> TanStackRoadmapQueries
-    CalendarSettingsPage --> ShadcnUI
+    CalendarSettingsPage --> RoadmapApiService
+    CalendarSettingsPage --> SpartanUI
+
+    RoadmapApiService --> AuthInterceptor
+    HeartbeatService --> AuthInterceptor
 ```
 
 ---
@@ -290,7 +303,7 @@ flowchart LR
 | **AdminRouter** | Backend API | Tiếp nhận và kiểm soát các tác vụ quản trị: xem danh sách người dùng, trạng thái và khóa/mở khóa tài khoản (RBAC `role='ADMIN'`). | RESTful Endpoints `/api/v1/admin/*` | `AdminUC`, `Middlewares` |
 | **AdminPages** | Web Frontend | Cung cấp giao diện bảng điều khiển quản trị viên tối giản gồm 3 màn hình giám sát và điều khiển. | Tuyến đường `/admin/*` | `TanStackRoadmapQueries`, `ShadcnUI` |
 | **RoadmapRouter** | Backend API | Tiếp nhận và điều hướng các HTTP Request liên quan đến lộ trình, SSE streaming và tịnh tiến lịch. | RESTful Endpoints `/api/v1/roadmaps/*` | `GenerateProposalUC`, `ApplyProposalUC`, `PauseRoadmapUC` |
-| **SessionRouter** | Backend API | Tiếp nhận lệnh mở phiên, nhịp tim Heartbeat 60s và lệnh kết thúc phiên học. | RESTful Endpoints `/api/v1/sessions/*` | `SessionUC` |
+| **SessionRouter** | Backend API | Tiếp nhận lệnh mở phiên, tín hiệu duy trì phiên Heartbeat 60s và lệnh kết thúc phiên học. | RESTful Endpoints `/api/v1/sessions/*` | `SessionUC` |
 | **CalendarRouter** | Backend API | Cấp mã token bảo mật WebCal và trả về luồng tệp iCalendar chuẩn RFC 5545. | Endpoint `/api/v1/calendar/feed/{token}.ics` | `CalendarUC`, `LogSanitizerMiddleware` |
 | **GenerateProposalUC** | Backend API | Điều phối quy trình phân rã mục tiêu AI 2 cấp qua SSE, kiểm soát Quota 2 pha và bắt lỗi Timeout 55s. | `GenerateProposalInputPort` | `PromptSanitizer`, `GeminiAdapter`, `RedisQuotaAdapter`, `SqlRoadmapRepo` |
 | **ApplyProposalUC** | Backend API | Thẩm định trần giờ rảnh và ghi nhận Lịch học chính thức vào CSDL trong một Transaction duy nhất. | `ApplyProposalInputPort` | `AvailabilityValidator`, `SqlRoadmapRepo` |

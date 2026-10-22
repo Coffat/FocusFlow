@@ -3,7 +3,7 @@
 
 **Dự Án:** FocusFlow — Hệ thống hỗ trợ lập kế hoạch và thực thi lộ trình tự học thích ứng tích hợp AI  
 **Kỳ Báo Cáo:** Tuần 5 - Từ ngày 25/09/2026 đến ngày 01/10/2026  
-**Người Lập Báo Cáo:** Vũ Toàn Thắng (Project Manager)  
+**Người Lập Báo Cáo:** Vũ Toàn Thắng  
 **Gửi Đến:** ThS. Vũ Đình Bảo (Giảng viên Hướng dẫn — Khoa Công nghệ Thông tin, HCMUTE)  
 **Ngày Gửi:** 01/10/2026  
 

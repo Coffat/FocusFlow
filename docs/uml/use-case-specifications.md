@@ -18,6 +18,7 @@
    - [UC-AUTH-02: Đăng nhập hệ thống](#uc-auth-02-đăng-nhập-hệ-thống)
    - [UC-AUTH-03: Đăng xuất hệ thống](#uc-auth-03-đăng-xuất-hệ-thống)
    - [UC-QUOTA-01: Thử nghiệm nâng cấp gói học tập (Mock Sandbox)](#uc-quota-01-thử-nghiệm-nâng-cấp-gói-học-tập-mock-sandbox)
+   - [UC-QUOTA-02: Quét dọn & hoàn trả hạn ngạch AI quá hạn (Celery Beat Sweeper)](#uc-quota-02-quét-dọn--hoàn-trả-hạn-ngạch-ai-quá-hạn-celery-beat-sweeper)
 3. [Phân hệ 2: Khởi tạo Lộ trình (AI & Fallback)](#3-phân-hệ-2-khởi-tạo-lộ-trình-ai--fallback)
    - [UC-PLAN-01: Khởi tạo mục tiêu & Làm rõ ngữ cảnh](#uc-plan-01-khởi-tạo-mục-tiêu--làm-rõ-ngữ-cảnh)
    - [UC-AVAIL-01: Cấu hình thời gian rảnh khả dụng](#uc-avail-01-cấu-hình-thời-gian-rảnh-khả-dụng)
@@ -135,6 +136,28 @@ Mỗi Use Case trong tài liệu này tuân thủ cấu trúc chuẩn ISO/IEC/IE
   5. Hệ thống cập nhật trường `tier = PRO` và điều chỉnh trần hạn ngạch trong bảng `ai_quotas`.
   6. Giao diện hiển thị trạng thái mới thành công.
 * **Truy vết:** `FR-QUOTA-002`, `OS-02`.
+
+---
+
+### UC-QUOTA-02: Quét dọn & hoàn trả hạn ngạch AI quá hạn (Celery Beat Sweeper)
+* **Tác nhân chính:** System Clock / Celery Beat (`TimeActor`).
+* **Tác nhân hỗ trợ:** Hệ thống FocusFlow, PostgreSQL 16, Redis Broker.
+* **Mục tiêu:** Tự động giải phóng các khoản giữ chỗ hạn ngạch AI (`ai_quota_reservations`) bị treo ở trạng thái `RESERVED` quá 5 phút do sự cố mạng, client ngắt kết nối SSE đột ngột hoặc LLM worker crash, hoàn trả lại hạn ngạch cho người học.
+* **Tiền điều kiện:** Celery Beat kích hoạt định kỳ mỗi 5 phút (`ADR-004`).
+* **Hậu điều kiện:** Các bản ghi `ai_quota_reservations` hết hạn chuyển sang trạng thái `EXPIRED`; trường `reserved_calls` trong bảng `ai_quotas` của người dùng được giảm trừ tương ứng, giải phóng hạn ngạch hợp lệ.
+* **Luồng sự kiện chính:**
+  1. Celery Beat phát tín hiệu định kỳ `sweep_expired_quota_reservations` mỗi 5 phút vào hàng đợi Redis không chặn.
+  2. `QuotaSweeperWorker` nhận task từ Redis Broker và thực thi Use Case `SweepExpiredReservationsUC`.
+  3. Hệ thống quét các bản ghi `ai_quota_reservations` có `status = 'RESERVED'` và `expires_at < NOW()` sử dụng cơ chế `SELECT ... FOR UPDATE SKIP LOCKED` để tránh race condition giữa các worker.
+  4. Nếu có bản ghi quá hạn, với từng bản ghi:
+     a. Hệ thống thực thi giao dịch ACID hoàn trả:
+        - Cập nhật `status = 'EXPIRED'`, `updated_at = NOW()` trong `ai_quota_reservations`.
+        - Cập nhật `reserved_calls = GREATEST(0, reserved_calls - 1)` trong `ai_quotas`.
+     b. Đồng bộ giảm số đếm giữ chỗ tương ứng trên Redis cache.
+  5. Hệ thống ghi nhật ký kiểm toán và số liệu vận hành (số lượng reservation đã thu hồi).
+* **Luồng phụ / Ngoại lệ:**
+  - *4a. Không có bản ghi nào quá hạn:* Hệ thống kết thúc chu kỳ quét với `swept_count = 0`, ghi nhận log và chờ chu kỳ hẹn giờ tiếp theo.
+* **Truy vết:** `FR-QUOTA-001`, `BUSR-10`, `OS-02`, `ADR-004`, `ADR-005`, Sơ đồ tuần tự `SD9_Quota_Sweeper`.
 
 ---
 
@@ -299,7 +322,7 @@ Mỗi Use Case trong tài liệu này tuân thủ cấu trúc chuẩn ISO/IEC/IE
   2. Hệ thống kiểm tra: Người dùng chưa có phiên học nào khác đang mở (`IN_PROGRESS`).
   3. Hệ thống khởi tạo `StudySession` ở trạng thái `IN_PROGRESS`, ghi nhận `started_at = NOW()`.
   4. Màn hình Study Workspace kích hoạt chế độ tập trung, bắt đầu đếm ngược đồng hồ Pomodoro (mặc định 25 hoặc 50 phút).
-  5. Trong suốt phiên học, client định kỳ gửi nhịp tim `heartbeat` mỗi 60 giây lên server để duy trì trạng thái phiên sống (`OS-07`).
+  5. Trong suốt phiên học, client định kỳ gửi tín hiệu duy trì phiên (`heartbeat ping`) mỗi 60 giây lên server để duy trì trạng thái phiên sống và bảo toàn thời gian thực học (`OS-07`).
   6. Khi hết giờ hoặc hoàn thành bài học, người học bấm [Kết thúc Phiên học], nhập ghi chú thu hoạch (Key Takeaways).
   7. Hệ thống thực thi giao dịch Unit of Work:
      - Cập nhật `StudySession` sang `COMPLETED`.

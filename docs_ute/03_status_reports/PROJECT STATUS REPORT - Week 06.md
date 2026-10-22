@@ -3,7 +3,7 @@
 
 **Dự Án:** FocusFlow — Hệ thống hỗ trợ lập kế hoạch và thực thi lộ trình tự học thích ứng tích hợp AI  
 **Kỳ Báo Cáo:** Tuần 6 - Từ ngày 02/10/2026 đến ngày 08/10/2026  
-**Người Lập Báo Cáo:** Vũ Toàn Thắng (Lead BA / System Architect)  
+**Người Lập Báo Cáo:** Vũ Toàn Thắng  
 **Gửi Đến:** ThS. Vũ Đình Bảo (Giảng viên Hướng dẫn — Khoa Công nghệ Thông tin, HCMUTE)  
 **Ngày Gửi:** 09/10/2026  
 
@@ -15,15 +15,15 @@
 
 | Hạng mục | Trạng thái | Diễn giải ngắn gọn |
 | :--- | :---: | :--- |
-| **Tiến độ (Schedule)** | 🟢 Green | Hoàn thành 100% mục tiêu Milestone 2 (Phân tích hệ thống, Thiết kế kiến trúc & CSDL) đúng hạn chót 08/10/2026. Khép lại Phase Two thành công rực rỡ và sẵn sàng kích hoạt Phase Three (Lập trình chức năng cốt lõi MVP & Tích hợp AI). |
-| **Phạm vi (Scope)** | 🟢 Green | Thực hiện kiểm toán toàn diện 15 tạo tác kỹ thuật xác nhận khớp nối 100% với 8 nhóm yêu cầu chức năng (FR-01 đến FR-08) của SRS v1.0; không phát sinh Scope Creep; hoàn thiện cơ chế bảo mật token xác thực (ADR-008) và quản trị hạn ngạch AI (ADR-005). |
-| **Chất lượng (Quality)** | 🟢 Green | Hoàn thành xuất sắc đợt kiểm toán chéo (Cross-Consistency Audit) Milestone 2, phát hiện và khắc phục triệt để 18/18 bất cập kỹ thuật (ISS-01 đến ISS-18). Đồng bộ hoàn chỉnh chuỗi Traceability 9 mắt xích từ Requirements tới ADR. Đạt mốc M2 Design Baseline Freeze Sign-Off. |
-| **Rủi ro (Risk)** | 🟢 Green | Đã đóng kín toàn bộ các rủi ro kiến trúc mở: chuẩn hóa định danh toàn cục với UUIDv7 (RFC 9562), bảo mật token xác thực đa tầng qua Redis RTR & Revocation Blacklist, 4 scheduled tasks Celery Beat (Overdue shift & Session cleanup), và cơ chế Reserve/Commit Quota 2-phase. |
+| **Tiến độ (Schedule)** | <span style="color:#2e7d32">●</span> **Green** | Hoàn thành 100% mục tiêu Milestone 2 (Phân tích hệ thống, Thiết kế kiến trúc & CSDL) đúng hạn chót 08/10/2026. Khép lại Phase Two thành công rực rỡ và sẵn sàng kích hoạt Phase Three (Lập trình chức năng cốt lõi MVP & Tích hợp AI). |
+| **Phạm vi (Scope)** | <span style="color:#2e7d32">●</span> **Green** | Thực hiện kiểm toán toàn diện 15 tạo tác kỹ thuật xác nhận khớp nối 100% với 8 nhóm yêu cầu chức năng (FR-01 đến FR-08) của SRS v1.0; không phát sinh Scope Creep; hoàn thiện cơ chế bảo mật token xác thực (ADR-008) và quản trị hạn ngạch AI (ADR-005). |
+| **Chất lượng (Quality)** | <span style="color:#2e7d32">●</span> **Green** | Hoàn thành xuất sắc đợt kiểm toán chéo (Cross-Consistency Audit) Milestone 2, phát hiện và khắc phục triệt để 18/18 bất cập kỹ thuật (ISS-01 đến ISS-18). Đồng bộ hoàn chỉnh chuỗi Traceability 9 mắt xích từ Requirements tới ADR. Đạt mốc M2 Design Baseline Freeze Sign-Off. |
+| **Rủi ro (Risk)** | <span style="color:#2e7d32">●</span> **Green** | Đã đóng kín toàn bộ các rủi ro kiến trúc mở: chuẩn hóa định danh toàn cục với UUIDv7 (RFC 9562), bảo mật token xác thực đa tầng qua Redis RTR & Revocation Blacklist, 4 scheduled tasks Celery Beat (Overdue shift & Session cleanup), và cơ chế Reserve/Commit Quota 2-phase. |
 
 **Chú thích:**
-- 🟢 **Green (Xanh):** Ổn định, đúng tiến độ, không có vấn đề lớn cản trở.
-- 🟡 **Amber (Vàng):** Có rủi ro tiềm ẩn hoặc chậm trễ nhẹ, cần chú ý theo dõi.
-- 🔴 **Red (Đỏ):** Vấn đề nghiêm trọng, trượt hạn hoặc có lỗi chặn cần sự can thiệp ngay lập tức từ cấp trên.
+- <span style="color:#2e7d32">●</span> **Green (Xanh):** Ổn định, đúng tiến độ, không có vấn đề lớn cản trở.
+- <span style="color:#f57c00">●</span> **Amber (Vàng):** Có rủi ro tiềm ẩn hoặc chậm trễ nhẹ, cần chú ý theo dõi.
+- <span style="color:#c62828">●</span> **Red (Đỏ):** Vấn đề nghiêm trọng, trượt hạn hoặc có lỗi chặn cần sự can thiệp ngay lập tức từ cấp trên.
 
 ---
 

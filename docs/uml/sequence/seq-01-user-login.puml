@@ -9,7 +9,7 @@ title UC-AUTH-02: Đăng nhập Hệ thống (Use-Case Realization)
 
 actor "Learner" as User
 box "FrontendDMZ" #F8F9FA
-    participant "Next.js Web Client" as UI
+    participant "Angular Web Client" as UI
 end box
 box "Presentation Layer" #E9ECEF
     participant "AuthRouter\n(FastAPI)" as Router
@@ -42,7 +42,7 @@ activate DB
 DB --> Repo: user_record
 deactivate DB
 
-alt [Không tìm thấy User (user_record == null)]
+alt Không tìm thấy User (user_record == null)
     Repo --> AuthUC: null
     deactivate Repo
     AuthUC --> Router: throw InvalidCredentialsError
@@ -50,7 +50,7 @@ alt [Không tìm thấy User (user_record == null)]
     Router --> UI: 401 Unauthorized {"error": "INVALID_CREDENTIALS"}
     deactivate Router
     UI --> User: Hiển thị thông báo "Email hoặc mật khẩu không chính xác"
-else [Tìm thấy User]
+else Tìm thấy User
     Repo --> AuthUC: userEntity
     deactivate Repo
 
@@ -59,25 +59,25 @@ else [Tìm thấy User]
     Hasher --> AuthUC: is_password_valid: bool
     deactivate Hasher
 
-    alt [Mật khẩu sai (is_password_valid == false)]
+    alt Mật khẩu sai (is_password_valid == false)
         AuthUC --> Router: throw InvalidCredentialsError
         deactivate AuthUC
         Router --> UI: 401 Unauthorized {"error": "INVALID_CREDENTIALS"}
         deactivate Router
         UI --> User: Hiển thị thông báo "Email hoặc mật khẩu không chính xác"
-    else [Mật khẩu chính xác (is_password_valid == true)]
+    else Mật khẩu chính xác (is_password_valid == true)
         AuthUC -> UserEntity: is_locked()
         activate UserEntity
         UserEntity --> AuthUC: is_locked: bool
         deactivate UserEntity
 
-        alt [Tài khoản bị khóa (is_locked == true)]
+        alt Tài khoản bị khóa (is_locked == true)
             AuthUC --> Router: throw AccountLockedError
             deactivate AuthUC
             Router --> UI: 403 Forbidden {"error": "ACCOUNT_LOCKED"}
             deactivate Router
             UI --> User: Cảnh báo "Tài khoản của bạn đã bị tạm khóa"
-        else [Tài khoản hoạt động (ACTIVE)]
+        else Tài khoản hoạt động (ACTIVE)
             AuthUC -> TokenService: create_token_pair(userEntity.id, userEntity.role)
             activate TokenService
             TokenService --> AuthUC: TokenPair(access_token, refresh_token)

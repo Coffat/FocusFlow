@@ -8,7 +8,7 @@
 * **Tài liệu nguồn chân lý liên kết:**
   * Đặc tả SRS v1.1: [`docs/srs/srs-v1.0.md`](file:///Users/vuthang/Documents/FocusFlow/docs/srs/srs-v1.0.md) (Mục 6.1..6.4, Mục 15: OS-01, OS-03, OS-07)
   * Thiết kế CSDL Quan hệ: [`docs/database/schema.sql`](file:///Users/vuthang/Documents/FocusFlow/docs/database/schema.sql) & [`docs/database/database-schema-design.md`](file:///Users/vuthang/Documents/FocusFlow/docs/database/database-schema-design.md)
-  * Biểu đồ Tuần tự: [`docs/uml/sequence-m2-workflow.md`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/sequence-m2-workflow.md)
+  * Biểu đồ Tuần tự: [`docs/uml/sequence-diagrams.md`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/sequence-diagrams.md)
   * Quyết định Kiến trúc: [`docs/decisions/ADR-004-worker-and-scheduled-jobs.md`](file:///Users/vuthang/Documents/FocusFlow/docs/decisions/ADR-004-worker-and-scheduled-jobs.md)
   * Thư mục nguồn PlantUML: [`docs/uml/state-machines/`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/state-machines) (gồm 4 máy trạng thái độc lập)
   * Thư mục ảnh xuất sẵn: [`docs/uml/images/`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/images) (PNG và SVG vector)
@@ -80,7 +80,11 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
-    [*] --> TODO
+    [*] --> PENDING : AIDecompose [milestone_pending]
+    [*] --> TODO : DirectManualCreate / ActiveMilestone
+    
+    PENDING --> TODO : ApplySchedule / ActivateMilestone
+    PENDING --> CANCELLED : DiscardProposal / CancelTask
 
     state "TODO" as TODO {
         [*] --> Scheduled : [scheduled_date IS NOT NULL]
@@ -89,18 +93,23 @@ stateDiagram-v2
         state "Scheduled" as Scheduled {
             [*] --> NormalScheduled
             NormalScheduled --> NormalScheduled : DominoShift / update_scheduled_date()
-            NormalScheduled --> NormalScheduled : Reschedule / change_date()
+            NormalScheduled --> NormalScheduled : Reschedule [reschedule_count < 3] / increment_reschedule_count()
             NormalScheduled --> OverdueScheduled : DailyEvaluation [CURRENT_DATE > scheduled_date]
-            OverdueScheduled --> NormalScheduled : Reschedule [new_date >= CURRENT_DATE]
+            OverdueScheduled --> NormalScheduled : RescheduleCommit [reschedule_count = 0]
+            OverdueScheduled --> StalledScheduled : ConsecutiveFailureLimit [reschedule_count >= 3] / trigger_intervention()
+            StalledScheduled --> NormalScheduled : UserResolveIntervention [commit_fixed_date] / reset_reschedule_count()
+            StalledScheduled --> Backlog : UserMoveToBacklog / set_scheduled_date_null()
         }
 
         state "OverdueScheduled <<derived>>" as OverdueScheduled
+        state "StalledScheduled <<derived>>" as StalledScheduled
+        state "BlockedExecution <<derived>>" as BlockedExecution
 
         Scheduled --> Backlog : ReturnToBacklog / set_scheduled_date_null()
         Backlog --> Scheduled : ScheduleTask [valid_date] / set_scheduled_date()
     }
 
-    TODO --> IN_PROGRESS : StartSession [selected_for_session] / bind_to_session()
+    TODO --> IN_PROGRESS : StartSession [selected_for_session AND NOT has_unmet_prerequisites] / bind_to_session()
     IN_PROGRESS --> TODO : SessionInterrupted [task_unfinished] / unbind_and_return_to_backlog()
 
     IN_PROGRESS --> COMPLETED : FinishSession [task_done] / set_completed_at(NOW())
@@ -116,15 +125,22 @@ stateDiagram-v2
 ```
 
 > **Ghi chú chuẩn UML 2.5.1 về Trạng thái Task:**  
-> - Bốn trạng thái bền vững chuẩn CSDL: `TODO`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED` (`tasks.status IN ('TODO', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED')`).
-> - `OverdueScheduled` mang stereotype `<<derived>>`: Đây là trạng thái logic thời thực (Runtime Evaluation) tính toán động qua điều kiện `CURRENT_DATE > scheduled_date AND status = 'TODO'`, hoàn toàn **không lưu trữ cột enum riêng** trong CSDL PostgreSQL.  
+> - **Năm trạng thái bền vững chuẩn CSDL:** `PENDING`, `TODO`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED` (`tasks.status IN ('PENDING', 'TODO', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED')`).  
+> - **Các trạng thái dẫn xuất (Derived States - mang stereotype `<<derived>>`):**  
+>   * `OverdueScheduled`: Đánh giá logic thời thực: `CURRENT_DATE > scheduled_date AND status = 'TODO' AND scheduled_date IS NOT NULL`.  
+>   * `StalledScheduled`: Đánh giá logic khi nhiệm vụ bị dời lịch liên tiếp: `reschedule_count >= 3`. Nhiệm vụ bị ngắt cơ chế tự động dời ngày và yêu cầu can thiệp từ người học.  
+>   * `BlockedExecution`: Đánh giá logic điều kiện thực thi: Tồn tại ít nhất một task tiền đề $p \in \text{Predecessors}(task)$ mà $p.\text{status} \neq \text{'COMPLETED'}$. Nhiệm vụ bị khóa nút "Start Session".  
+>   * **Giải quyết tính đồng thời:** Một task có thể **vừa thuộc `StalledScheduled` vừa thuộc `BlockedExecution`** mà không hề gây xung đột dữ liệu, vì đây là các chiều đánh giá logic trực giao (Orthogonal Concerns) dựa trên thuộc tính và quan hệ `task_dependencies`, hoàn toàn không phá vỡ cột enum trạng thái vòng đời duy nhất trong CSDL PostgreSQL.  
 > - Trạng thái `COMPLETED`: Khi Lộ trình kết thúc, Task được khóa ở chế độ Read-only theo quy tắc Invariant phục vụ báo cáo chứ không cần sub-state cô lập; chỉ các task bị hủy (`CANCELLED`) hoặc hoàn thành (`COMPLETED`) mới kết thúc vòng đời thực thể.
 
 ### 2.2. Bảng Chuyển trạng thái (State Transition Table)
 
 | Mã Transition | Trạng thái Nguồn | Sự kiện Kích hoạt | Điều kiện Tiên quyết (Guard) | Trạng thái Đích | Hành động Thực thi |
 |---|---|---|---|---|---|
-| `T_TK_00` | `[*]` | Không điều kiện (UML 2.5.1) | Không | `TODO` | Khởi tạo bản ghi `tasks`, phân nhánh vào `Scheduled` nếu có `scheduled_date` hoặc `Backlog` nếu `NULL`. |
+| `T_TK_00a` | `[*]` | `AIDecompose` | Milestone thuộc trạng thái PENDING | `PENDING` | Khởi tạo task dự thảo từ AI. |
+| `T_TK_00b` | `PENDING` | `ApplySchedule / ActivateMilestone` | Milestone được kích hoạt/duyệt vào lịch | `TODO` | Chuyển sang `TODO` (vào Scheduled nếu có ngày hoặc Backlog nếu chưa xếp). |
+| `T_TK_00c` | `PENDING` | `DiscardProposal / CancelTask` | Người học hủy đề xuất | `CANCELLED` | Đánh dấu `status = 'CANCELLED'`. |
+| `T_TK_00d` | `[*]` | `DirectManualCreate` | Người học tự tạo task thủ công | `TODO` | Khởi tạo bản ghi `tasks`, phân nhánh vào `Scheduled` nếu có `scheduled_date` hoặc `Backlog` nếu `NULL`. |
 | `T_TK_01` | `TODO` | `StartSession` (`FR-SESSION-001`) | Người học chọn task tham gia Study Session | `IN_PROGRESS` | Cập nhật `tasks.status = 'IN_PROGRESS'`, ghi nhận liên kết `session_tasks`. |
 | `T_TK_02` | `IN_PROGRESS` | `SessionInterrupted` (`FR-SESSION-003`) | Phiên học bị ngắt quãng mà task chưa hoàn thành | `TODO` (Backlog) | Đặt lại `status = 'TODO'`, `scheduled_date = NULL`, trả về Backlog. |
 | `T_TK_03a` | `IN_PROGRESS` | `FinishSession` (`FR-SESSION-002`) | Phiên hoàn thành và task được đánh dấu xong | `COMPLETED` | Cập nhật `status = 'COMPLETED'`, `completed_at = NOW()`. |
@@ -169,7 +185,7 @@ stateDiagram-v2
 ```
 
 > **Ghi chú chuẩn UML 2.5.1 về Choice Pseudostate:**  
-> Nút `check_threshold` được mô hình hóa dưới dạng **Choice Pseudostate** (`<<choice>>`). Khi sự kiện ngắt quãng phát sinh (`UserStopEarly` do người học bấm dừng hoặc `CeleryBeatSweep` do mất tín hiệu nhịp tim > 5 phút), bộ điều khiển đánh giá động điều kiện toán học ngay tại thời điểm đó để phân nhánh chính xác sang `PARTIAL_COMPLETED` hoặc `CANCELLED`, loại bỏ sự trùng lặp trigger trên các chuyển đổi song song.
+> Nút `check_threshold` được mô hình hóa dưới dạng **Choice Pseudostate** (`<<choice>>`). Khi sự kiện ngắt quãng phát sinh (`UserStopEarly` do người học bấm dừng hoặc `CeleryBeatSweep` do mất tín hiệu duy trì phiên Heartbeat > 5 phút), bộ điều khiển đánh giá động điều kiện toán học ngay tại thời điểm đó để phân nhánh chính xác sang `PARTIAL_COMPLETED` hoặc `CANCELLED`, loại bỏ sự trùng lặp trigger trên các chuyển đổi song song.
 
 ### 3.2. Bảng Chuyển trạng thái (State Transition Table)
 

@@ -63,6 +63,7 @@
    - 7.12 [Kiểm soát An toàn & Cơ chế Thử lại AI (FR-AI)](#712-kiểm-soát-an-toàn--cơ-chế-thử-lại-ai-fr-ai)
    - 7.13 [Quản trị Hạn ngạch & Mock Upgrade Sandbox (FR-QUOTA)](#713-quản-trị-hạn-ngạch--mock-upgrade-sandbox-fr-quota)
    - 7.14 [Phân hệ Quản trị viên Nền tảng (FR-ADM)](#714-phân-hệ-quản-trị-viên-nền-tảng-fr-adm)
+   - 7.15 [Hồ sơ Thói quen Người học & Cá nhân hóa Lộ trình (FR-PROFILE)](#715-hồ-sơ-thói-quen-người-học--cá-nhân-hóa-lộ-trình-fr-profile)
 8. [Yêu cầu Phi Chức năng (Non-Functional Requirements - NFR)](#8-yêu-cầu-phi-chức-năng-non-functional-requirements---nfr)
    - 8.1 [Hiệu năng & Thời gian Phản hồi (NFR-PERF)](#81-hiệu-năng--thời-gian-phản-hồi-nfr-perf)
    - 8.2 [An toàn & Bảo mật Hệ thống (NFR-SEC)](#82-an-toàn--bảo-mật-hệ-thống-nfr-sec)
@@ -240,6 +241,7 @@ Các ứng dụng lịch tiêu chuẩn của bên thứ ba (Google Calendar, App
 | **UC-AUTH-02** | Đăng nhập hệ thống | Learner | Hệ thống |
 | **UC-AUTH-03** | Đăng xuất hệ thống | Learner, Administrator | Hệ thống |
 | **UC-QUOTA-01** | Thử nghiệm nâng cấp gói học tập (Mock Sandbox) | Learner | Hệ thống |
+| **UC-QUOTA-02** | Quét dọn & hoàn trả hạn ngạch AI quá hạn | System Clock / Celery Beat | PostgreSQL, Redis |
 | **UC-PLAN-01** | Khởi tạo mục tiêu & Làm rõ ngữ cảnh | Learner | External LLM |
 | **UC-AVAIL-01** | Cấu hình thời gian rảnh khả dụng | Learner | Hệ thống |
 | **UC-PLAN-02** | Phê duyệt các cột mốc học tập | Learner | Hệ thống |
@@ -675,60 +677,83 @@ Mục này chuẩn hóa toàn bộ các máy trạng thái (State Machines) củ
 - **Phương pháp kiểm chứng**: Integration Test ngắt kết nối mạng ngoại vi (offline mock).
 - **Truy vết**: BR-001, NFR-AVAIL-001.
 
+#### FR-PLAN-005: Xác thực Đề xuất Lịch trình Đa tầng (Hybrid Validation Gate)
+- **Tiêu đề**: Xác thực Đề xuất Lịch trình Đa tầng (Cú pháp, Ràng buộc Cứng và Kiểm định Sư phạm).
+- **Mô tả**: Khi External LLM sinh đề xuất lịch trình (Schedule Proposal), hệ thống phải kích hoạt cổng kiểm định 3 tầng trước khi hiển thị cho người học xem trước (Preview):
+  1. *Tầng 1 (Cú pháp & Schema - Pydantic)*: Kiểm tra tính toàn vẹn JSON, định dạng ngày giờ, liên kết `milestone_id`.
+  2. *Tầng 2 (Ràng buộc Cứng - Deterministic Constraint Engine 100%)*: Kiểm tra toán học quỹ thời gian rảnh không bị overbooking (Mode A), kiểm tra từng task nằm trọn trong slot rảnh thực tế qua `validate_proposal_against_slots` (Mode B), không trùng lấn lịch (Zero Overlap), thứ tự thời gian tuân thủ quan hệ tiên quyết (Prerequisites), và thời lượng task liên tục $\le 120$ phút (BUSR-04).
+  3. *Tầng 3 (Kiểm định Sư phạm - Lightweight LLM Pedagogical Judge)*: Đánh giá độ dốc nhận thức (kiến thức nền tảng xếp trước nâng cao) và tính thực tế của khối lượng học.
+- **Tiền điều kiện**: AI vừa hoàn tất sinh dữ liệu thô của Schedule Proposal.
+- **Tác nhân kích hoạt**: Sự kiện hoàn thành sinh kế hoạch từ AI Service.
+- **Dữ liệu đầu vào**: Danh sách task dự thảo, Cấu hình thời gian rảnh (Availability), Lịch cố định đã có.
+- **Luồng chính**:
+  1. Hệ thống thực thi Tầng 1 (Pydantic). Nếu lỗi schema $\rightarrow$ chuyển Luồng Ngoại lệ.
+  2. Hệ thống thực thi Tầng 2 (Deterministic Engine). Nếu vi phạm ràng buộc cứng $\rightarrow$ chuyển Luồng Ngoại lệ.
+  3. Hệ thống thực thi Tầng 3 (LLM Judge). Nếu đạt chuẩn, lưu Proposal ở trạng thái `DRAFT` và hiển thị Preview cho người học.
+- **Luồng ngoại lệ & Fallback**:
+  - *Vi phạm Tầng 1 hoặc Tầng 2*: Hệ thống đóng gói danh sách mã lỗi vi phạm cụ thể làm ngữ cảnh phản hồi (Feedback Prompt) yêu cầu LLM tự điều chỉnh. Tối đa 2 lần retry. Nếu hết 2 lượt retry hoặc chạm timeout 55s, hệ thống trả về bản nháp kèm nhãn cảnh báo vi phạm cụ thể để người học tự điều chỉnh thủ công trên giao diện Preview.
+  - *Sự cố Tầng 3 (LLM Judge lỗi/timeout hoặc có góp ý nhẹ)*: Áp dụng cơ chế **Fail-Open có kiểm soát**: Cho phép hiển thị Preview nếu Tầng 2 đã đạt 100%, đính kèm nhãn góp ý sư phạm để người học tự quyết định trước khi Apply. Tuyệt đối không chặn người học nếu ràng buộc toán học đã thỏa mãn.
+- **Hậu điều kiện**: Schedule Proposal hợp lệ được lưu ở trạng thái `DRAFT`, sẵn sàng cho người học duyệt.
+- **Tiêu chí chấp nhận**: Tỷ lệ vi phạm ràng buộc cứng sau Validation Gate là $0\%$; không tự ý ghi vào Official Schedule.
+- **Phương pháp kiểm chứng**: Automated Unit & Integration Tests với bộ mock vi phạm giờ rảnh, ngược prerequisite, và lỗi schema.
+- **Truy vết**: BR-001, BUSR-02, BUSR-03, BUSR-04, NFR-AI-001, NFR-PERF-001.
+
 ---
 
 ### 7.4 Cấu hình Thời gian rảnh Lai (FR-AVAIL)
 
-#### FR-AVAIL-001: Cấu hình Thời gian rảnh Chế độ A — Daily Hours Quota
-- **Tiêu đề**: Cấu hình Thời gian rảnh Chế độ A (Quỹ giờ mỗi ngày).
-- **Mô tả**: Hệ thống phải cho phép Learner thiết lập số giờ rảnh tối đa cho từng ngày trong tuần (Thứ Hai đến Chủ Nhật).
+#### FR-AVAIL-001: Cấu hình Thời gian rảnh Chế độ A — Daily Hours Quota & Scheduling Preferences
+- **Tiêu đề**: Cấu hình Thời gian rảnh Chế độ A (Quỹ giờ mỗi ngày & Sở thích phân bổ).
+- **Mô tả**: Hệ thống phải cho phép Learner thiết lập số giờ rảnh tối đa cho từng ngày trong tuần (Thứ Hai đến Chủ Nhật) kèm theo chính sách phân bổ giờ học dự kiến (khung giờ cho phép `allowed_window`, buổi học ưu tiên `preferred_period`, thời lượng phiên học tối thiểu `min_session_minutes`).
 - **Tiền điều kiện**: Learner đã đăng nhập.
 - **Tác nhân kích hoạt**: Learner gửi biểu mẫu cấu hình Mode A.
-- **Dữ liệu đầu vào**: Số giờ rảnh cho từng ngày trong tuần. Ngưỡng giá trị hợp lệ (cận dưới và cận trên) **tuân theo Quyết định Mở OS-06**.
+- **Dữ liệu đầu vào**: Số giờ rảnh cho từng ngày trong tuần (ngưỡng giá trị $0.5$h đến $14.0$h/ngày theo `OS-06`, tổng tuần $\ge 1.0$h), khung giờ `allowed_window` (ví dụ: `07:00 - 23:00`), và buổi ưu tiên (`MORNING`, `AFTERNOON`, `EVENING`, `ANY`).
 - **Luồng chính**:
   1. Learner chọn "Chế độ A — Quỹ giờ mỗi ngày" trên trang cài đặt Availability.
-  2. Learner điền số giờ rảnh cho từng ngày trong tuần.
+  2. Learner điền số giờ rảnh cho từng ngày và tùy chọn buổi ưu tiên.
   3. Learner bấm "Lưu cấu hình".
-  4. Hệ thống kiểm tra giá trị nằm trong khoảng hợp lệ theo quy định của `OS-06` và lưu vào hồ sơ người dùng.
+  4. Hệ thống kiểm tra giá trị hợp lệ theo quy định của `OS-06` và lưu vào hồ sơ người dùng.
 - **Luồng ngoại lệ**:
   - *Giá trị ngoài khoảng hợp lệ*: Hệ thống từ chối lưu, hiển thị thông báo giới hạn giờ theo quy định của `OS-06`.
 - **Hậu điều kiện**: Cấu hình Availability Mode A được kích hoạt làm căn cứ phân bổ task.
-- **Tiêu chí chấp nhận**: Tổng thời lượng task được xếp trong ngày không được vượt quá số giờ rảnh đã cấu hình cho ngày đó.
+- **Tiêu chí chấp nhận**: Tổng thời lượng task được xếp trong ngày không được vượt quá số giờ rảnh đã cấu hình cho ngày đó; các phiên học được xếp trong khung giờ `allowed_window`.
 - **Phương pháp kiểm chứng**: Unit Test kiểm tra tính hợp lệ của dải dữ liệu và thuật toán kiểm tra trần thời gian.
 - **Truy vết**: BUSR-03, OS-06.
 
-#### FR-AVAIL-002: Cấu hình Thời gian rảnh Chế độ B — Time Slot Window
-- **Tiêu đề**: Cấu hình Thời gian rảnh Chế độ B (Khung giờ cố định).
-- **Mô tả**: Hệ thống phải cho phép Learner thiết lập các khung giờ rảnh cố định (bắt đầu - kết thúc) theo từng ngày trong tuần.
+#### FR-AVAIL-002: Cấu hình Thời gian rảnh Chế độ B — Time Slot Window & Slot-fit Validation
+- **Tiêu đề**: Cấu hình Thời gian rảnh Chế độ B (Khung giờ cố định & Kiểm định vị trí thực).
+- **Mô tả**: Hệ thống phải cho phép Learner thiết lập các khung giờ rảnh cố định (bắt đầu - kết thúc) theo từng ngày trong tuần, hỗ trợ khung giờ qua nửa đêm (`end_day_offset`), đồng thời thẩm định vị trí thời gian thực tế của các nhiệm vụ học tập.
 - **Tiền điều kiện**: Learner đã đăng nhập.
 - **Tác nhân kích hoạt**: Learner gửi biểu mẫu cấu hình Mode B.
-- **Dữ liệu đầu vào**: Danh sách các khoảng thời gian `[StartTime, EndTime]` cho từng ngày trong tuần (Ví dụ: Thứ 2 từ 19:00 đến 21:00).
+- **Dữ liệu đầu vào**: Danh sách các khoảng thời gian `[StartTime, EndTime, end_day_offset]` cho từng ngày trong tuần (Ví dụ: Thứ 2 từ 19:00 đến 21:00 hoặc 22:30 đến 00:30 ngày hôm sau với `end_day_offset = 1`).
 - **Luồng chính**:
   1. Learner chọn "Chế độ B — Khung giờ cố định".
   2. Learner thêm các khung giờ rảnh cho từng ngày.
-  3. Hệ thống kiểm tra: `StartTime < EndTime`, các khung giờ trong cùng một ngày không được chồng lấn nhau.
+  3. Hệ thống kiểm tra: tính hợp lệ của từng slot (thời lượng $\ge 30$ phút), và các khung giờ trong cùng một ngày không được chồng lấn nhau.
   4. Learner bấm "Lưu cấu hình".
   5. Hệ thống lưu cấu hình Mode B vào hồ sơ người dùng.
 - **Luồng ngoại lệ**:
   - *Khung giờ không hợp lệ hoặc chồng lấn*: Hệ thống từ chối lưu, hiển thị thông báo lỗi cụ thể.
-- **Hậu điều kiện**: Cấu hình Availability Mode B được kích hoạt; các task được xếp sẽ có giờ bắt đầu và kết thúc cụ thể.
-- **Tiêu chí chấp nhận**: Hệ thống từ chối lưu khung giờ nếu thời gian kết thúc trước hoặc bằng thời gian bắt đầu.
-- **Phương pháp kiểm chứng**: Unit Test kiểm tra logic không chồng lấn khung giờ (Interval Overlap Check).
+- **Hậu điều kiện**: Cấu hình Availability Mode B được kích hoạt; các task được xếp sẽ có giờ bắt đầu và kết thúc cụ thể, nằm trọn trong các slot rảnh hợp lệ (cho phép Soft Overflow $\le 30$ phút ngoài biên slot nếu có người dùng xác nhận).
+- **Tiêu chí chấp nhận**: Hệ thống từ chối lưu khung giờ nếu thời lượng $< 30$ phút hoặc chồng lấn; từ chối proposal nếu task đè lên khoảng bận.
+- **Phương pháp kiểm chứng**: Unit Test kiểm tra logic không chồng lấn khung giờ và kiểm định vị trí task thực tế.
 - **Truy vết**: BUSR-03, BUSR-04.
 
-#### FR-AVAIL-003: Quản lý Năng lực Đa Lộ trình (Multi-Roadmap Capacity Management)
-- **Tiêu đề**: Quản trị dung lượng thời gian rảnh đa lộ trình.
-- **Mô tả**: Hệ thống phải tính toán dung lượng thời gian rảnh khả dụng thực tế bằng cách lấy tổng thời gian rảnh trừ đi thời gian đã phân bổ cho các Official Schedule hiện có trước khi xếp lịch mới.
-- **Tiền điều kiện**: Learner sở hữu ít nhất một Roadmap đang ở trạng thái `ACTIVE`.
+#### FR-AVAIL-003: Quản lý Năng lực Đa Lộ trình & Lịch Ngoại vi (Multi-Roadmap Capacity Management)
+- **Tiêu đề**: Quản trị dung lượng thời gian rảnh đa lộ trình và lịch ngoại vi.
+- **Mô tả**: Hệ thống phải tính toán dung lượng thời gian rảnh khả dụng thực tế bằng cách trừ đi thời gian đã phân bổ cho các Official Schedule hiện có và các khoảng bận từ Google Calendar (nếu có kết nối):
+  - *Với Mode A*: Trả về tổng số phút khả dụng còn lại (`remaining_capacity_minutes: int`).
+  - *Với Mode B*: Trả về danh sách các khoảng thời gian rảnh còn lại thực tế (`List<TimeSlot>`) sau giải thuật trừ đoạn thời gian.
+- **Tiền điều kiện**: Learner sở hữu ít nhất một Roadmap đang ở trạng thái `ACTIVE` hoặc có liên kết lịch ngoại vi.
 - **Tác nhân kích hoạt**: Yêu cầu tạo lịch hoặc cập nhật lịch cho một Roadmap mới/khác.
 - **Luồng chính**:
-  1. Hệ thống truy vấn toàn bộ các task thuộc Official Schedule của tất cả Roadmap đang hoạt động của Learner.
+  1. Hệ thống truy vấn toàn bộ các task thuộc Official Schedule của tất cả Roadmap đang hoạt động của Learner và các khoảng bận ngoại vi.
   2. Xác định các khoảng thời gian đã bị chiếm dụng trên từng ngày.
-  3. Trả về tập hợp các khoảng thời gian rảnh còn lại (Remaining Available Slots) cho Planning Engine.
+  3. Trả về năng lực còn lại theo đúng định dạng của từng chế độ cho Planning Engine.
   4. Trường hợp có xung đột cạnh tranh khoảng thời gian trống giữa các lộ trình, hệ thống áp dụng nguyên tắc ưu tiên theo quy định tại `OS-04`.
 - **Hậu điều kiện**: Lộ trình mới chỉ được xếp vào các khoảng thời gian chưa có cam kết học tập trước đó.
-- **Tiêu chí chấp nhận**: Tuyệt đối không tự ý xếp trùng giờ giữa 2 task thuộc 2 Roadmap khác nhau của cùng một Learner.
-- **Phương pháp kiểm chứng**: Automated Integration Test với 2 Roadmap chạy song song.
+- **Tiêu chí chấp nhận**: Tuyệt đối không tự ý xếp trùng giờ giữa 2 task thuộc 2 Roadmap khác nhau của cùng một Learner; không biến quota Mode A thành các khung giờ giả lập.
+- **Phương pháp kiểm chứng**: Automated Integration Test với 2 Roadmap chạy song song và đối chiếu dung lượng rảnh.
 - **Truy vết**: BUSR-05, OS-04.
 
 ---
@@ -782,6 +807,26 @@ Mục này chuẩn hóa toàn bộ các máy trạng thái (State Machines) củ
 - **Tiêu chí chấp nhận**: Mọi task chưa hoàn thành từ phiên học gián đoạn đều xuất hiện đầy đủ trong Backlog.
 - **Phương pháp kiểm chứng**: Integration Test kiểm tra luồng gián đoạn phiên học và kiểm tra danh sách Backlog.
 - **Truy vết**: BUSR-09, Mục 6.2 State Transition.
+
+#### FR-TASK-003: Quản lý Quan hệ Tiên quyết (Prerequisite Task Dependencies) & Kiểm soát Chu trình
+- **Tiêu đề**: Quản lý quan hệ phụ thuộc tiên quyết giữa các nhiệm vụ và khóa thực thi có điều kiện.
+- **Mô tả**: Hệ thống cho phép thiết lập quan hệ phụ thuộc có hướng giữa các task trong cùng Roadmap (`task_dependencies`), ngăn chặn chu trình phụ thuộc và chỉ cho phép bắt đầu phiên học khi toàn bộ task tiền đề đã hoàn tất.
+- **Tiền điều kiện**: Các task cùng thuộc về một Roadmap đang hoạt động.
+- **Tác nhân kích hoạt**: Learner tự gán quan hệ phụ thuộc hoặc AI đề xuất trong Schedule Proposal.
+- **Dữ liệu đầu vào**: `predecessor_id`, `successor_id`, `roadmap_id`.
+- **Luồng chính**:
+  1. Khi có yêu cầu thêm quan hệ phụ thuộc ($A \to B$), tầng Domain Service thực thi thuật toán kiểm tra chu trình (Cycle Detection bằng DFS / Kahn Topological Sort).
+  2. Nếu không có chu trình, lưu bản ghi vào bảng `task_dependencies`.
+  3. Khi Learner bấm "Start Session" cho Task B: Hệ thống kiểm tra điều kiện:
+     $$\forall p \in \text{Predecessors}(B), \quad p.\text{status} = \text{'COMPLETED'}$$
+  4. Nếu toàn bộ $p$ đã `COMPLETED`, cho phép mở Study Workspace.
+- **Luồng ngoại lệ**:
+  - *Phát hiện chu trình ($A \to B \to A$)*: Hệ thống từ chối giao dịch, trả về mã lỗi `ERR_CYCLIC_DEPENDENCY` kèm danh sách các task tạo chu trình.
+  - *Task tiền đề chưa hoàn thành*: Hệ thống đánh dấu trạng thái dẫn xuất của Task B là `BLOCKED`, vô hiệu hóa nút "Start Session" và hiển thị tooltip nêu rõ tên task tiền đề cần giải quyết trước.
+- **Hậu điều kiện**: Quan hệ phụ thuộc được bảo toàn toàn vẹn; không task nào được thực thi sai thứ tự tiên quyết.
+- **Tiêu chí chấp nhận**: Phát hiện $100\%$ chu trình phụ thuộc; chặn tuyệt đối bắt đầu phiên khi task tiền đề chưa xong.
+- **Phương pháp kiểm chứng**: Unit test thuật toán Cycle Detection và Integration test chặn bắt đầu session.
+- **Truy vết**: BR-002, BUSR-02, Mục 6.2 State Transition.
 
 ---
 
@@ -840,7 +885,7 @@ Mục này chuẩn hóa toàn bộ các máy trạng thái (State Machines) củ
 - **Luồng phục hồi khi sự cố bất thường (Browser Crash / Tab Close / Disconnect / Refresh)**:
   - *Browser Refresh / Tab Close / Reconnect*: Khi Learner tải lại trang hoặc mở lại hệ thống trong khi Session vẫn ở trạng thái `IN_PROGRESS`, hệ thống khôi phục giao diện Study Workspace, tính lại thời gian đã trôi qua dựa trên `started_at` và tiếp tục đếm giờ.
   - *Duplicate Resume*: Nếu người học mở đồng thời Study Workspace trên nhiều tab/thiết bị cho cùng một Session, hệ thống chỉ cho phép phiên hoạt động trên tab kích hoạt sau cùng và hiển thị thông báo trên các tab cũ để tránh trùng lặp đếm giờ.
-  - *Thời gian học được chốt*: Trường hợp phiên học bị bỏ quên hoặc ngắt kết nối kéo dài vượt quá thời lượng dự kiến, hệ thống tự động đóng phiên học tại mốc kết thúc dự kiến và áp dụng quy tắc phân định trạng thái như trên. Cơ chế đồng bộ nhịp thời gian chi tiết tuân theo quyết định mở `OS-07`.
+  - *Thời gian học được chốt*: Trường hợp phiên học bị bỏ quên hoặc ngắt kết nối kéo dài vượt quá thời lượng dự kiến, hệ thống tự động đóng phiên học tại mốc kết thúc dự kiến và áp dụng quy tắc phân định trạng thái như trên. Cơ chế đồng bộ tín hiệu duy trì phiên (Heartbeat ping) chi tiết tuân theo quyết định mở `OS-07`.
 - **Hậu điều kiện**: Số phút thực học được lưu chính xác; không mất trạng thái task đã hoàn thành; task chưa xong nằm an toàn trong Backlog.
 - **Tiêu chí chấp nhận**:
   - Không mất dữ liệu số phút thực học đã trôi qua.
@@ -887,6 +932,27 @@ Mục này chuẩn hóa toàn bộ các máy trạng thái (State Machines) củ
 - **Tiêu chí chấp nhận**: Phân tách hoàn toàn giữa phát hiện quá hạn (tất định) và sắp xếp lại (tùy chọn bởi người dùng).
 - **Phương pháp kiểm chứng**: Automated E2E Test kiểm tra request mạng ngoại vi chỉ phát sinh sau thao tác click của User.
 - **Truy vết**: BR-003, BUSR-02, BUSR-06, OS-03.
+
+#### FR-ADAPT-003: Cơ chế Ngắt mạch Chống lặp Quá hạn (Overdue Anti-Loop Circuit Breaker)
+- **Tiêu đề**: Ngắt mạch chống dời lịch tự động lặp vô hạn cho nhiệm vụ quá hạn.
+- **Mô tả**: Khi một task bị dời lịch liên tiếp do trễ hạn chạm ngưỡng $\ge 3$ lần (`tasks.reschedule_count >= 3`), tác vụ Celery Beat quét quá hạn (`adapt_overdue_tasks_job`) phải ngắt cơ chế tự động tịnh tiến ngày, đánh dấu trạng thái dẫn xuất là `STALLED` và kích hoạt hộp thoại can thiệp người học.
+- **Tiền điều kiện**: Task ở trạng thái `TODO (Scheduled)` có `scheduled_date < CURRENT_DATE`.
+- **Tác nhân kích hoạt**: Celery Beat quét quá hạn lúc 00:05 UTC+7 hàng ngày.
+- **Dữ liệu đầu vào**: Bản ghi task quá hạn, số lần dời lịch `reschedule_count`.
+- **Luồng chính**:
+  1. Celery Beat thực thi `SELECT ... FOR UPDATE SKIP LOCKED` để khóa an toàn các task quá hạn cần xử lý.
+  2. Nếu `reschedule_count < 3`: Hệ thống tự động dời sang ngày tiếp theo còn thời gian rảnh, tăng `reschedule_count = reschedule_count + 1`, ghi log vào `schedule_change_logs`.
+  3. Nếu `reschedule_count >= 3`:
+     - Giữ nguyên `scheduled_date` hiện tại, KHÔNG tự động dời tiếp.
+     - Đánh dấu trạng thái chú ý là `STALLED`.
+     - Tạo thông báo hệ thống yêu cầu người học can thiệp với 3 lựa chọn: (1) Chọn ngày cố định có cam kết, (2) Kích hoạt AI phân rã task nhỏ hơn, (3) Đưa task về Backlog (`scheduled_date = NULL`).
+- **Quy tắc Reset & Tương tác**:
+  - `reschedule_count` được reset về `0` khi và chỉ khi: Task được đánh dấu `COMPLETED` hoặc người học chủ động chọn ngày mới có cam kết.
+  - Thuật toán Domino Shift (`FR-PAUSE-002`) khi tạm dừng toàn bộ lộ trình **KHÔNG làm tăng `reschedule_count`** vì đây là hành động chủ động vĩ mô, không phải hành vi bỏ bê nhiệm vụ cá nhân.
+- **Hậu điều kiện**: Ngăn chặn hoàn toàn hiện tượng "tuyết lăn trì hoãn" (Procrastination Snowball); dồn ứ lịch trình ảo được triệt tiêu.
+- **Tiêu chí chấp nhận**: Đúng 100% các task dời lịch lần thứ 3 bị khóa dời tự động; giao diện hiển thị cảnh báo can thiệp.
+- **Phương pháp kiểm chứng**: Automated Integration Test với Mock Celery Beat dời lịch 3 ngày liên tiếp.
+- **Truy vết**: BR-003, BUSR-06, NFR-AVAIL-001.
 
 ---
 
@@ -1171,6 +1237,34 @@ Mục này chuẩn hóa toàn bộ các máy trạng thái (State Machines) củ
 
 ---
 
+### 7.15 Hồ sơ Thói quen Người học & Cá nhân hóa Lộ trình (FR-PROFILE)
+
+#### FR-PROFILE-001: Tổng hợp Hồ sơ Thói quen Học tập (Learner Profile Memory)
+- **Tiêu đề**: Thu thập, tổng hợp chỉ số thói quen học tập thực tế và hiệu chỉnh kế hoạch theo mô hình Zimmerman SRL (2002).
+- **Mô tả**: Hệ thống sử dụng tác vụ nền Celery định kỳ (chạy sau mỗi $\ge 5$ phiên học hoàn thành hoặc tổng hợp hàng tuần) để tính toán 4 chỉ số thực chứng của người học và lưu trữ vào bảng `learner_profiles`, làm ngữ cảnh hỗ trợ (Advisory Guidance) cho AI Planner sinh lộ trình phù hợp với năng lực thực tế.
+- **Tiền điều kiện**: Người học có tài khoản đang hoạt động.
+- **Tác nhân kích hoạt**: Sự kiện hoàn tất phiên học thứ $5, 10, \dots$ hoặc lịch quét định kỳ hàng tuần của Celery Beat.
+- **Dữ liệu đầu vào**: Lịch sử các bản ghi `study_sessions` và `tasks` đã hoàn tất.
+- **Quy tắc Tính toán 4 Chỉ số Thực chứng**:
+  1. **Optimal Focus Duration ($D_{opt}$)**: Tính toán trung vị (Median) thời lượng tập trung thực tế từ các phiên học thành công (`study_sessions.status = 'COMPLETED'`) trong 30 ngày gần nhất (yêu cầu $\ge 5$ phiên; loại bỏ ngoại lệ $< 5$ phút hoặc $> 180$ phút). Giá trị mặc định khi Cold Start là 25 phút.
+  2. **Peak Productivity Slots**: Xác định các khung giờ trong ngày có tỷ lệ hoàn thành nhiệm vụ cao nhất ($\ge 70\%$) dựa trên tối thiểu $\ge 10$ phiên phân bổ qua 14 ngày.
+  3. **Estimation Bias Factor ($\beta_{bias}$)**: Tỷ số trung bình giữa thời gian thực tế người học bỏ ra và thời gian ước lượng ban đầu ($\beta_{bias} = T_{actual} / T_{estimated}$), tính trên tối thiểu $\ge 8$ task có ghi nhận thời gian; kẹp trong khoảng an toàn $[0.50, 2.00]$.
+  4. **Weekly Completion Rate**: Tỷ lệ phần trăm hoàn thành nhiệm vụ được lên lịch của tuần gần nhất.
+- **Luồng chính**:
+  1. Celery Worker giành Redis lock (`lock:learner_profile_agg:{user_id}`) để chống chạy trùng lặp.
+  2. Worker thực thi truy vấn tổng hợp dữ liệu giao dịch từ `study_sessions` và `tasks`.
+  3. Cập nhật bản ghi nguyên tử vào bảng `learner_profiles` (`ON CONFLICT (user_id) DO UPDATE SET ...`).
+  4. Khi AI Planner sinh đề xuất lịch mới, hệ thống trích xuất khối tóm tắt profile $\le 60$ tokens đưa vào System Prompt để AI hiệu chỉnh độ dài task và độ dốc kiến thức.
+- **Bất biến An toàn & Quyền riêng tư**:
+  - Dữ liệu Profile chỉ đóng vai trò gợi ý tối ưu trong prompt, **tuyệt đối không được ghi đè** lên cấu hình thời gian rảnh hoặc các chỉnh sửa thủ công của người học.
+  - Người học có toàn quyền xem các chỉ số của mình tại trang Cài đặt và bấm nút "Đặt lại Hồ sơ (Reset Profile)" để xóa các chỉ số đã hiệu chỉnh về trạng thái Cold Start ban đầu.
+- **Hậu điều kiện**: Bản ghi `learner_profiles` được cập nhật đồng bộ, sẵn sàng phục vụ lần lập lịch tiếp theo.
+- **Tiêu chí chấp nhận**: Quá trình tính toán không làm nghẽn API kết thúc phiên (chạy hoàn toàn ở background); xử lý chính xác trạng thái Cold Start.
+- **Phương pháp kiểm chứng**: Automated Unit Test kiểm tra công thức tính toán với các bộ dữ liệu có ngoại lệ, và Integration Test kiểm tra Redis lock.
+- **Truy vết**: BR-002, BR-005, NFR-AI-001, NFR-PERF-002.
+
+---
+
 ## 8. Yêu cầu Phi Chức năng (Non-Functional Requirements - NFR)
 
 ### 8.1 Hiệu năng & Thời gian Phản hồi (NFR-PERF)
@@ -1240,11 +1334,21 @@ Mục này chuẩn hóa toàn bộ các máy trạng thái (State Machines) củ
   - *Phương pháp kiểm chứng*: Schema Validation Test trên toàn bộ các prompt template.
   - *Truy vết*: BR-005, FR-AI-001, TC2.3.
 
+- **NFR-AI-002: Kiểm soát An toàn Ngắt mạch Dịch vụ AI (AI Service Circuit Breaker)**
+  - Khi dịch vụ External LLM phát sinh lỗi hệ thống (5xx, 429 quá tải hoặc Timeout liên tiếp $\ge 3$ lần trong vòng 60 giây), Circuit Breaker phải chuyển sang trạng thái `OPEN` để tạm ngắt gọi ngoại vi, bảo vệ tài nguyên và phản hồi ngay mã lỗi bảo trì kèm tùy chọn Lập kế hoạch thủ công (`FR-PLAN-004`).
+  - *Phương pháp kiểm chứng*: Mock test chuỗi lỗi 3 lần liên tiếp và kiểm tra trạng thái circuit breaker trong Redis.
+  - *Truy vết*: BR-005, FR-AI-002, NFR-AVAIL-001.
+
+- **NFR-AI-003: Bộ khung Đánh giá Thực nghiệm Tự động (AI Evaluation Harness Suite)**
+  - Hệ thống phải sở hữu bộ công cụ đánh giá tự động (`backend/tests/ai_evals/`) với tập dữ liệu chuẩn hóa 100+ kịch bản (JSONL) để kiểm thử hồi quy prompt, đo lường độ chính xác phân bổ thời gian và so sánh hiệu năng giữa các mô hình (Gemini vs OpenAI vs Local SLM).
+  - *Phương pháp kiểm chứng*: Chạy script CLI `run_benchmark.py` đa tiến trình và xuất báo cáo tự động.
+  - *Truy vết*: BR-005, NFR-PERF-001, TC2.3.
+
 ---
 
 ## 9. Tiêu chí Đánh giá Dự án & Thử nghiệm (Evaluation Metrics & Benchmarks)
 
-> **PHÂN BIỆT RÕ RÀNG VỀ MẶT PHƯƠNG PHÁP LUẬN**: Các chỉ số dưới đây là **Tiêu chí Đánh giá Nghiệp vụ và Kết quả Dự án (Evaluation Metrics & Benchmarks)** trong đợt thử nghiệm thực tế (UAT Phase). Chúng phản ánh mức độ thành công của đề tài học thuật theo chuẩn Rubric CNTT, **không phải** là các yêu cầu phi chức năng nội tại mà phần mềm có thể tự đơn phương bảo đảm nếu không có sự tham gia của con người.
+> **PHÂN BIỆT RÕ RÀNG VỀ MẶT PHƯƠNG PHÁP LUẬN**: Các chỉ số dưới đây là **Tiêu chí Đánh giá Nghiệp vụ và Kết quả Dự án (Evaluation Metrics & Benchmarks)** trong đợt thử nghiệm thực tế (UAT Phase) và kiểm thử thực nghiệm AI (Benchmark Phase). Chúng phản ánh mức độ thành công của đề tài học thuật theo chuẩn Rubric CNTT, **không phải** là các yêu cầu phi chức năng nội tại mà phần mềm có thể tự đơn phương bảo đảm nếu không có sự tham gia của con người.
 
 | Mã Chỉ số | Tên Chỉ số Nghiệp vụ / Đánh giá | Mục tiêu Định lượng (Benchmark) | Phương pháp & Công cụ Đo lường | Tiêu chí Rubric Căn cứ |
 |---|---|---|---|---|
@@ -1253,6 +1357,9 @@ Mục này chuẩn hóa toàn bộ các máy trạng thái (State Machines) củ
 | **EVAL-03** | **Tỷ lệ duy trì lộ trình (Plan Adherence Rate - KPI 3)** | $\ge \mathbf{70\%}$ tham gia | Công thức toán học: $\frac{\text{Số buổi học có tham gia}}{\text{Tổng số buổi đã lên lịch (loại trừ ngày PAUSED)}} \times 100\%$. | KPI 3, TC1 Mức 5 |
 | **EVAL-04** | **Tỷ lệ hoàn thành tác vụ (Task Success Rate - KPI 4)** | $\ge \mathbf{90\%}$ thành công | Đánh giá qua kịch bản kiểm thử UAT 4 tác vụ chính: (1) Tạo lộ trình, (2) Chạy phiên học Pomodoro, (3) Lưu ghi chú Scratchpad & Takeaway, (4) Đăng ký WebCal / Xem báo cáo. | KPI 4, TC2.7 Mức 5 |
 | **EVAL-05** | **Độ hài lòng trải nghiệm người dùng (SUS Usability Score - KPI 5)** | $\ge \mathbf{80 / 100}$ điểm | Khảo sát chuẩn hóa bằng bảng câu hỏi System Usability Scale (SUS) gồm 10 câu hỏi tiêu chuẩn quốc tế trên tối thiểu $\ge \mathbf{10}$ người dùng thật thuộc đối tượng mục tiêu. | KPI 5, TC2.7 Mức 5 |
+| **EVAL-06** | **Tỷ lệ tuân thủ Ràng buộc Lịch (AI Constraint Compliance Rate)** | $\mathbf{100\%}$ Zero Overbooking | Đo đạc qua AI Evaluation Harness trên 100 kịch bản: Tỷ lệ task không vi phạm thời gian rảnh và thứ tự prerequisite sau Hybrid Validation Gate. | TC2.3 Mức 5 |
+| **EVAL-07** | **Độ trễ P95 Lập kế hoạch AI (AI Planner P95 Latency)** | $\le \mathbf{35}$ giây | Phân vị P95 thời gian xử lý toàn trình (kết nối SSE, suy luận LLM và Validation Gate). Ngưỡng tối đa chấp nhận là $< 55$s (NFR-PERF-001). | NFR-PERF-001 |
+| **EVAL-08** | **Chi phí Token Trung bình (Average Token Cost per Schedule)** | $\le \mathbf{\$0.015}$ / Roadmap | Đo lường chi phí token thực tế trung bình qua kế toán token của các lượt gọi hoàn chỉnh. | TC2.3 Mức 5 |
 
 ---
 
@@ -1388,7 +1495,7 @@ Toàn bộ 8 quyết định mở kỹ thuật (`OS-01` đến `OS-08`) đã đ�
 | **OS-04** | **Thuật toán giải quyết xung đột ưu tiên giữa nhiều Roadmap khi xếp lịch tự động** | FR-AVAIL-003, BUSR-05 | **Phê duyệt**: Áp dụng giải thuật **Earliest Deadline First (EDF)**: Ưu tiên phân bổ slot thời gian trống cho Roadmap có hạn chót mục tiêu gần hơn. |
 | **OS-05** | **Thuật toán mã hóa và định dạng cụ thể của WebCal Secure Token** | FR-CALENDAR-002, NFR-SEC-004 | **Phê duyệt**: Sử dụng chuỗi ngẫu nhiên độ dài **32-byte hex (CSPRN)** sinh bằng thư viện mật mã an toàn của Python (`secrets.token_hex(32)`). Cơ sở dữ liệu chỉ lưu bản băm **SHA-256** của token (`token_hash`), token thô được trả về cho Client 1 lần duy nhất để nhúng vào URL. Gắn quan hệ 1-1 với User và tự động vô hiệu hóa token cũ khi bấm Reset. |
 | **OS-06** | **Dải giá trị hợp lệ của Quỹ giờ rảnh mỗi ngày (Mode A Availability Bounds)** | FR-AVAIL-001, BUSR-03 | **Phê duyệt**: Cận dưới tối thiểu là **0.5 giờ (30 phút)/ngày**; Cận trên tối đa là **14 giờ/ngày**. |
-| **OS-07** | **Cơ chế kỹ thuật chốt giờ và đồng bộ phiên học khi mất kết nối kéo dài** | FR-SESSION-003 | **Phê duyệt**: Client gửi định kỳ nhịp **Heartbeat ping mỗi 60 giây**. Nếu server không nhận được ping quá **5 phút**, hệ thống tự động chốt phiên học theo thời điểm ping thành công gần nhất. |
+| **OS-07** | **Cơ chế kỹ thuật chốt giờ và đồng bộ phiên học khi mất kết nối kéo dài** | FR-SESSION-003 | **Phê duyệt**: Client gửi định kỳ tín hiệu duy trì phiên **Heartbeat ping mỗi 60 giây** (tín hiệu keep-alive hệ thống mạng, không phải nhịp tim sinh học). Nếu server không nhận được ping quá **5 phút**, hệ thống tự động chốt phiên học theo thời điểm ping thành công gần nhất. |
 | **OS-08** | **Chính sách Backoff và Giới hạn chờ cho lỗi quá tải AI 429/503** | FR-AI-001, FR-AI-002 | **Phê duyệt**: Áp dụng chiến lược **Exponential Backoff với Full Jitter** (khoảng chờ lần lượt 2s, 4s, tối đa 10s) cho tối đa 2 lần retry tự động. |
 
 ---
@@ -1405,7 +1512,7 @@ Toàn bộ 8 quyết định mở kỹ thuật (`OS-01` đến `OS-08`) đã đ�
 | **Mục 1.2, 5.4 (P3: Đứt gãy lịch khi trễ hạn)** | BR-003 | BUSR-06, BUSR-07 | FR-ADAPT-001 (Overdue), FR-ADAPT-002 (AI Reprioritize), FR-PAUSE-001, FR-PAUSE-002 (Domino Shift) | UC-PAUSE-01, UC-ADAPT-01, UC-ADAPT-02 | NFR-PERF-002, NFR-AVAIL-001 ($\ge 95\%$) | **EVAL-03**: Plan Adherence $\ge 70\%$.<br>**AC**: Phát hiện quá hạn tất định thuần túy backend; Domino Shift dời lùi đúng số ngày khả dụng, không báo quá hạn khi Pause. |
 | **Mục 5.5 (Tích hợp Lịch ngoại vi)** | BR-004 | BUSR-08 | FR-CALENDAR-001 (.ics), FR-CALENDAR-002 (WebCal), FR-CALENDAR-003 (Reset Token) | UC-CAL-01, UC-CAL-02 | NFR-SEC-004 (Bảo mật Token & Log Hygiene), RFC 5545 | **AC**: Chỉ xuất Official Schedule; WebCal 1 chiều bảo mật; token cũ bị hủy hiệu lực ngay lập tức khi bấm reset (tuân thủ OS-05). |
 | **Mục 5.6 (Báo cáo & Đánh giá định kỳ)** | BR-002, BR-003 | BUSR-10 | FR-REPORT-001 (Thống kê toán), FR-REPORT-002 (AI Review) | UC-REP-01, UC-REP-02 | NFR-PERF-002, NFR-SEC-003 (Sanitization) | **AC**: Thống kê toán học chính xác 100%; AI Review nhận xét đúng số liệu, không bịa đặt số liệu. |
-| **Mục 5.1, 8.2 (Quản trị Chi phí & Rủi ro AI)** | BR-005 | BUSR-10 | FR-QUOTA-001, FR-QUOTA-002 (Mock Sandbox), FR-AI-001 (Retry Semantics), FR-AI-002 (Timeout 55s / Fallback) | UC-QUOTA-01, UC-PLAN-01, UC-REP-02 | NFR-PERF-001 (Timeout 55s), NFR-SEC-001 (Zero secret leak), NFR-AI-001 | **AC**: Kiểm tra hạn ngạch nguyên tử; chặn 100% request hết quota tại middleware (theo OS-02); retry tối đa 2 lần không trừ quota; ngắt ở giây 55; Mock Sandbox không thanh toán thật. |
+| **Mục 5.1, 8.2 (Quản trị Chi phí & Rủi ro AI)** | BR-005 | BUSR-10 | FR-QUOTA-001, FR-QUOTA-002 (Mock Sandbox), FR-AI-001 (Retry Semantics), FR-AI-002 (Timeout 55s / Fallback) | UC-QUOTA-01, UC-QUOTA-02, UC-PLAN-01, UC-REP-02 | NFR-PERF-001 (Timeout 55s), NFR-SEC-001 (Zero secret leak), NFR-AI-001 | **AC**: Kiểm tra hạn ngạch nguyên tử; chặn 100% request hết quota tại middleware (theo OS-02); retry tối đa 2 lần không trừ quota; ngắt ở giây 55; Mock Sandbox không thanh toán thật; Quota Sweeper tự động dọn dẹp reservation quá hạn. |
 | **Quản trị Nền tảng & RBAC (Admin Governance)** | BR-006 | BUSR-11, BUSR-10 | FR-ADM-001 (RBAC Auth), FR-ADM-002 (User & Quota), FR-ADM-003 (Observability) | UC-ADM-01, UC-ADM-02, UC-ADM-03, UC-AUTH-03 | NFR-SEC-002, NFR-PERF-002 ($\le 500$ms), NFR-AVAIL-001 | **AC**: 100% route `/admin/*` chặn truy cập không có `role = 'ADMIN'`; cập nhật Tier/Quota thành công $\le 500$ms; Dashboard hiển thị số liệu trung thực, non-blocking. |
 
 ---

@@ -53,7 +53,7 @@ Người tự học gặp phải chuỗi đứt gãy liên hoàn từ giai đo�
 ## 3. Current Situation & Benchmarking (Hiện trạng & Đối sánh giải pháp)
 
 Đáp ứng tiêu chí **TC1 (Mức 5: So sánh $\ge 3$ giải pháp hiện có, nêu rõ khoảng trống với phân tích thực tế khách quan)**:  
-> *Chi tiết phân tích sâu 8 giải pháp và số liệu thực chứng xem tại:* [Khảo sát Nhu cầu Tự học & Đối sánh Giải pháp](user-survey-and-benchmarking.md) và hồ sơ môn học [WBS 1.1 — Khảo sát & Benchmarking](../../docs_ute/WBS%201.1%20-%20Kh%E1%BA%A3o%20s%C3%A1t%20nhu%20c%E1%BA%A7u%20t%E1%BB%B1%20h%E1%BB%8Dc%20v%C3%A0%20nghi%C3%AAn%20c%E1%BB%A9u%20%C4%91%E1%BB%91i%20s%C3%A1nh%20gi%E1%BA%A3i%20ph%C3%A1p%20%28Benchmarking%29.md).
+> *Chi tiết phân tích sâu 8 giải pháp và số liệu thực chứng xem tại:* [Khảo sát Nhu cầu Tự học & Đối sánh Giải pháp](user-survey-and-benchmarking.md) và hồ sơ môn học [WBS 1.1 — Khảo sát & Benchmarking](../../docs_ute/04_wbs_deliverables/WBS%201.1%20-%20Kh%E1%BA%A3o%20s%C3%A1t%20nhu%20c%E1%BA%A7u%20t%E1%BB%B1%20h%E1%BB%8Dc%20v%C3%A0%20nghi%C3%AAn%20c%E1%BB%A9u%20%C4%91%E1%BB%91i%20s%C3%A1nh%20gi%E1%BA%A3i%20ph%C3%A1p%20%28Benchmarking%29.md).
 
 | Tiêu chí so sánh | Google Calendar | Notion | Todoist | Reclaim.ai / Motion | Chatbots độc lập (ChatGPT/Claude) | **FocusFlow (Hệ thống đề xuất)** |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|

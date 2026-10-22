@@ -1,5 +1,5 @@
 # FocusFlow — Thiết kế Sơ đồ Tuần tự Chi tiết (Sequence Diagrams Document)
-## Phiên bản: v3.0 — Chuẩn UML 2.5.1 & Thực sự hóa Ca sử dụng (Use-Case Realization)
+## Phiên bản: v3.1 — Chuẩn UML 2.5.1 & Thực sự hóa Ca sử dụng (Use-Case Realization)
 **Dự án:** FocusFlow — Hệ thống hỗ trợ lập kế hoạch và thực thi lộ trình tự học thích ứng tích hợp AI  
 **Tiêu chuẩn kỹ thuật:** ISO/IEC 19505-2 (UML 2.5.1 Superstructure), RFC 5545 (iCalendar), Kiến trúc Lục giác (Hexagonal Architecture / Ports & Adapters)  
 **Căn cứ đánh giá học thuật:** Khung Rubric Đồ án Tốt nghiệp CNTT — Tiêu chí TC1 & TC2.1 & TC2.3 (Mức 5)  
@@ -10,7 +10,7 @@
 - Yêu cầu phần mềm (SRS): [`docs/srs/srs-v1.0.md`](file:///Users/vuthang/Documents/FocusFlow/docs/srs/srs-v1.0.md)
 - Thiết kế Kiến trúc: [`docs/architecture/system-architecture.md`](file:///Users/vuthang/Documents/FocusFlow/docs/architecture/system-architecture.md)
 - Thiết kế Cơ sở Dữ liệu: [`docs/database/database-schema-design.md`](file:///Users/vuthang/Documents/FocusFlow/docs/database/database-schema-design.md)
-- Thư mục nguồn PlantUML: [`docs/uml/sequence/`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/sequence) (gồm 9 sơ đồ độc lập)
+- Thư mục nguồn PlantUML: [`docs/uml/sequence/`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/sequence) (gồm 10 sơ đồ độc lập: SSD + SD1..SD9)
 
 ---
 
@@ -24,7 +24,8 @@
 7. [Sequence Diagram 6: Thiết lập Tạm dừng Lộ trình & Domino Shift (UC-PAUSE-01)](#7-sequence-diagram-6-thiết-lập-tạm-dừng-lộ-trình--domino-shift-uc-pause-01)
 8. [Sequence Diagram 7: Đồng bộ Lịch 1 Chiều WebCal RFC 5545 (UC-CAL-01)](#8-sequence-diagram-7-đồng-bộ-lịch-1-chiều-webcal-rfc-5545-uc-cal-01)
 9. [Sequence Diagram 8: Tự động Quét & Chốt Phiên Gián đoạn Celery Beat (UC-SESS-02)](#9-sequence-diagram-8-tự-động-quét--chốt-phiên-gián-đoạn-celery-beat-uc-sess-02)
-10. [Ma trận Kiểm tra Tính Nhất quán (Consistency & Traceability Matrix)](#10-ma-trận-kiểm-tra-tính-nhất-quán-consistency--traceability-matrix)
+10. [Sequence Diagram 9: Tự động Quét & Hoàn trả Hạn ngạch AI Quá hạn Celery Beat (UC-QUOTA-02)](#10-sequence-diagram-9-tự-động-quét--hoàn-trả-hạn-ngạch-ai-quá-hạn-celery-beat-uc-quota-02)
+11. [Ma trận Kiểm tra Tính Nhất quán (Consistency & Traceability Matrix)](#11-ma-trận-kiểm-tra-tính-nhất-quán-consistency--traceability-matrix)
 
 ---
 
@@ -35,7 +36,7 @@ Nhằm khắc phục triệt để lỗi thiết kế nhồi nhét nhiều kịc
 1. **Phạm vi kịch bản đơn lẻ (Single Scenario Focus):** Mỗi sơ đồ tuần tự mức thiết kế (Design Sequence Diagram - DSD) mô hình hóa trọn vẹn sự hợp tác giữa các đối tượng để thực sự hóa **1 kịch bản cụ thể** (Use-Case Realization) của một Ca sử dụng.
 2. **Tuân thủ phân lớp Kiến trúc Lục giác (Hexagonal Architecture):**
    - **Actor (Tác nhân):** Người dùng (`Learner`), tác nhân ngoại vi (`External Calendar App`) hoặc bộ lập lịch nền (`Celery Beat`).
-   - **Boundary / Presentation Layer:** Giao diện `Next.js Web Client`, các bộ lọc `Middleware`, và các bộ điều hướng `FastAPI Router`.
+   - **Boundary / Presentation Layer:** Giao diện `Angular Web Client`, các bộ lọc `Middleware`, và các bộ điều hướng `FastAPI Router`.
    - **Control / Application Layer:** Các `Use Case Interactors` điều phối luồng nghiệp vụ.
    - **Domain Layer:** Các thực thể nghiệp vụ (`Goal`, `Roadmap`, `StudySession`, `Task`) và các `Domain Services` thuần Python (`DominoShiftCalculator`, `AvailabilityValidator`, `PromptSanitizer`).
    - **Infrastructure Adapters:** Các Adapter giao tiếp cơ sở dữ liệu (`SqlRoadmapRepo`, `SqlSessionRepo`, v.v.), dịch vụ token bảo mật, và bộ tích hợp AI (`GeminiLLMAdapter`).
@@ -78,7 +79,7 @@ sequenceDiagram
     User->>System: startStudySession(task_id)
     System-->>User: sessionStartedAck (Mở Study Workspace)
 
-    opt Nhịp tim định kỳ trong lúc học (Mỗi 60s)
+    opt Tự động gửi tín hiệu Heartbeat duy trì phiên (Mỗi 60s)
         User->>System: sendHeartbeat(session_id)
         System-->>User: heartbeatAck
     end
@@ -111,7 +112,7 @@ sequenceDiagram
 sequenceDiagram
     autonumber
     actor User as Learner
-    participant UI as Next.js Web Client
+    participant UI as Angular Web Client
     participant Router as AuthRouter (FastAPI)
     participant AuthUC as AuthenticateUserUC (Use Case)
     participant Hasher as PasswordHasher (Domain)
@@ -172,7 +173,7 @@ sequenceDiagram
 sequenceDiagram
     autonumber
     actor User as Learner
-    participant UI as Next.js Web Client
+    participant UI as Angular Web Client
     participant Router as RoadmapRouter (FastAPI)
     participant CreateUC as CreateGoalAndRoadmapUC (Use Case)
     participant GoalEntity as Goal (Domain Entity)
@@ -209,14 +210,14 @@ sequenceDiagram
 ## 4. Sequence Diagram 3: Sinh Cột mốc & Phân rã Nhiệm vụ AI (UC-PLAN-02)
 * **Ca sử dụng:** `UC-PLAN-02: Phê duyệt các cột mốc học tập & Sinh đề xuất kế hoạch`.
 * **Yêu cầu chức năng:** `FR-PLAN-002`, `FR-QUOTA-001`, `OS-02` (Two-Phase Quota Lifecycle), `ADR-005` (SSE Streaming Progress).
-* **Mô tả kịch bản:** Thực hiện phân rã kế hoạch học tập qua Google Gemini API với cơ chế phản hồi dòng SSE (`text/event-stream`). Quota được bảo lưu nguyên tử qua Redis Lua script (`reserve_quota`), prompt được khử khuẩn chống Prompt Injection (`PromptSanitizer`), gọi LLM kèm giới hạn thời gian Timeout 55s. Dữ liệu đề xuất được stream về Client theo từng chunk tiến trình. Khi hoàn tất, lưu bản nháp đề xuất (`status='DRAFT'`) và chính thức trừ hạn ngạch (`commit_quota`). Nếu lỗi/timeout, hạn ngạch được hoàn trả an toàn (`release_quota`).
+* **Mô tả kịch bản:** Thực hiện phân rã kế hoạch học tập qua Google Gemini API với cơ chế phản hồi dòng SSE (`text/event-stream`). Quota được bảo lưu nguyên tử hai pha qua Sổ cái `ai_quota_reservations` (PostgreSQL 16) kết hợp bộ đếm Redis Lua (`reserve_quota`, `expires_at = NOW() + 5m`), prompt được khử khuẩn chống Prompt Injection (`PromptSanitizer`), gọi LLM kèm giới hạn thời gian Timeout 55s. Dữ liệu đề xuất được stream về Client theo từng chunk tiến trình. Khi hoàn tất, lưu bản nháp đề xuất duy nhất (`status='DRAFT'`) và chính thức chốt trừ hạn ngạch (`commit_quota` -> trạng thái `COMMITTED`). Nếu lỗi/timeout, hạn ngạch được hoàn trả an toàn (`release_quota` -> trạng thái `RELEASED`).
 * **File nguồn PlantUML:** [`docs/uml/sequence/seq-03-generate-milestones-tasks-ai.puml`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/sequence/seq-03-generate-milestones-tasks-ai.puml)
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor User as Learner
-    participant UI as Next.js Web Client
+    participant UI as Angular Web Client
     participant Router as RoadmapRouter (FastAPI)
     participant GenUC as GenerateProposalUC (Use Case)
     participant Sanitizer as PromptSanitizer (Domain)
@@ -240,7 +241,9 @@ sequenceDiagram
         Router-->>UI: 429 Too Many Requests {"error": "AI_QUOTA_EXCEEDED"}
         UI-->>User: Cảnh báo hết hạn ngạch AI hôm nay, gợi ý chuyển sang Lập kế hoạch thủ công
     else Quota hợp lệ
-        Quota-->>GenUC: reservation_token
+        Quota->>DB: INSERT INTO ai_quota_reservations (user_id, status='RESERVED', expires_at=NOW()+5m)
+        DB-->>Quota: reservation_id = "res_789"
+        Quota-->>GenUC: reservation_id
         GenUC->>Sanitizer: sanitize_prompt(rawContext)
         Sanitizer-->>GenUC: cleanPrompt (PII-stripped)
         GenUC->>LLMAdapter: generate_schedule_proposal_stream(cleanPrompt, availability) [Timeout 55s]
@@ -249,13 +252,15 @@ sequenceDiagram
         alt Lỗi Timeout 55s / Service Error
             LLM-->>LLMAdapter: TimeoutError (sau 55s)
             LLMAdapter-->>GenUC: throw LLMTimeoutException
-            GenUC->>Quota: release_quota(userId, reservation_token)
-            Quota->>Redis: EVALSHA token_bucket_release.lua (userId, token)
+            GenUC->>Quota: release_quota(userId, reservation_id)
+            Quota->>DB: UPDATE ai_quota_reservations SET status='RELEASED' WHERE id='res_789'; UPDATE ai_quotas SET reserved_calls = GREATEST(0, reserved_calls - 1)
+            DB-->>Quota: OK
+            Quota->>Redis: EVALSHA token_bucket_release.lua (userId)
             Redis-->>Quota: OK
             Quota-->>GenUC: OK
             GenUC-->>Router: throw AIPlanGenerationTimeoutException
             Router-->>UI: 504 Gateway Timeout {"error": "AI_TIMEOUT"}
-            UI-->>User: Thông báo AI quá tải, cho phép thử lại hoặc lập thủ công
+            UI-->>User: Thông báo AI quá tải, hoàn trả hạn ngạch thành công, cho phép thử lại
         else Sinh đề xuất thành công (Streaming SSE Chunks)
             loop Đọc từng SSE chunk từ Gemini
                 LLM-->>LLMAdapter: chunk_data
@@ -265,13 +270,15 @@ sequenceDiagram
             end
             LLM-->>LLMAdapter: completed_stream
             LLMAdapter-->>GenUC: completeRawProposalData
-            GenUC->>GenUC: validate_schema(completeRawProposalData) [tasks 30-120m]
+            GenUC->>GenUC: validate_schema(completeRawProposalData) [tasks 15-240m]
             GenUC->>Repo: create_draft_proposal(roadmapId, userId, rawProposalData)
-            Repo->>DB: insert_schedule_proposal(record, status='DRAFT')
-            DB-->>Repo: proposal_id
+            Repo->>DB: INSERT INTO schedule_proposals (roadmap_id, user_id, proposal_data, status='DRAFT')
+            DB-->>Repo: proposal_id = "prop_456"
             Repo-->>GenUC: proposalEntity (status="DRAFT")
-            GenUC->>Quota: commit_quota(userId, reservation_token)
-            Quota->>Redis: EVALSHA token_bucket_commit.lua (userId, token)
+            GenUC->>Quota: commit_quota(userId, reservation_id, tokens_used=1850)
+            Quota->>DB: UPDATE ai_quota_reservations SET status='COMMITTED', tokens_consumed=1850 WHERE id='res_789'; UPDATE ai_quotas SET used_calls = used_calls + 1, reserved_calls = GREATEST(0, reserved_calls - 1), tokens_consumed = tokens_consumed + 1850 WHERE user_id=:uid
+            DB-->>Quota: OK
+            Quota->>Redis: EVALSHA token_bucket_commit.lua (userId)
             Redis-->>Quota: OK
             Quota-->>GenUC: OK
             GenUC-->>Router: yield sse_event("completed", ProposalCreatedDTO)
@@ -293,7 +300,7 @@ sequenceDiagram
 sequenceDiagram
     autonumber
     actor User as Learner
-    participant UI as Next.js Web Client
+    participant UI as Angular Web Client
     participant Router as RoadmapRouter (FastAPI)
     participant ApplyUC as ApplyProposalUC (Use Case)
     participant Val as AvailabilityValidator (Domain Service)
@@ -337,24 +344,29 @@ sequenceDiagram
         ApplyUC->>Roadmap: activate(officialSchedule)
         Roadmap-->>ApplyUC: activeRoadmap (status="ACTIVE")
 
-        Note over ApplyUC,DB: ACID Transaction (Unit of Work): Hủy task cũ -> Insert task mới (TODO) -> Cập nhật Roadmap & Proposal
+        Note over ApplyUC,DB: Giao dịch ACID (Unit of Work): Khóa Roadmap -> Insert tasks với composite FK -> Kích hoạt Roadmap ACTIVE -> Ghi official_schedules (total_planned_minutes) -> Đóng Proposal (applied_at)
         ApplyUC->>TaskRepo: cancel_pending_tasks(roadmapId)
         TaskRepo->>DB: UPDATE tasks SET status = 'CANCELLED' WHERE roadmap_id = ... AND status = 'TODO'
         DB-->>TaskRepo: OK
         TaskRepo-->>ApplyUC: OK
 
         ApplyUC->>TaskRepo: save_tasks_batch(proposalEntity.tasks)
-        TaskRepo->>DB: INSERT INTO tasks (...) VALUES (...)
+        TaskRepo->>DB: INSERT INTO tasks (milestone_id, roadmap_id, title, estimated_minutes, scheduled_date, status='TODO') VALUES (...)
         DB-->>TaskRepo: OK
         TaskRepo-->>ApplyUC: OK
 
         ApplyUC->>RoadmapRepo: save(activeRoadmap)
-        RoadmapRepo->>DB: UPDATE roadmaps SET status = 'ACTIVE' ...
+        RoadmapRepo->>DB: UPDATE roadmaps SET status = 'ACTIVE', updated_at = NOW() ...
+        DB-->>RoadmapRepo: OK
+        RoadmapRepo-->>ApplyUC: OK
+
+        ApplyUC->>RoadmapRepo: record_official_schedule(roadmapId, totalSessions, totalPlannedMinutes)
+        RoadmapRepo->>DB: INSERT INTO official_schedules (roadmap_id, total_sessions, total_planned_minutes, activated_at) VALUES (...)
         DB-->>RoadmapRepo: OK
         RoadmapRepo-->>ApplyUC: OK
 
         ApplyUC->>ProposalRepo: save(appliedProposal)
-        ProposalRepo->>DB: UPDATE schedule_proposals SET status = 'APPLIED' ...
+        ProposalRepo->>DB: UPDATE schedule_proposals SET status = 'APPLIED', applied_at = NOW(), updated_at = NOW() WHERE id = :id
         DB-->>ProposalRepo: OK
         ProposalRepo-->>ApplyUC: OK
 
@@ -368,15 +380,15 @@ sequenceDiagram
 
 ## 6. Sequence Diagram 5: Thực thi Phiên học Tập trung (UC-SESS-01)
 * **Ca sử dụng:** `UC-SESS-01: Thực hiện phiên học tập trung`.
-* **Yêu cầu chức năng:** `FR-SESS-001`, `FR-SESS-002`, `OS-07` (Nhịp tim 60s).
-* **Mô tả kịch bản:** Vòng đời trọn vẹn của phiên học tập trung gồm 3 mốc tương tác: Khởi tạo phiên (`start`) với kiểm tra xung đột phiên đang chạy (409 Conflict), đồng bộ nhịp tim định kỳ mỗi 60 giây (`record_heartbeat`) để bảo vệ thời gian tích lũy chống rớt mạng, và chốt phiên hoàn thành (`finish`), phân tách rõ ràng trách nhiệm giữa `SessionRepo` và `TaskRepo` qua Unit of Work, cập nhật trạng thái nhiệm vụ sang `COMPLETED`. (Kịch bản minh họa: Người học kích hoạt chế độ đếm ngược Pomodoro/Time-boxing 50 phút).
+* **Yêu cầu chức năng:** `FR-SESS-001`, `FR-SESS-002`, `OS-07` (Tín hiệu duy trì phiên Heartbeat 60s).
+* **Mô tả kịch bản:** Vòng đời trọn vẹn của phiên học tập trung gồm 3 mốc tương tác: Khởi tạo phiên (`start`) với kiểm tra xung đột phiên đang chạy (409 Conflict), đồng bộ tín hiệu duy trì phiên Heartbeat định kỳ mỗi 60 giây (`record_heartbeat`) để bảo vệ thời gian tích lũy chống rớt mạng, và chốt phiên hoàn thành (`finish`), phân tách rõ ràng trách nhiệm giữa `SessionRepo` và `TaskRepo` qua Unit of Work, cập nhật trạng thái nhiệm vụ sang `COMPLETED`. (Kịch bản minh họa: Người học kích hoạt chế độ đếm ngược Pomodoro/Time-boxing 50 phút).
 * **File nguồn PlantUML:** [`docs/uml/sequence/seq-05-study-session-pomodoro.puml`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/sequence/seq-05-study-session-pomodoro.puml)
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor User as Learner
-    participant UI as Study Workspace (Next.js Client)
+    participant UI as Study Workspace (Angular Client)
     participant Router as SessionRouter (FastAPI)
     participant SessionUC as StudySessionUC (Use Case)
     participant SessionEntity as StudySession (Domain Entity)
@@ -412,7 +424,7 @@ sequenceDiagram
         UI-->>User: Mở giao diện Pomodoro Workspace, đếm ngược thời gian
     end
 
-    Note over User,DB: 2. Đồng bộ Nhịp tim định kỳ (Mỗi 60s)
+    Note over User,DB: 2. Đồng bộ Tín hiệu Duy trì Phiên Heartbeat (Mỗi 60s)
     loop Mỗi 60 giây trong phiên (Heartbeat Sync)
         UI->>Router: POST /api/v1/sessions/sess_101/heartbeat {"actual_minutes": X}
         Router->>SessionUC: record_heartbeat(session_id="sess_101", actual_minutes=X)
@@ -481,7 +493,7 @@ sequenceDiagram
 sequenceDiagram
     autonumber
     actor User as Learner
-    participant UI as Next.js Web Client
+    participant UI as Angular Web Client
     participant Router as RoadmapRouter (FastAPI)
     participant PauseUC as PauseRoadmapUC (Use Case)
     participant RoadmapEntity as Roadmap (Domain Entity)
@@ -519,8 +531,8 @@ sequenceDiagram
             DB-->>Repo: availabilityRecord
             Repo-->>PauseUC: availabilityProfile
 
-            PauseUC->>Domino: calculate_shifted_dates(todoTasks, startDate, resumeDate, availabilityProfile)
-            Note over Domino: Thuật toán tất định: Tính khoảng dời -> Tịnh tiến ngày học sang ngày rảnh -> Giữ nguyên quan hệ tiên quyết (< 50ms)
+            PauseUC->>Domino: calculate_shifted_dates(todoTasks, pauseStartDate, pauseEndDate, availabilityProfile)
+            Note over Domino: Thuật toán tất định: Tính shiftedDays = pauseEndDate - pauseStartDate + 1 -> Tịnh tiến ngày học sang ngày rảnh -> Giữ nguyên quan hệ tiên quyết (< 50ms)
             Domino-->>PauseUC: shiftedTaskDatesMap
 
             loop Với mỗi task trong danh sách tịnh tiến
@@ -665,7 +677,52 @@ sequenceDiagram
 
 ---
 
-## 10. Ma trận Kiểm tra Tính Nhất quán (Consistency & Traceability Matrix)
+## 10. Sequence Diagram 9: Tự động Quét & Hoàn trả Hạn ngạch AI Quá hạn Celery Beat (UC-QUOTA-02)
+* **Ca sử dụng:** `UC-QUOTA-02: Tự động quét và hoàn trả hạn ngạch AI quá hạn`.
+* **Yêu cầu chức năng:** `FR-QUOTA-001`, `BUSR-10`, `OS-02` (Two-Phase Quota Lifecycle Sweeper).
+* **Mô tả kịch bản:** Tác vụ nền chạy định kỳ mỗi 5 phút do Celery Beat kích hoạt. Task quét các bản ghi trong sổ cái `ai_quota_reservations` đang ở trạng thái `RESERVED` nhưng đã quá hạn thời gian giữ chỗ (`expires_at < NOW()`, do tiến trình gọi LLM bị treo hoặc client ngắt kết nối SSE đột ngột). Sử dụng chỉ mục bộ phận tối ưu `idx_quota_reservations_cleanup` để truy vấn cực nhanh, sau đó thực thi giao dịch ACID hoàn trả số lượt `reserved_calls` trong `ai_quotas` và chuyển trạng thái bản ghi sổ cái sang `EXPIRED`.
+* **File nguồn PlantUML:** [`docs/uml/sequence/seq-09-quota-sweeper.puml`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/sequence/seq-09-quota-sweeper.puml)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Beat as Celery Beat (Periodic Timer)
+    participant Broker as Redis 7.2 (Message Broker)
+    participant Worker as QuotaSweeperWorker (Celery Task)
+    participant SweepUC as SweepExpiredReservationsUC (Use Case)
+    participant QuotaRepo as SqlQuotaRepo (AIQuotaRepoPort)
+    participant DB as PostgreSQL 16
+
+    Note over Beat,DB: Tác vụ nền quét định kỳ mỗi 5 phút xử lý các reservation bị treo (RESERVED quá 5 phút)
+    Beat->>Broker: enqueue_task("sweep_expired_quota_reservations")
+    Note over Beat: Celery Beat đẩy task vào Redis bất đồng bộ không chặn
+    Broker->>Worker: dispatch_task("sweep_expired_quota_reservations")
+    Worker->>SweepUC: execute(now=CURRENT_TIMESTAMP)
+
+    SweepUC->>QuotaRepo: find_expired_reservations(cutoff_time=NOW())
+    Note over QuotaRepo,DB: Quét nhanh qua Partial Index: idx_quota_reservations_cleanup
+    QuotaRepo->>DB: SELECT id, user_id FROM ai_quota_reservations WHERE status = 'RESERVED' AND expires_at < NOW() FOR UPDATE SKIP LOCKED
+    DB-->>QuotaRepo: expiredReservationRecords
+    QuotaRepo-->>SweepUC: List[ExpiredReservation]
+
+    alt Không có reservation nào quá hạn
+        SweepUC-->>Worker: SweepSummaryDTO(swept_count=0)
+    else Có bản ghi reservation quá hạn
+        loop Với mỗi expired_reservation
+            SweepUC->>QuotaRepo: reclaim_expired_reservation(res.id, res.user_id)
+            Note over QuotaRepo,DB: ACID Reclaim Transaction:\n1. UPDATE ai_quota_reservations SET status = 'EXPIRED'\n2. UPDATE ai_quotas SET reserved_calls = GREATEST(0, reserved_calls - 1)
+            QuotaRepo->>DB: execute_atomic_reclaim(res.id, res.user_id)
+            DB-->>QuotaRepo: transaction_success
+            QuotaRepo-->>SweepUC: reclaimAck(res.id)
+        end
+        SweepUC-->>Worker: SweepSummaryDTO(swept_count=N)
+    end
+    Worker->>Worker: log_summary_and_metrics("Swept expired reservations", swept_count)
+```
+
+---
+
+## 11. Ma trận Kiểm tra Tính Nhất quán (Consistency & Traceability Matrix)
 
 | Mã Sơ đồ | Tên Kịch bản (Use-Case Realization) | Ca Sử Dụng Liên Kết | Lớp Điều Phối (Use Case) | Thực Thể & Domain Service | Adapters & Repositories | Ràng Buộc Nghiệp Vụ / Tiêu Chuẩn |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -674,10 +731,11 @@ sequenceDiagram
 | **SD2** | Khởi tạo Mục tiêu & Đăng ký Lộ trình | `UC-PLAN-01` | `CreateGoalAndRoadmapUC` | `Goal`, `Roadmap` | `SqlRoadmapRepo` | `FR-PLAN-001`, `targetDate > today` |
 | **SD3** | Sinh Cột mốc & Phân rã Nhiệm vụ AI | `UC-PLAN-02` | `GenerateProposalUC` | `PromptSanitizer` | `RedisQuotaAdapter`, `GeminiLLMAdapter`, `SqlProposalRepo` | `OS-02` (Two-Phase Quota), 55s Timeout, ADR-005 (SSE Streaming) |
 | **SD4** | Áp dụng Lịch học & Kiểm tra Quỹ giờ | `UC-PLAN-03` | `ApplyProposalUC` | `AvailabilityValidator`, `Proposal`, `Roadmap` | `SqlRoadmapRepo`, `SqlProposalRepo`, `SqlTaskRepo` | `BUSR-02`, Hard Ceiling Gate, ACID Persist (Task `TODO`) |
-| **SD5** | Thực thi Phiên học Tập trung | `UC-SESS-01` | `StudySessionUC` | `StudySession`, `Task` | `SqlSessionRepo`, `SqlTaskRepo`, `SqlUnitOfWork` | `OS-07` (Nhịp tim 60s), 409 Conflict, Pomodoro/Timebox Timer |
+| **SD5** | Thực thi Phiên học Tập trung | `UC-SESS-01` | `StudySessionUC` | `StudySession`, `Task` | `SqlSessionRepo`, `SqlTaskRepo`, `SqlUnitOfWork` | `OS-07` (Tín hiệu Heartbeat 60s), 409 Conflict, Pomodoro/Timebox Timer |
 | **SD6** | Tạm dừng Lộ trình & Domino Shift | `UC-ADAPT-02` | `PauseRoadmapUC` | `DominoShiftCalculator`, `Roadmap`, `Task`, `PauseRecord` | `SqlRoadmapRepo` | `BUSR-01`, Tất định < 50ms, Giữ tiên quyết, Task `TODO` |
 | **SD7** | Đồng bộ Lịch 1 Chiều WebCal | `UC-CAL-02` | `ExportCalendarFeedUC` | Token Sanitizer Logic | `SqlWebCalRepo`, `SqlTaskRepo`, `IcalGeneratorAdapter` | `RFC 5545`, SHA-256 Token, `NFR-SEC-004`, `FR-CALENDAR-002` |
 | **SD8** | Tự động Quét & Chốt Phiên Gián đoạn | `UC-SESS-02` | `SweepAbandonedSessionsUC` | `AbandonmentEvaluator`, `StudySession` | `SessionSweepWorker`, `SqlSessionRepo`, `SqlTaskRepo`, `Redis` | `OS-01` (Phân định 50% / 1 task), Celery Beat async queue |
+| **SD9** | Tự động Quét Hoàn trả Quota Quá hạn | `UC-QUOTA-02` | `SweepExpiredReservationsUC` | `AIQuotaReservation`, `AIQuota` | `QuotaSweeperWorker`, `SqlQuotaRepo`, `Redis` | `BUSR-10`, `OS-02`, Quota 2-phase Sweeper, Index cleanup |
 
 ---
 *Tài liệu được cập nhật và kiểm duyệt tự động theo tiêu chuẩn ISO/IEC 19505-2 và kiến trúc Lục giác FocusFlow.*

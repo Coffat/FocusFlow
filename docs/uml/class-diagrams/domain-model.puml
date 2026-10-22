@@ -1,5 +1,6 @@
 @startuml FocusFlow_Domain_Model
-title FocusFlow — Mô hình Miền Nghiệp vụ (Domain Model / Conceptual Class Diagram)\nTiêu chuẩn: Craig Larman (Applying UML and Patterns) & OMG UML 2.5.1 | Khái niệm Thực tế, Không có Phương thức
+title FocusFlow — Mô hình Miền Nghiệp vụ (Domain Model / Conceptual Class Diagram)
+' Phiên bản: v3.2 — 15 Khái niệm Miền Cốt lõi & Quan hệ Tiên quyết (Chuẩn Craig Larman: Không phương thức, Không thuộc tính khóa kỹ thuật)
 
 skinparam roundcorner 10
 skinparam monochrome false
@@ -19,8 +20,8 @@ skinparam enum {
 }
 
 ' ========================================================
-' 1. CÁC KHÁI NIỆM MIỀN BÀI TOÁN (DOMAIN CONCEPTUAL CLASSES)
-' Theo chuẩn Craig Larman: Chỉ bao gồm Tên lớp và Thuộc tính nghiệp vụ, KHÔNG CÓ PHƯƠNG THỨC
+' 1. CÁC KHÁI NIỆM MIỀN BÀI TOÁN (DOMAIN CONCEPTUAL CLASSES - 15 KHÁI NIỆM)
+' Theo chuẩn Craig Larman: Chỉ bao gồm Tên lớp và Thuộc tính nghiệp vụ, TUYỆT ĐỐI KHÔNG CÓ PHƯƠNG THỨC
 ' ========================================================
 
 class User {
@@ -47,7 +48,7 @@ class Roadmap {
 
 class OfficialSchedule {
     + totalSessions: Integer
-    + totalHours: Float
+    + totalPlannedMinutes: Integer
     + activatedAt: DateTime
 }
 
@@ -91,8 +92,8 @@ class ScheduleProposal {
 
 class PauseRecord {
     + pauseStartDate: Date
-    + resumeDate: Date
-    + shiftDays: Integer
+    + pauseEndDate: Date
+    + shiftedDays: Integer
     + reason: String
 }
 
@@ -102,22 +103,26 @@ class StudyNote {
 }
 
 class AIReview {
-    + reviewCycle: ReviewType
+    + reviewCycle: ReviewCycle
     + quantitativeSummary: Object
     + qualitativeFeedback: String
-}
-
-class WebCalSubscription {
-    + isActive: Boolean
-    + lastSyncedAt: DateTime [0..1]
 }
 
 class AIQuota {
     + monthlyLimit: Integer
     + usedCalls: Integer
     + reservedCalls: Integer
-    + cycleStart: Date
-    + cycleEnd: Date
+    + cycleStart: DateTime
+    + cycleEnd: DateTime
+}
+
+class LearnerProfile {
+    + optimalFocusDurationMins: Integer
+    + peakProductivitySlots: Object
+    + estimationBiasFactor: Float
+    + weeklyCompletionRate: Float
+    + totalCompletedSessions: Integer
+    + isColdStart: Boolean
 }
 
 ' ========================================================
@@ -153,6 +158,7 @@ enum MilestoneStatus {
 }
 
 enum TaskStatus {
+    PENDING
     TODO
     IN_PROGRESS
     COMPLETED
@@ -182,7 +188,7 @@ enum NoteType {
     TAKEAWAY
 }
 
-enum ReviewType {
+enum ReviewCycle {
     WEEKLY
     MILESTONE
 }
@@ -195,7 +201,7 @@ User "1" -- "0..*" Goal : "thiết lập"
 User "1" -- "0..*" Roadmap : "sở hữu"
 User "1" *-- "1" AvailabilityProfile : "cấu hình"
 User "1" *-- "1" AIQuota : "sở hữu"
-User "1" -- "0..1" WebCalSubscription : "cấp phát"
+User "1" *-- "1" LearnerProfile : "khắc họa hồ sơ"
 User "1" -- "0..*" StudySession : "thực hiện"
 
 Goal "1" -- "0..*" Roadmap : "phân rã thành"
@@ -207,9 +213,10 @@ Roadmap "1" *-- "0..*" PauseRecord : "lưu vết tạm dừng"
 Roadmap "1" -- "0..*" AIReview : "nhận đánh giá"
 
 Milestone "1" *-- "1..*" Task : "chia nhỏ thành"
+Task "0..*" -- "0..*" Task : "tiên quyết (DAG)"
 
-StudySession "0..*" -- "1..*" Task : "học nhiệm vụ"
-(StudySession, Task) .. SessionTask
+StudySession "1" *-- "1..*" SessionTask : "gồm các task trong phiên"
+SessionTask "0..*" -- "1" Task : "học nhiệm vụ"
 
 StudySession "1" *-- "0..*" StudyNote : "ghi chép"
 
@@ -224,12 +231,12 @@ StudySession ..> SessionStatus
 AvailabilityProfile ..> AvailabilityMode
 ScheduleProposal ..> ProposalStatus
 StudyNote ..> NoteType
-AIReview ..> ReviewType
+AIReview ..> ReviewCycle
 
 note "BUSR-02 (Human-in-the-Loop Cấp 1):\nMột Roadmap bao gồm từ 3 đến 7 Milestone,\nphải được phê duyệt trước khi phân rã Task." as N_MilestoneRule
 Milestone .. N_MilestoneRule
 
-note "BUSR-07 (Domino Shift):\nKhi Roadmap tạm dừng (PAUSED),\ntoàn bộ Task chưa hoàn thành được\ntịnh tiến tất định: shiftDays = resumeDate - pauseStartDate." as N_DominoRule
+note "BUSR-07 (Domino Shift):\nKhi Roadmap tạm dừng (PAUSED),\ntoàn bộ Task chưa hoàn thành được\ntịnh tiến tất định: shiftedDays = pauseEndDate - pauseStartDate + 1." as N_DominoRule
 PauseRecord .. N_DominoRule
 
 @enduml
