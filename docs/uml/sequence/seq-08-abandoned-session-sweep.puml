@@ -7,12 +7,12 @@ skinparam ResponseMessageBelowArrow true
 
 title UC-SESS-02: Tự động Quét & Chốt Phiên Gián đoạn (Use-Case Realization)
 
-actor "Celery Beat\n(Periodic Timer)" as Beat
+actor "Taskiq Scheduler\n(Periodic Timer)" as Beat
 box "Message Broker & Queue" #FFF3CD
-    participant "Redis 7.2\n(Message Broker)" as Broker
+    participant "Redis Streams\n(Taskiq Broker)" as Broker
 end box
 box "Background Processing" #F8F9FA
-    participant "SessionSweepWorker\n(Celery Task)" as Worker
+    participant "SessionSweepWorker\n(Taskiq Task)" as Worker
 end box
 box "Application Layer" #DEE2E6
     participant "SweepAbandonedSessionsUC\n(Use Case)" as SweepUC
@@ -30,7 +30,7 @@ end box
 note over Beat,DB: Tác vụ nền chạy định kỳ mỗi 5 phút để bảo vệ dữ liệu khi người học mất kết nối mạng hoặc đóng trình duyệt đột ngột
 
 Beat ->> Broker: enqueue_task("sweep_abandoned_sessions", args=[threshold=5])
-note over Beat: Celery Beat đẩy task bất đồng bộ vào hàng đợi Redis rồi tiếp tục chu kỳ hẹn giờ mà không đợi kết quả
+note over Beat: Taskiq Scheduler đẩy task bất đồng bộ vào Redis Streams rồi tiếp tục chu kỳ hẹn giờ mà không đợi kết quả
 
 Broker ->> Worker: dispatch_task("sweep_abandoned_sessions", args=[threshold=5])
 activate Worker

@@ -5,14 +5,14 @@ skinparam BoxPadding 10
 skinparam ParticipantPadding 10
 skinparam ResponseMessageBelowArrow true
 
-title UC-QUOTA-02: Tự động Quét & Hoàn trả Hạn ngạch AI Quá hạn Celery Beat (Use-Case Realization)
+title UC-QUOTA-02: Tự động Quét & Hoàn trả Hạn ngạch AI Quá hạn (Use-Case Realization)
 
-actor "Celery Beat\n(Periodic Timer)" as Beat
+actor "Taskiq Scheduler\n(Periodic Timer)" as Beat
 box "Message Broker & Queue" #FFF3CD
-    participant "Redis 7.2\n(Message Broker)" as Broker
+    participant "Redis Streams\n(Taskiq Broker)" as Broker
 end box
 box "Background Processing" #F8F9FA
-    participant "QuotaSweeperWorker\n(Celery Task)" as Worker
+    participant "QuotaSweeperWorker\n(Taskiq Task)" as Worker
 end box
 box "Application Layer" #DEE2E6
     participant "SweepExpiredReservationsUC\n(Use Case)" as SweepUC
@@ -25,7 +25,7 @@ end box
 note over Beat,DB: Tác vụ nền chạy định kỳ mỗi 5 phút quét sạch các reservation bị kẹt (RESERVED quá 5 phút)\ndo client ngắt kết nối SSE đột ngột hoặc tiến trình LLM worker gặp sự cố
 
 Beat ->> Broker: enqueue_task("sweep_expired_quota_reservations")
-note over Beat: Celery Beat đẩy task vào hàng đợi Redis bất đồng bộ không chặn
+note over Beat: Taskiq Scheduler đẩy task vào Redis Streams bất đồng bộ không chặn
 
 Broker ->> Worker: dispatch_task("sweep_expired_quota_reservations")
 activate Worker

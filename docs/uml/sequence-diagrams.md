@@ -1,5 +1,5 @@
 # FocusFlow — Thiết kế Sơ đồ Tuần tự Chi tiết (Sequence Diagrams Document)
-## Phiên bản: v3.1 — Chuẩn UML 2.5.1 & Thực sự hóa Ca sử dụng (Use-Case Realization)
+## Phiên bản: v4.0 — Chuẩn UML 2.5.1 & Kiến trúc Context-First Modular Monolith (Taskiq + Outbox + Provider-Agnostic LLM)
 **Dự án:** FocusFlow — Hệ thống hỗ trợ lập kế hoạch và thực thi lộ trình tự học thích ứng tích hợp AI  
 **Tiêu chuẩn kỹ thuật:** ISO/IEC 19505-2 (UML 2.5.1 Superstructure), RFC 5545 (iCalendar), Kiến trúc Lục giác (Hexagonal Architecture / Ports & Adapters)  
 **Căn cứ đánh giá học thuật:** Khung Rubric Đồ án Tốt nghiệp CNTT — Tiêu chí TC1 & TC2.1 & TC2.3 (Mức 5)  
@@ -23,8 +23,8 @@
 6. [Sequence Diagram 5: Thực thi Phiên học Pomodoro (UC-SESS-01)](#6-sequence-diagram-5-thực-thi-phiên-học-pomodoro-uc-sess-01)
 7. [Sequence Diagram 6: Thiết lập Tạm dừng Lộ trình & Domino Shift (UC-PAUSE-01)](#7-sequence-diagram-6-thiết-lập-tạm-dừng-lộ-trình--domino-shift-uc-pause-01)
 8. [Sequence Diagram 7: Đồng bộ Lịch 1 Chiều WebCal RFC 5545 (UC-CAL-01)](#8-sequence-diagram-7-đồng-bộ-lịch-1-chiều-webcal-rfc-5545-uc-cal-01)
-9. [Sequence Diagram 8: Tự động Quét & Chốt Phiên Gián đoạn Celery Beat (UC-SESS-02)](#9-sequence-diagram-8-tự-động-quét--chốt-phiên-gián-đoạn-celery-beat-uc-sess-02)
-10. [Sequence Diagram 9: Tự động Quét & Hoàn trả Hạn ngạch AI Quá hạn Celery Beat (UC-QUOTA-02)](#10-sequence-diagram-9-tự-động-quét--hoàn-trả-hạn-ngạch-ai-quá-hạn-celery-beat-uc-quota-02)
+9. [Sequence Diagram 8: Tự động Quét & Chốt Phiên Gián đoạn (Taskiq Scheduler / Worker) (UC-SESS-02)](#9-sequence-diagram-8-tự-động-quét--chốt-phiên-gián-đoạn-taskiq-scheduler--worker-uc-sess-02)
+10. [Sequence Diagram 9: Tự động Quét & Hoàn trả Hạn ngạch AI Quá hạn (Taskiq Scheduler / Worker) (UC-QUOTA-02)](#10-sequence-diagram-9-tự-động-quét--hoàn-trả-hạn-ngạch-ai-quá-hạn-taskiq-scheduler--worker-uc-quota-02)
 11. [Ma trận Kiểm tra Tính Nhất quán (Consistency & Traceability Matrix)](#11-ma-trận-kiểm-tra-tính-nhất-quán-consistency--traceability-matrix)
 
 ---
@@ -35,12 +35,12 @@
 Nhằm khắc phục triệt để lỗi thiết kế nhồi nhét nhiều kịch bản vào một sơ đồ gây rườm rà, bộ Sequence Diagram của FocusFlow tuân thủ nghiêm ngặt chuẩn mực công nghệ phần mềm:
 1. **Phạm vi kịch bản đơn lẻ (Single Scenario Focus):** Mỗi sơ đồ tuần tự mức thiết kế (Design Sequence Diagram - DSD) mô hình hóa trọn vẹn sự hợp tác giữa các đối tượng để thực sự hóa **1 kịch bản cụ thể** (Use-Case Realization) của một Ca sử dụng.
 2. **Tuân thủ phân lớp Kiến trúc Lục giác (Hexagonal Architecture):**
-   - **Actor (Tác nhân):** Người dùng (`Learner`), tác nhân ngoại vi (`External Calendar App`) hoặc bộ lập lịch nền (`Celery Beat`).
-   - **Boundary / Presentation Layer:** Giao diện `Angular Web Client`, các bộ lọc `Middleware`, và các bộ điều hướng `FastAPI Router`.
-   - **Control / Application Layer:** Các `Use Case Interactors` điều phối luồng nghiệp vụ.
-   - **Domain Layer:** Các thực thể nghiệp vụ (`Goal`, `Roadmap`, `StudySession`, `Task`) và các `Domain Services` thuần Python (`DominoShiftCalculator`, `AvailabilityValidator`, `PromptSanitizer`).
-   - **Infrastructure Adapters:** Các Adapter giao tiếp cơ sở dữ liệu (`SqlRoadmapRepo`, `SqlSessionRepo`, v.v.), dịch vụ token bảo mật, và bộ tích hợp AI (`GeminiLLMAdapter`).
-   - **Storage / External Systems:** `PostgreSQL 16`, `Redis`, `Google Gemini API`.
+   - **Actor (Tác nhân):** Người dùng (`Learner`), tác nhân ngoại vi (`External Calendar App`) hoặc bộ lập lịch nền (`Taskiq Scheduler`).
+   - **Boundary / Presentation Layer:** Giao diện `Angular 21+ Web Client`, các bộ lọc `Middleware`, và các bộ điều hướng `FastAPI Router`.
+   - **Control / Application Layer:** Các `Use Case Interactors` điều phối luồng nghiệp vụ qua `AsyncUnitOfWork`.
+   - **Domain Layer:** Các thực thể nghiệp vụ (`Goal`, `Roadmap`, `StudySession`, `Task`) và các `Pure Domain Services` (`DominoShiftEngine`, `HybridAvailabilityRuleEngine`, `DagCycleValidator`, `PromptSanitizer`).
+   - **Infrastructure Adapters:** Các Adapter giao tiếp cơ sở dữ liệu (`SqlRoadmapRepo`, `SqlSessionRepo`, v.v.), dịch vụ token bảo mật, và bộ tích hợp AI (`LiteLLMAdapter` qua `LLMProviderPort`).
+   - **Storage / External Systems:** `PostgreSQL 16` (24 bảng), `Redis Streams`, `External LLM Provider`.
 3. **Quy chuẩn thông điệp (Messages & Activations):**
    - Lời gọi phương thức đồng bộ thể hiện bằng mũi tên nét liền đầu đặc (`->`).
    - Phản hồi dữ liệu / DTO thể hiện bằng mũi tên nét đứt đầu hở (`-->`).
@@ -210,7 +210,7 @@ sequenceDiagram
 ## 4. Sequence Diagram 3: Sinh Cột mốc & Phân rã Nhiệm vụ AI (UC-PLAN-02)
 * **Ca sử dụng:** `UC-PLAN-02: Phê duyệt các cột mốc học tập & Sinh đề xuất kế hoạch`.
 * **Yêu cầu chức năng:** `FR-PLAN-002`, `FR-QUOTA-001`, `OS-02` (Two-Phase Quota Lifecycle), `ADR-005` (SSE Streaming Progress).
-* **Mô tả kịch bản:** Thực hiện phân rã kế hoạch học tập qua Google Gemini API với cơ chế phản hồi dòng SSE (`text/event-stream`). Quota được bảo lưu nguyên tử hai pha qua Sổ cái `ai_quota_reservations` (PostgreSQL 16) kết hợp bộ đếm Redis Lua (`reserve_quota`, `expires_at = NOW() + 5m`), prompt được khử khuẩn chống Prompt Injection (`PromptSanitizer`), gọi LLM kèm giới hạn thời gian Timeout 55s. Dữ liệu đề xuất được stream về Client theo từng chunk tiến trình. Khi hoàn tất, lưu bản nháp đề xuất duy nhất (`status='DRAFT'`) và chính thức chốt trừ hạn ngạch (`commit_quota` -> trạng thái `COMMITTED`). Nếu lỗi/timeout, hạn ngạch được hoàn trả an toàn (`release_quota` -> trạng thái `RELEASED`).
+* **Mô tả kịch bản:** Thực hiện phân rã kế hoạch học tập qua External LLM Provider (via `LLMProviderPort` / `LiteLLMAdapter`) với cơ chế phản hồi dòng SSE (`text/event-stream`). Quota được bảo lưu nguyên tử hai pha qua Sổ cái `ai_quota_reservations` (PostgreSQL 16) kết hợp bộ đếm Redis Lua (`reserve_quota`, `expires_at = NOW() + 5m`), prompt được khử khuẩn chống Prompt Injection (`PromptSanitizer`), gọi LLM kèm giới hạn thời gian Timeout 55s. Dữ liệu đề xuất được stream về Client theo từng chunk tiến trình. Khi hoàn tất, lưu bản nháp đề xuất duy nhất (`status='DRAFT'`) và chính thức chốt trừ hạn ngạch (`commit_quota` -> trạng thái `COMMITTED`). Nếu lỗi/timeout, hạn ngạch được hoàn trả an toàn (`release_quota` -> trạng thái `RELEASED`).
 * **File nguồn PlantUML:** [`docs/uml/sequence/seq-03-generate-milestones-tasks-ai.puml`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/sequence/seq-03-generate-milestones-tasks-ai.puml)
 
 ```mermaid
@@ -223,8 +223,8 @@ sequenceDiagram
     participant Sanitizer as PromptSanitizer (Domain)
     participant Quota as RedisQuotaAdapter (AIQuotaPort)
     participant Redis as Redis 7.2 (Cache & Quota)
-    participant LLMAdapter as GeminiLLMAdapter (LLMPort)
-    participant LLM as Google Gemini API
+    participant LLMAdapter as LiteLLMAdapter (LLMProviderPort)
+    participant LLM as External LLM Provider
     participant Repo as SqlProposalRepo (ProposalRepoPort)
     participant DB as PostgreSQL 16
 
@@ -262,7 +262,7 @@ sequenceDiagram
             Router-->>UI: 504 Gateway Timeout {"error": "AI_TIMEOUT"}
             UI-->>User: Thông báo AI quá tải, hoàn trả hạn ngạch thành công, cho phép thử lại
         else Sinh đề xuất thành công (Streaming SSE Chunks)
-            loop Đọc từng SSE chunk từ Gemini
+            loop Đọc từng SSE chunk từ LLM Provider
                 LLM-->>LLMAdapter: chunk_data
                 LLMAdapter-->>GenUC: parsedChunk
                 GenUC-->>Router: yield sse_event("progress", percent)
@@ -616,18 +616,18 @@ sequenceDiagram
 
 ---
 
-## 9. Sequence Diagram 8: Tự động Quét & Chốt Phiên Gián đoạn Celery Beat (UC-SESS-02)
+## 9. Sequence Diagram 8: Tự động Quét & Chốt Phiên Gián đoạn (Taskiq Scheduler / Worker) (UC-SESS-02)
 * **Ca sử dụng:** `UC-SESS-02: Xử lý gián đoạn phiên học`.
 * **Yêu cầu chức năng:** `FR-SESS-003`, `OS-01` (Quy tắc phân định trạng thái gián đoạn).
-* **Mô tả kịch bản:** Tác vụ nền định kỳ kích hoạt mỗi 5 phút bởi Celery Beat bằng cách đẩy message bất đồng bộ vào Redis Broker. Worker nhận message và gọi Use Case quét các phiên học đang ở trạng thái `IN_PROGRESS` nhưng mất kết nối heartbeat quá 5 phút. Domain Service `AbandonmentEvaluator` áp dụng quy tắc OS-01: Nếu phiên đã hoàn thành $\ge 50\%$ thời lượng dự kiến hoặc có ít nhất 1 task hoàn thành thì chốt `PARTIAL_COMPLETED` (công nhận công sức, trả task dở dang về `TODO` trong Backlog); ngược lại chốt `CANCELLED` (hủy phiên, bảo toàn task `TODO`).
+* **Mô tả kịch bản:** Tác vụ nền định kỳ kích hoạt mỗi 5 phút bởi Taskiq Scheduler (`replicas: 1`) bằng cách đẩy message bất đồng bộ vào Redis Streams. Taskiq Worker nhận message (`XREADGROUP`/`XACK`) và gọi Use Case quét các phiên học đang ở trạng thái `IN_PROGRESS` nhưng mất kết nối heartbeat quá 5 phút. Domain Service `AbandonmentEvaluator` áp dụng quy tắc OS-01: Nếu phiên đã hoàn thành $\ge 50\%$ thời lượng dự kiến hoặc có ít nhất 1 task hoàn thành thì chốt `PARTIAL_COMPLETED` (công nhận công sức, trả task dở dang về `TODO` trong Backlog); ngược lại chốt `CANCELLED` (hủy phiên, bảo toàn task `TODO`).
 * **File nguồn PlantUML:** [`docs/uml/sequence/seq-08-abandoned-session-sweep.puml`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/sequence/seq-08-abandoned-session-sweep.puml)
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Beat as Celery Beat (Periodic Timer)
-    participant Broker as Redis 7.2 (Message Broker)
-    participant Worker as SessionSweepWorker (Celery Task)
+    actor Beat as Taskiq Scheduler (Periodic Timer)
+    participant Broker as Redis Streams (Taskiq Broker)
+    participant Worker as SessionSweepWorker (Taskiq Task)
     participant SweepUC as SweepAbandonedSessionsUC (Use Case)
     participant Evaluator as AbandonmentEvaluator (Domain Service - OS-01)
     participant SessionEntity as StudySession (Domain Entity)
@@ -637,7 +637,7 @@ sequenceDiagram
 
     Note over Beat,DB: Tác vụ nền chạy định kỳ mỗi 5 phút quét các phiên mất heartbeat quá 5 phút
     Beat->>Broker: enqueue_task("sweep_abandoned_sessions", args=[threshold=5])
-    Note over Beat: Beat gửi bất đồng bộ vào Redis rồi tiếp tục chu kỳ hẹn giờ
+    Note over Beat: Taskiq Scheduler gửi bất đồng bộ vào Redis Streams rồi tiếp tục chu kỳ hẹn giờ
     Broker->>Worker: dispatch_task("sweep_abandoned_sessions", args=[threshold=5])
     Worker->>SweepUC: execute(threshold_minutes=5)
     SweepUC->>SessionRepo: find_stale_in_progress_sessions(interval_minutes=5)
@@ -677,25 +677,25 @@ sequenceDiagram
 
 ---
 
-## 10. Sequence Diagram 9: Tự động Quét & Hoàn trả Hạn ngạch AI Quá hạn Celery Beat (UC-QUOTA-02)
+## 10. Sequence Diagram 9: Tự động Quét & Hoàn trả Hạn ngạch AI Quá hạn (Taskiq Scheduler / Worker) (UC-QUOTA-02)
 * **Ca sử dụng:** `UC-QUOTA-02: Tự động quét và hoàn trả hạn ngạch AI quá hạn`.
 * **Yêu cầu chức năng:** `FR-QUOTA-001`, `BUSR-10`, `OS-02` (Two-Phase Quota Lifecycle Sweeper).
-* **Mô tả kịch bản:** Tác vụ nền chạy định kỳ mỗi 5 phút do Celery Beat kích hoạt. Task quét các bản ghi trong sổ cái `ai_quota_reservations` đang ở trạng thái `RESERVED` nhưng đã quá hạn thời gian giữ chỗ (`expires_at < NOW()`, do tiến trình gọi LLM bị treo hoặc client ngắt kết nối SSE đột ngột). Sử dụng chỉ mục bộ phận tối ưu `idx_quota_reservations_cleanup` để truy vấn cực nhanh, sau đó thực thi giao dịch ACID hoàn trả số lượt `reserved_calls` trong `ai_quotas` và chuyển trạng thái bản ghi sổ cái sang `EXPIRED`.
+* **Mô tả kịch bản:** Tác vụ nền chạy định kỳ mỗi 5 phút do Taskiq Scheduler kích hoạt. Task quét các bản ghi trong sổ cái `ai_quota_reservations` đang ở trạng thái `RESERVED` nhưng đã quá hạn thời gian giữ chỗ (`expires_at < NOW()`, do tiến trình gọi LLM bị treo hoặc client ngắt kết nối SSE đột ngột). Sử dụng chỉ mục bộ phận tối ưu `idx_quota_reservations_cleanup` để truy vấn cực nhanh, sau đó thực thi giao dịch ACID hoàn trả số lượt `reserved_calls` trong `ai_quotas` và chuyển trạng thái bản ghi sổ cái sang `EXPIRED`.
 * **File nguồn PlantUML:** [`docs/uml/sequence/seq-09-quota-sweeper.puml`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/sequence/seq-09-quota-sweeper.puml)
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Beat as Celery Beat (Periodic Timer)
-    participant Broker as Redis 7.2 (Message Broker)
-    participant Worker as QuotaSweeperWorker (Celery Task)
+    actor Beat as Taskiq Scheduler (Periodic Timer)
+    participant Broker as Redis Streams (Taskiq Broker)
+    participant Worker as QuotaSweeperWorker (Taskiq Task)
     participant SweepUC as SweepExpiredReservationsUC (Use Case)
     participant QuotaRepo as SqlQuotaRepo (AIQuotaRepoPort)
     participant DB as PostgreSQL 16
 
     Note over Beat,DB: Tác vụ nền quét định kỳ mỗi 5 phút xử lý các reservation bị treo (RESERVED quá 5 phút)
     Beat->>Broker: enqueue_task("sweep_expired_quota_reservations")
-    Note over Beat: Celery Beat đẩy task vào Redis bất đồng bộ không chặn
+    Note over Beat: Taskiq Scheduler đẩy task vào Redis Streams bất đồng bộ không chặn
     Broker->>Worker: dispatch_task("sweep_expired_quota_reservations")
     Worker->>SweepUC: execute(now=CURRENT_TIMESTAMP)
 
@@ -729,13 +729,13 @@ sequenceDiagram
 | **SSD** | Sơ đồ Tuần tự Hệ thống Tổng quan | Toàn hệ thống | :FocusFlow System | SRL 3 Pha | Web Client | ISO/IEC 19505-2, SRL Framework, OS-07 (5m Timeout) |
 | **SD1** | Đăng nhập Hệ thống | `UC-AUTH-02` | `AuthenticateUserUC` | `User`, `PasswordHasher` | `SqlUserRepo`, `JwtTokenProvider` | `NFR-SEC-001`, Argon2, HttpOnly JWT |
 | **SD2** | Khởi tạo Mục tiêu & Đăng ký Lộ trình | `UC-PLAN-01` | `CreateGoalAndRoadmapUC` | `Goal`, `Roadmap` | `SqlRoadmapRepo` | `FR-PLAN-001`, `targetDate > today` |
-| **SD3** | Sinh Cột mốc & Phân rã Nhiệm vụ AI | `UC-PLAN-02` | `GenerateProposalUC` | `PromptSanitizer` | `RedisQuotaAdapter`, `GeminiLLMAdapter`, `SqlProposalRepo` | `OS-02` (Two-Phase Quota), 55s Timeout, ADR-005 (SSE Streaming) |
-| **SD4** | Áp dụng Lịch học & Kiểm tra Quỹ giờ | `UC-PLAN-03` | `ApplyProposalUC` | `AvailabilityValidator`, `Proposal`, `Roadmap` | `SqlRoadmapRepo`, `SqlProposalRepo`, `SqlTaskRepo` | `BUSR-02`, Hard Ceiling Gate, ACID Persist (Task `TODO`) |
+| **SD3** | Sinh Cột mốc & Phân rã Nhiệm vụ AI | `UC-PLAN-02` | `GenerateProposalUC` | `PromptSanitizer` | `RedisQuotaAdapter`, `LiteLLMAdapter`, `SqlProposalRepo` | `OS-02` (Two-Phase Quota), 55s Timeout, ADR-005 (SSE Streaming) |
+| **SD4** | Áp dụng Lịch học & Kiểm tra Quỹ giờ | `UC-PLAN-03` | `ApplyProposalUC` | `HybridAvailabilityRuleEngine`, `Proposal`, `Roadmap` | `SqlRoadmapRepo`, `SqlProposalRepo`, `SqlTaskRepo` | `BUSR-02`, Hard Ceiling Gate, ACID Persist (Task `TODO`) |
 | **SD5** | Thực thi Phiên học Tập trung | `UC-SESS-01` | `StudySessionUC` | `StudySession`, `Task` | `SqlSessionRepo`, `SqlTaskRepo`, `SqlUnitOfWork` | `OS-07` (Tín hiệu Heartbeat 60s), 409 Conflict, Pomodoro/Timebox Timer |
-| **SD6** | Tạm dừng Lộ trình & Domino Shift | `UC-ADAPT-02` | `PauseRoadmapUC` | `DominoShiftCalculator`, `Roadmap`, `Task`, `PauseRecord` | `SqlRoadmapRepo` | `BUSR-01`, Tất định < 50ms, Giữ tiên quyết, Task `TODO` |
+| **SD6** | Tạm dừng Lộ trình & Domino Shift | `UC-ADAPT-02` | `PauseRoadmapUC` | `DominoShiftEngine`, `Roadmap`, `Task`, `PauseRecord` | `SqlRoadmapRepo` | `BUSR-01`, Tất định < 50ms, Giữ tiên quyết, Task `TODO` |
 | **SD7** | Đồng bộ Lịch 1 Chiều WebCal | `UC-CAL-02` | `ExportCalendarFeedUC` | Token Sanitizer Logic | `SqlWebCalRepo`, `SqlTaskRepo`, `IcalGeneratorAdapter` | `RFC 5545`, SHA-256 Token, `NFR-SEC-004`, `FR-CALENDAR-002` |
-| **SD8** | Tự động Quét & Chốt Phiên Gián đoạn | `UC-SESS-02` | `SweepAbandonedSessionsUC` | `AbandonmentEvaluator`, `StudySession` | `SessionSweepWorker`, `SqlSessionRepo`, `SqlTaskRepo`, `Redis` | `OS-01` (Phân định 50% / 1 task), Celery Beat async queue |
-| **SD9** | Tự động Quét Hoàn trả Quota Quá hạn | `UC-QUOTA-02` | `SweepExpiredReservationsUC` | `AIQuotaReservation`, `AIQuota` | `QuotaSweeperWorker`, `SqlQuotaRepo`, `Redis` | `BUSR-10`, `OS-02`, Quota 2-phase Sweeper, Index cleanup |
+| **SD8** | Tự động Quét & Chốt Phiên Gián đoạn | `UC-SESS-02` | `SweepAbandonedSessionsUC` | `AbandonmentEvaluator`, `StudySession` | `SessionSweepWorker (Taskiq Task)`, `SqlSessionRepo`, `SqlTaskRepo`, `Redis Streams` | `OS-01` (Phân định 50% / 1 task), Taskiq Scheduler async queue |
+| **SD9** | Tự động Quét Hoàn trả Quota Quá hạn | `UC-QUOTA-02` | `SweepExpiredReservationsUC` | `AIQuotaReservation`, `AIQuota` | `QuotaSweeperWorker (Taskiq Task)`, `SqlQuotaRepo`, `Redis Streams` | `BUSR-10`, `OS-02`, Quota 2-phase Sweeper, Index cleanup |
 
 ---
 *Tài liệu được cập nhật và kiểm duyệt tự động theo tiêu chuẩn ISO/IEC 19505-2 và kiến trúc Lục giác FocusFlow.*

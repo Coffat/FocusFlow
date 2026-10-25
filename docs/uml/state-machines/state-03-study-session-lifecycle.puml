@@ -21,7 +21,7 @@ state "Study Session Lifecycle" as SessionMachine {
 
     state "OS-01 Threshold\nEvaluation" as check_threshold <<choice>>
 
-    IN_PROGRESS --> check_threshold : StopOrTimeout [UserStopEarly / CeleryBeatSweep]
+    IN_PROGRESS --> check_threshold : StopOrTimeout [UserStopEarly / TaskiqSchedulerSweep]
     check_threshold --> PARTIAL_COMPLETED : [completed_tasks >= 1 OR actual_minutes >= 0.5 * planned_minutes] / record_ended_at(), return_unfinished_to_backlog()
     check_threshold --> CANCELLED : [else] / record_ended_at(), return_all_to_backlog()
 

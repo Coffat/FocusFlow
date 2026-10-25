@@ -22,12 +22,12 @@ box "Domain Layer" #E2E3E5
 end box
 box "Infrastructure & Adapters" #CED4DA
     participant "RedisQuotaAdapter\n(AIQuotaPort)" as Quota
-    participant "GeminiLLMAdapter\n(LLMPort)" as LLMAdapter
+    participant "LiteLLMAdapter\n(LLMProviderPort)" as LLMAdapter
     participant "SqlProposalRepo\n(ProposalRepoPort)" as Repo
 end box
 box "External & Persistence" #D8D8D8
     participant "Redis 7.2\n(Token Bucket)" as Redis
-    participant "Google Gemini API\n(LLM)" as LLM
+    participant "External LLM Provider\n(LLM API)" as LLM
     participant "PostgreSQL 16\n(Database)" as DB
 end box
 
@@ -72,7 +72,7 @@ else Quota hợp lệ - Ghi Sổ cái ai_quota_reservations & Bắt đầu SSE S
     Sanitizer --> GenUC: cleanPrompt (PII-stripped)
     deactivate Sanitizer
 
-    Router --> UI: event: status\ndata: {"step": "CALLING_GEMINI_API", "progress": 30}
+    Router --> UI: event: status\ndata: {"step": "CALLING_LLM_PROVIDER", "progress": 30}
 
     ' --- Bước 3: Gọi LLM Streaming ---
     GenUC -> LLMAdapter: stream_schedule_proposal(cleanPrompt, availability) [Timeout 55s]
@@ -106,7 +106,7 @@ else Quota hợp lệ - Ghi Sổ cái ai_quota_reservations & Bắt đầu SSE S
         deactivate Router
         UI --> User: Thông báo AI quá tải, hoàn trả hạn ngạch thành công, gợi ý thử lại
     else Thành công - Nhận Stream Chunks
-        loop Nhận các đoạn phân rã từ Gemini
+        loop Nhận các đoạn phân rã từ LLM Provider
             LLM --> LLMAdapter: stream_chunk (milestones & tasks)
             LLMAdapter --> GenUC: partial_proposal_chunk
             GenUC --> Router: stream_event(partial_data)

@@ -174,7 +174,7 @@ stateDiagram-v2
     IN_PROGRESS --> COMPLETED : FinishSessionNormal [all_tasks_completed or timer_expired] / record_ended_at(), save_notes()
 
     state check_threshold <<choice>>
-    IN_PROGRESS --> check_threshold : StopOrTimeout (UserStopEarly / CeleryBeatSweep)
+    IN_PROGRESS --> check_threshold : StopOrTimeout (UserStopEarly / TaskiqSchedulerSweep)
 
     check_threshold --> PARTIAL_COMPLETED : [completed_tasks >= 1 OR actual_minutes >= 0.5 * planned_minutes] / record_ended_at(), return_unfinished_to_backlog()
     check_threshold --> CANCELLED : [else] / record_ended_at(), return_all_to_backlog()
@@ -185,7 +185,7 @@ stateDiagram-v2
 ```
 
 > **Ghi chú chuẩn UML 2.5.1 về Choice Pseudostate:**  
-> Nút `check_threshold` được mô hình hóa dưới dạng **Choice Pseudostate** (`<<choice>>`). Khi sự kiện ngắt quãng phát sinh (`UserStopEarly` do người học bấm dừng hoặc `CeleryBeatSweep` do mất tín hiệu duy trì phiên Heartbeat > 5 phút), bộ điều khiển đánh giá động điều kiện toán học ngay tại thời điểm đó để phân nhánh chính xác sang `PARTIAL_COMPLETED` hoặc `CANCELLED`, loại bỏ sự trùng lặp trigger trên các chuyển đổi song song.
+> Nút `check_threshold` được mô hình hóa dưới dạng **Choice Pseudostate** (`<<choice>>`). Khi sự kiện ngắt quãng phát sinh (`UserStopEarly` do người học bấm dừng hoặc `TaskiqSchedulerSweep` do mất tín hiệu duy trì phiên Heartbeat > 5 phút, xem ADR-004), bộ điều khiển đánh giá động điều kiện toán học ngay tại thời điểm đó để phân nhánh chính xác sang `PARTIAL_COMPLETED` hoặc `CANCELLED`, loại bỏ sự trùng lặp trigger trên các chuyển đổi song song.
 
 ### 3.2. Bảng Chuyển trạng thái (State Transition Table)
 
@@ -195,9 +195,9 @@ stateDiagram-v2
 | `T_SS_01` | `IN_PROGRESS` | `HeartbeatPing` (`OS-07`) | Client gửi ping định kỳ mỗi 60s | `IN_PROGRESS` | Cập nhật `last_heartbeat_at = NOW()`, cộng dồn thời gian thực học `actual_minutes`. |
 | `T_SS_02` | `IN_PROGRESS` | `FinishSessionNormal` (`FR-SESSION-002`) | Hết giờ dự kiến HOẶC người dùng bấm kết thúc khi đã hoàn tất các nhiệm vụ | `COMPLETED` | Lưu `ended_at = NOW()`, chốt `actual_minutes`, lưu ghi chú Takeaway. |
 | `T_SS_03a` | `IN_PROGRESS` | `UserStopEarly` (`FR-SESSION-003`) | Dừng sớm MÀ ($\ge 1$ task `COMPLETED` HOẶC $\text{actual\_minutes} \ge 0.5 \times \text{planned\_minutes}$) | `PARTIAL_COMPLETED` | Lưu `ended_at`, lưu số phút thực học; giữ nguyên task đã tick `COMPLETED`; chuyển các task chưa xong về Backlog (`scheduled_date = NULL`). |
-| `T_SS_03b` | `IN_PROGRESS` | `CeleryBeatSweep` (`OS-07`, `ADR-004`) | Mất ping quá 5 phút MÀ ($\ge 1$ task `COMPLETED` HOẶC $\text{actual\_minutes} \ge 0.5 \times \text{planned\_minutes}$) | `PARTIAL_COMPLETED` | Chốt session tại `last_heartbeat_at`, lưu `actual_minutes`, chuyển các task chưa xong về Backlog. |
+| `T_SS_03b` | `IN_PROGRESS` | `TaskiqSchedulerSweep` (`OS-07`, `ADR-004`) | Mất ping quá 5 phút MÀ ($\ge 1$ task `COMPLETED` HOẶC $\text{actual\_minutes} \ge 0.5 \times \text{planned\_minutes}$) | `PARTIAL_COMPLETED` | Chốt session tại `last_heartbeat_at`, lưu `actual_minutes`, chuyển các task chưa xong về Backlog. |
 | `T_SS_04a` | `IN_PROGRESS` | `UserStopEarly` (`FR-SESSION-003`) | Dừng sớm MÀ (0 task `COMPLETED` VÀ $\text{actual\_minutes} < 0.5 \times \text{planned\_minutes}$) | `CANCELLED` | Lưu `ended_at`, lưu số phút thực học (thống kê nỗ lực), chuyển toàn bộ task về Backlog (`scheduled_date = NULL`). |
-| `T_SS_04b` | `IN_PROGRESS` | `CeleryBeatSweep` (`OS-07`, `ADR-004`) | Mất ping quá 5 phút MÀ (0 task `COMPLETED` VÀ $\text{actual\_minutes} < 0.5 \times \text{planned\_minutes}$) | `CANCELLED` | Chốt session tại `last_heartbeat_at`, lưu `actual_minutes`, chuyển toàn bộ task về Backlog. |
+| `T_SS_04b` | `IN_PROGRESS` | `TaskiqSchedulerSweep` (`OS-07`, `ADR-004`) | Mất ping quá 5 phút MÀ (0 task `COMPLETED` VÀ $\text{actual\_minutes} < 0.5 \times \text{planned\_minutes}$) | `CANCELLED` | Chốt session tại `last_heartbeat_at`, lưu `actual_minutes`, chuyển toàn bộ task về Backlog. |
 
 ### 3.3. Bất biến Vòng đời
 * **INV_SS_01 (Đơn phiên đồng thời):** Tại một thời điểm, một người dùng chỉ có tối đa 01 Study Session ở trạng thái `IN_PROGRESS`. Ràng buộc này được bảo vệ vật lý tuyệt đối bằng chỉ mục từng phần duy nhất: `CREATE UNIQUE INDEX uq_user_single_active_session ON study_sessions(user_id) WHERE status = 'IN_PROGRESS';`.
