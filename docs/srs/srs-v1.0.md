@@ -7,8 +7,8 @@
 |---|---|
 | **Dự án** | FocusFlow — Hệ thống hỗ trợ lập kế hoạch và thực thi lộ trình tự học thích ứng tích hợp AI |
 | **Cấp độ tài liệu** | Software Requirements Specification (SRS) |
-| **Phiên bản** | v1.1 (Requirements Baseline Post-Audit) |
-| **Trạng thái** | Chuẩn Cơ sở Sau Thẩm định — Bổ sung Phân hệ Quản trị viên & Chuẩn hóa Tác nhân (Milestone M2 Refinement) |
+| **Phiên bản** | v1.2 (Requirements Baseline Post-Audit & Tech-Neutral Alignment) |
+| **Trạng thái** | Chuẩn Cơ sở Sau Thẩm định — Chuẩn hóa Ngữ nghĩa Trung lập về Công nghệ Triển khai (Milestone M2 Refinement) |
 | **Vai trò soạn thảo** | Senior Business Analyst / Senior Requirements Engineer |
 | **Nguồn chân lý duy nhất (Single Source of Truth)** | `docs/requirements/problem-definition.md` |
 | **Tiêu chuẩn Kỹ thuật Yêu cầu** | **ISO/IEC/IEEE 29148:2018** (Tham chiếu lịch sử: IEEE Std 830-1998) |
@@ -19,7 +19,8 @@
 | Phiên bản | Ngày hiệu lực | Tác giả thực hiện | Lý do & Nội dung thay đổi cốt lõi |
 |---|---|---|---|
 | **v1.0** | 17/09/2026 | Vũ Toàn Thắng | Khởi tạo chuẩn yêu cầu cơ sở ban đầu (Baseline Frozen); giải quyết 8 quyết định mở kỹ thuật (`OS-01` đến `OS-08`). |
-| **v1.1** | 30/09/2026 | Vũ Toàn Thắng | Thẩm định và chuẩn hóa Tác nhân Hệ thống theo chuẩn UML 2.5: Bổ sung Phân hệ Quản trị viên (Web Admin Portal tối giản gồm `UC-ADM-01..03` và `FR-ADM-001..003`), giải quyết triệt để lỗi Orphan Actor; bổ sung quy tắc `BUSR-11` (RBAC Gate) và `BR-006`; định vị chuẩn mực nghiệp vụ Review là Supporting Subdomain trong mô hình Zimmerman SRL (2002); cập nhật schema `users.role` và ma trận RTM. |
+| **v1.1** | 30/09/2026 | Vũ Toàn Thắng | Thẩm định và chuẩn hóa Tác nhân Hệ thống & Danh mục 19 Use Cases (`UC-01` đến `UC-19` trên 5 phân hệ) theo chuẩn UML 2.5: Bổ sung Phân hệ Quản trị viên (`UC-18`, `UC-19` và `FR-ADM-001..003`), tích hợp Cổng thanh toán trực tuyến (`Payment Gateway` — `UC-04`, `UC-05`, `FR-QUOTA-002`) và Đồng bộ lịch ngoại vi 2 chiều có kiểm soát (`UC-03`, `UC-13`, `BUSR-08`, `FR-CALENDAR-002`); bổ sung quy tắc `BUSR-11` (RBAC Gate) và `BR-006`; định vị chuẩn mực nghiệp vụ Review là Supporting Subdomain trong mô hình Zimmerman SRL (2002); cập nhật ma trận RTM toàn diện. |
+| **v1.2** | 25/10/2026 | Vũ Toàn Thắng | Gỡ tham chiếu công nghệ triển khai cụ thể khỏi văn bản đặc tả yêu cầu; sử dụng mô tả trung lập ("Bộ lập lịch tác vụ nền", "Tác vụ nền", "Khóa phân tán") và trỏ sang các quyết định kiến trúc tương ứng (`ADR-001`..`ADR-010`); không thay đổi bất kỳ mã định danh FR/BUSR/OS/UC, ngữ nghĩa hay ngưỡng đo lường nào. |
 
 ---
 
@@ -58,10 +59,10 @@
    - 7.7 [Không gian Thực thi Phiên học & Phục hồi (FR-SESSION)](#77-không-gian-thực-thi-phiên-học--phục-hồi-fr-session)
    - 7.8 [Cơ chế Thích ứng khi Quá hạn (FR-ADAPT)](#78-cơ-chế-thích-ứng-khi-quá-hạn-fr-adapt)
    - 7.9 [Tạm dừng Lộ trình & Domino Shift (FR-PAUSE)](#79-tạm-dừng-lộ-trình--domino-shift-fr-pause)
-   - 7.10 [Tích hợp Lịch ngoại vi WebCal & .ics (FR-CALENDAR)](#710-tích-hợp-lịch-ngoại-vi-webcal--ics-fr-calendar)
+   - 7.10 [Đồng bộ Lịch ngoại vi 2 chiều, WebCal & .ics (FR-CALENDAR)](#710-đồng-bộ-lịch-ngoại-vi-2-chiều-webcal--ics-fr-calendar)
    - 7.11 [Báo cáo & AI Review Định kỳ (FR-REPORT)](#711-báo-cáo--ai-review-định-kỳ-fr-report)
    - 7.12 [Kiểm soát An toàn & Cơ chế Thử lại AI (FR-AI)](#712-kiểm-soát-an-toàn--cơ-chế-thử-lại-ai-fr-ai)
-   - 7.13 [Quản trị Hạn ngạch & Mock Upgrade Sandbox (FR-QUOTA)](#713-quản-trị-hạn-ngạch--mock-upgrade-sandbox-fr-quota)
+   - 7.13 [Quản trị Hạn ngạch, Gói cước & Thanh toán Trực tuyến (FR-QUOTA)](#713-quản-trị-hạn-ngạch-gói-cước--thanh-toán-trực-tuyến-fr-quota)
    - 7.14 [Phân hệ Quản trị viên Nền tảng (FR-ADM)](#714-phân-hệ-quản-trị-viên-nền-tảng-fr-adm)
    - 7.15 [Hồ sơ Thói quen Người học & Cá nhân hóa Lộ trình (FR-PROFILE)](#715-hồ-sơ-thói-quen-người-học--cá-nhân-hóa-lộ-trình-fr-profile)
 8. [Yêu cầu Phi Chức năng (Non-Functional Requirements - NFR)](#8-yêu-cầu-phi-chức-năng-non-functional-requirements---nfr)
@@ -93,9 +94,9 @@ Tài liệu đóng vai trò là chuẩn cơ sở kỹ thuật phục vụ phân 
 Hệ thống FocusFlow được xây dựng dưới dạng ứng dụng web (Web Application) responsive, phục vụ người tự học thông qua quy trình 4 giai đoạn logic khép kín:
 1. **Khởi tạo lộ trình & Duyệt lịch 2 cấp (Hierarchical Adaptive Planning & Human Approval)**: Định danh người dùng, thu thập mục tiêu, AI làm rõ ngữ cảnh, sinh Milestone, sinh Schedule Proposal và áp dụng validation gate để lưu Official Schedule.
 2. **Không gian thực thi phiên học (Active Study Workspace)**: Hỗ trợ phiên học tập trung với bộ công cụ Study Tool Suite (Pomodoro/Stopwatch, Scratchpad, Key Takeaways, Task Checklist) và xử lý gián đoạn/phục hồi phiên học.
-3. **Thích ứng & Quản trị lịch (Adaptive Shift & Calendar Management)**: Tự động phát hiện task quá hạn bằng thuật toán tất định, cung cấp tùy chọn AI sắp xếp lại, hỗ trợ tạm dừng lộ trình với thuật toán tịnh tiến dây chuyền (Domino Shift), xuất lịch tĩnh `.ics` và đăng ký luồng 1 chiều bảo mật WebCal.
+3. **Thích ứng & Quản trị lịch (Adaptive Shift & Calendar Management)**: Tự động phát hiện task quá hạn bằng thuật toán tất định, cung cấp tùy chọn AI sắp xếp lại, hỗ trợ tạm dừng lộ trình với thuật toán tịnh tiến dây chuyền (Domino Shift), đồng bộ lịch ngoại vi 2 chiều có kiểm soát (đọc khoảng bận Free/Busy và đẩy lịch chính thức), xuất lịch tĩnh `.ics` và đăng ký luồng bảo mật WebCal.
 4. **Tổng kết & Cải tiến chu kỳ (Review & Continuous Retrospective)**: Báo cáo định lượng toán học chính xác kết hợp nhận xét định tính từ AI Review.
-5. **Kiểm soát hạn ngạch dịch vụ (Quota Guard & Mock Sandbox)**: Quản lý quota gọi AI theo phân tầng Free/Premium tại tầng middleware dịch vụ kèm sandbox mô phỏng nâng cấp.
+5. **Kiểm soát hạn ngạch & Thanh toán trực tuyến (Quota Guard & Payment Gateway)**: Quản lý quota gọi AI theo phân tầng Free/Premium tại tầng middleware dịch vụ kèm tích hợp Cổng thanh toán trực tuyến (PayOS / VNPay Sandbox) để nâng cấp gói học tập tự động qua Webhook/IPN.
 
 ### 1.3 Đối tượng độc giả (Intended Audience)
 - **Sinh viên / Tác giả đề tài**: Định hướng phân tích thiết kế, lập trình, kiểm thử và viết khóa luận tốt nghiệp.
@@ -135,10 +136,11 @@ FocusFlow là nền tảng chuyên biệt giải quyết triệt để 3 nút th
 | **Plan Adherence** | Tỷ lệ tuân thủ kế hoạch học tập, đo bằng tỷ lệ phần trăm số buổi học người dùng tham gia trên tổng số buổi đã lên lịch (loại trừ khoảng thời gian PAUSED). |
 | **AI Planning** | Quy trình tương tác với mô hình ngôn ngữ lớn để làm rõ mục tiêu, phân rã kiến thức và sinh đề xuất kế hoạch. |
 | **AI Reprioritization** | Tính năng tùy chọn do người dùng chủ động kích hoạt để nhờ AI gợi ý lại thứ tự ưu tiên cho danh sách task tồn đọng. |
-| **WebCal** | Giao thức đăng ký theo dõi lịch ngoại vi một chiều qua URL bảo mật định dạng `.ics`. |
+| **WebCal** | Giao thức đăng ký theo dõi lịch ngoại vi qua URL bảo mật định dạng `.ics`. |
 | **`.ics`** | Định dạng tệp tin lịch chuẩn iCalendar tĩnh được hệ thống kết xuất để tải về. |
+| **Controlled Two-Way Calendar Sync** | Cơ chế đồng bộ lịch ngoại vi 2 chiều có kiểm soát: chiều Inbound đọc các khoảng thời gian bận (Free/Busy intervals) từ Google Calendar để trừ dung lượng thời gian rảnh khả dụng; chiều Outbound xuất và đồng bộ các nhiệm vụ thuộc Official Schedule ra ứng dụng lịch ngoài. |
 | **AI Quota** | Định mức hạn ngạch gọi dịch vụ AI (Token usage & Request Quota) được cấp cho tài khoản theo phân tầng Free/Premium. |
-| **Mock Upgrade Sandbox** | Giao diện mô phỏng việc nâng cấp gói tài khoản để thử nghiệm tính năng nới rộng hạn ngạch, không tích hợp cổng thanh toán thực tế. |
+| **Payment Gateway (PayOS / VNPay)** | Cổng thanh toán trực tuyến cung cấp giao diện thanh toán mã QR (VietQR) / Checkout URL và gửi thông báo kết quả giao dịch tức thời qua Webhook/IPN có chữ ký số HMAC-SHA256 để nâng cấp gói Premium tự động. |
 | **Review / Retrospective** | Hoạt động tổng kết định kỳ đóng vai trò Supporting Subdomain khép kín chu trình tự học theo mô hình Zimmerman SRL (2002), kết hợp phân tích số liệu định lượng toán học và nhận xét định tính từ AI Review dựa trên Key Takeaways. |
 
 ### 1.6 Tài liệu tham khảo (References)
@@ -167,34 +169,36 @@ Xây dựng một hệ thống khép kín hỗ trợ người học chuyển hó
 |                               FOCUSFLOW SYSTEM                                |
 |                                                                               |
 |  [Auth & Quota] <---> [Planning Engine] <---> [Active Study Workspace]        |
-|         ^                     |                              |                |
-|         |                     v                              v                |
-|  [User Database]      [Official Schedule] <--------> [Session Logs & Notes]   |
-|                               |                              |                |
-|                               v                              v                |
-|                    [Adaptive Recovery / Pause]      [Quantitative Reporting]  |
-+-------------------------------|------------------------------|----------------+
-                                |                              |
-           +--------------------+                              v
-           v                                            [AI Review Engine]
-   [1-Way WebCal Feed / .ics]                                  |
-           |                                                   v
-           v                                         [External LLM Provider]
- [Apple / Google Calendar]
+|    ^        ^                 |                              |                |
+|    |        |                 v                              v                |
+|    | [User Database]  [Official Schedule] <--------> [Session Logs & Notes]   |
+|    |                          |                              |                |
+|    |                          v                              v                |
+|    |               [Adaptive Recovery / Pause]      [Quantitative Reporting]  |
++----|--------------------------|------------------------------|----------------+
+     |                          |                              |
+     v                          v                              v
+[Payment Gateway       [Controlled 2-Way Sync:        [AI Review Engine]
+ (PayOS/VNPay)]         Busy Slots Inbound /                   |
+                        Official Schedule Outbound]            v
+                                ^                     [External LLM Provider]
+                                |
+                                v
+                      [Apple / Google Calendar]
 ```
 
 ### 2.4 Các tính năng trong phạm vi (In-Scope — Core MVP)
-- **Module Quản lý tài khoản & Hồ sơ**: Đăng ký, đăng nhập email/mật khẩu, xác thực phiên làm việc, thiết lập cấu hình thời gian rảnh lai (Mode A / Mode B).
+- **Module Quản lý tài khoản, Hồ sơ & Gói học tập**: Đăng ký, đăng nhập email/mật khẩu, xác thực phiên làm việc, thiết lập cấu hình thời gian rảnh lai (Mode A / Mode B) và hồ sơ học tập.
 - **Module Lập kế hoạch AI**: Thu thập thông tin mục tiêu, đối thoại làm rõ, sinh Milestone, sinh Schedule Proposal, giao diện xem lại/chỉnh sửa, thao tác "Apply" và Backend Validation Gate.
 - **Module Không gian phiên học**: Danh sách kiểm tra task, bộ công cụ Study Tool Suite (Pomodoro / Stopwatch), ghi chú Scratchpad, ghi chú đúc kết Key Takeaways, cơ chế xử lý phiên gián đoạn và phục hồi phiên học.
-- **Module Thích ứng & Lịch trình**: Quét phát hiện task quá hạn bằng logic tất định, tùy chọn AI Reprioritization, tính năng Tạm dừng lộ trình (Domino Shift), kết xuất file `.ics` và luồng WebCal 1 chiều bảo mật token.
+- **Module Thích ứng & Lịch trình**: Quét phát hiện task quá hạn bằng logic tất định, tùy chọn AI Reprioritization, tính năng Tạm dừng lộ trình (Domino Shift), và **Đồng bộ lịch ngoại vi 2 chiều có kiểm soát (Controlled Two-Way Calendar Sync: đọc khoảng bận Free/Busy chiều Inbound + xuất lịch chính thức chiều Outbound qua kết nối API, luồng WebCal bảo mật token và tệp `.ics`)**.
 - **Module Báo cáo & Đánh giá**: Bảng điều khiển số liệu thống kê định lượng và trợ lý AI Review đưa ra nhận xét định tính chu kỳ (đóng vai trò Supporting Subdomain khép kín chu trình tự học theo mô hình Zimmerman SRL).
-- **Module Quản trị Hạn ngạch (Quota Service & Mock Sandbox)**: Middleware kiểm soát hạn ngạch Free/Premium và giao diện thử nghiệm nâng cấp mô phỏng Mock Upgrade.
-- **Module Quản trị viên Nền tảng (Minimal Admin Portal)**: Giao diện web bảo mật RBAC (`role = 'ADMIN'`) hỗ trợ đăng nhập Admin, quản trị danh sách người dùng, chuyển đổi phân tầng tài khoản (Free/Premium), cấu hình hạn ngạch Quota AI và bảng điều khiển giám sát chỉ số tiêu thụ token/lỗi hệ thống.
+- **Module Quản trị Hạn ngạch & Thanh toán trực tuyến (Quota Service & Online Payment Gateway)**: Middleware kiểm soát hạn ngạch Free/Premium và tích hợp **Cổng thanh toán trực tuyến (Payment Gateway — PayOS / VNPay Sandbox)** để nâng cấp gói tài khoản lên Premium qua mã QR/liên kết thanh toán và xác thực kết quả giao dịch tự động qua Webhook/IPN có chữ ký số bảo mật.
+- **Module Quản trị viên Nền tảng (Minimal Admin Portal)**: Giao diện web bảo mật RBAC (`role = 'ADMIN'`) hỗ trợ đăng nhập Admin, quản lý danh sách người dùng, gói cước (Free/Premium), tra cứu lịch sử giao dịch thanh toán, cấu hình hạn ngạch Quota AI và bảng điều khiển giám sát chỉ số vận hành, mức tiêu thụ token AI và doanh thu gói cước.
 
 ### 2.5 Các tính năng ngoài phạm vi (Out-of-Scope)
-- **Đồng bộ hai chiều với Google Calendar / Apple Calendar**: Không hỗ trợ đọc ngược sự kiện từ lịch ngoài về hệ thống hoặc xử lý xung đột hai chiều.
-- **Cổng thanh toán thực tế (Payment Gateway)**: Không tích hợp các cổng thanh toán thực tế (Stripe, VNPay, Momo...); mọi luồng nâng cấp đều thông qua Mock Upgrade Sandbox hoặc do Admin phân quyền.
+- **Sửa đổi/xóa trực tiếp cấu trúc lộ trình học tập từ ứng dụng lịch bên ngoài**: Không cho phép các thao tác sửa đổi hoặc xóa sự kiện từ Google Calendar / Apple Calendar ghi đè ngược lại cấu trúc Milestone/Roadmap gốc hoặc tự ý thay đổi Official Schedule mà không qua cổng kiểm tra tính hợp lệ (Validation Gate) của FocusFlow.
+- **Hoàn tiền tự động đa tiền tệ phức tạp (Complex Multi-currency Automated Refunds)**: Không triển khai hệ thống kế toán hoàn tiền tự động đa tiền tệ quốc tế, xử lý tranh chấp thẻ tín dụng (chargeback) hay chia sẻ doanh thu phức tạp.
 - **Tính năng quản trị phức tạp ngoài phạm vi Admin Portal tối giản**: Hệ thống không xây dựng CMS quản trị nội dung chi tiết bài học của người học, không can thiệp đọc trộm nhật ký hội thoại/prompt học tập cá nhân, không hỗ trợ xuất báo cáo PDF/Excel phức tạp và không can thiệp chỉnh sửa lộ trình học tập của người dùng.
 - **Ứng dụng Native Mobile (iOS/Android)**: Không phát triển ứng dụng di động gốc; tập trung duy nhất vào Web Application responsive.
 - **Mạng xã hội & Tương tác cộng đồng**: Không hỗ trợ kết bạn, bảng tin, chia sẻ công khai lộ trình hoặc nhắn tin giữa các người học.
@@ -209,19 +213,20 @@ Xây dựng một hệ thống khép kín hỗ trợ người học chuyển hó
 Cá nhân trực tiếp trải nghiệm toàn bộ vòng đời sản phẩm.
 - **Trách nhiệm của Learner**:
   - Đăng ký và bảo vệ thông tin xác thực tài khoản cá nhân.
-  - Cung cấp chính xác mục tiêu học tập và thiết lập thời gian rảnh (Availability).
+  - Cung cấp chính xác mục tiêu học tập, thiết lập thời gian rảnh (Availability) và hồ sơ học tập.
   - Chủ động xem xét, tinh chỉnh và bấm "Apply" để phê duyệt Schedule Proposal thành Official Schedule.
   - Thực hiện phiên học trong Study Workspace, ghi nhận kết quả và đúc kết Key Takeaway.
   - Kích hoạt yêu cầu sắp xếp lại (AI Reprioritization) hoặc tạm dừng lộ trình (Pause Roadmap) khi cần.
-  - Quản lý và đổi mã bảo mật WebCal token của chính mình.
+  - Đồng bộ lịch học 2 chiều có kiểm soát với ứng dụng lịch ngoài, quản lý mã bảo mật WebCal token và xuất tệp `.ics`.
+  - Chọn nâng cấp gói học tập (Premium) và thực hiện thanh toán trực tuyến qua cổng thanh toán.
 
 #### 2. Administrator (Tác nhân người dùng nội bộ - Internal Human Actor)
 Người dùng nội bộ nắm giữ vai trò quản trị hệ thống và vận hành dịch vụ nền tảng.
 - **Ranh giới tương tác**: Giao diện Web Admin Portal tối giản (được bảo vệ nghiêm ngặt bằng cơ chế kiểm soát truy cập dựa trên vai trò RBAC với `role = 'ADMIN'`).
 - **Trách nhiệm của Administrator**:
   - Đăng nhập xác thực tài khoản quản trị bảo mật qua route `/admin/*`.
-  - Quản lý danh sách người dùng, chuyển đổi phân tầng tài khoản (`FREE` / `PREMIUM`), điều chỉnh và thiết lập lại định mức hạn ngạch gọi AI (Tokens / Requests) theo chính sách dịch vụ.
-  - Giám sát độ sẵn sàng hệ thống, tỷ lệ lỗi API và thống kê mức tiêu thụ tài nguyên AI (Tokens/Requests).
+  - Quản lý danh sách người dùng, chuyển đổi phân tầng tài khoản (`FREE` / `PREMIUM`), tra cứu lịch sử giao dịch thanh toán, điều chỉnh và thiết lập lại định mức hạn ngạch gọi AI (Tokens / Requests) theo chính sách dịch vụ.
+  - Giám sát độ sẵn sàng hệ thống, tỷ lệ lỗi API, thống kê mức tiêu thụ tài nguyên AI (Tokens/Requests) và doanh thu gói cước.
 
 #### 3. External LLM Provider (Hệ thống ngoài)
 Dịch vụ mô hình ngôn ngữ lớn cung cấp qua giao diện API hỗ trợ Structured JSON Outputs.
@@ -231,43 +236,52 @@ Dịch vụ mô hình ngôn ngữ lớn cung cấp qua giao diện API hỗ tr�
 
 #### 4. External Calendar Application (Hệ thống ngoài)
 Các ứng dụng lịch tiêu chuẩn của bên thứ ba (Google Calendar, Apple Calendar, Outlook...).
-- **Trách nhiệm**: Đọc dữ liệu định dạng `.ics` hoặc định kỳ truy vấn luồng WebCal 1 chiều qua URL kèm token bảo mật.
+- **Trách nhiệm**:
+  - **Chiều Inbound (Lịch ngoài $\rightarrow$ FocusFlow)**: Cung cấp dữ liệu các khoảng thời gian bận (Free/Busy intervals) từ Google Calendar qua OAuth 2.0 API để FocusFlow trừ dung lượng thời gian rảnh khả dụng khi lập lịch.
+  - **Chiều Outbound (FocusFlow $\rightarrow$ Lịch ngoài)**: Nhận sự kiện học tập từ Official Schedule qua kết nối đồng bộ API, định kỳ truy vấn luồng WebCal qua URL kèm token bảo mật, hoặc nhập tệp lịch tĩnh `.ics`.
+
+#### 5. Payment Gateway (Cổng thanh toán trực tuyến - Hệ thống ngoài)
+Dịch vụ cổng thanh toán trực tuyến tích hợp chuẩn công nghiệp (PayOS / VNPay Sandbox).
+- **Trách nhiệm**:
+  - Cung cấp API khởi tạo giao dịch thanh toán trực tuyến (mã QR VietQR / Checkout URL) theo yêu cầu từ FocusFlow backend.
+  - Gửi thông báo kết quả giao dịch tức thời về FocusFlow qua Webhook / IPN có đính kèm chữ ký số bảo mật (`HMAC-SHA256`) để xác thực và kích hoạt nâng cấp gói tài khoản tự động.
 
 ### 3.2 Danh mục Use Cases Cấp Yêu cầu (Use Case Inventory)
 
-| Mã Use Case | Tên Use Case | Tác nhân chính | Tác nhân hỗ trợ |
-|---|---|---|---|
-| **UC-AUTH-01** | Đăng ký tài khoản mới | Learner | Hệ thống |
-| **UC-AUTH-02** | Đăng nhập hệ thống | Learner | Hệ thống |
-| **UC-AUTH-03** | Đăng xuất hệ thống | Learner, Administrator | Hệ thống |
-| **UC-QUOTA-01** | Thử nghiệm nâng cấp gói học tập (Mock Sandbox) | Learner | Hệ thống |
-| **UC-QUOTA-02** | Quét dọn & hoàn trả hạn ngạch AI quá hạn | System Clock / Celery Beat | PostgreSQL, Redis |
-| **UC-PLAN-01** | Khởi tạo mục tiêu & Làm rõ ngữ cảnh | Learner | External LLM |
-| **UC-AVAIL-01** | Cấu hình thời gian rảnh khả dụng | Learner | Hệ thống |
-| **UC-PLAN-02** | Phê duyệt các cột mốc học tập | Learner | Hệ thống |
-| **UC-PLAN-03** | Tạo đề xuất & Áp dụng lịch trình | Learner | External LLM, Hệ thống |
-| **UC-PLAN-04** | Tự lập kế hoạch học tập thủ công | Learner | Hệ thống |
-| **UC-ROADMAP-01** | Điều phối & Chuyển đổi lộ trình | Learner | Hệ thống |
-| **UC-SCHED-01** | Theo dõi & Điều hướng lịch trình | Learner | Hệ thống |
-| **UC-TASK-02** | Tái xếp lịch nhiệm vụ từ Backlog | Learner | Hệ thống |
-| **UC-SESS-01** | Thực hiện phiên học tập trung | Learner | Hệ thống |
-| **UC-SESS-02** | Xử lý gián đoạn phiên học | Learner | Hệ thống |
-| **UC-TASK-01** | Đánh dấu hoàn thành nhiệm vụ | Learner | Hệ thống |
-| **UC-PAUSE-01** | Thiết lập tạm dừng lộ trình | Learner | Hệ thống |
-| **UC-ADAPT-01** | Quét phát hiện nhiệm vụ quá hạn | Time / Chronological Event, Learner | Hệ thống |
-| **UC-ADAPT-02** | Yêu cầu AI tái cấu trúc nhiệm vụ | Learner | External LLM |
-| **UC-REP-01** | Theo dõi báo cáo tiến độ định lượng | Learner | Hệ thống |
-| **UC-REP-02** | Yêu cầu nhận xét từ AI Review | Learner | External LLM |
-| **UC-CAL-01** | Xuất tệp lịch tĩnh .ics | Learner | Hệ thống |
-| **UC-CAL-02** | Đăng ký & Quản lý WebCal feed | Learner | External Calendar App |
-| **UC-ADM-01** | Đăng nhập cổng quản trị RBAC | Administrator | Hệ thống |
-| **UC-ADM-02** | Quản lý người dùng & Hạn ngạch AI | Administrator | Hệ thống |
-| **UC-ADM-03** | Giám sát chỉ số vận hành hệ thống | Administrator | Hệ thống |
+Hệ thống được chuẩn hóa thành **19 Ca sử dụng cấp độ mục tiêu người dùng (User-Goal Use Cases: `UC-01` đến `UC-19`)**, được tổ chức nhất quán theo **5 Phân hệ chức năng (Modules)**:
+
+| Phân hệ (Module) | Mã Use Case | Tên Use Case | Tác nhân chính | Tác nhân hỗ trợ / Quan hệ UML |
+|---|---|---|---|---|
+| **Module 1: Quản lý Tài khoản, Hồ sơ & Gói học tập** | **UC-01** | Đăng ký tài khoản người học | Learner | Hệ thống |
+| **Module 1: Quản lý Tài khoản, Hồ sơ & Gói học tập** | **UC-02** | Đăng nhập hệ thống | Learner, Administrator | Hệ thống (bao gồm luồng Đăng xuất) |
+| **Module 1: Quản lý Tài khoản, Hồ sơ & Gói học tập** | **UC-03** | Thiết lập thời gian rảnh và hồ sơ học tập | Learner | External Calendar App |
+| **Module 1: Quản lý Tài khoản, Hồ sơ & Gói học tập** | **UC-04** | Nâng cấp gói học tập (Premium) | Learner | Hệ thống (`<<include>> UC-05`) |
+| **Module 1: Quản lý Tài khoản, Hồ sơ & Gói học tập** | **UC-05** | Thanh toán trực tuyến | *(Được `UC-04` include)* | Payment Gateway |
+| **Module 2: Thiết lập & Điều phối Lộ trình** | **UC-06** | Khởi tạo lộ trình và duyệt cột mốc với AI | Learner | External LLM |
+| **Module 2: Thiết lập & Điều phối Lộ trình** | **UC-07** | Sinh đề xuất và áp dụng lịch học chi tiết | Learner | External LLM |
+| **Module 2: Thiết lập & Điều phối Lộ trình** | **UC-08** | Lập kế hoạch học tập thủ công | *(Mở rộng `UC-06`, `UC-07`)* | Hệ thống (`<<extend>> UC-06, UC-07`) |
+| **Module 2: Thiết lập & Điều phối Lộ trình** | **UC-09** | Quản lý danh mục và trạng thái lộ trình | Learner | Hệ thống |
+| **Module 3: Thực thi Học tập & Đồng bộ Lịch** | **UC-10** | Quản lý lịch học, nhiệm vụ và Backlog | Learner | Hệ thống |
+| **Module 3: Thực thi Học tập & Đồng bộ Lịch** | **UC-11** | Thực hiện phiên học tập trung | Learner | Hệ thống |
+| **Module 3: Thực thi Học tập & Đồng bộ Lịch** | **UC-12** | Xử lý gián đoạn và phục hồi phiên học | *(Mở rộng `UC-11`)* | Hệ thống (`<<extend>> UC-11`) |
+| **Module 3: Thực thi Học tập & Đồng bộ Lịch** | **UC-13** | Đồng bộ lịch học 2 chiều và xuất lịch ngoại vi | Learner | External Calendar App |
+| **Module 4: Đánh giá Tiến độ & Thích ứng Lịch trình** | **UC-14** | Xem báo cáo tiến độ định lượng | Learner | Hệ thống |
+| **Module 4: Đánh giá Tiến độ & Thích ứng Lịch trình** | **UC-15** | Yêu cầu AI đánh giá định kỳ | *(Mở rộng `UC-14`)* | External LLM (`<<extend>> UC-14`) |
+| **Module 4: Đánh giá Tiến độ & Thích ứng Lịch trình** | **UC-16** | Tạm dừng và khôi phục lộ trình (Domino Shift) | Learner | Hệ thống |
+| **Module 4: Đánh giá Tiến độ & Thích ứng Lịch trình** | **UC-17** | Xử lý nhiệm vụ quá hạn và tái cấu trúc lịch với AI | Learner | External LLM |
+| **Module 5: Quản trị Hệ thống** | **UC-18** | Quản lý người dùng, gói cước và giao dịch | Administrator | Hệ thống (Precondition: Xác thực `UC-02` với vai trò `ADMIN`) |
+| **Module 5: Quản trị Hệ thống** | **UC-19** | Giám sát chỉ số vận hành, tiêu thụ AI và doanh thu | Administrator | Hệ thống (Precondition: Xác thực `UC-02` với vai trò `ADMIN`) |
 
 > [!NOTE]
-> **Tài liệu Đặc tả & Biểu đồ Mô hình hóa Chi tiết (UML 2.5):**
-> - Toàn bộ 25 Use Cases trên được đặc tả chi tiết (Preconditions, Postconditions, Main/Alt/Exception Flows, Traceability) tại: [`docs/uml/use-case-specifications.md`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/use-case-specifications.md).
-> - Sơ đồ Ca sử dụng tổng thể hệ thống: [`docs/uml/use-cases/use-case-diagram.puml`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/use-cases/use-case-diagram.puml) | File Draw.io: [`docs/uml/UC_Dia.drawio`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/UC_Dia.drawio).
+> **Tài liệu Đặc tả & Bộ 6 Biểu đồ Mô hình hóa Chi tiết (UML 2.5):**
+> - Toàn bộ 19 Use Cases trên được đặc tả chi tiết (Preconditions, Postconditions, Main/Alt/Exception Flows, Traceability) tại: [`docs/uml/use-case-specifications.md`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/use-case-specifications.md).
+> - Bộ 6 sơ đồ Ca sử dụng chuẩn PlantUML tại thư mục `docs/uml/use-cases/`:
+>   1. Sơ đồ tổng quan hệ thống (Master Overview): [`docs/uml/use-cases/use-case-diagram.puml`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/use-cases/use-case-diagram.puml) | File Draw.io: [`docs/uml/UC_Dia.drawio`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/UC_Dia.drawio)
+>   2. Module 1 — Tài khoản, Hồ sơ & Gói học tập: [`docs/uml/use-cases/uc-mod-01-account-profile-billing.puml`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/use-cases/uc-mod-01-account-profile-billing.puml)
+>   3. Module 2 — Thiết lập & Điều phối Lộ trình: [`docs/uml/use-cases/uc-mod-02-roadmap-planning.puml`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/use-cases/uc-mod-02-roadmap-planning.puml)
+>   4. Module 3 — Thực thi Học tập & Đồng bộ Lịch: [`docs/uml/use-cases/uc-mod-03-study-execution-calendar.puml`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/use-cases/uc-mod-03-study-execution-calendar.puml)
+>   5. Module 4 — Đánh giá Tiến độ & Thích ứng Lịch trình: [`docs/uml/use-cases/uc-mod-04-analytics-adaptation.puml`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/use-cases/uc-mod-04-analytics-adaptation.puml)
+>   6. Module 5 — Quản trị Hệ thống: [`docs/uml/use-cases/uc-mod-05-system-administration.puml`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/use-cases/uc-mod-05-system-administration.puml)
 
 ---
 
@@ -343,9 +357,10 @@ Các ứng dụng lịch tiêu chuẩn của bên thứ ba (Google Calendar, App
     - Toàn bộ thứ tự tuần tự và liên kết logic của các task được bảo toàn nguyên vẹn.
     - Trong khoảng thời gian từ ngày A đến ngày B, hệ thống không phát sinh bất kỳ cảnh báo quá hạn nào cho lộ trình bị tạm dừng.
 
-- **BUSR-08: Bảo mật dữ liệu lịch ngoại vi (1-Way WebCal Security Rule)**
-  - Luồng WebCal chỉ là luồng đăng ký **một chiều (1-Way Subscription)**; hệ thống không tiếp nhận hoặc xử lý bất kỳ thay đổi nào từ ứng dụng lịch bên ngoài dội ngược về.
-  - Luồng WebCal và file `.ics` tuyệt đối **chỉ xuất bản các task thuộc Official Schedule**. Các task thuộc Schedule Proposal hoặc Backlog không bao giờ được đưa vào feed.
+- **BUSR-08: Đồng bộ lịch ngoại vi 2 chiều có kiểm soát & Bảo mật WebCal (Controlled Two-Way Calendar Sync & WebCal Security Rule)**
+  - Hệ thống thực thi cơ chế **đồng bộ lịch ngoại vi 2 chiều có kiểm soát (Controlled Two-Way Calendar Sync)**:
+    - *Chiều Inbound (Lịch ngoài $\rightarrow$ FocusFlow)*: Chỉ đọc dữ liệu các khoảng thời gian bận (Free/Busy intervals) từ Google Calendar của người học để tự động trừ dung lượng thời gian rảnh khả dụng khi lập lịch theo `FR-AVAIL-003`. Tuyệt đối không cho phép thao tác trên ứng dụng lịch bên ngoài sửa đổi hoặc xóa trực tiếp cấu trúc lộ trình học tập gốc.
+    - *Chiều Outbound (FocusFlow $\rightarrow$ Lịch ngoài)*: Đồng bộ sự kiện sang lịch ngoài hoặc xuất qua luồng WebCal và tệp `.ics` tuyệt đối **chỉ xuất bản các task thuộc Official Schedule**. Các task thuộc Schedule Proposal hoặc Backlog không bao giờ được đưa ra lịch ngoài.
   - Mỗi liên kết WebCal gắn liền với một mã token ngẫu nhiên bảo mật (user secure token). Khi người dùng bấm "Reset Token", token cũ bị hủy hiệu lực ngay lập tức.
   - URL và mã token WebCal tuyệt đối không được ghi vào log truy cập máy chủ (access logs) ở dạng bản rõ.
 
@@ -935,12 +950,12 @@ Mục này chuẩn hóa toàn bộ các máy trạng thái (State Machines) củ
 
 #### FR-ADAPT-003: Cơ chế Ngắt mạch Chống lặp Quá hạn (Overdue Anti-Loop Circuit Breaker)
 - **Tiêu đề**: Ngắt mạch chống dời lịch tự động lặp vô hạn cho nhiệm vụ quá hạn.
-- **Mô tả**: Khi một task bị dời lịch liên tiếp do trễ hạn chạm ngưỡng $\ge 3$ lần (`tasks.reschedule_count >= 3`), tác vụ Celery Beat quét quá hạn (`adapt_overdue_tasks_job`) phải ngắt cơ chế tự động tịnh tiến ngày, đánh dấu trạng thái dẫn xuất là `STALLED` và kích hoạt hộp thoại can thiệp người học.
+- **Mô tả**: Khi một task bị dời lịch liên tiếp do trễ hạn chạm ngưỡng $\ge 3$ lần (`tasks.reschedule_count >= 3`), tác vụ quét quá hạn của Bộ lập lịch nền (`adapt_overdue_tasks_job`, xem ADR-004, ADR-010) phải ngắt cơ chế tự động tịnh tiến ngày, đánh dấu trạng thái dẫn xuất là `STALLED` và kích hoạt hộp thoại can thiệp người học.
 - **Tiền điều kiện**: Task ở trạng thái `TODO (Scheduled)` có `scheduled_date < CURRENT_DATE`.
-- **Tác nhân kích hoạt**: Celery Beat quét quá hạn lúc 00:05 UTC+7 hàng ngày.
+- **Tác nhân kích hoạt**: Bộ lập lịch tác vụ nền (Periodic Scheduler — xem ADR-004) quét quá hạn lúc 00:05 UTC+7 hàng ngày.
 - **Dữ liệu đầu vào**: Bản ghi task quá hạn, số lần dời lịch `reschedule_count`.
 - **Luồng chính**:
-  1. Celery Beat thực thi `SELECT ... FOR UPDATE SKIP LOCKED` để khóa an toàn các task quá hạn cần xử lý.
+  1. Tác vụ nền thực thi `SELECT ... FOR UPDATE SKIP LOCKED` để khóa an toàn các task quá hạn cần xử lý.
   2. Nếu `reschedule_count < 3`: Hệ thống tự động dời sang ngày tiếp theo còn thời gian rảnh, tăng `reschedule_count = reschedule_count + 1`, ghi log vào `schedule_change_logs`.
   3. Nếu `reschedule_count >= 3`:
      - Giữ nguyên `scheduled_date` hiện tại, KHÔNG tự động dời tiếp.
@@ -951,7 +966,7 @@ Mục này chuẩn hóa toàn bộ các máy trạng thái (State Machines) củ
   - Thuật toán Domino Shift (`FR-PAUSE-002`) khi tạm dừng toàn bộ lộ trình **KHÔNG làm tăng `reschedule_count`** vì đây là hành động chủ động vĩ mô, không phải hành vi bỏ bê nhiệm vụ cá nhân.
 - **Hậu điều kiện**: Ngăn chặn hoàn toàn hiện tượng "tuyết lăn trì hoãn" (Procrastination Snowball); dồn ứ lịch trình ảo được triệt tiêu.
 - **Tiêu chí chấp nhận**: Đúng 100% các task dời lịch lần thứ 3 bị khóa dời tự động; giao diện hiển thị cảnh báo can thiệp.
-- **Phương pháp kiểm chứng**: Automated Integration Test với Mock Celery Beat dời lịch 3 ngày liên tiếp.
+- **Phương pháp kiểm chứng**: Automated Integration Test với Mock Scheduler dời lịch 3 ngày liên tiếp.
 - **Truy vết**: BR-003, BUSR-06, NFR-AVAIL-001.
 
 ---
@@ -993,7 +1008,7 @@ Mục này chuẩn hóa toàn bộ các máy trạng thái (State Machines) củ
 
 ---
 
-### 7.10 Tích hợp Lịch ngoại vi WebCal & .ics (FR-CALENDAR)
+### 7.10 Đồng bộ Lịch ngoại vi 2 chiều, WebCal & .ics (FR-CALENDAR)
 
 #### FR-CALENDAR-001: Xuất Tệp tin Lịch Tĩnh `.ics`
 - **Tiêu đề**: Xuất lịch tĩnh định dạng `.ics`.
@@ -1008,26 +1023,27 @@ Mục này chuẩn hóa toàn bộ các máy trạng thái (State Machines) củ
 - **Hậu điều kiện**: Tệp `.ics` được tải về máy thành công, có thể nhập thủ công vào các ứng dụng lịch ngoài.
 - **Tiêu chí chấp nhận**: Tệp `.ics` tuân thủ chuẩn RFC 5545, không phát sinh lỗi cú pháp khi import; chỉ xuất các task thuộc Official Schedule.
 - **Phương pháp kiểm chứng**: RFC 5545 iCalendar Linter / Validator tự động.
-- **Truy vết**: BUSR-08.
+- **Truy vết**: BUSR-08, UC-13.
 
-#### FR-CALENDAR-002: Cung cấp Luồng Đăng ký Lịch Một chiều Bảo mật WebCal (WebCal Feed)
-- **Tiêu đề**: Cung cấp luồng đăng ký lịch WebCal một chiều.
-- **Mô tả**: Hệ thống phải cung cấp một URL duy nhất chứa mã bảo mật ngẫu nhiên (secure token) cho phép các ứng dụng lịch bên ngoài đăng ký theo dõi luồng sự kiện 1 chiều.
+#### FR-CALENDAR-002: Đồng bộ Lịch Ngoại vi 2 Chiều Có Kiểm Soát & Cung cấp Luồng Bảo mật WebCal (Controlled Two-Way Calendar Sync & WebCal Feed)
+- **Tiêu đề**: Đồng bộ lịch ngoại vi 2 chiều có kiểm soát và cung cấp luồng đăng ký lịch WebCal bảo mật.
+- **Mô tả**: Hệ thống phải hỗ trợ cơ chế đồng bộ lịch 2 chiều có kiểm soát với ứng dụng lịch ngoài (chiều Inbound đọc khoảng bận Free/Busy từ Google Calendar để trừ dung lượng thời gian rảnh khả dụng theo `FR-AVAIL-003`; chiều Outbound đẩy các task thuộc Official Schedule sang lịch ngoài hoặc qua URL WebCal bảo mật chứa secure token).
 - **Tiền điều kiện**: Learner có tài khoản hợp lệ.
-- **Tác nhân kích hoạt**: Learner truy cập trang Tích hợp Lịch.
+- **Tác nhân kích hoạt**: Learner truy cập trang Tích hợp Lịch hoặc liên kết tài khoản Google Calendar.
 - **Luồng chính**:
-  1. Hệ thống khởi tạo cho mỗi Learner một mã bảo mật ngẫu nhiên mã hóa an toàn (chuẩn định dạng cụ thể tuân theo `OS-05`).
-  2. Hiển thị đường dẫn đăng ký cá nhân: `https://focusflow.app/api/v1/feeds/{user_secure_token}.ics` kèm nút sao chép.
-  3. Khi ứng dụng lịch ngoài gửi request `GET` đến URL trên:
-     - Backend kiểm tra tính hợp lệ của `{user_secure_token}`.
-     - Nếu token hợp lệ: Backend trả về luồng dữ liệu lịch iCalendar (MIME type: `text/calendar`) chứa các task thuộc Official Schedule của đúng người dùng sở hữu token.
-  4. Toàn bộ URL và token WebCal không được ghi vào access log của máy chủ ở dạng bản rõ (tuân thủ NFR-SEC-004 và BUSR-08).
+  1. **Đồng bộ chiều Inbound (Free/Busy Sync)**: Khi Learner cấp quyền kết nối Google Calendar (OAuth 2.0), hệ thống truy vấn các khoảng thời gian bận (`Free/Busy intervals`) trong phạm vi lập lịch để cập nhật vào bộ tính toán dung lượng khả dụng (`FR-AVAIL-003`), đảm bảo AI và thuật toán xếp lịch không xếp nhiệm vụ học tập đè lên lịch bận cá nhân.
+  2. **Đồng bộ chiều Outbound & WebCal Feed**:
+     - Hệ thống đồng bộ các nhiệm vụ thuộc Official Schedule ra lịch ngoài hoặc khởi tạo cho mỗi Learner một mã bảo mật ngẫu nhiên mã hóa an toàn (chuẩn định dạng cụ thể tuân theo `OS-05`).
+     - Hiển thị đường dẫn đăng ký cá nhân: `https://focusflow.app/api/v1/feeds/{user_secure_token}.ics` kèm nút sao chép.
+     - Khi ứng dụng lịch ngoài gửi request `GET` đến URL trên: Backend kiểm tra tính hợp lệ của `{user_secure_token}` và trả về luồng dữ liệu lịch iCalendar (MIME type: `text/calendar`) chứa duy nhất các task thuộc Official Schedule của đúng người dùng sở hữu token.
+  3. Toàn bộ URL và token WebCal không được ghi vào access log của máy chủ ở dạng bản rõ (tuân thủ NFR-SEC-004 và BUSR-08).
 - **Luồng ngoại lệ**:
   - *Token không tồn tại hoặc đã bị thu hồi*: Trả về mã lỗi HTTP `404 Not Found` hoặc `401 Unauthorized`, tuyệt đối không trả về dữ liệu lịch.
-- **Hậu điều kiện**: Ứng dụng lịch ngoài tự động đồng bộ sự kiện định kỳ một chiều.
-- **Tiêu chí chấp nhận**: Tuyệt đối không cho phép truy cập feed nếu không có token hoặc token sai; dữ liệu chỉ gồm Official Schedule; không hỗ trợ đồng bộ 2 chiều.
-- **Phương pháp kiểm chứng**: Automated Security and Feed Validation Test.
-- **Truy vết**: BR-004, BUSR-08, NFR-SEC-004, OS-05.
+  - *Mất kết nối hoặc hết hạn OAuth token lịch ngoài*: Hệ thống thông báo trạng thái ngắt kết nối và vẫn cho phép lập lịch bình thường dựa trên cấu hình Availability nội bộ.
+- **Hậu điều kiện**: Khoảng bận từ lịch ngoài được tự động khấu trừ khi xếp lịch; ứng dụng lịch ngoài nhận đầy đủ sự kiện học tập thuộc Official Schedule.
+- **Tiêu chí chấp nhận**: Đọc đúng khoảng bận Free/Busy chiều Inbound; chiều Outbound và WebCal chỉ xuất Official Schedule; tuyệt đối không cho phép truy cập feed nếu token sai.
+- **Phương pháp kiểm chứng**: Automated Security, OAuth Mock Free/Busy Sync Test và Feed Validation Test.
+- **Truy vết**: BR-004, BUSR-08, FR-AVAIL-003, UC-03, UC-13, NFR-SEC-004, OS-05.
 
 #### FR-CALENDAR-003: Đặt lại Mã Bảo mật WebCal (Reset WebCal Token)
 - **Tiêu đề**: Đặt lại mã bảo mật WebCal.
@@ -1140,7 +1156,7 @@ Mục này chuẩn hóa toàn bộ các máy trạng thái (State Machines) củ
 
 ---
 
-### 7.13 Quản trị Hạn ngạch & Mock Upgrade Sandbox (FR-QUOTA)
+### 7.13 Quản trị Hạn ngạch, Gói cước & Thanh toán Trực tuyến (FR-QUOTA)
 
 #### FR-QUOTA-001: Kiểm soát Hạn ngạch Gọi AI Cấp Dịch vụ (Service-Level Quota Guard)
 - **Tiêu đề**: Kiểm soát hạn ngạch AI cấp dịch vụ.
@@ -1156,84 +1172,91 @@ Mục này chuẩn hóa toàn bộ các máy trạng thái (State Machines) củ
   3. **Xử lý khi không đủ hạn ngạch**:
      - Middleware chặn request ngay tại chỗ, tuyệt đối không gửi prompt ra bên ngoài.
      - Trả về mã lỗi có cấu trúc `QUOTA_EXHAUSTED`.
-     - Giao diện người dùng hiển thị thông báo hết hạn ngạch kèm liên kết chuyển hướng đến Mock Upgrade Sandbox.
+     - Giao diện người dùng hiển thị thông báo hết hạn ngạch kèm liên kết chuyển hướng đến trang Nâng cấp Gói học tập Premium (`UC-04`).
   4. **Định mức phân tầng & Chu kỳ làm mới**:
      - Định mức cụ thể cho phân tầng `FREE` và `PREMIUM` cũng như chu kỳ làm mới (tháng/tuần) **tuân theo Quyết định Mở OS-02 của Product Owner**.
 - **Hậu điều kiện**: 100% request hết hạn ngạch bị chặn; bảo vệ toàn vẹn chi phí API.
 - **Tiêu chí chấp nhận**: Không có bất kỳ request nào được gửi đến External LLM khi tài khoản hết hạn ngạch; thao tác kiểm tra đảm bảo tính nguyên tử.
 - **Phương pháp kiểm chứng**: Concurrency Load Test (k6) kiểm tra race condition với tài khoản chỉ còn 1 lượt gọi.
-- **Truy vết**: BR-005, BUSR-10, OS-02.
+- **Truy vết**: BR-005, BUSR-10, UC-04, OS-02.
 
-#### FR-QUOTA-002: Trải nghiệm Nâng cấp Giả lập (Mock Upgrade Sandbox)
-- **Tiêu đề**: Nâng cấp tài khoản giả lập trong môi trường Sandbox.
-- **Mô tả**: Hệ thống phải cung cấp giao diện mô phỏng nâng cấp tài khoản từ Free lên Premium trong môi trường sandbox giả lập, không sử dụng cổng thanh toán thực tế và không lưu thông tin thẻ ngân hàng thật.
+#### FR-QUOTA-002: Nâng cấp Gói học tập Premium & Thanh toán Trực tuyến (Online Subscription & Payment Gateway)
+- **Tiêu đề**: Nâng cấp gói học tập Premium tích hợp Cổng thanh toán trực tuyến.
+- **Mô tả**: Hệ thống phải cho phép Learner chọn gói nâng cấp tài khoản từ `FREE` lên `PREMIUM`, khởi tạo giao dịch thanh toán qua Cổng thanh toán trực tuyến (Payment Gateway — PayOS / VNPay Sandbox) và tự động kích hoạt quyền lợi gói Premium khi nhận được thông báo Webhook/IPN hợp lệ.
 - **Tiền điều kiện**: Learner đã đăng nhập tài khoản ở phân tầng `FREE`.
-- **Tác nhân kích hoạt**: Learner truy cập trang Quản lý Hạn ngạch hoặc bấm nâng cấp từ thông báo hết quota.
+- **Tác nhân kích hoạt**: Learner chọn gói nâng cấp Premium (`UC-04`) và tiến hành thanh toán trực tuyến (`UC-05`).
 - **Luồng chính**:
-  1. Hệ thống hiển thị bảng so sánh quyền lợi giữa gói Free và Premium.
-  2. Hiển thị thông báo rõ ràng: *"Đây là môi trường thử nghiệm mô phỏng (Mock Sandbox). Không có giao dịch tiền tệ thực tế nào được thực hiện."*.
-  3. Learner bấm nút "Mô phỏng Nâng cấp lên Premium (Mock Upgrade Now)".
-  4. Hệ thống cập nhật phân tầng tài khoản của Learner thành `PREMIUM`, làm mới và cộng thêm hạn ngạch AI tương ứng vào cơ sở dữ liệu (theo định mức tại `OS-02`).
-  5. Giao diện hiển thị thông báo chúc mừng nâng cấp thành công và chuyển hướng người dùng về trang làm việc với đầy đủ hạn ngạch mới.
-- **Hậu điều kiện**: Tài khoản được nâng cấp lên `PREMIUM` trong cơ sở dữ liệu; hạn ngạch mới có hiệu lực ngay lập tức.
-- **Tiêu chí chấp nhận**: Nâng cấp thành công tức thì; tuyệt đối không yêu cầu nhập thông tin thanh toán thật; không gọi đến bất kỳ cổng thanh toán ngoài nào.
-- **Phương pháp kiểm chứng**: Automated UI Test và assertion kiểm tra thuộc tính phân tầng trong database.
-- **Truy vết**: BR-005, OS-02.
+  1. Hệ thống hiển thị bảng so sánh quyền lợi giữa gói Free (3 Roadmap hoạt động, 30 lượt gọi AI/tháng) và gói Premium (15 Roadmap hoạt động, 300 lượt gọi AI/tháng theo `OS-02`).
+  2. Learner chọn gói nâng cấp Premium và bấm "Thanh toán nâng cấp".
+  3. Backend khởi tạo bản ghi giao dịch thanh toán (`payment_transactions`) ở trạng thái `PENDING` kèm mã đơn hàng duy nhất (`order_code`), sau đó gọi API của **Payment Gateway (PayOS / VNPay Sandbox)** để lấy liên kết thanh toán (`checkout_url`) và mã QR chuyển khoản (`VietQR`).
+  4. Learner thực hiện quét mã QR hoặc hoàn tất thanh toán trên giao diện cổng thanh toán.
+  5. **Payment Gateway** gửi thông báo kết quả giao dịch tức thời về endpoint Webhook/IPN của FocusFlow kèm chữ ký số bảo mật (`HMAC-SHA256`).
+  6. Backend kiểm tra tính xác thực của chữ ký số `HMAC-SHA256` và xử lý bất biến (idempotent): nếu hợp lệ và giao dịch đang ở trạng thái `PENDING`, hệ thống thực thi giao dịch nguyên tử cập nhật trạng thái đơn hàng thành `PAID`, nâng cấp phân tầng tài khoản của Learner lên `PREMIUM` và cấp hạn ngạch AI mới là **300 lượt gọi/tháng** (theo `OS-02`).
+  7. Giao diện hiển thị thông báo nâng cấp thành công và chuyển hướng người dùng về trang làm việc với đầy đủ hạn ngạch Premium.
+- **Luồng ngoại lệ**:
+  - *Người dùng hủy thanh toán hoặc giao dịch hết hạn*: Trạng thái giao dịch chuyển sang `CANCELLED` hoặc `EXPIRED`; tài khoản giữ nguyên phân tầng `FREE`.
+  - *Chữ ký số Webhook không hợp lệ*: Backend từ chối yêu cầu với mã lỗi `400 Bad Request` / `401 Unauthorized`, ghi nhận vào Security Audit Log và tuyệt đối không nâng cấp tài khoản.
+  - *Webhook gửi trùng lặp (Duplicate IPN)*: Hệ thống kiểm tra trạng thái đơn hàng đã là `PAID` và trả về phản hồi `200 OK` ngay lập tức (idempotency), không cộng dồn hạn ngạch trùng lặp.
+- **Hậu điều kiện**: Bản ghi giao dịch được lưu vết đầy đủ ở trạng thái `PAID`; tài khoản được nâng cấp lên `PREMIUM` và hạn ngạch 300 lượt gọi/tháng có hiệu lực ngay lập tức.
+- **Tiêu chí chấp nhận**: Xác thực chữ ký số HMAC-SHA256 chính xác 100%; đảm bảo tính idempotent khi nhận Webhook trùng lặp; nâng cấp phân tầng và hạn ngạch nguyên tử.
+- **Phương pháp kiểm chứng**: Automated Integration Test mô phỏng luồng tạo đơn thanh toán và gửi Webhook có chữ ký hợp lệ, chữ ký giả mạo và gửi lặp nhiều lần.
+- **Truy vết**: BR-005, UC-04, UC-05, OS-02.
 
 ### 7.14 Phân hệ Quản trị viên Nền tảng (FR-ADM)
 
 #### FR-ADM-001: Đăng nhập Quản trị viên & Phân quyền RBAC (Admin Authentication & Access Gate)
 - **Tiêu đề**: Đăng nhập và kiểm soát phiên làm việc của Quản trị viên.
-- **Mô tả**: Hệ thống phải cung cấp cơ chế xác thực riêng biệt cho tài khoản Quản trị viên mang thuộc tính `role = 'ADMIN'`, cấp phát phiên làm việc (Session/JWT) có chứa claim phân quyền tương ứng và bảo vệ nghiêm ngặt toàn bộ giao diện `/admin/*` cũng như các API endpoints `/api/v1/admin/*`.
+- **Mô tả**: Hệ thống phải cung cấp cơ chế xác thực cho tài khoản Quản trị viên mang thuộc tính `role = 'ADMIN'`, cấp phát phiên làm việc (Session/JWT) có chứa claim phân quyền tương ứng và bảo vệ nghiêm ngặt toàn bộ giao diện `/admin/*` cũng như các API endpoints `/api/v1/admin/*`.
 - **Tiền điều kiện**: Tài khoản quản trị viên đã được kích hoạt trong cơ sở dữ liệu (khởi tạo qua Database Seed script hoặc biến môi trường `ADMIN_INIT_EMAIL` / `ADMIN_INIT_PASSWORD`).
-- **Tác nhân kích hoạt**: Administrator truy cập cổng đăng nhập quản trị.
+- **Tác nhân kích hoạt**: Administrator truy cập cổng đăng nhập hệ thống.
 - **Luồng chính**:
-  1. Administrator nhập thông tin email và mật khẩu tại trang đăng nhập Quản trị viên.
+  1. Administrator nhập thông tin email và mật khẩu tại trang đăng nhập.
   2. Backend kiểm tra tính hợp lệ của mật khẩu bằng thuật toán Argon2id.
   3. Backend kiểm tra thuộc tính phân quyền: `user.role == 'ADMIN'`.
   4. Nếu hợp lệ, hệ thống cấp phát JWT token có mang claim `role: "ADMIN"` với cờ bảo mật `HttpOnly`, `SameSite=Lax` và thời gian hết hạn phiên (Session Expiration) tối đa 8 giờ.
   5. Trình duyệt điều hướng Administrator vào bảng điều khiển Admin Portal.
 - **Luồng ngoại lệ**:
   - *Sai email hoặc mật khẩu*: Trả về mã lỗi `401 Unauthorized`, hiển thị thông báo "Thông tin đăng nhập không chính xác".
-  - *Tài khoản người dùng thông thường (`role == 'LEARNER'`) cố tình đăng nhập*: Hệ thống từ chối cấp quyền, trả về mã lỗi `403 Forbidden`, ghi nhận cảnh báo an ninh (Security Audit Event) kèm địa chỉ IP client.
+  - *Tài khoản người dùng thông thường (`role == 'LEARNER'`) cố tình truy cập `/admin/*`*: Hệ thống từ chối cấp quyền, trả về mã lỗi `403 Forbidden`, ghi nhận cảnh báo an ninh (Security Audit Event) kèm địa chỉ IP client.
 - **Hậu điều kiện**: Administrator đăng nhập thành công vào phiên làm việc bảo mật; người dùng không có quyền bị chặn 100%.
 - **Tiêu chí chấp nhận**: 100% các route `/admin/*` và API `/api/v1/admin/*` chặn đứng các truy cập không có JWT mang claim `role = 'ADMIN'`.
 - **Phương pháp kiểm chứng**: Automated Security Test (kiểm thử thâm nhập thử nghiệm truy cập trái phép bằng tài khoản Learner).
-- **Truy vết**: BR-006, BUSR-11, UC-ADM-01, NFR-SEC-002.
+- **Truy vết**: BR-006, BUSR-11, UC-02, UC-18, UC-19, NFR-SEC-002.
 
-#### FR-ADM-002: Quản lý Người dùng & Điều chỉnh Hạn ngạch Quota (User & Tier Administration)
-- **Tiêu đề**: Quản lý danh sách người dùng, phân tầng tài khoản và hạn ngạch AI.
-- **Mô tả**: Hệ thống phải cung cấp giao diện quản lý danh sách người dùng có tính năng tìm kiếm theo email và phân trang; cho phép Quản trị viên chuyển đổi phân tầng tài khoản (`FREE` $\leftrightarrow$ `PREMIUM`) và thiết lập lại hoặc cộng thêm hạn ngạch gọi AI cho người dùng trong chu kỳ hiện tại.
+#### FR-ADM-002: Quản lý Người dùng, Gói cước, Giao dịch & Điều chỉnh Hạn ngạch Quota (User, Tier & Transaction Administration)
+- **Tiêu đề**: Quản lý danh sách người dùng, gói cước, lịch sử giao dịch thanh toán và hạn ngạch AI.
+- **Mô tả**: Hệ thống phải cung cấp giao diện quản lý danh sách người dùng và lịch sử giao dịch thanh toán có tính năng tìm kiếm, lọc và phân trang; cho phép Quản trị viên khóa/mở khóa tài khoản, chuyển đổi phân tầng gói cước (`FREE` $\leftrightarrow$ `PREMIUM`), đối soát các giao dịch thanh toán trực tuyến và thiết lập lại hoặc cộng thêm hạn ngạch gọi AI cho người dùng trong chu kỳ hiện tại.
 - **Tiền điều kiện**: Administrator đã đăng nhập với phiên làm việc hợp lệ.
-- **Tác nhân kích hoạt**: Administrator thực hiện thao tác trên màn hình Quản lý Người dùng.
+- **Tác nhân kích hoạt**: Administrator thực hiện thao tác trên màn hình Quản lý Người dùng, Gói cước & Giao dịch (`UC-18`).
 - **Luồng chính**:
-  1. Administrator tra cứu tài khoản người học theo email hoặc duyệt danh sách phân trang.
-  2. Hệ thống hiển thị danh sách người dùng kèm các thông tin: ID, Email, Họ tên, Vai trò (`role`), Phân tầng hiện tại (`tier`), Số lượt gọi AI đã dùng trong tháng, Thời điểm tạo tài khoản.
-  3. Administrator chọn thao tác "Chuyển đổi Phân tầng (Switch Tier)" sang `PREMIUM` (hoặc ngược lại) hoặc bấm "Đặt lại Hạn ngạch (Reset Quota)".
+  1. Administrator tra cứu tài khoản người học theo email hoặc tra cứu lịch sử giao dịch thanh toán theo mã đơn hàng / trạng thái (`PENDING`, `PAID`, `CANCELLED`).
+  2. Hệ thống hiển thị danh sách người dùng (ID, Email, Họ tên, Vai trò `role`, Phân tầng `tier`, Số lượt gọi AI đã dùng, Trạng thái tài khoản) và danh sách các giao dịch thanh toán nâng cấp gói cước tương ứng.
+  3. Administrator chọn thao tác quản trị: Khóa/Mở khóa tài khoản, "Chuyển đổi Phân tầng (Switch Tier)" sang `PREMIUM` (hoặc ngược lại), hoặc bấm "Đặt lại Hạn ngạch (Reset Quota)".
   4. Hệ thống yêu cầu xác nhận thao tác quản trị.
   5. Khi xác nhận, Backend thực thi giao dịch cập nhật nguyên tử trên các bảng `users` và `ai_quotas`.
   6. Hệ thống ghi nhận nhật ký quản trị (Admin Audit Log) và hiển thị thông báo cập nhật thành công.
-- **Hậu điều kiện**: Phân tầng tài khoản và hạn ngạch của người học được cập nhật ngay lập tức trong cơ sở dữ liệu mà không cần người học đăng xuất.
-- **Tiêu chí chấp nhận**: Thao tác cập nhật hạn ngạch và phân tầng thành công trong vòng $\le 500$ ms; người dùng mục tiêu lập tức được áp dụng hạn mức mới tại middleware.
-- **Phương pháp kiểm chứng**: Integration Test thực hiện cập nhật phân tầng của User và kiểm tra số dư quota khả dụng tại Middleware.
-- **Truy vết**: BR-006, BUSR-10, BUSR-11, UC-ADM-02, OS-02.
+- **Hậu điều kiện**: Trạng thái tài khoản, phân tầng gói cước và hạn ngạch của người học được cập nhật ngay lập tức trong cơ sở dữ liệu; lịch sử giao dịch được tra cứu minh bạch.
+- **Tiêu chí chấp nhận**: Thao tác cập nhật hạn ngạch, phân tầng và tra cứu giao dịch thành công trong vòng $\le 500$ ms; người dùng mục tiêu lập tức được áp dụng hạn mức mới tại middleware.
+- **Phương pháp kiểm chứng**: Integration Test thực hiện cập nhật phân tầng của User, kiểm tra số dư quota khả dụng tại Middleware và kiểm tra truy vấn danh sách giao dịch thanh toán.
+- **Truy vết**: BR-006, BUSR-10, BUSR-11, UC-18, OS-02.
 
-#### FR-ADM-003: Bảng điều khiển Giám sát Chỉ số Vận hành & Tiêu thụ AI (Admin Observability Dashboard)
-- **Tiêu đề**: Giám sát chỉ số vận hành và tài nguyên AI tổng quan.
-- **Mô tả**: Hệ thống phải cung cấp màn hình Dashboard hiển thị các chỉ số đo lường hiệu năng và mức tiêu thụ tài nguyên trên toàn hệ thống theo thời gian thực hoặc cận thời gian thực.
+#### FR-ADM-003: Bảng điều khiển Giám sát Chỉ số Vận hành, Tiêu thụ AI & Doanh thu (Admin Observability & Revenue Dashboard)
+- **Tiêu đề**: Giám sát chỉ số vận hành, mức tiêu thụ tài nguyên AI và thống kê doanh thu gói cước.
+- **Mô tả**: Hệ thống phải cung cấp màn hình Dashboard hiển thị các chỉ số đo lường hiệu năng vận hành, mức tiêu thụ tài nguyên AI và thống kê doanh thu từ các giao dịch nâng cấp gói cước Premium trên toàn hệ thống theo thời gian thực hoặc cận thời gian thực.
 - **Tiền điều kiện**: Administrator đã đăng nhập với phiên làm việc hợp lệ.
-- **Tác nhân kích hoạt**: Administrator truy cập trang tổng quan Admin Dashboard.
+- **Tác nhân kích hoạt**: Administrator truy cập trang tổng quan Admin Dashboard (`UC-19`).
 - **Luồng chính**:
   1. Administrator mở màn hình Dashboard.
   2. Backend truy vấn và tổng hợp các chỉ số:
-     - **Thống kê người dùng**: Tổng số tài khoản đăng ký, số lượng tài khoản phân tầng `FREE` và `PREMIUM`.
+     - **Thống kê người dùng & Chuyển đổi**: Tổng số tài khoản đăng ký, số lượng và tỷ lệ tài khoản phân tầng `FREE` so với `PREMIUM`.
      - **Thống kê tài nguyên AI**: Tổng số cuộc gọi API AI đã thực hiện trong chu kỳ, tổng lượng Tokens tiêu thụ ước tính, chi phí dự toán (USD).
+     - **Thống kê Giao dịch & Doanh thu gói cước**: Tổng số giao dịch thanh toán thành công (`PAID`), tổng doanh thu gói học tập Premium theo tuần/tháng.
      - **Chỉ số vận hành & Sức khỏe hệ thống**: Tỷ lệ hoàn thành tác vụ gọi AI thành công (API Success Rate), số lượng request bị lỗi hoặc timeout, chỉ số Uptime của backend.
   3. Hệ thống biểu diễn các số liệu qua các thẻ chỉ số (Metric Cards) và biểu đồ phân bổ trực quan.
-- **Hậu điều kiện**: Số liệu vận hành được hiển thị trung thực, phục vụ công tác giám sát hạ tầng và nghiệm thu khóa luận.
+- **Hậu điều kiện**: Số liệu vận hành, tiêu thụ AI và doanh thu được hiển thị trung thực, phục vụ công tác giám sát hạ tầng và nghiệm thu khóa luận.
 - **Tiêu chí chấp nhận**: Dashboard tải và hiển thị hoàn tất trong vòng $\le 500$ ms; truy vấn tổng hợp số liệu không khóa (non-blocking) các giao dịch ghi dữ liệu của người dùng.
 - **Phương pháp kiểm chứng**: Performance Test đo thời gian tải trang Dashboard dưới tải nền 20 concurrent learners.
-- **Truy vết**: BR-006, BUSR-11, UC-ADM-03, NFR-PERF-002, NFR-AVAIL-001.
+- **Truy vết**: BR-006, BUSR-11, UC-19, NFR-PERF-002, NFR-AVAIL-001.
 
 ---
 
@@ -1241,9 +1264,9 @@ Mục này chuẩn hóa toàn bộ các máy trạng thái (State Machines) củ
 
 #### FR-PROFILE-001: Tổng hợp Hồ sơ Thói quen Học tập (Learner Profile Memory)
 - **Tiêu đề**: Thu thập, tổng hợp chỉ số thói quen học tập thực tế và hiệu chỉnh kế hoạch theo mô hình Zimmerman SRL (2002).
-- **Mô tả**: Hệ thống sử dụng tác vụ nền Celery định kỳ (chạy sau mỗi $\ge 5$ phiên học hoàn thành hoặc tổng hợp hàng tuần) để tính toán 4 chỉ số thực chứng của người học và lưu trữ vào bảng `learner_profiles`, làm ngữ cảnh hỗ trợ (Advisory Guidance) cho AI Planner sinh lộ trình phù hợp với năng lực thực tế.
+- **Mô tả**: Hệ thống sử dụng tác vụ nền định kỳ (xem ADR-004, ADR-010; chạy sau mỗi $\ge 5$ phiên học hoàn thành hoặc tổng hợp hàng tuần) để tính toán 4 chỉ số thực chứng của người học và lưu trữ vào bảng `learner_profiles`, làm ngữ cảnh hỗ trợ (Advisory Guidance) cho AI Planner sinh lộ trình phù hợp với năng lực thực tế.
 - **Tiền điều kiện**: Người học có tài khoản đang hoạt động.
-- **Tác nhân kích hoạt**: Sự kiện hoàn tất phiên học thứ $5, 10, \dots$ hoặc lịch quét định kỳ hàng tuần của Celery Beat.
+- **Tác nhân kích hoạt**: Sự kiện hoàn tất phiên học thứ $5, 10, \dots$ hoặc lịch quét định kỳ hàng tuần của Bộ lập lịch tác vụ nền (xem ADR-004).
 - **Dữ liệu đầu vào**: Lịch sử các bản ghi `study_sessions` và `tasks` đã hoàn tất.
 - **Quy tắc Tính toán 4 Chỉ số Thực chứng**:
   1. **Optimal Focus Duration ($D_{opt}$)**: Tính toán trung vị (Median) thời lượng tập trung thực tế từ các phiên học thành công (`study_sessions.status = 'COMPLETED'`) trong 30 ngày gần nhất (yêu cầu $\ge 5$ phiên; loại bỏ ngoại lệ $< 5$ phút hoặc $> 180$ phút). Giá trị mặc định khi Cold Start là 25 phút.
@@ -1251,8 +1274,8 @@ Mục này chuẩn hóa toàn bộ các máy trạng thái (State Machines) củ
   3. **Estimation Bias Factor ($\beta_{bias}$)**: Tỷ số trung bình giữa thời gian thực tế người học bỏ ra và thời gian ước lượng ban đầu ($\beta_{bias} = T_{actual} / T_{estimated}$), tính trên tối thiểu $\ge 8$ task có ghi nhận thời gian; kẹp trong khoảng an toàn $[0.50, 2.00]$.
   4. **Weekly Completion Rate**: Tỷ lệ phần trăm hoàn thành nhiệm vụ được lên lịch của tuần gần nhất.
 - **Luồng chính**:
-  1. Celery Worker giành Redis lock (`lock:learner_profile_agg:{user_id}`) để chống chạy trùng lặp.
-  2. Worker thực thi truy vấn tổng hợp dữ liệu giao dịch từ `study_sessions` và `tasks`.
+  1. Tác vụ nền giành khóa phân tán (Distributed Lock — xem ADR-004, `lock:learner_profile_agg:{user_id}`) để chống chạy trùng lặp.
+  2. Tiến trình nền (Background Worker) thực thi truy vấn tổng hợp dữ liệu giao dịch từ `study_sessions` và `tasks`.
   3. Cập nhật bản ghi nguyên tử vào bảng `learner_profiles` (`ON CONFLICT (user_id) DO UPDATE SET ...`).
   4. Khi AI Planner sinh đề xuất lịch mới, hệ thống trích xuất khối tóm tắt profile $\le 60$ tokens đưa vào System Prompt để AI hiệu chỉnh độ dài task và độ dốc kiến thức.
 - **Bất biến An toàn & Quyền riêng tư**:
@@ -1260,7 +1283,7 @@ Mục này chuẩn hóa toàn bộ các máy trạng thái (State Machines) củ
   - Người học có toàn quyền xem các chỉ số của mình tại trang Cài đặt và bấm nút "Đặt lại Hồ sơ (Reset Profile)" để xóa các chỉ số đã hiệu chỉnh về trạng thái Cold Start ban đầu.
 - **Hậu điều kiện**: Bản ghi `learner_profiles` được cập nhật đồng bộ, sẵn sàng phục vụ lần lập lịch tiếp theo.
 - **Tiêu chí chấp nhận**: Quá trình tính toán không làm nghẽn API kết thúc phiên (chạy hoàn toàn ở background); xử lý chính xác trạng thái Cold Start.
-- **Phương pháp kiểm chứng**: Automated Unit Test kiểm tra công thức tính toán với các bộ dữ liệu có ngoại lệ, và Integration Test kiểm tra Redis lock.
+- **Phương pháp kiểm chứng**: Automated Unit Test kiểm tra công thức tính toán với các bộ dữ liệu có ngoại lệ, và Integration Test kiểm tra cơ chế khóa phân tán chống chạy trùng lặp.
 - **Truy vết**: BR-002, BR-005, NFR-AI-001, NFR-PERF-002.
 
 ---
@@ -1442,9 +1465,10 @@ Hệ thống FocusFlow quản lý các thực thể logic sau:
 9. **Study Session (Phiên học tập trung)**: Quản lý buổi học thực tế trong Study Workspace; gắn liền với User và các Task được chọn; lưu trữ thời điểm bắt đầu, thời điểm kết thúc, thời lượng thực học (phút), trạng thái phiên (`IN_PROGRESS`, `COMPLETED`, `PARTIAL_COMPLETED`, `CANCELLED`).
 10. **Study Note (Ghi chú học tập)**: Quản lý nội dung ghi chép trong phiên học; gắn với một Session; gồm 2 loại: ghi chú nháp (*Scratchpad*) và ghi chú đúc kết (*Key Takeaways*).
 11. **Pause Record (Bản ghi tạm dừng lộ trình)**: Ghi nhận lịch sử và khoảng thời gian tạm dừng của một Roadmap; chứa ngày bắt đầu tạm dừng, ngày kết thúc tạm dừng và số ngày đã tịnh tiến dời lịch.
-12. **AI Quota & Usage (Hạn ngạch & Sử dụng AI)**: Quản lý định mức và số lượt gọi AI của User; gắn với User; lưu trữ chu kỳ áp dụng, tổng hạn ngạch được cấp, số lượt/tokens đã tiêu thụ, thời điểm làm mới (theo `OS-02`).
-13. **WebCal Token (Mã bảo mật lịch ngoại vi)**: Quản lý mã bí mật dùng cho luồng đăng ký lịch WebCal; gắn duy nhất với một User (quan hệ 1-1); chứa chuỗi token ngẫu nhiên, trạng thái kích hoạt, thời điểm tạo và thời điểm đặt lại gần nhất (theo `OS-05`).
+12. **AI Quota & Payment Transaction (Hạn ngạch AI & Giao dịch Thanh toán)**: Quản lý định mức, số lượt gọi AI của User (theo `OS-02`) và lịch sử các giao dịch thanh toán nâng cấp gói cước Premium qua cổng thanh toán trực tuyến (`PENDING`, `PAID`, `CANCELLED`).
+13. **WebCal Token & Calendar Sync (Mã bảo mật & Kết nối lịch ngoại vi)**: Quản lý mã bí mật dùng cho luồng đăng ký lịch WebCal (quan hệ 1-1 theo `OS-05`) và trạng thái kết nối đồng bộ lịch ngoại vi 2 chiều có kiểm soát.
 14. **AI Review & Report (Báo cáo & Đánh giá định kỳ)**: Lưu trữ các nhận xét định tính do AI sinh ra dựa trên số liệu thống kê; gắn với User và Roadmap; chứa chu kỳ đánh giá, nội dung khen ngợi, điểm nghẽn cảnh báo và lời khuyên điều chỉnh.
+15. **Learner Profile (Hồ sơ thói quen người học)**: Lưu trữ các chỉ số thực chứng được tổng hợp định kỳ của User (thời lượng tập trung tối ưu, khung giờ năng suất cao, hệ số sai lệch ước lượng thời gian và tỷ lệ hoàn thành tuần).
 
 ---
 
@@ -1461,10 +1485,14 @@ Hệ thống FocusFlow quản lý các thực thể logic sau:
 - **Ràng buộc Schema**: Yêu cầu nhà cung cấp hỗ trợ cơ chế Structured JSON Outputs hoặc JSON Object Mode nghiêm ngặt.
 - **Xử lý Mạng**: Quản lý timeout 55s, bắt mã lỗi HTTP chuẩn (400, 401, 429, 500, 503), hỗ trợ `idempotency_key`.
 
-### 13.3 Giao diện Người tiêu thụ Lịch Ngoại vi (External Calendar Consumers)
-- **Định dạng Tệp Tĩnh**: Tệp văn bản chuẩn RFC 5545 iCalendar (`.ics`), mã hóa ký tự UTF-8.
-- **Giao thức Luồng WebCal**: HTTP/HTTPS GET Endpoint phản hồi MIME type `text/calendar`.
-- **Ràng buộc chiều dữ liệu**: Luồng một chiều (One-Way Feed) duy nhất; không tiếp nhận dữ liệu ngược chiều.
+### 13.3 Giao diện Ứng dụng Lịch Ngoại vi (External Calendar Interfaces)
+- **Giao thức Đồng bộ 2 Chiều Có Kiểm Soát**:
+  - *Chiều Inbound*: OAuth 2.0 REST API truy vấn các khoảng thời gian bận (`Free/Busy intervals`) từ Google Calendar.
+  - *Chiều Outbound*: Đồng bộ sự kiện thuộc Official Schedule sang lịch ngoài, kết hợp HTTP/HTTPS GET Endpoint phản hồi luồng WebCal (MIME type `text/calendar`) bảo mật bằng token và kết xuất tệp tĩnh chuẩn RFC 5545 iCalendar (`.ics`, UTF-8).
+
+### 13.4 Giao diện Cổng Thanh toán Trực tuyến (Payment Gateway Interface)
+- **Giao thức Khởi tạo Giao dịch**: HTTPS REST API tới cổng thanh toán (PayOS / VNPay Sandbox) để tạo đơn hàng thanh toán nâng cấp gói Premium và nhận `checkout_url` / mã `VietQR`.
+- **Giao thức Xác nhận Tức thời (Webhook / IPN)**: HTTPS POST Webhook tiếp nhận kết quả thanh toán từ Payment Gateway, bắt buộc xác thực chữ ký số `HMAC-SHA256` và đảm bảo xử lý bất biến (idempotent).
 
 ---
 
@@ -1477,7 +1505,7 @@ Hệ thống FocusFlow quản lý các thực thể logic sau:
 | **Lỗi AI Provider 503 (Unavailable)** | Dịch vụ AI bên ngoài bị sập hoặc bảo trì mạng. | Backend bắt mã 503; ghi log lỗi hạ tầng nhà cung cấp. | Hiển thị thông báo "Dịch vụ AI tạm thời gián đoạn" kèm nút [Tạo kế hoạch thủ công]. | Không ghi nhận bản ghi mới; **không trừ hạn ngạch**. | Learner chuyển sang lập kế hoạch thủ công mà không phụ thuộc vào AI. |
 | **Lỗi Schema AI (Schema Failure)** | AI trả về văn bản tự do hoặc JSON thiếu trường bắt buộc. | Backend phát hiện qua Schema Validator; tự động kích hoạt Auto-retry tối đa 2 lần. | Trong 2 lần đầu: Giao diện hiển thị đang xử lý. Nếu vẫn lỗi: hiển thị hộp thoại báo lỗi cấu trúc kèm 2 nút bấm. | Không bao giờ lưu trữ payload sai vào cơ sở dữ liệu; **các lần retry không trừ thêm quota**. | Tự động retry tối đa 2 lần; nếu kiệt thì người dùng chọn Thử lại hoặc tạo thủ công. |
 | **Áp dụng Lịch Không Hợp lệ (Invalid Apply)** | Learner chỉnh sửa task trên Proposal làm tổng giờ vượt quá Availability. | Backend Validation Gate từ chối lưu trữ; trả về mã lỗi `VALIDATION_OVERLOAD`. | Đánh dấu đỏ các ngày bị quá tải thời gian kèm thông báo số phút bị vượt. | Tuyệt đối từ chối ghi vào Official Schedule. | Learner điều chỉnh giảm thời lượng task hoặc dời ngày cho phù hợp rồi bấm Apply lại. |
-| **Cạn kiệt Hạn ngạch AI (Quota Exhausted)** | Người dùng đạt tới giới hạn số lượt gọi AI của gói tài khoản. | Middleware Backend chặn ngay tại chỗ; không gửi request ra LLM ngoài. | Hiển thị thông báo hết hạn ngạch kèm nút [Trải nghiệm Nâng cấp Giả lập]. | Hạn ngạch giữ nguyên ở mức 0; không phát sinh chi phí. | Learner truy cập Mock Upgrade Sandbox để mô phỏng nâng cấp lên gói Premium. |
+| **Cạn kiệt Hạn ngạch AI (Quota Exhausted)** | Người dùng đạt tới giới hạn số lượt gọi AI của gói tài khoản. | Middleware Backend chặn ngay tại chỗ; không gửi request ra LLM ngoài. | Hiển thị thông báo hết hạn ngạch kèm nút [Nâng cấp gói học tập Premium]. | Hạn ngạch giữ nguyên ở mức 0; không phát sinh chi phí. | Learner chọn nâng cấp gói học tập Premium và thanh toán trực tuyến qua cổng thanh toán để mở rộng hạn ngạch lên 300 lượt/tháng. |
 | **Gián đoạn Phiên học (Browser Crash / Disconnect)** | Learner mất mạng, đóng trình duyệt hoặc bấm dừng phiên sớm. | Hệ thống bắt sự kiện hoặc tính lại khi kết nối lại; tính số phút thực học đã trôi qua. | Khi mở lại: Hiển thị tóm tắt phiên, task xong giữ nguyên, task dở dang về Backlog. | Lưu chính xác số phút thực học vào Session; cập nhật trạng thái `PARTIAL_COMPLETED` hoặc `CANCELLED` theo `OS-01`. | Người dùng truy cập danh sách Backlog để xếp lịch lại cho các task chưa hoàn thành. |
 | **Lộ Liên kết WebCal** | Người dùng nghi ngờ lộ URL bí mật cho bên thứ ba. | Learner bấm nút "Reset Token" trên trang tích hợp. | Hiển thị cảnh báo xác nhận; sau khi đổi hiển thị URL mới kèm nút sao chép. | Token cũ bị hủy hiệu lực tức thì trong DB; sinh token mới thay thế. | Các ứng dụng lịch cũ dùng token cũ bị từ chối 401/404 ngay lập tức; Learner dán URL mới vào ứng dụng lịch. |
 
@@ -1506,14 +1534,14 @@ Toàn bộ 8 quyết định mở kỹ thuật (`OS-01` đến `OS-08`) đã đ�
 
 | Nguồn Chân lý (Problem Definition) | Mã BR | Mã Quy tắc (BUSR) | Mã Yêu cầu Chức năng (FR) | Mã Use Case (UC) | Mã NFR chi phối | Tiêu chí Đánh giá & Chấp nhận (EVAL / AC) |
 |---|---|---|---|---|---|---|
-| **Mục 1.2, 4 (P1: Khó phân rã mục tiêu)** | BR-001 | BUSR-01, BUSR-02 | FR-AUTH-001, FR-AUTH-002, FR-GOAL-001, FR-GOAL-002, FR-PLAN-001, FR-PLAN-002, FR-PLAN-003, FR-PLAN-004 | UC-AUTH-01, UC-AUTH-02, UC-AUTH-03, UC-PLAN-01, UC-PLAN-02, UC-PLAN-03, UC-PLAN-04 | NFR-PERF-001 ($\le 60$s), NFR-AI-001 (Schema), NFR-SEC-001 | **EVAL-01**: Tạo kế hoạch $\le 5$ phút.<br>**AC**: Proposal không tự lưu; chỉ lưu khi bấm Apply qua Validation Gate (tuân thủ OS-03). |
-| **Mục 5.2 (Mô hình Thời gian rảnh Lai)** | BR-001, BR-003 | BUSR-03, BUSR-04, BUSR-05 | FR-AVAIL-001 (Mode A), FR-AVAIL-002 (Mode B), FR-AVAIL-003 (Đa Roadmap) | UC-AVAIL-01, UC-ROADMAP-01 | NFR-PERF-002 (UI $\le 500$ms, API $\le 200$ms) | **AC**: Chặn vượt quỹ giờ Mode A (theo OS-06); chặn lệch khung giờ Mode B; Soft Overflow tối đa 30 phút có cảnh báo và xác nhận. |
-| **Mục 1.2, 5.3 (P2: Phân mảnh công cụ)** | BR-002 | BUSR-09 | FR-SESSION-001, FR-SESSION-002, FR-SESSION-003, FR-TASK-001, FR-TASK-002, FR-SCHEDULE-001 | UC-SCHED-01, UC-TASK-01, UC-TASK-02, UC-SESS-01, UC-SESS-02 | NFR-PERF-002, NFR-UX-001 (Responsive), NFR-UX-002 (Lighthouse $\ge 90$) | **EVAL-02**: Hiệu quả buổi học $\ge 80\%$.<br>**EVAL-04**: Task Success Rate $\ge 90\%$.<br>**EVAL-05**: SUS $\ge 80/100$.<br>**AC**: Lưu đúng số phút thực học; task xong giữ nguyên, task dở dang về Backlog (tuân thủ OS-01, OS-07). |
-| **Mục 1.2, 5.4 (P3: Đứt gãy lịch khi trễ hạn)** | BR-003 | BUSR-06, BUSR-07 | FR-ADAPT-001 (Overdue), FR-ADAPT-002 (AI Reprioritize), FR-PAUSE-001, FR-PAUSE-002 (Domino Shift) | UC-PAUSE-01, UC-ADAPT-01, UC-ADAPT-02 | NFR-PERF-002, NFR-AVAIL-001 ($\ge 95\%$) | **EVAL-03**: Plan Adherence $\ge 70\%$.<br>**AC**: Phát hiện quá hạn tất định thuần túy backend; Domino Shift dời lùi đúng số ngày khả dụng, không báo quá hạn khi Pause. |
-| **Mục 5.5 (Tích hợp Lịch ngoại vi)** | BR-004 | BUSR-08 | FR-CALENDAR-001 (.ics), FR-CALENDAR-002 (WebCal), FR-CALENDAR-003 (Reset Token) | UC-CAL-01, UC-CAL-02 | NFR-SEC-004 (Bảo mật Token & Log Hygiene), RFC 5545 | **AC**: Chỉ xuất Official Schedule; WebCal 1 chiều bảo mật; token cũ bị hủy hiệu lực ngay lập tức khi bấm reset (tuân thủ OS-05). |
-| **Mục 5.6 (Báo cáo & Đánh giá định kỳ)** | BR-002, BR-003 | BUSR-10 | FR-REPORT-001 (Thống kê toán), FR-REPORT-002 (AI Review) | UC-REP-01, UC-REP-02 | NFR-PERF-002, NFR-SEC-003 (Sanitization) | **AC**: Thống kê toán học chính xác 100%; AI Review nhận xét đúng số liệu, không bịa đặt số liệu. |
-| **Mục 5.1, 8.2 (Quản trị Chi phí & Rủi ro AI)** | BR-005 | BUSR-10 | FR-QUOTA-001, FR-QUOTA-002 (Mock Sandbox), FR-AI-001 (Retry Semantics), FR-AI-002 (Timeout 55s / Fallback) | UC-QUOTA-01, UC-QUOTA-02, UC-PLAN-01, UC-REP-02 | NFR-PERF-001 (Timeout 55s), NFR-SEC-001 (Zero secret leak), NFR-AI-001 | **AC**: Kiểm tra hạn ngạch nguyên tử; chặn 100% request hết quota tại middleware (theo OS-02); retry tối đa 2 lần không trừ quota; ngắt ở giây 55; Mock Sandbox không thanh toán thật; Quota Sweeper tự động dọn dẹp reservation quá hạn. |
-| **Quản trị Nền tảng & RBAC (Admin Governance)** | BR-006 | BUSR-11, BUSR-10 | FR-ADM-001 (RBAC Auth), FR-ADM-002 (User & Quota), FR-ADM-003 (Observability) | UC-ADM-01, UC-ADM-02, UC-ADM-03, UC-AUTH-03 | NFR-SEC-002, NFR-PERF-002 ($\le 500$ms), NFR-AVAIL-001 | **AC**: 100% route `/admin/*` chặn truy cập không có `role = 'ADMIN'`; cập nhật Tier/Quota thành công $\le 500$ms; Dashboard hiển thị số liệu trung thực, non-blocking. |
+| **Mục 1.2, 4 (P1: Khó phân rã mục tiêu)** | BR-001 | BUSR-01, BUSR-02 | FR-AUTH-001, FR-AUTH-002, FR-GOAL-001, FR-GOAL-002, FR-PLAN-001, FR-PLAN-002, FR-PLAN-003, FR-PLAN-004, FR-PLAN-005 (Hybrid Gate) | UC-01, UC-02, UC-06, UC-07, UC-08 | NFR-PERF-001 ($\le 60$s), NFR-AI-001 (Schema), NFR-SEC-001 | **EVAL-01**: Tạo kế hoạch $\le 5$ phút.<br>**EVAL-06**: 100% Zero Overbooking.<br>**AC**: Proposal không tự lưu; chỉ lưu khi bấm Apply qua Hybrid Validation Gate (tuân thủ OS-03). |
+| **Mục 5.2 (Mô hình Thời gian rảnh Lai & Hồ sơ)** | BR-001, BR-002, BR-003 | BUSR-03, BUSR-04, BUSR-05 | FR-AVAIL-001 (Mode A), FR-AVAIL-002 (Mode B), FR-AVAIL-003 (Đa Roadmap & Lịch bận), FR-PROFILE-001 (Hồ sơ người học) | UC-03, UC-07, UC-09 | NFR-PERF-002 (UI $\le 500$ms, API $\le 200$ms), NFR-AI-001 | **AC**: Chặn vượt quỹ giờ Mode A (theo OS-06); chặn lệch khung giờ Mode B; Soft Overflow tối đa 30 phút có cảnh báo và xác nhận; tổng hợp hồ sơ thói quen chạy ngầm không khóa phiên. |
+| **Mục 1.2, 5.3 (P2: Phân mảnh công cụ)** | BR-002 | BUSR-09 | FR-SESSION-001, FR-SESSION-002, FR-SESSION-003, FR-TASK-001, FR-TASK-002, FR-TASK-003 (Prerequisites), FR-SCHEDULE-001 | UC-10, UC-11, UC-12 | NFR-PERF-002, NFR-UX-001 (Responsive), NFR-UX-002 (Lighthouse $\ge 90$) | **EVAL-02**: Hiệu quả buổi học $\ge 80\%$.<br>**EVAL-04**: Task Success Rate $\ge 90\%$.<br>**EVAL-05**: SUS $\ge 80/100$.<br>**AC**: Chặn chu trình phụ thuộc task; lưu đúng số phút thực học; task xong giữ nguyên, task dở dang về Backlog (tuân thủ OS-01, OS-07). |
+| **Mục 1.2, 5.4 (P3: Đứt gãy lịch khi trễ hạn)** | BR-003 | BUSR-06, BUSR-07 | FR-ADAPT-001 (Overdue), FR-ADAPT-002 (AI Reprioritize), FR-ADAPT-003 (Anti-Loop Circuit Breaker), FR-PAUSE-001, FR-PAUSE-002 (Domino Shift) | UC-09, UC-16, UC-17 | NFR-PERF-002, NFR-AVAIL-001 ($\ge 95\%$) | **EVAL-03**: Plan Adherence $\ge 70\%$.<br>**AC**: Phát hiện quá hạn tất định thuần túy backend; ngắt dời tự động khi `reschedule_count >= 3`; Domino Shift dời lùi đúng số ngày khả dụng, không báo quá hạn khi Pause. |
+| **Mục 5.5 (Đồng bộ Lịch ngoại vi 2 chiều)** | BR-004 | BUSR-08 | FR-CALENDAR-001 (.ics), FR-CALENDAR-002 (2-Way Sync & WebCal), FR-CALENDAR-003 (Reset Token) | UC-03, UC-13 | NFR-SEC-004 (Bảo mật Token & Log Hygiene), RFC 5545 | **AC**: Chiều Inbound đọc đúng khoảng bận Free/Busy; chiều Outbound & WebCal chỉ xuất Official Schedule; token cũ bị hủy hiệu lực ngay lập tức khi bấm reset (tuân thủ OS-05). |
+| **Mục 5.6 (Báo cáo & Đánh giá định kỳ)** | BR-002, BR-003 | BUSR-10, BUSR-12 | FR-REPORT-001 (Thống kê toán), FR-REPORT-002 (AI Review) | UC-14, UC-15 | NFR-PERF-002, NFR-SEC-003 (Sanitization) | **AC**: Thống kê toán học chính xác 100%; AI Review nhận xét đúng số liệu, không bịa đặt số liệu và không tự ý thay đổi lịch. |
+| **Mục 5.1, 6.1, 8.2 (Quản trị Chi phí, Thanh toán & Rủi ro AI)** | BR-005 | BUSR-10 | FR-QUOTA-001, FR-QUOTA-002 (Online Subscription & Payment Gateway), FR-AI-001 (Retry Semantics), FR-AI-002 (Timeout 55s / Fallback) | UC-04, UC-05, UC-06, UC-07, UC-15, UC-17 | NFR-PERF-001 (Timeout 55s), NFR-SEC-001 (Zero secret leak), NFR-AI-001 | **AC**: Kiểm tra hạn ngạch nguyên tử; chặn 100% request hết quota tại middleware (theo OS-02); retry tối đa 2 lần không trừ quota; ngắt ở giây 55; xác thực chữ ký HMAC-SHA256 Webhook/IPN idempotent để nâng cấp Premium (300 lượt/tháng). |
+| **Quản trị Nền tảng & RBAC (Admin Governance)** | BR-006 | BUSR-11, BUSR-10 | FR-ADM-001 (RBAC Auth), FR-ADM-002 (User, Quota & Transaction), FR-ADM-003 (Observability & Revenue) | UC-02, UC-18, UC-19 | NFR-SEC-002, NFR-PERF-002 ($\le 500$ms), NFR-AVAIL-001 | **AC**: 100% route `/admin/*` chặn truy cập không có `role = 'ADMIN'`; cập nhật Tier/Quota và tra cứu giao dịch thành công $\le 500$ms; Dashboard hiển thị số liệu vận hành, tiêu thụ AI và doanh thu trung thực, non-blocking. |
 
 ---
 
@@ -1524,4 +1552,4 @@ Tài liệu **Software Requirements Specification (SRS) v1.1 — FocusFlow** đ�
 Tài liệu hiện đang ở trạng thái:
 > **Phiên bản v1.1 — Chuẩn Yêu cầu Cơ sở Sau Thẩm định (Requirements Baseline Post-Audit v1.1)**
 
-Tất cả 12 quy tắc nghiệp vụ cốt lõi, danh mục 25 ca sử dụng chuẩn hóa (gồm cả phân hệ Quản trị viên `UC-ADM-01..03` và các ca sử dụng Lịch trình/Backlog/Đăng xuất), cùng 8 quyết định mở kỹ thuật (`OS-01` đến `OS-08`) đã được phê chuẩn chính thức, loại bỏ hoàn toàn các khiếm khuyết tác nhân mồ côi (Orphan Actor) và khoảng trống yêu cầu, đảm bảo tính nhất quán tuyệt đối giữa Mô hình Ca sử dụng và Đặc tả Kiến trúc, sẵn sàng chuyển giao làm đầu vào chuẩn mực cho **Giai đoạn 2: Phân tích Hệ thống & Thiết kế Kiến trúc, CSDL (UML 2.5)**. Mọi yêu cầu thay đổi tiếp theo bắt buộc phải qua quy trình Quản lý Thay đổi (Change Control Board - CCB).
+Tất cả 12 quy tắc nghiệp vụ cốt lõi, danh mục **19 ca sử dụng chuẩn hóa (`UC-01` đến `UC-19` phân bổ trên 5 phân hệ chức năng)**, cơ chế đồng bộ lịch ngoại vi 2 chiều có kiểm soát, tích hợp cổng thanh toán trực tuyến qua Webhook/IPN bảo mật, cùng 8 quyết định mở kỹ thuật (`OS-01` đến `OS-08`) đã được phê chuẩn chính thức, loại bỏ hoàn toàn các khiếm khuyết tác nhân mồ côi (Orphan Actor) và khoảng trống yêu cầu, đảm bảo tính nhất quán tuyệt đối giữa Mô hình Ca sử dụng và Đặc tả Kiến trúc, sẵn sàng chuyển giao làm đầu vào chuẩn mực cho **Giai đoạn 2: Phân tích Hệ thống & Thiết kế Kiến trúc, CSDL (UML 2.5)**. Mọi yêu cầu thay đổi tiếp theo bắt buộc phải qua quy trình Quản lý Thay đổi (Change Control Board - CCB).

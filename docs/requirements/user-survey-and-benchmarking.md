@@ -317,7 +317,7 @@ Bảng đối sánh tổng hợp giữa các giải pháp hiện hữu và **H�
 | **4. Không gian phiên học tích hợp** | ❌ Không | ⚠️ Nhúng widget ngoài | ❌ Không | ❌ Không | ⚠️ Timer cơ bản | ❌ Không | ❌ Không | ✅ **Timer, Checklist, Scratchpad & Takeaways** |
 | **5. Thu thập Key Takeaways đúc kết** | ❌ Không | ⚠️ Phải tự ghi | ❌ Không | ❌ Không | ❌ Không | ❌ Không | ❌ Không | ✅ **Modal đúc kết bắt buộc sau phiên** |
 | **6. Phục hồi phiên học gián đoạn** | ❌ Không | ❌ Không | ❌ Không | ❌ Không | ❌ Không | ❌ Không | ❌ Không | ✅ **Crash Recovery tự động** |
-| **7. Tự động thích ứng khi quá hạn** | ❌ Thủ công | ❌ Lọc sửa thủ công | ❌ Thủ công | ⚠️ AI hộp đen | ⚠️ Đẩy việc dở dang | ❌ Không | ❌ Không | ✅ **Celery Beat Auto-shift tất định** |
+| **7. Tự động thích ứng khi quá hạn** | ❌ Thủ công | ❌ Lọc sửa thủ công | ❌ Thủ công | ⚠️ AI hộp đen | ⚠️ Đẩy việc dở dang | ❌ Không | ❌ Không | ✅ **Bộ lập lịch nền Auto-shift tất định (xem ADR-004)** |
 | **8. Tạm dừng lộ trình (Domino Shift)**| ❌ Kéo thả tay | ❌ Sửa date tay | ❌ Kéo thả tay | ❌ Không | ❌ Không | ❌ Không | ❌ Không | ✅ **Tịnh tiến ngày tự động 100%** |
 | **9. Đồng bộ Lịch ngoại vi an toàn** | Gốc | ⚠️ Qua Zapier | ⚠️ iCal cơ bản | Gốc (OAuth 2 chiều)| Gốc | ❌ Không | ❌ Không | ✅ **Secure Token WebCal (RFC 5545)** |
 | **10. Báo cáo định lượng & AI Review** | ❌ Không | ⚠️ Formula phức tạp | ⚠️ Karma điểm | ⚠️ Báo cáo họp | ⚠️ Báo cáo ngày | ❌ Hỏi đáp rời rạc | ❌ Không | ✅ **Thống kê toán học + AI Review tuần** |
