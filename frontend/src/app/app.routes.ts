@@ -39,6 +39,10 @@ export const routes: Routes = [
     loadChildren: () => import('./features/settings/settings.routes').then(m => m.SETTINGS_ROUTES)
   },
   {
+    path: 'admin',
+    loadChildren: () => import('./features/admin/admin.routes').then(m => m.ADMIN_ROUTES)
+  },
+  {
     path: '**',
     redirectTo: 'dashboard'
   }

@@ -6,14 +6,19 @@ export const API_ENDPOINTS = {
     LOGOUT: '/api/v1/auth/logout',
     ME: '/api/v1/auth/me',
   },
+  BILLING: {
+    CHECKOUT: '/api/v1/billing/checkout',
+    WEBHOOK: '/api/v1/billing/webhook',
+  },
   ROADMAPS: {
     BASE: '/api/v1/roadmaps',
-    GENERATE_STREAM: '/api/v1/roadmaps/generate-stream',
+    GENERATE_JOB: '/api/v1/roadmaps/generate-jobs',
+    STREAM_JOB: (jobId: string) => `/api/v1/roadmaps/generate-jobs/${jobId}/stream`,
     ACTIVE: '/api/v1/roadmaps/active',
     APPLY: (id: string) => `/api/v1/roadmaps/${id}/apply`,
     PAUSE: (id: string) => `/api/v1/roadmaps/${id}/pause`,
     RESUME: (id: string) => `/api/v1/roadmaps/${id}/resume`,
-    OVERDUE_REVISE: (id: string) => `/api/v1/roadmaps/${id}/overdue-revise-stream`,
+    OVERDUE_REVISE: (id: string) => `/api/v1/roadmaps/${id}/overdue-revise-jobs`,
   },
   TASKS: {
     BASE: '/api/v1/tasks',
@@ -27,9 +32,10 @@ export const API_ENDPOINTS = {
     FINALIZE: (id: string) => `/api/v1/sessions/${id}/finalize`,
   },
   CALENDAR: {
-    FEED: (token: string) => `/api/v1/calendar/feed/${token}.ics`,
+    FEED: (token: string) => `/api/v1/calendar/webcal/${token}.ics`,
     GENERATE_TOKEN: '/api/v1/calendar/tokens',
     RESET_TOKEN: '/api/v1/calendar/tokens/reset',
+    OAUTH_GOOGLE: '/api/v1/calendar/oauth/google',
   },
   ANALYTICS: {
     SUMMARY: '/api/v1/analytics/summary',
@@ -37,6 +43,12 @@ export const API_ENDPOINTS = {
   },
   SETTINGS: {
     PROFILE: '/api/v1/users/profile',
+    AVAILABILITY: '/api/v1/availability',
     QUOTA: '/api/v1/users/quota',
-  }
+  },
+  ADMIN: {
+    USERS: '/api/v1/admin/users',
+    USER_QUOTA: (userId: string) => `/api/v1/admin/users/${userId}/quota`,
+    AI_MONITORING: '/api/v1/admin/monitoring/ai-telemetry',
+  },
 } as const;
