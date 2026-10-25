@@ -5,6 +5,7 @@ WORKDIR /app
 # Enable bytecode compilation
 ENV UV_COMPILE_BYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV PATH="/app/.venv/bin:$PATH"
 
 # Copy project specification files
 COPY pyproject.toml README.md ./
@@ -16,4 +17,4 @@ RUN uv sync --frozen --no-install-project --no-dev || uv sync --no-install-proje
 COPY src/ ./src/
 
 # Default command to start FastAPI
-CMD ["uv", "run", "uvicorn", "src.presentation.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]

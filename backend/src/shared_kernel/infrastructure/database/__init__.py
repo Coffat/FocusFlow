@@ -1,0 +1,1 @@
+"""Shared Kernel Database Infrastructure."""
