@@ -26,14 +26,19 @@ def create_app() -> FastAPI:
     # Configure CORS
     allowed_origins = os.getenv(
         "BACKEND_CORS_ORIGINS",
-        '["http://localhost:3000", "http://127.0.0.1:3000"]',
+        '["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:4200", "http://127.0.0.1:4200"]',
     )
     if isinstance(allowed_origins, str) and allowed_origins.startswith("["):
         import json
 
         origins = json.loads(allowed_origins)
     else:
-        origins = ["http://localhost:3000", "http://127.0.0.1:3000"]
+        origins = [
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "http://localhost:4200",
+            "http://127.0.0.1:4200",
+        ]
 
     app.add_middleware(
         CORSMiddleware,
@@ -52,6 +57,11 @@ def create_app() -> FastAPI:
             "version": "1.0.0",
             "architecture": "Hexagonal (Ports & Adapters)",
         }
+
+    # API Routers
+    from src.presentation.api.v1.routers.auth import router as auth_router
+
+    app.include_router(auth_router, prefix="/api/v1")
 
     return app
 

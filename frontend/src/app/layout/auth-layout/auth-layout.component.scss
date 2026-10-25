@@ -1,0 +1,39 @@
+.auth-viewport {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  background-color: var(--surface);
+  padding: 1rem 0;
+  box-sizing: border-box;
+}
+
+app-header,
+app-footer {
+  width: 100%;
+  display: block;
+}
+
+.auth-content {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex: 1;
+}
+
+/* Grouped Single ::ng-deep Block */
+::ng-deep {
+  .auth-viewport {
+    box-sizing: border-box;
+  }
+}
+
+/* Grouped Single @media Block */
+@media (max-width: 640px) {
+  .auth-viewport {
+    padding: 0.5rem 0;
+  }
+}

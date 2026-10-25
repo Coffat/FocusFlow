@@ -1,0 +1,29 @@
+<div class="dashboard-viewport">
+  <!-- Top Navigation Header -->
+  <header class="dashboard-nav">
+    <div class="nav-left">
+      <img src="assets/logo.svg" alt="FocusFlow" class="brand-logo" />
+      <span class="brand-title">FocusFlow</span>
+    </div>
+
+    <div class="nav-right">
+      @if (currentUser.email) {
+        <div class="user-chip">
+          <span class="material-symbols-outlined user-avatar-icon">account_circle</span>
+          <div class="user-meta">
+            <span class="user-name">{{ currentUser.fullName || currentUser.email }}</span>
+            <span class="user-role-badge">{{ currentUser.tier || 'FREE' }} &bull; {{ currentUser.role || 'LEARNER' }}</span>
+          </div>
+        </div>
+      }
+
+      <button pButton type="button" class="sign-out-btn" (click)="signOut()">
+        <span class="material-symbols-outlined">logout</span>
+        <span>{{ 'common.signOut' | translate }}</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Blank Page Content -->
+  <main class="dashboard-empty-canvas"></main>
+</div>

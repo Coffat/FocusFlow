@@ -1,23 +1,24 @@
-FROM node:22-alpine AS base
+# Stage 1: Build the Angular 21 application
+FROM node:22-alpine AS build
 
-# Install pnpm
+WORKDIR /app
+
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
-WORKDIR /app
+COPY package.json pnpm-lock.yaml ./
 
-# Dependencies stage
-FROM base AS deps
-COPY package.json ./
-RUN pnpm install --frozen-lockfile || pnpm install
+RUN pnpm install --frozen-lockfile
 
-# Development stage
-FROM base AS dev
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-EXPOSE 3000
-ENV PORT=3000
-ENV HOSTNAME="0.0.0.0"
+RUN pnpm run build
 
-CMD ["pnpm", "dev"]
+# Stage 2: Serve the application with Nginx
+FROM nginx:alpine
+
+COPY --from=build /app/dist/focusflow-frontend/browser /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
