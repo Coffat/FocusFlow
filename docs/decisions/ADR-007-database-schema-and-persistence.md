@@ -1,120 +1,106 @@
-# ADR-007: Kiến trúc Cơ sở Dữ liệu Quan hệ, Chuẩn hóa 3NF/BCNF và Ràng buộc Toàn vẹn ACID (PostgreSQL 16)
+# ADR-007: Kiến trúc Cơ sở Dữ liệu PostgreSQL 16 (24 Bảng 3NF/BCNF), Khóa Ngoại Đơn (Single Surrogate FK) & Cấm ORM JOIN Chéo Context
 
-* **Trạng thái:** Được chấp thuận (Approved)
-* **Ngày quyết định:** 30/09/2026 (Cập nhật Kiến trúc & Hardening: 16/10/2026)
+* **Trạng thái:** Được chấp thuận (Approved — Cập nhật & Đồng bộ Kiến trúc v2.0)
+* **Ngày quyết định:** 30/09/2026 (Cập nhật v2.0: 25/10/2026)
 * **Người quyết định:** Vũ Toàn Thắng, Phan Đình Duẩn
 * **Căn cứ đánh giá:** Khung Rubric Đồ án Tốt nghiệp CNTT — Tiêu chí TC2.1 & TC2.3 (Mức 5)
-* **Yêu cầu liên quan:** FR-AUTH-001, FR-PLAN-001..003, FR-SESSION-001..003, FR-TASK-001, FR-ADAPT-001, FR-REPORT-001, BUSR-02, BUSR-06, BUSR-07, BUSR-09, OS-01, OS-03, NFR-PERF-002, NFR-SEC-001
-* **Tài liệu đối chiếu:** [`docs/database/database-schema-design.md`](file:///Users/vuthang/Documents/FocusFlow/docs/database/database-schema-design.md), [`docs/database/data-dictionary.md`](file:///Users/vuthang/Documents/FocusFlow/docs/database/data-dictionary.md), [`docs/database/schema.sql`](file:///Users/vuthang/Documents/FocusFlow/docs/database/schema.sql), [`docs/architecture/system-architecture.md`](file:///Users/vuthang/Documents/FocusFlow/docs/architecture/system-architecture.md)
+* **Yêu cầu liên quan:** `ASR-01`, `ASR-02`, `FR-AUTH-001`, `FR-PLAN-001..005`, `FR-SESSION-001..003`, `FR-TASK-001`, `FR-ADAPT-001..003`, `FR-REPORT-001`, `UC-01` đến `UC-19`, `BUSR-02`, `BUSR-06`, `BUSR-07`, `OS-01`, `OS-03`
+* **Tài liệu đối chiếu:** [`docs/database/database-schema-design.md`](file:///Users/vuthang/Documents/FocusFlow/docs/database/database-schema-design.md), [`docs/database/data-dictionary.md`](file:///Users/vuthang/Documents/FocusFlow/docs/database/data-dictionary.md), [`docs/database/schema.sql`](file:///Users/vuthang/Documents/FocusFlow/docs/database/schema.sql)
 
 ---
 
 ## 1. Ngữ cảnh & Đặt vấn đề (Context)
-FocusFlow là hệ thống lập kế hoạch và thực thi lộ trình tự học thích ứng (Adaptive Learning Roadmap System), đòi hỏi tính toàn vẹn dữ liệu, kiểm toán và bảo mật đa người dùng (Multi-tenant) cực kỳ khắt khe:
-1. **Ràng buộc nghiệp vụ nghiêm ngặt & Tính nhất quán phân cấp:** 
-   - Một lộ trình tại một thời điểm chỉ có tối đa 1 Lịch chính thức đang hoạt động (`official_schedules`).
-   - Một người dùng tại một thời điểm chỉ có tối đa 1 phiên học đang diễn ra (`study_sessions.status = 'IN_PROGRESS'`).
-   - Các thực thể con (Milestones, Tasks, Sessions, Proposals, Reviews) phải trực thuộc chính xác Lộ trình và Mục tiêu của cùng một Người dùng, tuyệt đối không được xảy ra tình trạng rò rỉ dữ liệu chéo (Cross-tenant Data Leakage / IDOR) ở mức lưu trữ.
-2. **Bảo tồn Dữ liệu Lịch sử Học tập (Audit Trail & Data Preservation):**
-   - Trong quá trình thích ứng và điều chỉnh kế hoạch, người dùng có thể xóa hoặc hủy Task, nhưng dữ liệu lịch sử các phiên học (`study_sessions`, `session_tasks`) đã thực hiện trong quá khứ là tài sản dữ liệu quý giá của người học, không được phép bị xóa liên hoàn (`CASCADE`) mất dấu tích.
-3. **Quản trị Giao dịch & Hạn ngạch AI (Concurrency & Quota Integrity):**
-   - Các thao tác kích hoạt lịch (Strict Apply - `OS-03`), tịnh tiến dời lịch (Domino Shift - `BUSR-07`) và cơ chế trừ hạn ngạch AI Quota hai pha (Reserve / Commit / Release) đòi hỏi tính nguyên tử (Atomicity) và cô lập (Isolation). Nếu tiến trình xử lý nền (Celery Worker) hoặc luồng SSE bị gián đoạn/crash, hạn ngạch đã giữ chỗ (Reserved) phải có cơ chế hoàn trả (Release/Reclaim) tự động, không được thất thoát.
-4. **Hiệu năng truy vấn & Tránh bẫy khóa CASCADE:**
-   - Hệ thống cần duy trì độ trễ phản hồi API $\le 200$ms cho 20 người dùng đồng thời (`NFR-PERF-002`), đồng thời cơ chế khóa ngoại khi xóa tài khoản người dùng (`DELETE FROM users`) không được gây xung đột khóa tức thời (`RESTRICT` check) giữa các bảng phụ thuộc lẫn nhau.
+Trong quá trình đối chiếu chéo toàn diện giữa tài liệu Nghiệp vụ (`SRS v1.1`, `19 Use Cases`, `Class Diagram v4.2`) và tài liệu Thiết kế Cơ sở Dữ liệu, nhóm phát triển đã phát hiện và cần giải quyết dứt điểm **3 mâu thuẫn thiết kế tồn đọng** từ phiên bản v1.0:
+1. **Lệch số lượng bảng giữa các tài liệu (15 vs 16 vs 19 vs 24 bảng):** Các bản ghi ADR cũ chỉ nhắc tới 15 hoặc 16 bảng, thiếu các bảng quan trọng phục vụ thanh toán (`payment_transactions`), kiểm toán dời lịch (`schedule_change_logs`), nhật ký tiêu thụ AI (`ai_usage_logs`), và đặc biệt là cặp bảng đảm bảo tính nhất quán sự kiện liên module (`outbox_events`, `processed_events`).
+2. **Mâu thuẫn giữa Khóa ngoại Phức hợp (Composite FK) trong ADR-007 cũ và Khóa ngoại Đơn (Single Surrogate FK) trong `database-schema-design.md`:** Bản nháp ADR-007 cũ từng đề xuất sao chép cột `user_id` xuống mọi bảng con (`schedule_proposals`, `study_sessions`, `ai_reviews`) để làm Composite FK `(roadmap_id, user_id)`. Cách làm này gây **dư thừa dữ liệu bắc cầu (Transitive Dependency: `id -> roadmap_id -> goal_id -> user_id`)**, vi phạm nguyên tắc chuẩn hóa 3NF/BCNF nghiêm ngặt mà Hội đồng chấm thi yêu cầu.
+3. **Mâu thuẫn biểu diễn Lịch rảnh (`availability_slots` vs cột `JSONB weekly_schedule`):** Tài liệu CSDL thiết kế bảng con chuẩn hóa `availability_slots` đạt chuẩn 3NF, trong khi một số tài liệu kiến trúc cũ lại mô tả lưu mảng JSONB `weekly_schedule` trong bảng `availabilities` còn Class Diagram mô tả các Value Objects `WeeklySchedule` và `TimeSlot`.
 
 ---
 
 ## 2. Các phương án xem xét (Alternatives Considered)
 
-### Phương án A: Cơ sở dữ liệu NoSQL Tài liệu (MongoDB)
-* *Ưu điểm:* Linh hoạt trong việc lưu trữ toàn bộ cây lộ trình (Roadmap $\rightarrow$ Milestones $\rightarrow$ Tasks) dưới dạng 1 document JSON lồng nhau.
-* *Nhược điểm:* Rất khó bảo đảm tính toàn vẹn tham chiếu quan hệ phức tạp; thiếu các ràng buộc `CHECK`, `FOREIGN KEY CASCADE` mạnh mẽ; quản trị giao dịch đa tài liệu phức tạp và tốn tài nguyên; không phù hợp để bảo vệ trước Hội đồng chấm thi chuyên ngành Công nghệ Phần mềm.
+### Phương án A: Tách 4 Cơ sở dữ liệu / 4 Schema Vật lý riêng biệt và Bỏ toàn bộ Foreign Keys liên Context
+* *Ưu điểm:* Cô lập vật lý giống Microservices.
+* *Nhược điểm:* Mất khả năng bảo vệ toàn vẹn tham chiếu (Referential Integrity) ở cấp hệ quản trị CSDL; khó chứng minh thiết kế lược đồ quan hệ chuẩn 3NF/BCNF hoàn chỉnh trước Hội đồng bảo vệ đồ án.
 
-### Phương án B: Cơ sở dữ liệu Quan hệ MySQL 8.0
-* *Ưu điểm:* Rất phổ biến, dễ cài đặt.
-* *Nhược điểm:* Khả năng hỗ trợ chỉ mục bộ phận (Partial Index / Filtered Index) kém hơn PostgreSQL; kiểu dữ liệu `JSONB` xử lý chậm hơn; hàm sinh UUID tích hợp sẵn không tối ưu bằng `gen_random_uuid()` của PostgreSQL 16; thiếu hỗ trợ `DEFERRABLE INITIALLY DEFERRED` cho các ràng buộc duy nhất phức hợp.
+### Phương án B: Dùng Khóa ngoại Phức hợp (Composite FK) kèm cột `user_id` dư thừa và Lưu Lịch rảnh bằng JSONB (Bản nháp cũ)
+* *Ưu điểm:* Truy vấn nhanh `user_id` mà không cần đi qua bảng cha.
+* *Nhược điểm:* Vi phạm chuẩn 3NF do phụ thuộc bắc cầu (`roadmap_id` đã xác định duy nhất `goal_id` và `user_id`); lưu khung giờ rảnh trong JSONB khiến CSDL không thể kiểm tra ràng buộc `start_time < end_time` hay `day_of_week` bằng các `CHECK` constraints quan hệ chuẩn.
 
-### Phương án C: PostgreSQL 16 Quan hệ kết hợp JSONB Tài liệu & Defense-in-Depth Constraints (Được chọn)
-* Sử dụng hệ quản trị CSDL quan hệ PostgreSQL 16 làm nguồn chân lý dữ liệu bền vững duy nhất (Single Source of Truth).
-* Chuẩn hóa toàn bộ 16 bảng dữ liệu đạt Dạng Chuẩn 3 (3NF) và Chuẩn Boyce-Codd (BCNF).
-* Tận dụng kiểu `JSONB` cho các tài liệu cấu trúc động (`proposal_data`, `weekly_schedule`, `quantitative_summary`), kết hợp hệ thống khóa chính UUIDv7 tuần tự theo thời gian (RFC 9562), khóa ngoại phức hợp cô lập Tenant, sổ cái giữ chỗ AI Quota 2 pha và các chỉ mục bộ phận (Partial Indexes).
+### Phương án C: Đồng bộ Tuyệt đối 24 Bảng Chuẩn 3NF/BCNF trên PostgreSQL 16 (`public` schema), Khóa ngoại Đơn (Single Surrogate FK), Bảng con `availability_slots` & Cấm ORM JOIN Chéo Context ở Tầng Ứng dụng (Được chọn)
+* Chuẩn hóa chính thức **24 bảng trong schema `public` của PostgreSQL 16** đạt chuẩn **3NF/BCNF** nghiêm ngặt.
+* Sử dụng **Khóa ngoại Đơn thay thế (Single Surrogate Foreign Keys - `UUIDv7`)** ở cấp CSDL để bảo toàn 3NF không dư thừa cột `user_id`, đồng thời **cấm tuyệt đối SQLAlchemy ORM JOIN hoặc import ORM Model chéo Bounded Context** trong mã nguồn ứng dụng.
+* Giữ nguyên bảng con chuẩn hóa **`availability_slots`** trong PostgreSQL 16 và thực hiện ánh xạ (mapping) bên trong `SqlAlchemyAvailabilityRepository` sang các Domain Value Objects `WeeklySchedule` và `TimeSlot`.
 
 ---
 
 ## 3. Quyết định (Decision)
-**Chấp thuận Phương án C với 8 trụ cột kỹ thuật chi tiết:**
+**Chấp thuận Phương án C với 5 trụ cột thiết kế CSDL v2.0:**
 
-1. **Hệ quản trị CSDL:** Lựa chọn **PostgreSQL 16 Alpine** (vận hành containerized qua Docker Compose).
-2. **Chiến lược Khóa chính Tuần tự Thời gian (UUIDv7 - RFC 9562):** 
-   - Khóa chính được sinh tại Backend Python bằng thư viện `uuid6` theo chuẩn UUIDv7 (chứa 48-bit timestamp), kết hợp fallback `id UUID PRIMARY KEY DEFAULT gen_random_uuid()` tại CSDL PostgreSQL 16.
-   - Đảm bảo tính đơn điệu tăng dần (Time-Ordered Monotonic), triệt tiêu phân mảnh trang chỉ mục B-Tree (Page Splitting) và tối ưu hóa bộ đệm Buffer Cache.
-3. **Kiến trúc Cô lập Dữ liệu Đa người dùng Đa tầng (Cross-Tenant Multi-Entity Isolation):**
-   - Thiết lập các Siêu khóa Ứng viên (Candidate Superkeys):
-     - `goals`: `CONSTRAINT uq_goals_id_user UNIQUE (id, user_id)`
-     - `roadmaps`: `CONSTRAINT uq_roadmaps_id_user UNIQUE (id, user_id)`
-   - Ràng buộc Khóa ngoại phức hợp kết nối User:
-     - `roadmaps`: `FOREIGN KEY (goal_id, user_id) REFERENCES goals(id, user_id) ON DELETE NO ACTION`
-     - `schedule_proposals`: `FOREIGN KEY (roadmap_id, user_id) REFERENCES roadmaps(id, user_id) ON DELETE CASCADE`
-     - `study_sessions`: `FOREIGN KEY (roadmap_id, user_id) REFERENCES roadmaps(id, user_id) ON DELETE CASCADE`
-     - `ai_reviews`: `FOREIGN KEY (roadmap_id, user_id) REFERENCES roadmaps(id, user_id) ON DELETE CASCADE`
-   - *Hệ quả:* Ngăn chặn 100% rủi ro lỗ hổng IDOR ở mức CSDL, bảo đảm người dùng A không bao giờ có thể tạo lộ trình, phiên học hay bản đề xuất trỏ vào mục tiêu của người dùng B.
-4. **Hiệu chỉnh Hành vi Xóa Tham chiếu (Referential Integrity Actions Tuning):**
-   - **`roadmaps.goal_id` sử dụng `ON DELETE NO ACTION`:** Thay thế `ON DELETE RESTRICT` để tránh lỗi câu lệnh khi xóa Người dùng (`DELETE FROM users`). Khi cascade xóa `users`, cả `goals` và `roadmaps` đều nhận lệnh xóa; `NO ACTION` chỉ kiểm tra tính hợp lệ ở cuối câu lệnh (End-of-Statement), do đó không gây lỗi nếu `goals` bị xóa trước `roadmaps`, đồng thời vẫn chặn hoàn toàn hành vi người dùng cố tình xóa lẻ Goal khi Roadmap đang hoạt động.
-   - **`session_tasks.task_id` sử dụng `ON DELETE RESTRICT`:** Ngăn chặn việc xóa cứng Task khi task đó đã từng được học trong một Phiên học (`study_sessions`). Để duy trì lịch sử học tập chuẩn xác, ứng dụng bắt buộc phải chuyển trạng thái task sang `CANCELLED` thay vì xóa vật lý.
-5. **Cơ chế Hạn ngạch AI Hai Pha & Sổ cái Giữ chỗ (`ai_quota_reservations`):**
-   - Bổ sung bảng thứ 16: `ai_quota_reservations` đóng vai trò Transaction Ledger cho việc trừ hạn ngạch AI:
-     - Trạng thái: `RESERVED` $\rightarrow$ `COMMITTED` (khi AI gọi thành công) hoặc `RELEASED` / `EXPIRED` (khi thất bại/quá hạn).
-     - Lưu trữ `expires_at` (thời hạn 5 phút) cho phép Celery Beat Sweeper Job tự động quét và hoàn trả số lượt `reserved_calls` bị treo khi worker crash hoặc client ngắt kết nối SSE.
-   - Cột `ai_quotas.tokens_consumed` nâng cấp lên `BIGINT` để tránh tràn số nguyên 32-bit ($> 2.14$ tỷ tokens).
-6. **Tự động hóa Đồng bộ Thời gian Kiểm toán (Automated Auditing via Triggers):**
-   - Định nghĩa hàm trigger dùng chung: `set_updated_at()`.
-   - Gắn 12 Triggers `BEFORE UPDATE` trên tất cả 12 bảng có cột `updated_at`, đảm bảo thời gian cập nhật luôn được ghi nhận chính xác ở cấp độ hệ quản trị CSDL ngay cả khi truy vấn qua Raw SQL.
-7. **Toàn vẹn Nghiệp vụ & Ràng buộc Hoãn lại (Domain Invariants & Deferrable Constraints):**
-   - Hoán đổi vị trí Milestones: `CONSTRAINT uq_milestone_roadmap_sequence UNIQUE (roadmap_id, sequence_order) DEFERRABLE INITIALLY DEFERRED` cho phép cập nhật thứ tự các chặng học trong cùng một giao dịch mà không bị xung đột khóa tạm thời.
-   - Chuẩn hóa Email không phân biệt hoa thường: `CREATE UNIQUE INDEX uq_users_lower_email ON users (LOWER(email))`.
-   - Kiểm định cấu trúc JSON: Ràng buộc `jsonb_typeof(...) = 'object'` trên `availabilities.weekly_schedule` (lưu trữ đồng thời cả Mode A preferences và Mode B cross-midnight offset slots theo D-05, D-10), `schedule_proposals.proposal_data`, và `ai_reviews.quantitative_summary`.
-   - Phân tách cấu hình tích hợp lịch: Cột `availabilities.calendar_integration_mode` (`NONE`, `EXPORT_ICS`, `CONNECTED`) độc lập với `mode` (D-06).
-   - Kiểm toán đồng thời Optimistic Locking: Tận dụng trigger `trg_availabilities_updated_at` để bảo vệ cổng kích hoạt lịch (Apply Gate), trả về HTTP 409 nếu phiên bản cấu hình rảnh bị thay đổi ở phiên khác (D-09).
-   - Tính toán chính xác ngày lùi lịch: `CONSTRAINT chk_pause_duration CHECK (shifted_days = (pause_end_date - pause_start_date + 1))`.
-   - Kiểm soát chu kỳ Đánh giá AI: `milestone_id` bắt buộc khi `review_cycle = 'MILESTONE'`, `(period_start, period_end)` bắt buộc khi `review_cycle = 'WEEKLY'`.
-   - Ảnh chụp Kế hoạch cơ sở: Cột `official_schedules.total_planned_minutes INTEGER` đóng băng tổng thời gian dự kiến (Frozen Baseline) theo đơn vị phút thống nhất.
-8. **Chiến lược 24 Chỉ mục Tối ưu Hóa Truy vấn (23 Optimized Indexes):**
-   - Đảm bảo 100% cột Khóa ngoại đều có Index tương ứng để triệt tiêu Table Scan khi JOIN.
-   - Chỉ mục bộ phận kiểm soát đơn phiên hoạt động: `uq_user_single_active_session` trên `study_sessions(user_id) WHERE status = 'IN_PROGRESS'`.
-   - Chỉ mục bộ phận đơn bản nháp đề xuất: `uq_one_draft_per_roadmap` trên `schedule_proposals(roadmap_id) WHERE status = 'DRAFT'`.
-   - Chỉ mục chống trùng lặp đánh giá AI: `uq_ai_reviews_weekly` và `uq_ai_reviews_milestone`.
-   - Chỉ mục tối ưu truy vấn quét Task quá hạn và phục hồi phiên học gián đoạn của Celery Worker.
+### 3.1. Phân bổ Chính thức 24 Bảng Chuẩn 3NF/BCNF theo 4 Bounded Contexts + `shared_kernel`
+Toàn bộ 24 bảng nằm trong schema `public` của PostgreSQL 16, trong đó mỗi bảng thuộc quyền **sở hữu ghi độc quyền (Exclusive Write Ownership)** của đúng một Bounded Context:
+
+| Phân vùng (Bounded Context) | Số lượng | Danh sách các Bảng PostgreSQL 16 Sở hữu |
+| :--- | :---: | :--- |
+| **1. `account`** | **9 bảng** | `users`, `learner_profiles`, `availabilities`, `availability_slots`, `webcal_tokens`, `ai_quotas`, `ai_quota_reservations`, `ai_usage_logs`, `payment_transactions` |
+| **2. `planning`** | **7 bảng** | `goals`, `roadmaps`, `milestones`, `official_schedules`, `tasks`, `task_dependencies`, `schedule_proposals` |
+| **3. `execution`** | **4 bảng** | `study_sessions`, `session_tasks`, `study_notes`, `pause_records` |
+| **4. `evaluation`** | **2 bảng** | `ai_reviews`, `schedule_change_logs` |
+| **5. `shared_kernel`** | **2 bảng** | `outbox_events`, `processed_events` |
+| **Tổng cộng toàn hệ thống** | **24 bảng** | **Đạt chuẩn 3NF / BCNF 100% với Khóa chính `UUIDv7` tuần tự thời gian** |
+
+### 3.2. Khóa Ngoại Đơn (Single Surrogate Foreign Keys) tại CSDL kết hợp Cấm ORM JOIN Chéo Context
+1. **Ở cấp độ CSDL Vật lý (`PostgreSQL 16`):**
+   * Loại bỏ hoàn toàn thiết kế Composite FK dư thừa `user_id` ở các bảng con tầng sâu. Mọi liên kết quan hệ đều sử dụng **Single Surrogate Foreign Key (`UUIDv7`)** chuẩn mực (ví dụ: `roadmaps.goal_id -> goals.id`, `milestones.roadmap_id -> roadmaps.id`, `schedule_proposals.roadmap_id -> roadmaps.id`, `study_sessions.roadmap_id -> roadmaps.id`, `ai_reviews.roadmap_id -> roadmaps.id`).
+   * Cách thiết kế này khớp 100% với [`database-schema-design.md`](file:///Users/vuthang/Documents/FocusFlow/docs/database/database-schema-design.md), loại bỏ hoàn toàn phụ thuộc bắc cầu và bảo toàn chuẩn **3NF/BCNF** thuần khiết.
+   * Quyền sở hữu dữ liệu của người dùng (Multi-tenant Ownership / Chống IDOR) được kiểm tra chặt chẽ thông qua truy vấn xác thực quyền sở hữu tại Repository/Query Port trước khi thực hiện thao tác.
+2. **Ở cấp độ Mã nguồn Ứng dụng (`SQLAlchemy 2.0 ORM`):**
+   * Giữ các ràng buộc `FOREIGN KEY` vật lý ở DDL SQL để đảm bảo tính toàn vẹn dữ liệu cấp cuối (Defense-in-Depth), nhưng **cấm tuyệt đối việc khai báo `relationship()` hoặc viết câu lệnh SQLAlchemy `JOIN` trực tiếp giữa các bảng thuộc hai Bounded Context khác nhau**.
+   * Mọi nhu cầu tra cứu dữ liệu liên Context bắt buộc đi qua `public_api.py` (Read-Only Query Port) của Context sở hữu bảng đó (`ADR-001`).
+
+### 3.3. Giải quyết Triệt để Bài toán Lịch Rảnh: Bảng `availability_slots` $\leftrightarrow$ Value Objects `WeeklySchedule` & `TimeSlot`
+* **Tại tầng CSDL (`PostgreSQL 16`):** Lưu trữ các khung giờ rảnh trong bảng con chuẩn hóa **`availability_slots`** (`id`, `availability_id`, `day_of_week`, `start_time`, `end_time`, `slot_type`, ...) có khóa ngoại trỏ về `availabilities(id) ON DELETE CASCADE`. Điều này cho phép kiểm tra ràng buộc toàn vẹn từng khung giờ bằng SQL `CHECK` constraints và đạt chuẩn 3NF tuyệt đối (không lưu mảng lặp trong cột JSONB).
+* **Tại tầng Domain (`account.domain`):** Aggregate Root `AvailabilityProfile` giữ đối tượng giá trị bất biến **`WeeklySchedule`** chứa tập hợp các **`TimeSlot`** (đồng bộ 100% với `Class Diagram v4.2`) để phục vụ tính toán trong `HybridAvailabilityRuleEngine`.
+* **Tại tầng Infrastructure (`SqlAlchemyAvailabilityRepository`):** Repository đảm nhận vai trò **Data Mapper** nạp bảng `availabilities` cùng danh sách `availability_slots` (qua `selectinload`) và tái cấu trúc thành `WeeklySchedule` / `TimeSlot` khi đọc lên Domain, cũng như đồng bộ ngược lại các dòng `availability_slots` khi lưu Aggregate Root.
+
+### 3.4. Chuẩn hóa 5 Bảng Nghiệp vụ & Hạ tầng Bổ sung cùng `ai_usage_logs`
+Bản thiết kế v2.0 chính thức chuẩn hóa đầy đủ các bảng phục vụ giao dịch tài chính, hạn ngạch AI, kiểm toán lịch và kiến trúc hướng sự kiện:
+1. **`payment_transactions` (`account`):** Lưu trữ lịch sử giao dịch nâng cấp gói (`UC-05`), mã tham chiếu duy nhất `transaction_ref` (`UNIQUE` chống replay webhook), số tiền, cổng thanh toán (`PAYOS`/`VNPAY`/`LOCAL_MOCK`) và trạng thái (`PENDING`, `PAID`, `FAILED`, `CANCELLED`).
+2. **`ai_quota_reservations` (`account`):** Sổ cái giữ chỗ hạn ngạch AI 2 pha (`RESERVED`, `COMMITTED`, `RELEASED`, `EXPIRED`) kèm cột `expires_at` phục vụ `QuotaSweeperTask` (`ADR-005`).
+3. **`ai_usage_logs` (`account`):** Bảng telemetry ghi nhận từng lệnh gọi LLM (mô hình, số prompt/completion tokens, thời gian phản hồi `latency_ms`, trạng thái thành công/lỗi) phục vụ giám sát hệ thống của Admin (`UC-19`).
+4. **`schedule_change_logs` (`evaluation`):** Bảng kiểm toán bất biến ghi lại mọi biến động lịch trình (do `DominoShiftEngine` khi Pause/Resume lộ trình hoặc do xử lý quá hạn `UC-16`, `UC-17`), lưu trữ trạng thái trước/sau và lý do dịch chuyển.
+5. **`outbox_events` & `processed_events` (`shared_kernel`):** Cặp bảng hạ tầng đảm bảo mẫu **Transactional Outbox** và **Idempotent Consumer** giữa 4 Bounded Contexts (`ADR-001`, `ADR-004`).
+
+### 3.5. Ràng buộc Toàn vẹn Cốt lõi, Deferrable Constraints & Partial Indexes
+* **Khóa chính UUIDv7 (RFC 9562):** Sinh tại tầng Domain Python (`uuid6.uuid7()`), đảm bảo thứ tự tăng dần theo thời gian, chống phân mảnh B-Tree Index.
+* **Bảo tồn lịch sử học tập:** `session_tasks.task_id` sử dụng `ON DELETE RESTRICT` để ngăn xóa cứng các Task đã từng có lịch sử phiên học; ứng dụng chuyển trạng thái Task sang `CANCELLED`.
+* **Ràng buộc hoãn lại (Deferrable Unique):** `uq_milestone_roadmap_sequence UNIQUE (roadmap_id, sequence_order) DEFERRABLE INITIALLY DEFERRED` hỗ trợ hoán đổi thứ tự Milestones mượt mà trong một giao dịch.
+* **Partial Unique Indexes:** Đảm bảo mỗi người học chỉ có tối đa 1 phiên `IN_PROGRESS` (`uq_user_single_active_session`) và mỗi lộ trình chỉ có tối đa 1 bản nháp đề xuất `DRAFT` (`uq_one_draft_per_roadmap`).
 
 ---
 
 ## 4. Lý do & Đánh đổi (Rationale & Trade-Offs)
 
-| Tiêu chí | Quyết định Lựa chọn | Đánh đổi / Chi phí Chấp nhận |
+| Tiêu chí | Quyết định Lựa chọn v2.0 | Lý do & Giá trị Đạt được |
 | :--- | :--- | :--- |
-| **Bảo vệ Tính toàn vẹn (Integrity)** | Cài đặt toàn bộ Invariants ở CSDL (`CHECK`, Composite FK, Triggers, Deferrable Unique). | CSDL có cấu trúc chặt chẽ, câu lệnh INSERT/UPDATE phải tuân thủ nghiêm ngặt schema. |
-| **Bảo mật Multi-tenant** | Khóa ngoại phức hợp `(goal_id, user_id)` và `(roadmap_id, user_id)`. | Phải tạo thêm Unique index phức hợp trên bảng cha để làm mục tiêu tham chiếu (tốn thêm một phần nhỏ dung lượng index). |
-| **Độ tin cậy Quota AI** | Bảng sổ cái `ai_quota_reservations` + Sweeper Job. | Tăng thêm 1 bảng và 1 thao tác ghi bản ghi reservation khi bắt đầu gọi LLM. Đổi lại: triệt tiêu 100% thất thoát hạn ngạch. |
-| **Bảo tồn Lịch sử Học** | `ON DELETE RESTRICT` trên `session_tasks.task_id`. | Ứng dụng không thể gọi lệnh DELETE bừa bãi trên Task đã học mà phải Soft Delete / Đổi status `CANCELLED`. Đổi lại: Báo cáo học tập lịch sử không bao giờ bị mồ côi hoặc sai lệch. |
+| **Chuẩn hóa 3NF/BCNF** | Khóa ngoại đơn (Single Surrogate FK) + Bảng con `availability_slots`. | Loại bỏ hoàn toàn cột `user_id` dư thừa bắc cầu và mảng JSONB lặp; thuyết phục tuyệt đối Hội đồng chấm thi về lý thuyết CSDL quan hệ. |
+| **Cô lập Bounded Context** | Giữ FK vật lý ở PostgreSQL nhưng cấm ORM JOIN chéo Context. | Vừa có lưới an toàn Referential Integrity ở cấp DB, vừa giữ mã nguồn các Bounded Context độc lập hoàn toàn (`ASR-01`). |
+| **Đồng bộ Tài liệu 100%** | Thống nhất con số **24 bảng** trên mọi tài liệu (`ERD`, `DDL`, `Class Diagram`, `ADRs`). | Xóa bỏ hoàn toàn mâu thuẫn giữa các phiên bản tài liệu cũ. |
 
 ---
 
-## 5. Hệ quả & Rủi ro (Consequences)
+## 5. Nguồn Chân Lý của Schema & Chiến Lược Migration (Schema Source of Truth & Migration Strategy)
 
-### Tích cực (Positive Consequences)
-- **Đạt điểm tối đa đồ án tốt nghiệp (TC2.1 & TC2.3 Mức 5):** Thiết kế mô hình CSDL hoàn chỉnh, chuẩn hóa 3NF/BCNF, kiểm soát toàn diện ACID, bảo mật đa người dùng và kiểm toán tự động.
-- **Triệt tiêu lỗi logic nghiệp vụ:** Không còn rủi ro người dùng mở nhiều phiên học cùng lúc, tạo nhiều bản nháp đè nhau, hoặc sinh trùng lặp báo cáo tuần khi Celery retry.
-- **Hiệu năng cao & Khả năng mở rộng:** Nhờ UUIDv7 và 24 chỉ mục tối ưu được tối ưu có chủ đích, hệ thống sẵn sàng xử lý hàng triệu bản ghi mà không lo phân mảnh đĩa.
-
-### Giảm thiểu Rủi ro (Risk Mitigation)
-- **Đồng bộ Schema mã nguồn:** Sử dụng SQLAlchemy 2.0 Async (`asyncpg`) và Alembic để sinh và kiểm soát các tập lệnh Migration tương thích 100% với `schema.sql`.
-- **Sao lưu & Phục hồi:** Sử dụng Docker Volume `pg_data` bền vững và tệp kiểm thử khởi tạo tự động `schema.sql` (gắn vào `/docker-entrypoint-initdb.d/01-init.sql`).
+* **Alembic là Nguồn Chân lý khi chạy (Runtime Source of Truth):**
+  - Mọi thay đổi cấu trúc CSDL vật lý đều được hiện thực hóa thông qua các phiên bản di chuyển dữ liệu (migrations) được quản lý chặt chẽ bởi **Alembic Async** (`alembic/versions/`).
+  - Khi triển khai môi trường Docker Compose hoặc Cloud Production, tiến trình khởi động của dịch vụ `backend` sẽ tự động thực thi lệnh `alembic upgrade head` trước khi khởi chạy máy chủ ASGI `uvicorn`. CSDL vật lý không còn phụ thuộc vào việc gắn tệp SQL tĩnh qua thư mục `/docker-entrypoint-initdb.d/`.
+* **Vai trò của `docs/database/schema.sql`:**
+  - `schema.sql` (v3.0 — 24 bảng 3NF/BCNF) đóng vai trò là **tài liệu thiết kế kiến trúc chuẩn mực (Design Specification Target)** và là bản DDL phục vụ cho Hội đồng chấm đồ án tốt nghiệp.
+  - Trong quá trình phát triển, tệp `schema.sql` được đồng bộ ngược (regenerate) từ CSDL thực thi đã áp dụng đủ các migration mới nhất thông qua kịch bản `backend/scripts/dump_schema.sh` (`pg_dump --schema-only --no-owner --no-privileges`).
+  - Kiểm thử CI (CI Pipeline) sẽ tự động kiểm tra tính tương đồng (diff check) giữa kết quả xuất từ `alembic upgrade head` trên CSDL mới với tệp `docs/database/schema.sql` để đảm bảo không xảy ra hiện tượng trôi dạt lược đồ (schema drift).
 
 ---
 
-## 6. Yêu cầu & Tài liệu liên quan
-- **Yêu cầu SRS:** `FR-AUTH-001`, `FR-PLAN-001..003`, `FR-SESSION-001..003`, `FR-TASK-001`, `FR-ADAPT-001`, `FR-REPORT-001`, `BUSR-02`, `BUSR-06`, `BUSR-07`, `OS-01`, `OS-03`.
-- **ADR liên quan:** `ADR-001` (Kiến trúc Lục giác), `ADR-002` (Backend Tech Stack), `ADR-004` (Celery & Background Jobs).
-- **Hồ sơ thiết kế chi tiết:**
-  - [`docs/database/database-schema-design.md`](file:///Users/vuthang/Documents/FocusFlow/docs/database/database-schema-design.md) (Mô hình ERD, DBML, 16 Bảng, 24 Index)
-  - [`docs/database/data-dictionary.md`](file:///Users/vuthang/Documents/FocusFlow/docs/database/data-dictionary.md) (Từ điển Dữ liệu, Constraint Matrix, Index Matrix)
-  - [`docs/database/schema.sql`](file:///Users/vuthang/Documents/FocusFlow/docs/database/schema.sql) (Tập lệnh DDL thực thi PostgreSQL 16)
+## 6. Hệ quả & Kiểm chứng (Consequences & Verification)
+* **Tích cực:** Lược đồ CSDL 24 bảng đạt độ chuẩn xác học thuật và kỹ thuật cao nhất (Rubric TC2.1 & TC2.3 Mức 5). Quy trình migration tự động triệt tiêu hoàn toàn rủi ro mất dữ liệu khi nâng cấp hệ thống.
+* **Kiểm chứng Tự động:** Tập lệnh migration của Alembic và `schema.sql` khởi tạo thành công 24 bảng, đầy đủ Foreign Keys, Check Constraints, Triggers `set_updated_at()` và Partial Indexes trên PostgreSQL 16 mà không có bất kỳ cảnh báo nào.

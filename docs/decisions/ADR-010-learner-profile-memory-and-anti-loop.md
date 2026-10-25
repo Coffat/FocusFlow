@@ -1,59 +1,81 @@
-# ADR-010: Lựa chọn Thiết kế Hồ sơ Người học (Learner Profile Memory) theo Mô hình Zimmerman SRL và Cơ chế Ngắt mạch Chống lặp Quá hạn (Overdue Anti-Loop)
+# ADR-010: Hồ sơ Năng lực Người học (Zimmerman SRL) qua Transactional Outbox / Taskiq & Ngắt mạch Chống lặp Quá hạn (`reschedule_count >= 3`)
 
-* **Trạng thái:** Được chấp thuận (Approved — Đã chuẩn hóa theo SRS v1.1 & Kết quả Rà soát Kiến trúc)
-* **Ngày quyết định:** 16/10/2026
+* **Trạng thái:** Được chấp thuận (Approved — Cập nhật Kiến trúc v2.0)
+* **Ngày quyết định:** 16/10/2026 (Cập nhật v2.0: 25/10/2026)
 * **Người quyết định:** Vũ Toàn Thắng, Phan Đình Duẩn
-* **Căn cứ đánh giá:** Khung Rubric Đồ án Tốt nghiệp CNTT — Tiêu chí TC2.1, TC2.3 (Mức 5)
-* **Yêu cầu liên quan:** FR-ADAPT-001, FR-ADAPT-003, FR-PAUSE-001, FR-PAUSE-002, FR-PROFILE-001, BUSR-06, BUSR-07, BUSR-09
+* **Căn cứ đánh giá:** Khung Rubric Đồ án Tốt nghiệp CNTT — Tiêu chí TC2.1 & TC2.3 (Mức 5)
+* **Yêu cầu liên quan:** `ASR-01`, `ASR-02`, `FR-ADAPT-001`, `FR-ADAPT-003`, `FR-PAUSE-001`, `FR-PAUSE-002`, `FR-PROFILE-001`, `UC-03`, `UC-10`, `UC-16`, `UC-17`, `BUSR-06`, `BUSR-07`, `BUSR-09`
 
 ---
 
 ## 1. Ngữ cảnh & Đặt vấn đề (Context)
-1. **Thiếu Khả năng Cá nhân hóa Thực chứng:** Trong mô hình Self-Regulated Learning (Zimmerman 2002), giai đoạn Phản tư (Self-Reflection) đóng vai trò quyết định để tái lập kế hoạch (Forethought) hiệu quả hơn. Hiện tại, FocusFlow chỉ nhận dữ liệu đầu vào tĩnh; AI Planner không học hỏi từ lịch sử thực tế của sinh viên (thường học bao nhiêu phút thì đuối, có xu hướng ước lượng thiếu thời gian hay không).
-2. **Hiện tượng Tuyết lăn Trì hoãn (Procrastination Snowball):** Khi một task bị trễ hạn, cơ chế quét quá hạn tự động dời sang ngày tiếp theo. Nếu sinh viên liên tục bỏ bê task nhiều ngày liền, việc tự động dời lịch vô hạn gây ra tình trạng dồn ứ lịch trình ảo, phá vỡ tính cam kết tâm lý của người học.
+Nền tảng lý thuyết cốt lõi của FocusFlow là mô hình **Học tập Tự điều chỉnh của Zimmerman (Self-Regulated Learning — SRL, 2002)** gồm 3 pha khép kín: *Forethought (Hoạch định)* $\to$ *Performance (Thực thi)* $\to$ *Self-Reflection (Phản tư & Thích ứng)*. Để chu trình SRL thực sự khép kín về mặt kỹ thuật trong kiến trúc Context-First Modular Monolith (`ADR-001`), hệ thống phải giải quyết hai vấn đề:
+1. **Đồng bộ Dữ liệu Hành vi Học tập Liên Bounded Context mà Không Gây Nghẽn Giao dịch (`ASR-01`, `ASR-02`):**
+   * Phiên học (`StudySession`) diễn ra tại Bounded Context **`execution`**, trong khi Hồ sơ năng lực người học (`LearnerProfile` — bảng `learner_profiles`) lại thuộc quyền sở hữu của Bounded Context **`account`** và được sử dụng bởi **`planning`** khi lập lịch AI.
+   * Nếu tính toán lại toàn bộ chỉ số thống kê SRL ngay trong HTTP request kết thúc phiên học (`CompleteStudySessionUseCase`) hoặc gọi ORM ghi trực tiếp từ `execution` sang bảng `learner_profiles` của `account`, hệ thống sẽ làm chậm độ trễ API và phá vỡ ranh giới cô lập Bounded Context.
+   * Ngược lại, nếu chỉ bắn sự kiện qua bộ nhớ tạm mà không có cơ chế bền vững (như cách gọi Celery rời rạc trước đây), dữ liệu học tập sẽ bị lệch nếu worker gặp sự cố.
+2. **Ngăn chặn Hiện tượng "Tuyết lăn Trì hoãn" (Procrastination Snowball) & Ghi nhận Kiểm toán Lịch trình (`FR-ADAPT-003`, `BUSR-06`, `BUSR-07`):**
+   * Khi người học bỏ lỡ nhiệm vụ, hệ thống hỗ trợ dời lịch. Tuy nhiên, nếu một nhiệm vụ bị trì hoãn và dời lịch tự động lặp đi lặp lại nhiều lần, lịch trình tương lai sẽ bị dồn ứ ảo và người học mất hoàn toàn động lực cam kết.
 
 ---
 
-## 2. Các phương án xem xét (Alternatives)
+## 2. Các phương án xem xét (Alternatives Considered)
 
-### Hạng mục 1: Kiến trúc Hồ sơ Người học (Learner Profile Memory)
-* **Phương án A — Tính toán Trực tiếp Đồng bộ (Online Real-time):** Tính toán lại toàn bộ chỉ số profile ngay trong request HTTP kết thúc phiên học (`FinishSession`).
-  * *Nhược điểm:* Làm chậm API kết thúc phiên (tăng latency $> 500\text{ms}$); dễ xung đột khóa dữ liệu.
-* **Phương án B — Tích hợp Vector DB & Agent Memory Framework ngoài (như Honcho trong Hermes):**
-  * *Nhược điểm:* Quá phức tạp và cồng kềnh đối với đồ án tốt nghiệp; Honcho tập trung vào persona đàm thoại chứ không trích xuất số liệu học tập định lượng.
-* **Phương án C — Tổng hợp Bất đồng bộ qua Celery vào Bảng `learner_profiles` (Được chọn):**
-  * Tách biệt hoàn toàn: Tác vụ nền Celery chạy định kỳ (sau mỗi $\ge 5$ phiên hoàn thành hoặc tổng hợp hàng tuần).
-  * Định nghĩa ngưỡng dữ liệu riêng biệt cho từng chỉ số để tránh kết luận vội:
-    - $D_{opt}$ (thời lượng tập trung tối ưu): Cần $\ge 5$ phiên, lọc bỏ ngoại lệ $< 5$p hoặc $> 180$p trước khi tính Median.
-    - $\beta_{bias}$ (hệ số chệch ước lượng): Cần $\ge 8$ task, kẹp trong khoảng an toàn $[0.50, 2.00]$.
-    - Khung giờ đỉnh: Cần $\ge 10$ phiên qua 14 ngày.
-  * Có cơ chế Cold Start rõ ràng (dưới ngưỡng dùng giá trị chuẩn); đóng gói System Prompt tinh gọn $\le 60$ tokens để bảo đảm prompt hygiene; người dùng có quyền xem và Reset Profile.
+### Hạng mục 1: Cơ chế Cập nhật Hồ sơ Năng lực Người học (`learner_profiles`)
+* **Phương án A — Tính toán Đồng bộ Trực tiếp trong HTTP Request Kết thúc Phiên học:**
+  * *Nhược điểm:* Tăng độ trễ API kết thúc phiên học và tạo sự phụ thuộc ghi trực tiếp từ Context `execution` sang Context `account`, vi phạm `ADR-001`.
+* **Phương án B — Đẩy Task Trực tiếp sang Celery không có Outbox (Thiết kế cũ v1.0):**
+  * *Nhược điểm:* Celery bất tương thích với `SQLAlchemy 2.0 AsyncSession` (`ADR-004`); dễ xảy ra lỗi Dual-Write (commit DB thành công nhưng gửi message sang Redis thất bại làm mất sự kiện cập nhật hồ sơ).
+* **Phương án C — Phát `StudySessionCompletedEvent` qua Transactional Outbox (`outbox_events`) $\to$ Taskiq Worker Cập nhật Bất đồng bộ `learner_profiles` (Được chọn):**
+  * Đảm bảo cô lập tuyệt đối giữa `execution` và `account`, đồng thời cam kết **0% mất sự kiện (`ASR-02`)** nhờ mẫu Transactional Outbox + Idempotent Consumer (`processed_events`) trên nền **Taskiq + Redis Streams**.
 
-### Hạng mục 2: Cơ chế Chống lặp Quá hạn (Overdue Anti-Loop)
-* **Phương án A — Cho phép Dời lịch Vô hạn, chỉ Tăng Priority:**
-  * *Nhược điểm:* Task bị trôi dạt vĩnh viễn, người học mất cảm giác trách nhiệm với mục tiêu.
-* **Phương án B — Tự động Xóa hoặc Đẩy thẳng về Backlog:**
-  * *Nhược điểm:* Quá tiêu cực và gây thất lạc nhiệm vụ quan trọng mà không hỏi ý kiến người học.
-* **Phương án C — Ngắt mạch tại Ngưỡng 3 lần Dời lịch (`reschedule_count >= 3`) kết hợp Phân lập Domino Shift (Được chọn):**
-  * Dựa trên lý thuyết tâm lý học trì hoãn (Steel 2007): Sau 3 ngày liên tiếp trì hoãn, hành vi né tránh đã hình thành.
-  * Khi `reschedule_count >= 3`: Khóa dời lịch tự động, chuyển trạng thái dẫn xuất sang `STALLED`, kích hoạt hộp thoại can thiệp với 3 lựa chọn (Cam kết ngày cố định, Chia nhỏ task bằng AI, hoặc Chuyển về Backlog).
-  * **Phân lập với Domino Shift:** Khi tạm dừng toàn bộ Roadmap (`FR-PAUSE`), thuật toán Domino Shift tịnh tiến ngày **KHÔNG làm tăng `reschedule_count`** vì đây là quyết định chủ động toàn cục, không phải lỗi bỏ bê task cá nhân.
-  * Chống race condition giữa các Celery worker bằng `SELECT ... FOR UPDATE SKIP LOCKED`.
+### Hạng mục 2: Cơ chế Kiểm soát Quá hạn & Dịch lịch Thích ứng
+* **Phương án A — Tự động Dời lịch Vô hạn không Giới hạn Số lần:**
+  * *Nhược điểm:* Gây hiệu ứng tuyết lăn trì hoãn, làm mất ý nghĩa của kế hoạch học tập.
+* **Phương án B — Ngắt mạch Chống lặp Quá hạn (`reschedule_count >= 3`) Thực thi bởi Taskiq Scheduler kết hợp `DominoShiftEngine` & Bảng Kiểm toán `schedule_change_logs` (Được chọn):**
+  * Khóa tự động dời lịch khi chạm ngưỡng `reschedule_count >= 3` để yêu cầu người học can thiệp chủ động (`UC-17`), đồng thời phân lập rạch ròi với thao tác tạm dừng lộ trình toàn cục (`DominoShiftEngine` - `UC-16`) và lưu vết đầy đủ vào bảng `schedule_change_logs`.
 
 ---
 
 ## 3. Quyết định (Decision)
-**Chấp thuận Phương án C cho cả hai hạng mục: Triển khai Bảng `learner_profiles` tổng hợp bất đồng bộ qua Celery theo chuẩn Zimmerman SRL và Cơ chế Overdue Anti-Loop Circuit Breaker tại ngưỡng 3 lần dời lịch.**
+**Chấp thuận Phương án C cho cả hai hạng mục với thiết kế chi tiết v2.0 như sau:**
+
+### 3.1. Luồng Cập nhật Hồ sơ Năng lực SRL qua Transactional Outbox $\to$ Taskiq Worker
+1. **Phát Sự kiện Nguyên tử tại Context `execution`:**
+   * Khi người học hoàn thành phiên học (`UC-10`) hoặc khi `AbandonedSessionSweeperTask` chốt phiên `PARTIAL_COMPLETED` (`OS-01`), Aggregate Root `StudySession` phát ra sự kiện miền **`StudySessionCompletedEvent`**.
+   * `SqlAlchemyUnitOfWork` ghi nhận trạng thái phiên học vào bảng `study_sessions` và ghi `StudySessionCompletedEvent` vào bảng **`outbox_events`** trong cùng một giao dịch PostgreSQL ACID.
+2. **Chuyển tiếp & Xử lý Lũy đẳng trên Taskiq Worker tại Context `account`:**
+   * `OutboxRelayTask` đẩy sự kiện qua **Redis Streams (`RedisStreamBroker`)**.
+   * Taskiq Worker của Bounded Context `account` (`UpdateLearnerProfileOnSessionCompletedHandler`) nhận sự kiện, kiểm tra `event_id` trong bảng **`processed_events`** để chống xử lý trùng lặp, truy vấn dữ liệu thống kê qua `StudyExecutionQueryPort` (`execution/public_api.py`) và cập nhật bảng **`learner_profiles`**:
+     * **Thời lượng Tập trung Tối ưu ($D_{opt}$ — `preferred_session_duration`):** Tính trung vị (Median) thời lượng thực học hiệu quả khi đủ ngưỡng $\ge 5$ phiên (lọc bỏ nhiễu $< 5$ phút hoặc $> 180$ phút).
+     * **Hệ số Chệch Ước lượng Thời gian ($\beta_{bias}$ — `estimation_bias_factor`):** Tỷ số giữa thời gian thực tế và thời gian dự kiến khi đủ $\ge 8$ tasks hoàn thành, được kẹp an toàn trong đoạn $[0.50, 2.00]$.
+     * **Khung Giờ Năng suất Đỉnh (`peak_productivity_window`) & Điểm Tuân thủ (`adherence_rate`):** Tổng hợp từ chuỗi phiên học trong 14 ngày gần nhất.
+   * **Cơ chế Cold Start & Quyền Tự chủ (`UC-03`):** Khi chưa đủ ngưỡng dữ liệu, hệ thống giữ giá trị mặc định chuẩn ($D_{opt} = 45\text{ phút}$, $\beta_{bias} = 1.00$). Người học có toàn quyền xem và bấm **Reset Learner Profile** về trạng thái gốc bất cứ lúc nào.
+
+### 3.2. Cơ chế Ngắt mạch Chống lặp Quá hạn (Overdue Anti-Loop Circuit Breaker — `reschedule_count >= 3`)
+1. **Quét Định kỳ bằng `TaskiqScheduler` (`replicas: 1`):**
+   * `TaskiqScheduler` kích hoạt `OverdueAntiLoopSweeperTask` (tại Bounded Context `evaluation` / `planning`) sử dụng khóa hàng **`SELECT ... FOR UPDATE SKIP LOCKED`** để quét các nhiệm vụ quá hạn chưa hoàn thành mà không bao giờ gây xung đột giữa các worker.
+2. **Ngưỡng Ngắt mạch `reschedule_count >= 3` (`BUSR-06`, `UC-17`):**
+   * Dựa trên Lý thuyết Động lực Thời gian (Temporal Motivation Theory — Steel, 2007), nếu một nhiệm vụ bị dời lịch quá hạn chạm ngưỡng **`reschedule_count >= 3`**, hệ thống lập tức **ngắt mạch tự động dời lịch**, đánh dấu trạng thái cần can thiệp (`STALLED`) và phát sự kiện `TaskStalledThresholdReachedEvent`.
+   * Trên giao diện Angular 21+ (`tasks` feature slice), hệ thống hiển thị **Hộp thoại Can thiệp Thích ứng (SRL Intervention Dialog)** yêu cầu người học chọn 1 trong 3 giải pháp chủ động:
+     1. **Cam kết Ngày Cố định Mới (Re-commit):** Chọn lại khung giờ cụ thể và đặt lại cam kết.
+     2. **Nhờ AI Chia nhỏ Nhiệm vụ (AI Micro-Stepping):** Gọi `LLMProviderPort` tách nhiệm vụ đang bị quá tải thành 2–3 nhiệm vụ nhỏ dễ hoàn thành hơn ($\le 30\text{ phút}$).
+     3. **Đưa về Backlog / Hủy bỏ (Move to Backlog / Cancel):** Giải phóng áp lực cho lịch học hiện tại.
+3. **Phân lập Tuyệt đối với `DominoShiftEngine` & Kiểm toán trong `schedule_change_logs` (`BUSR-07`, `UC-16`):**
+   * Khi người học chủ động **Tạm dừng và Tiếp tục Lộ trình (`Pause / Resume Roadmap` - `UC-16`)**, Pure Domain Service **`DominoShiftEngine`** thực hiện tịnh tiến toàn bộ các nhiệm vụ chưa hoàn thành theo số ngày tạm dừng `shifted_days` mà **KHÔNG làm tăng `reschedule_count`** của từng task (vì đây là quyết định điều chỉnh kế hoạch chủ động toàn cục, không phải hành vi trì hoãn cá nhân).
+   * Mọi thao tác dịch lịch (cả Domino Shift lẫn Reschedule quá hạn) đều bắt buộc ghi nhận bản ghi kiểm toán bất biến vào bảng **`schedule_change_logs`** (lưu rõ loại thay đổi, số ngày dịch chuyển, lý do và mốc thời gian).
 
 ---
 
 ## 4. Lý do & Đánh đổi (Rationale & Trade-Offs)
-* **Khớp 100% Cơ sở Lý thuyết Khoa học:** Gắn kết chặt chẽ với mô hình Self-Regulated Learning (Zimmerman 2002) và lý thuyết Temporal Motivation Theory (Steel 2007), tạo luận cứ học thuật đắt giá khi bảo vệ đồ án tốt nghiệp.
-* **Bảo vệ Trạng thái Hệ thống:** Chặn đứng tình trạng dồn ứ lịch trình ảo; bảo đảm hiệu năng API kết thúc phiên không bị ảnh hưởng.
-* **Tôn trọng Quyền Tự chủ của Người học:** Profile chỉ đóng vai trò tư vấn trong prompt, không bao giờ tự ý ghi đè quyết định của người dùng.
+* **Khép kín Vòng lặp Lý thuyết Zimmerman SRL một cách Bền vững (`ASR-02`):** Kết hợp Transactional Outbox và Taskiq Worker đảm bảo mọi nỗ lực trong pha *Performance* (`execution`) đều được phản ánh chính xác vào hồ sơ năng lực ở pha *Self-Reflection* (`account`/`evaluation`) để tối ưu hóa cho lần *Forethought* (`planning`) tiếp theo mà không làm chậm HTTP API.
+* **Giá trị Khoa học & Thực tiễn Cao:** Phân biệt rạch ròi giữa trì hoãn cá nhân (`reschedule_count >= 3`) và tạm dừng kế hoạch chủ động (`DominoShiftEngine`), đồng thời lưu vết đầy đủ trong `schedule_change_logs`.
+* **Đánh đổi:** Hồ sơ năng lực người học được cập nhật theo mô hình **Nhất quán Cuối cùng (Eventual Consistency)** với độ trễ vài giây sau khi kết thúc phiên học qua Taskiq Worker — hoàn toàn phù hợp với bản chất của chỉ số thống kê tích lũy.
 
 ---
 
-## 5. Hệ quả (Consequences)
-* **Tích cực:** Kế hoạch học tập ngày càng thích ứng chính xác với sức học thực tế của sinh viên; ngăn ngừa bỏ cuộc giữa chừng.
-* **Tiêu cực / Rủi ro:** Cần bổ sung bảng `learner_profiles` và cột `reschedule_count` trong CSDL PostgreSQL; cần thêm worker task trong Celery.
+## 5. Hệ quả & Kiểm chứng (Consequences & Verification)
+* **Tích cực:** Hoàn thiện kiến trúc thích ứng thông minh của FocusFlow v2.0, đồng bộ 100% giữa `ADR-001` (Outbox), `ADR-004` (Taskiq) và `ADR-007` (24 bảng PostgreSQL, bao gồm `learner_profiles` và `schedule_change_logs`).
+* **Kiểm chứng Tự động:**
+  * Unit test kiểm chứng `DominoShiftEngine` dịch chuyển đúng số ngày bảo lưu mà giữ nguyên `reschedule_count`.
+  * Integration test kiểm chứng khi hoàn thành phiên học, sự kiện trong `outbox_events` được Taskiq xử lý lũy đẳng qua `processed_events` và cập nhật chính xác bảng `learner_profiles`.

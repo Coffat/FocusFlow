@@ -1,55 +1,93 @@
-# ADR-009: Lựa chọn Cơ chế Xác thực Đề xuất Lịch trình Đa tầng (Hybrid Validation Gate) và Bộ khung Đánh giá Thực nghiệm (AI Evaluation Harness)
+# ADR-009: Cổng Kiểm duyệt AI Đa tầng 3 Lớp (3-Tier Hybrid Validation Gate) qua `LLMProviderPort` & Bộ khung AI Evaluation Harness
 
-* **Trạng thái:** Được chấp thuận (Approved — Đã chuẩn hóa theo SRS v1.1 & Kết quả Rà soát Kiến trúc)
-* **Ngày quyết định:** 16/10/2026
+* **Trạng thái:** Được chấp thuận (Approved — Cập nhật Kiến trúc v2.0)
+* **Ngày quyết định:** 16/10/2026 (Cập nhật v2.0: 25/10/2026)
 * **Người quyết định:** Vũ Toàn Thắng, Phan Đình Duẩn
-* **Căn cứ đánh giá:** Khung Rubric Đồ án Tốt nghiệp CNTT — Tiêu chí TC2.1 & TC2.3 (Mức 5)
-* **Yêu cầu liên quan:** FR-PLAN-002, FR-PLAN-003, FR-PLAN-005, NFR-AI-001, NFR-AI-003, EVAL-06, EVAL-07, EVAL-08, BUSR-02, BUSR-03, BUSR-04, BUSR-05
+* **Căn cứ đánh giá:** Khung Rubric Đồ án Tốt nghiệp CNTT — Tiêu chí TC2.1, TC2.3 & TC2.7 (Mức 5)
+* **Yêu cầu liên quan:** `ASR-04`, `ASR-06`, `FR-PLAN-002`, `FR-PLAN-003`, `FR-PLAN-005`, `UC-06`, `UC-07`, `NFR-AI-001`, `NFR-AI-003`, `EVAL-06`, `EVAL-07`, `EVAL-08`, `BUSR-02`, `BUSR-03`, `BUSR-04`, `BUSR-05`
 
 ---
 
 ## 1. Ngữ cảnh & Đặt vấn đề (Context)
-Trong hệ thống FocusFlow, quá trình lập lịch học tập bằng External LLM (Google Gemini / OpenAI) thường đối mặt với hai thách thức kỹ thuật lớn:
-1. **Ảo giác Lập lịch (Hallucinated Scheduling) & Vi phạm Ràng buộc Cứng:** LLM thường tính toán thời gian kém, có thể xếp các task vượt quá số giờ rảnh trong ngày của người học (Overbooking), xếp chồng chéo mốc giờ (Time Overlap), hoặc xếp task nâng cao trước task tiên quyết. Hệ thống bắt buộc phải đảm bảo $100\%$ không vi phạm các ràng buộc cứng này trước khi người dùng xem xét áp dụng.
-2. **Thiếu Bộ khung Đo lường Thực nghiệm Khoa học cho Luận văn:** Để chứng minh tính khả thi và độ tin cậy của giải pháp AI trong Đồ án Tốt nghiệp Kỹ sư CNTT, nhóm nghiên cứu cần số liệu thực nghiệm đo đạc độc lập, có thể tái lập, so sánh được giữa các mô hình (Gemini 2.5 Flash, GPT-4o-mini, Local SLM) trên bộ kịch bản kiểm thử đa dạng.
+Khi ứng dụng các Mô hình Ngôn ngữ Lớn (LLM) vào bài toán lập kế hoạch và xếp lịch học tập cá nhân hóa trong FocusFlow (`UC-06`, `UC-07`), hệ thống đối mặt với hai thách thức cốt lõi (`ASR-04`, `ASR-06`):
+1. **Ảo giác Lập lịch & Vi phạm Ràng buộc Toán học/Đồ thị (`ASR-04`):** LLM có thế mạnh về phân rã ngữ nghĩa sư phạm nhưng lại thường mắc sai lầm trong tính toán số học và ràng buộc tổ hợp:
+   * Xếp tổng thời lượng nhiệm vụ trong ngày vượt quá trần giờ rảnh của người học ở **Mode A (Hard Ceiling - `BUSR-03`)**.
+   * Xếp nhiệm vụ rơi ra ngoài các khung giờ rảnh cụ thể hoặc vượt quá dung sai tràn biên cho phép ở **Mode B (Time Slots & Soft Overflow $\le 30\text{ phút}$ - `BUSR-04`)**, hoặc xếp chồng chéo 2 nhiệm vụ trong cùng một khoảng thời gian (Time Overlap).
+   * Tạo ra các mối quan hệ tiên quyết bị lặp vòng (**Chu trình đồ thị DAG - `BUSR-05`**) hoặc xếp nhiệm vụ hậu kế diễn ra trước nhiệm vụ tiên quyết.
+2. **Yêu cầu Đánh giá Thực nghiệm Đa Mô hình Khoa học (`ASR-06`, `EVAL-06..08`):** Để bảo vệ luận văn tốt nghiệp ở mức Xuất sắc (Rubric TC2.3 & TC2.7 Mức 5), hệ thống cần chứng minh bằng số liệu định lượng khả năng chặn 100% lịch trình vi phạm và so sánh tỷ lệ thành công (Pass@1 vs Pass sau Retry) giữa nhiều nhà cung cấp mô hình khác nhau thông qua một cổng trừu tượng thống nhất.
 
 ---
 
-## 2. Các phương án xem xét (Alternatives)
+## 2. Các phương án xem xét (Alternatives Considered)
 
-### Phương án A: Chỉ Dùng Pydantic Schema Validation Đơn thuần
-* *Ưu điểm:* Cài đặt rất nhanh, độ trễ thấp.
-* *Nhược điểm:* Pydantic chỉ kiểm tra cấu trúc cú pháp và kiểu dữ liệu (ngày, số phút). Nó không kiểm tra được logic nghiệp vụ như tổng thời lượng ngày vượt quỹ rảnh, xung đột khung giờ, hay chu trình phụ thuộc giữa các task. Toàn bộ gánh nặng kiểm tra dồn lên mắt người dùng khi xem giao diện Preview.
+### Phương án A: Chỉ Kiểm tra Cú pháp JSON bằng Pydantic Schema
+* *Ưu điểm:* Cài đặt đơn giản, độ trễ thấp.
+* *Nhược điểm:* Pydantic chỉ xác thực được kiểu dữ liệu cú pháp (chuỗi, số nguyên, định dạng ngày giờ) mà không thể kiểm tra quy tắc miền phức tạp như chu trình đồ thị DAG (`task_dependencies`) hay kiểm tra chồng lấn khung giờ rảnh Mode A/B của từng người học.
 
-### Phương án B: Sử dụng LLM-as-a-Judge Toàn phần (Ralph-style Goal Loop như Hermes)
-* Gửi toàn bộ lịch do AI sinh qua một LLM thứ hai (Judge) để thẩm định mọi khía cạnh, lặp lại cho đến khi Judge đồng ý.
-* *Ưu điểm:* Linh hoạt về mặt nhận thức.
-* *Nhược điểm:* Rất chậm (có thể vượt trần 55s của NFR-PERF-001), tốn kém chi phí token gấp đôi, và bản thân LLM Judge cũng tính toán toán học không đáng tin cậy bằng thuật toán tất định (Deterministic Code).
+### Phương án B: Dùng LLM-as-a-Judge Duyệt Toàn bộ Ràng buộc Toán học và Lịch trình
+* *Ưu điểm:* Không cần viết giải thuật kiểm tra ràng buộc bằng code.
+* *Nhược điểm:* Bản thân LLM Judge cũng tính toán số học không chính xác, tốn gấp đôi chi phí token, tăng độ trễ vượt ngưỡng và không đảm bảo cam kết **100% Zero Overbooking (`ASR-04`)**.
 
-### Phương án C: Cổng Xác thực Đa tầng Lai (Hybrid Validation Gate) kết hợp AI Evaluation Harness Độc lập (Được chọn)
-* **Kiến trúc Runtime:**
-  1. *Tầng 1 (Cú pháp & Schema)*: Pydantic v2 kiểm định tính toàn vẹn JSON và quan hệ khóa ngoại `milestone_id`.
-  2. *Tầng 2 (Ràng buộc Cứng Tất định - 100% Python Engine)*: Kiểm tra toán học quỹ thời gian rảnh (Hard Ceiling cho Mode A), kiểm tra từng task nằm trọn trong slot rảnh thực tế qua `validate_proposal_against_slots` (Mode B với dung sai Soft Overflow $\le 30$ phút cho phần tràn ngoài biên không va chạm), chống trùng lịch (Zero Overlap), tuân thủ biên roadmap, và thứ tự prerequisite.
-  3. *Tầng 3 (Kiểm định Sư phạm - Lightweight LLM Judge)*: Đánh giá độ dốc nhận thức (khối lượng kiến thức nền tảng xếp trước nâng cao).
-  * *Chính sách Thử lại có Ngữ cảnh (Structured Feedback Retry)*: Nếu vi phạm Tầng 1 hoặc Tầng 2, đóng gói mã lỗi cụ thể gửi lại cho LLM tự sửa (tối đa 2 lần retry).
-  * *Chính sách Fail-Open có kiểm soát cho Tầng 3*: Nếu Ràng buộc Cứng đã thỏa mãn $100\%$ nhưng Tầng 3 gặp sự cố timeout/5xx hoặc có góp ý nhẹ, hệ thống vẫn trả về Schedule Preview kèm nhãn cảnh báo/góp ý để người học tự quyết định trước khi Apply. Tuyệt đối không chặn người học nếu ràng buộc toán học đã hợp lệ.
-* **Kiến trúc Offline Evaluation (`backend/tests/ai_evals/`)**:
-  * Xây dựng bộ công cụ chạy batch benchmark độc lập trên 100+ kịch bản chuẩn (JSONL), đo lường 3 tầng: Pass@1 Schema thô, Tỷ lệ vi phạm ràng buộc thô, và Tỷ lệ thành công hệ thống sau retry; xuất số liệu trực tiếp phục vụ Chương 5 Luận văn.
+### Phương án C: Kiến trúc LLM Đa nhà cung cấp (`LLMProviderPort`) kết hợp Cổng Kiểm duyệt Lai 3 Tầng (3-Tier Hybrid Validation Gate) & Bộ khung Offline AI Evaluation Harness (Được chọn)
+* Mọi lệnh gọi sinh kế hoạch và thẩm định đều đi qua cổng trừu tượng **`LLMProviderPort`** (`ADR-005`).
+* Kết quả đầu ra của LLM bắt buộc đi qua **Cổng Kiểm duyệt Lai 3 Tầng (3-Tier Hybrid Validation Gate)** kết hợp chặt chẽ giữa:
+  * **Tier 1:** Kiểm định cấu trúc JSON bằng **Pydantic v2 Structured Output**.
+  * **Tier 2:** Kiểm định ràng buộc cứng tất định 100% bằng **Pure Domain Services** (`HybridAvailabilityRuleEngine` và `DagCycleValidator`).
+  * **Tier 3:** Kiểm định chất lượng sư phạm bằng **Pedagogical LLM Judge** kèm cơ chế **Structured Feedback Retry (tối đa 2 vòng tự sửa lỗi)**.
+* Xây dựng bộ công cụ **Offline AI Evaluation Harness** độc lập để chạy benchmark tự động trên 100+ kịch bản chuẩn.
 
 ---
 
 ## 3. Quyết định (Decision)
-**Chấp thuận Phương án C: Triển khai Cổng Xác thực Đa tầng Lai (Hybrid Validation Gate) cho luồng runtime lập lịch và Xây dựng Bộ khung AI Evaluation Harness (100+ scenarios) cho công tác thử nghiệm đo lường khoa học của Đồ án.**
+**Chấp thuận Phương án C với kiến trúc chi tiết của Cổng Kiểm duyệt 3 Tầng và Bộ khung Đánh giá như sau:**
+
+### 3.1. Kiến trúc Cổng Kiểm duyệt Lai 3 Tầng (3-Tier Hybrid Validation Gate — `ASR-04`)
+Bộ điều phối `ProposalValidationGateOrchestrator` (tại tầng Application của Bounded Context `planning`) kiểm duyệt mọi đề xuất từ `LLMProviderPort` qua 3 tầng tuần tự trước khi cho phép lưu bản nháp `ScheduleProposal` (`status = 'DRAFT'`):
+
+```mermaid
+flowchart LR
+    LLM["🤖 LLMProviderPort<br/>(Gemini / OpenAI / Claude / Ollama / Mock)"] --> T1["🛡️ Tier 1: Pydantic v2<br/>Structured Output & Schema Gate"]
+    T1 -->|"Hợp lệ JSON & FK"| T2["⚙️ Tier 2: Pure Domain Services<br/>HybridAvailabilityRuleEngine + DagCycleValidator"]
+    T2 -->|"100% Thỏa Ràng buộc Cứng"| T3["🎓 Tier 3: Pedagogical LLM Judge<br/>Đánh giá Độ dốc Nhận thức & Sư phạm"]
+    T3 -->|"Đạt chuẩn"| Draft["✅ Lưu ScheduleProposal (DRAFT)<br/>& Commit AI Quota"]
+    T1 -.->|"Lỗi Schema (Retry <= 2)"| Retry["🔄 Structured Error Feedback Prompt"]
+    T2 -.->|"Vi phạm Mode A/B hoặc Chu trình DAG (Retry <= 2)"| Retry
+    T3 -.->|"Vi phạm Sư phạm Nặng (Retry <= 2)"| Retry
+    Retry --> LLM
+```
+
+1. **Tier 1 — Cổng Cú pháp & Lược đồ (`Pydantic v2 Structured Output`):**
+   * Ép kiểu và kiểm tra tính hợp lệ của cấu trúc JSON trả về (`MilestoneListSchema`, `ProposalPlanSchema`): giới hạn độ dài chuỗi, thời lượng từng task nằm trong khoảng `[15, 180]` phút, định dạng ngày giờ ISO 8601 và tính hợp lệ của khóa tham chiếu `milestone_id`.
+2. **Tier 2 — Cổng Ràng buộc Cứng Tất định (`Pure Domain Services` — 100% Deterministic Python):**
+   * **`HybridAvailabilityRuleEngine` (thuộc `account.domain`, truy cập qua `AvailabilityQueryPort`):**
+     * **Mode A (Capacity / Hard Ceiling - `BUSR-03`):** Kiểm tra tổng số phút học tập được xếp trong mỗi ngày không bao giờ vượt quá trần dung lượng `max_daily_minutes` của ngày đó.
+     * **Mode B (Explicit Time Slots & Soft Overflow - `BUSR-04`):** Đối chiếu từng task với danh sách `TimeSlot` thực tế (đã nạp từ bảng `availability_slots` và trừ đi các khoảng bận từ Google Calendar OAuth2 nếu có). Cho phép dung sai tràn biên mềm (**Soft Overflow $\le 30\text{ phút}$**) nếu không đụng độ khung bận kế tiếp, đồng thời chặn tuyệt đối mọi sự chồng lấn giờ giữa các task (**Zero Overlap**).
+   * **`DagCycleValidator` (thuộc `planning.domain` - `BUSR-05`):**
+     * Kiểm tra đồ thị phụ thuộc `TaskDependency` bằng thuật toán phát hiện chu trình (Topological Sort / Kahn's Algorithm & DFS), đảm bảo đồ thị là **DAG thuần khiết (0 chu trình)** và mọi task tiên quyết đều được xếp lịch hoàn thành trước task phụ thuộc.
+3. **Tier 3 — Cổng Thẩm định Sư phạm (`PedagogicalJudgeAdapter` qua `LLMProviderPort`):**
+   * Đánh giá tính hợp lý về mặt sư phạm và lý thuyết tải nhận thức (Cognitive Load): kiến thức nền tảng phải đặt trước kiến thức nâng cao, không dồn các nhiệm vụ độ khó cao liên tiếp nhau trong cùng một buổi.
+   * **Chính sách Fail-Open Có Kiểm soát cho Tier 3:** Trong khi Tier 1 và Tier 2 áp dụng chính sách **Fail-Closed tuyệt đối** (chặn 100% nếu vi phạm), nếu đề xuất đã vượt qua 100% kiểm định toán học ở Tier 1 & Tier 2 nhưng Tier 3 gặp timeout hoặc chỉ đưa ra khuyến nghị nhẹ, hệ thống vẫn cho phép tạo bản nháp `DRAFT` kèm nhãn gợi ý sư phạm để người học xem xét quyết định tại cổng Human-in-the-Loop (`BUSR-02`).
+
+### 3.2. Cơ chế Tự sửa lỗi có Cấu trúc (Structured Feedback Self-Correction Loop)
+* Khi phát hiện bất kỳ vi phạm nào ở Tier 1 hoặc Tier 2, hệ thống không trả về thông báo chung chung mà đóng gói danh sách đối tượng lỗi chi tiết (`ConstraintViolationDTO`: mã lỗi, ngày vi phạm, số phút vượt trần hoặc cặp task tạo chu trình DAG) vào prompt phản hồi để `LLMProviderPort` tự sửa lỗi (**tối đa 2 vòng retry**).
+* Nếu sau 2 vòng retry vẫn vi phạm ràng buộc cứng, hệ thống hủy thao tác, kích hoạt **`RELEASE` hạn ngạch AI** (`ADR-005`) để không trừ lượt của người học, và trả về thông báo hướng dẫn người học nới lỏng quỹ thời gian rảnh hoặc điều chỉnh mục tiêu.
+
+### 3.3. Bộ khung Đánh giá Thực nghiệm Độc lập (Offline AI Evaluation Harness — `backend/tests/ai_evals/`)
+* Xây dựng bộ công cụ đánh giá tự động chạy trên tập dữ liệu chuẩn gồm **100+ kịch bản kiểm thử đa dạng (JSONL)** (bao gồm các ca biên: quỹ thời gian cực hẹp, lịch rảnh vắt qua nửa đêm Mode B, đồ thị phụ thuộc nhiều nhánh, hồ sơ người học có $\beta_{bias}$ cao).
+* Nhờ kiến trúc **`LLMProviderPort`**, bộ Harness có thể chạy đối chứng cùng một tập kịch bản trên nhiều mô hình (ví dụ: `Gemini 2.5 Flash`, `GPT-4o-mini`, `Claude 3.5 Haiku`, `Local Ollama Qwen2.5`) để xuất bảng thống kê khoa học cho Chương Thực nghiệm của Khóa luận:
+  * **Metric 1:** Tỷ lệ đạt chuẩn Schema & Ràng buộc cứng ngay lần đầu (**Raw Pass@1 Rate**).
+  * **Metric 2:** Tỷ lệ khôi phục thành công sau vòng lặp tự sửa lỗi (**Post-Retry Recovery Rate**).
+  * **Metric 3:** Cam kết **0% lịch trình vi phạm lọt qua cổng Tier 2 (`Zero Hallucinated Overbooking`)**.
 
 ---
 
 ## 4. Lý do & Đánh đổi (Rationale & Trade-Offs)
-* **Phân định Trách nhiệm Chuẩn mực (Separation of Concerns):** Thuật toán tất định làm việc tính toán số học (giờ rảnh, chống trùng); LLM làm việc sáng tạo ngữ nghĩa và đánh giá sư phạm.
-* **Bảo vệ Trải nghiệm & Độ trễ:** Cơ chế Fail-Open có kiểm soát ở Tầng 3 bảo đảm hệ thống luôn tuân thủ ngắt cứng 55s (`NFR-PERF-001`) và không từ chối vô lý một đề xuất đã hợp lệ về mặt toán học.
-* **Giá trị Thực nghiệm Xuất sắc cho Khóa luận:** Cung cấp số liệu định lượng có đối chứng (Gemini vs GPT-4o-mini vs Local Ollama) cho Tiêu chí Rubric TC2.3 Mức 5.
+* **Kết hợp Thế mạnh của AI Tạo sinh và Giải thuật Tất định (`ASR-04`):** Để LLM làm công việc sáng tạo nội dung học tập và để Pure Domain Services (`HybridAvailabilityRuleEngine`, `DagCycleValidator`) làm công việc kiểm chứng toán học/đồ thị, giúp đạt độ tin cậy 100% trên các ràng buộc cứng.
+* **Giá trị Học thuật & Thực nghiệm Cao (`TC2.3`, `TC2.7`):** Bộ khung AI Evaluation Harness kết hợp `LLMProviderPort` mang lại bằng chứng thực nghiệm định lượng rõ ràng, khách quan khi bảo vệ đồ án.
+* **Đánh đổi:** Khi LLM vi phạm ở lần sinh đầu tiên, vòng lặp retry có thể làm tăng thời gian chờ thêm 3–5 giây; hệ thống giải quyết bằng cách phát sự kiện SSE `validation_retry` trực tiếp lên giao diện Angular 21+ để người dùng nắm bắt tiến trình minh bạch.
 
 ---
 
-## 5. Hệ quả (Consequences)
-* **Tích cực:** Độ tin cậy của đề xuất lịch trình đạt $100\%$ Zero Overbooking; loại bỏ hoàn toàn lỗi lịch trình bất khả thi; cung cấp bằng chứng thực nghiệm khoa học.
-* **Tiêu cực / Rủi ro:** Cần duy trì và viết thêm mã nguồn cho `ConstraintValidationEngine` và bộ kịch bản 100+ JSONL trong thư mục test.
+## 5. Hệ quả & Kiểm chứng (Consequences & Verification)
+* **Tích cực:** Chặn đứng 100% lịch trình vượt trần giờ rảnh hoặc chứa chu trình DAG trước khi lưu xuống bảng `schedule_proposals`.
+* **Kiểm chứng Tự động:** Bộ Unit Test cho `HybridAvailabilityRuleEngine` và `DagCycleValidator` đạt độ phủ nhánh (branch coverage) $\ge 95\%$ và chạy độc lập 100% không cần mạng hay CSDL.
