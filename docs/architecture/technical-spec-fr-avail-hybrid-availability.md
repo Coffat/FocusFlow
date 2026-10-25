@@ -1,17 +1,18 @@
 # Đặc Tả Kỹ Thuật & Luận Chứng Kiến Trúc: Phân Hệ Cấu Hình Thời Gian Rảnh Lai (FR-AVAIL)
-## Hybrid Availability Management Module (Mode A Quota & Mode B Time Slots)
+## Hybrid Availability Management Module (Mode A Quota & Mode B Time Slots — v2.0)
 
 ---
 
 | **Thuộc tính** | **Nội dung chi tiết** |
 | :--- | :--- |
-| **Dự án** | FocusFlow — Hệ điều hành Hỗ trợ Tự học Thích ứng Tích hợp Trí tuệ Nhân tạo |
+| **Dự án** | FocusFlow — Hệ thống Lập kế hoạch & Quản lý Học tập Cá nhân hóa Ứng dụng AI |
 | **Mã phân hệ** | `FR-AVAIL` (Bao gồm `FR-AVAIL-001`, `FR-AVAIL-002`, liên đới `FR-AVAIL-003`) |
+| **Bounded Context sở hữu** | `account` (`backend/src/account/`) — Phối hợp với `planning` qua `public_api.py` (`AvailabilityQueryPort`) |
 | **Hạng mục WBS** | **WBS 5.3** (Sprint 1 — Milestone 2.5) |
 | **Tác giả / Sinh viên** | Vũ Toàn Thắng |
-| **Trạng thái tài liệu** | Hoàn thiện (Approved Specification & Architecture Guide) |
+| **Trạng thái tài liệu** | Hoàn thiện v2.0 (Đồng bộ Context-First Modular Monolith, Rich DDD + 3NF/BCNF `availability_slots`) |
 | **Căn cứ đánh giá** | Rubric Đồ án Tốt nghiệp CNTT — HCMUTE (Tiêu chí TC2.1, TC2.3, TC2.4, TC2.7) |
-| **Truy vết SRS & Quyết định**| `SRS v1.0 (Mục 7.4)`, `OS-04`, `OS-06`, `BUSR-02`, `BUSR-03`, `BUSR-04`, `ADR-001`, `ADR-007` |
+| **Truy vết SRS & Quyết định**| `SRS v1.1 (Mục 7.4)`, `OS-04`, `OS-06`, `BUSR-02`, `BUSR-03`, `BUSR-04`, `ADR-001`, `ADR-003`, `ADR-007`, `ADR-009` |
 
 ---
 
@@ -20,9 +21,9 @@
 2. [Luận chứng Kỹ thuật & Phân tích Đánh đổi (Trade-off Analysis)](#2-luận-chứng-kỹ-thuật--phân-tích-đánh-đổi-trade-off-analysis)
 3. [Mô hình Hóa Thiết kế Hệ thống Chuẩn UML 2.5.1](#3-mô-hình-hóa-thiết-kế-hệ-thống-chuẩn-uml-251)
 4. [Đặc tả Thuật toán & Phân tích Độ phức tạp](#4-đặc-tả-thuật-toán--phân-tích-độ-phức-tạp)
-5. [Thiết kế Cơ sở Dữ liệu & Chiến lược Lưu trữ (Persistence Design)](#5-thiết-kế-cơ-sở-dữ-liệu--chiến-lược-lưu-trữ-persistence-design)
+5. [Thiết kế Cơ sở Dữ liệu 3NF/BCNF & Chiến lược Lưu trữ (Persistence Design)](#5-thiết-kế-cơ-sở-dữ-liệu-3nfbcnf--chiến-lược-lưu-trữ-persistence-design)
 6. [Hợp đồng Giao diện Lập trình Ứng dụng (RESTful API Contract)](#6-hợp-đồng-giao-diện-lập-trình-ứng-dụng-restful-api-contract)
-7. [Kiến trúc Giao diện Người dùng Frontend (Angular 19 Signals Architecture)](#7-kiến-trúc-giao-diện-người-dùng-frontend-angular-19-signals-architecture)
+7. [Kiến trúc Giao diện Người dùng Frontend (Angular 21+ Zoneless Signals Architecture)](#7-kiến-trúc-giao-diện-người-dùng-frontend-angular-21-zoneless-signals-architecture)
 8. [Ma trận Truy vết & Chiến lược Kiểm thử Chất lượng (Verification Matrix)](#8-ma-trận-truy-vết--chiến-lược-kiểm-thử-chất-lượng-verification-matrix)
 9. [Lộ trình Triển khai Kỹ thuật Từng bước (Implementation Roadmap)](#9-lộ-trình-triển-khai-kỹ-thuật-từng-bước-implementation-roadmap)
 
@@ -34,7 +35,7 @@
 Khảo sát người dùng tự học (`docs/requirements/user-survey-and-benchmarking.md`) chỉ ra rằng **68% người tự học bị vỡ kế hoạch (Plan Abandonment) ngay trong 2 tuần đầu tiên** do kế hoạch học tập quá phi thực tế, không ăn khớp với quỹ thời gian rảnh thực tế của họ:
 - **Các ứng dụng To-Do truyền thống (Todoist, TickTick):** Chỉ quản lý danh sách công việc tĩnh, phó mặc hoàn toàn cho người dùng tự ước lượng và tự tìm giờ học.
 - **Lịch biểu điện tử (Google Calendar, Apple Calendar):** Quản lý sự kiện theo khung giờ cứng ngắc, đòi hỏi người dùng phải tự sắp xếp thủ công từng block giờ, tốn từ 45–60 phút mỗi tuần.
-- **Chatbot AI tạo kế hoạch dạng văn bản (ChatGPT, Claude):** Khi được yêu cầu lập lộ trình, AI chỉ trả về danh sách bài học kèm mốc tuần chung chung ("Tuần 1: Học cú pháp cơ bản; Tuần 2: Học OOP"), hoàn toàn mù mờ về việc người học rảnh vào thứ mấy, khung giờ nào và tối đa bao nhiêu tiếng mỗi ngày.
+- **Chatbot AI tạo kế hoạch dạng văn bản:** Khi được yêu cầu lập lộ trình, AI chỉ trả về danh sách bài học kèm mốc tuần chung chung ("Tuần 1: Học cú pháp cơ bản; Tuần 2: Học OOP"), hoàn toàn mù mờ về việc người học rảnh vào thứ mấy, khung giờ nào và tối đa bao nhiêu tiếng mỗi ngày.
 
 ### 1.2. Khái niệm Mô hình Thời gian Rảnh Lai (Hybrid Availability Model)
 Hệ thống FocusFlow tiếp cận bài toán bằng việc định nghĩa **Mô hình Thời gian Rảnh Lai (Hybrid Model)**, bao quát 2 nhóm chân dung người học đối lập:
@@ -42,7 +43,7 @@ Hệ thống FocusFlow tiếp cận bài toán bằng việc định nghĩa **M�
 ```
                           ┌──────────────────────────────────────────────┐
                           │     HỒ SƠ THỜI GIAN RẢNH CỦA NGƯỜI HỌC       │
-                          │        (AvailabilityProfile Entity)          │
+                          │        (AvailabilityProfile Aggregate)       │
                           └──────────────────────┬───────────────────────┘
                                                  │
                    ┌─────────────────────────────┴─────────────────────────────┐
@@ -66,7 +67,7 @@ Hệ thống FocusFlow tiếp cận bài toán bằng việc định nghĩa **M�
   - Áp dụng ngưỡng giá trị cận biên theo Quyết định Mở `OS-06`:
     $$\text{Cận dưới} = 0.5 \text{ giờ (30 phút/ngày)}; \quad \text{Cận trên} = 14.0 \text{ giờ/ngày}$$
     Tổng số giờ rảnh hợp lệ cả tuần phải thỏa mãn điều kiện sàn: $\sum \text{quota\_hours} \ge 1.0 \text{ giờ/tuần}$.
-  - Nhằm cho phép AI Planner tạo thời khóa biểu có giờ bắt đầu/kết thúc cụ thể mà không cần đọc Google Calendar, Mode A bổ sung 3 trường cấu hình trong `DaySchedule`:
+  - Nhằm cho phép bộ lập lịch AI (qua cổng trừu tượng đa nhà cung cấp `LLMProviderPort`) tạo thời khóa biểu có giờ bắt đầu/kết thúc cụ thể mà không cần đọc Google Calendar, Mode A bổ sung 3 trường cấu hình trong `DaySchedule`:
     1. `allowed_window`: Khung giờ cho phép xếp lịch trong ngày (ví dụ `07:00 - 23:00`).
     2. `preferred_period`: Buổi học ưu tiên (`MORNING`, `AFTERNOON`, `EVENING`, `ANY`).
     3. `min_session_minutes`: Thời lượng phiên học tối thiểu (mặc định $30$ phút).
@@ -74,38 +75,40 @@ Hệ thống FocusFlow tiếp cận bài toán bằng việc định nghĩa **M�
   - Khung giờ hỗ trợ qua nửa đêm thông qua thuộc tính `end_day_offset` ($0$: cùng ngày, $1$: qua 00:00 ngày hôm sau). Khi `end_day_offset = 0`, yêu cầu $\text{StartTime} < \text{EndTime}$. Khi `end_day_offset = 1`, cho phép slot kéo dài qua nửa đêm (ví dụ: `22:30 - 01:30`).
   - Độ dài khung giờ tối thiểu $\text{Duration} \ge 30 \text{ phút}$ (tương ứng 1 đơn vị phiên học Pomodoro).
   - Tuyệt đối không được xảy ra chồng lấn (Overlapping) giữa các khung giờ trong cùng một ngày.
-- **`FR-AVAIL-003` (Quản lý Năng lực Đa Lộ trình & Lịch Ngoại vi):** 
+- **`FR-AVAIL-003` (Quản lý Năng lực Đa Lộ trình & Lịch Ngoại vi):**
   - Với **Mode A**: Trả về `remaining_capacity_minutes: int` (tổng số phút còn lại từ quỹ giờ sau khi trừ thời lượng đã phân bổ). Không tự suy diễn thành các slot giả lập.
-  - Với **Mode B**: Áp dụng giải thuật trừ đoạn thời gian (Interval Subtraction) trên Domain để tính toán danh sách các khoảng rảnh thực tế còn lại (`List<TimeSlot>`) sau khi đã trừ các khoảng thời gian bị chiếm dụng bởi lộ trình khác hoặc sự kiện bận từ Google Calendar.
-- **Phân tách Cấu hình Tích hợp Lịch Ngoại vi (`calendar_integration_mode`):** Độc lập với `availability_mode`, người dùng có thể cấu hình trạng thái tích hợp lịch: `NONE` (chỉ dùng nội bộ), `EXPORT_ICS` (xuất tệp tĩnh hoặc WebCal 1 chiều) hoặc `CONNECTED` (đồng bộ Google Calendar với scope tối thiểu).
+  - Với **Mode B**: Áp dụng giải thuật trừ đoạn thời gian (Interval Subtraction) trong `HybridAvailabilityRuleEngine` để tính toán danh sách các khoảng rảnh thực tế còn lại (`List<TimeSlot>`) sau khi đã trừ các khoảng thời gian bị chiếm dụng bởi lộ trình khác hoặc sự kiện bận từ Google Calendar (`CalendarSyncPort`).
+- **Phân tách Cấu hình Tích hợp Lịch Ngoại vi (`calendar_integration_mode`):** Độc lập với `availability_mode`, người dùng có thể cấu hình trạng thái tích hợp lịch: `NONE` (chỉ dùng nội bộ), `EXPORT_ICS` (xuất tệp tĩnh hoặc WebCal 1 chiều) hoặc `CONNECTED` (đồng bộ 2 chiều có kiểm soát với Google Calendar OAuth2).
 
 ---
 
 ## 2. Luận chứng Kỹ thuật & Phân tích Đánh đổi (Trade-off Analysis)
 
-### 2.1. Phân tích Đánh đổi Lưu trữ Cơ sở Dữ liệu: JSONB vs 1-N Normalized Table
-Một trong những quyết định kỹ thuật quan trọng nhất của phân hệ này là lựa chọn cấu trúc lưu trữ CSDL trong PostgreSQL 16 (tham chiếu `ADR-007`).
+### 2.1. Phân tách Lục giác (Hexagonal Separation): Rich Value Objects trong Bộ nhớ vs Chuẩn hóa 3NF/BCNF trong PostgreSQL (`ADR-007`)
+Một trong những quyết định kiến trúc quan trọng nhất trong phiên bản v2.0 (`ADR-007`) là giải quyết bài toán cân bằng giữa **Mô hình Miền Giàu (Rich DDD)** ở tầng mã nguồn và **Tính Chuẩn hóa Học thuật 3NF/BCNF** ở tầng cơ sở dữ liệu:
 
-| Tiêu chí Đánh giá | Phương án 1: Chuẩn hóa 1-N (`availability_slots` Table) | Phương án 2: Tài liệu Nguyên khối (`availabilities.weekly_schedule` JSONB) [ĐƯỢC CHỌN] |
-| :--- | :--- | :--- |
-| **Cấu trúc vật lý** | 1 bảng cha `availabilities` và 1 bảng con `availability_slots(id, availability_id, day_of_week, start_time, end_time)`. | 1 bảng duy nhất `availabilities` với cột `weekly_schedule JSONB` lưu trọn vẹn 7 ngày trong 1 hàng (Row). |
-| **Thao tác Ghi (Write Performance)** | **Kém (Write Amplification):** Mỗi khi người dùng bấm "Lưu cấu hình", Backend phải thực hiện: `DELETE FROM availability_slots WHERE availability_id = ...` rồi `INSERT INTO availability_slots ...` hàng loạt (gây bloat index và dead tuples trong PostgreSQL). | **Tối ưu (Single-Row Atomic Update):** Thực hiện 1 câu lệnh `UPDATE` hoặc `UPSERT` duy nhất trên 1 dòng đơn nguyên. Tận dụng cơ chế WAL (Write-Ahead Logging) của PostgreSQL. |
-| **Thao tác Đọc (Read Performance)** | **Phức tạp:** Phải thực hiện phép nối `JOIN` hoặc truy vấn tập hợp `GROUP BY` để tái tạo lại bức tranh 7 ngày trong tuần. | **Tức thời (Single-Row Key Lookup):** Đọc trực tiếp 1 dòng duy nhất qua khóa ngoại `user_id` có Unique Constraint, nạp toàn bộ cây cấu hình 7 ngày mà không cần JOIN. |
-| **Kiểm định Tính Toàn vẹn (Integrity Validation)** | **Khó bảo vệ mức CSDL:** Ràng buộc không chồng lấn (No-Overlap Constraint) trên nhiều dòng trong cùng ngày đòi hỏi cài đặt Extension phức tạp (`btree_gist` với `EXCLUDE USING gist`) hoặc viết DB Trigger nặng nề. | **Toàn vẹn Tại Tầng Domain:** Toàn bộ dữ liệu 7 ngày được nạp vào bộ nhớ trong 1 đối tượng Aggregate Root (`AvailabilityProfile`). Thuật toán Sweep-line kiểm tra chồng lấn, kiểm tra trần giờ và offset qua đêm diễn ra trong bộ nhớ trước khi chạm vào CSDL. CSDL bảo vệ bằng constraint `CHECK (jsonb_typeof(weekly_schedule) = 'object')`. |
-| **Bảo toàn Dữ liệu (State Retention)** | **Khó khăn:** Khi chuyển từ Mode B sang Mode A, việc có nên xóa các slot trong bảng con hay giữ lại đòi hỏi thêm các cờ trạng thái phức tạp. | **Tự nhiên & Tinh gọn:** JSONB giữ đồng thời cả `quota_hours` và `time_slots` cho từng ngày. Người dùng đổi Mode thoải mái mà không hề bị mất dữ liệu đã nhập trước đó. |
+| Tiêu chí Đánh giá | Phương án A: Lưu cột `JSONB` nguyên khối trong DB | Phương án B: Anemic CRUD trực tiếp trên bảng 1-N (Không có Value Object) | Phương án C (Được chọn - v2.0): Rich DDD Value Objects (`WeeklySchedule`/`TimeSlot`) + Bảng chuẩn hóa 3NF/BCNF (`availabilities` & `availability_slots`) qua Repository |
+| :--- | :--- | :--- | :--- |
+| **Chuẩn hóa Học thuật 3NF/BCNF** | **Vi phạm 1NF** dưới góc nhìn CSDL quan hệ thuần túy (lưu mảng lặp các slot giờ vào 1 ô JSONB, không truy vấn SQL trực tiếp từng slot được). | **Đạt 3NF/BCNF** (tách bảng cha `availabilities` và bảng con `availability_slots`). | **Đạt tuyệt đối 3NF/BCNF** trên toàn bộ 24 bảng PostgreSQL 16: bảng cha `availabilities` lưu cấu hình chung và bảng con `availability_slots` lưu từng dòng khung giờ/quỹ giờ theo ngày. |
+| **Mô hình hóa Nghiệp vụ (DDD)** | Tốt ở tầng Domain nhưng rò rỉ cấu trúc lưu trữ tài liệu JSONB. | **Kém (Anemic):** Mất tính đóng gói của Aggregate Root, khó kiểm tra chồng lấn khung giờ trên toàn tuần. | **Xuất sắc (Rich DDD + Pure Domain Service):** Trong bộ nhớ (`account/domain/`), `AvailabilityProfile` nắm giữ Value Object bất biến `WeeklySchedule`, `DaySchedule`, `TimeSlot` và phối hợp cùng `HybridAvailabilityRuleEngine`. |
+| **Vai trò của Hexagonal Adapter** | Ánh xạ 1-1 đơn giản nhưng hy sinh ràng buộc khóa/kiểu dữ liệu SQL trên từng slot. | Không có ranh giới Domain/Infrastructure rõ ràng. | **`SqlAlchemyAvailabilityRepository`** đóng vai trò **Data Mapper** đích thực: khi đọc (`get_by_user_id`), gom các dòng từ `availabilities` + `availability_slots` để tái tạo `WeeklySchedule` VO; khi ghi (`save`), đồng bộ nguyên tử (atomic replacement trong `AsyncUnitOfWork`) từ `WeeklySchedule` VO xuống bảng `availability_slots`. |
 
-> [!TIP]
-> **Kết luận Luận văn:** Việc lựa chọn lưu trữ tài liệu có cấu trúc `JSONB` kết hợp với Ràng buộc toàn vẹn `jsonb_typeof` trong CSDL quan hệ PostgreSQL 16 là giải pháp kiến trúc dung hòa hoàn hảo giữa sự linh hoạt trong biểu diễn cấu hình tuần và tính nhất quán đơn vị nguyên tử của Aggregate Root (DDD).
+> [!IMPORTANT]
+> **Kết luận Kiến trúc v2.0:** Nhờ Kiến trúc Lục giác (Ports & Adapters), tầng Domain hoàn toàn không biết dữ liệu được lưu bằng JSONB hay bảng quan hệ. Việc `SqlAlchemyAvailabilityRepository` ánh xạ `WeeklySchedule` và `TimeSlot` xuống bảng chuẩn hóa 3NF/BCNF **`availability_slots`** giúp hệ thống vừa thỏa mãn **100% tiêu chuẩn thiết kế CSDL quan hệ 3NF/BCNF** trước Hội đồng chấm khóa luận, vừa bảo toàn nguyên vẹn **Rich Domain Model** trong mã nguồn Python.
 
 ---
 
-### 2.2. Rich Domain Model vs Anemic Domain Model
-Theo tiêu chuẩn thiết kế hướng miền (Domain-Driven Design - DDD) và nguyên lý **Information Expert (GRASP)**:
-- **Mô hình Thiếu máu (Anemic Domain Model - Anti-pattern):** Lớp `AvailabilityProfile` chỉ chứa các thuộc tính (getters/setters thuần túy). Các logic nghiệp vụ như `validateDailyCeiling()`, `checkOverlap()`, `calculateRemainingCapacity()` bị đẩy ra ngoài cho một lớp dịch vụ phi trạng thái như `AvailabilityValidator`. Điều này vi phạm tính đóng gói (Encapsulation), biến thực thể thành một cấu trúc dữ liệu thụ động.
-- **Mô hình Miền Giàu (Rich Domain Model - Lựa chọn thiết kế):** `AvailabilityProfile` và các Value Objects (`TimeSlot`, `DaySchedule`, `WeeklySchedule`) tự chịu trách nhiệm bảo vệ các bất biến nghiệp vụ của chính mình:
-  - Bản thân `TimeSlot` tự kiểm tra tính hợp lệ và $\ge 30$ phút ngay tại hàm khởi tạo `__post_init__`, xử lý chính xác `end_day_offset` ($0$ hoặc $1$) khi slot kéo dài qua nửa đêm.
-  - `DaySchedule` tự thực thi giải thuật kiểm tra chồng lấn các khung giờ trong ngày của mình.
-  - `AvailabilityProfile` nắm giữ toàn bộ lịch tuần và trực tiếp thẩm định xem một kế hoạch học tập có vi phạm trần giờ rảnh hay không thông qua hai phương thức chuyên biệt: `validate_daily_ceiling(...)` cho Mode A và `validate_proposal_against_slots(...)` cho Mode B.
+### 2.2. Sự Phối Hợp Giữa Rich Aggregate Root (`AvailabilityProfile`) và Pure Domain Service (`HybridAvailabilityRuleEngine`)
+Theo tiêu chuẩn Domain-Driven Design (DDD) và `Class Diagram v4.2`, tầng `backend/src/account/domain/` phân chia trách nhiệm rõ ràng giữa **Models (`domain/models/`)** và **Services (`domain/services/`)**:
+1. **Rich Aggregate Root & Value Objects (`backend/src/account/domain/models/availability.py`):**
+   - `TimeSlot`: Tự bảo vệ bất biến cục bộ ngay tại `__post_init__` ($\text{Duration} \ge 30$ phút, xử lý `end_day_offset` $0$ hoặc $1$).
+   - `DaySchedule` & `WeeklySchedule`: Tự bảo vệ bất biến nội tại của cấu hình 7 ngày (cận giờ Mode A $0.5\text{h} - 14.0\text{h}$ theo `OS-06`, tổng giờ tuần $\ge 1.0\text{h}$, không chồng lấn giữa các `TimeSlot` trong cùng ngày).
+   - `AvailabilityProfile`: Quản lý vòng đời cấu hình thời gian rảnh của người học (`switch_mode`, `update_schedule`) và ủy quyền (delegate) các phép kiểm chứng lịch học phức tạp cho `HybridAvailabilityRuleEngine`.
+2. **Pure Domain Service (`backend/src/account/domain/services/hybrid_availability_rule_engine.py`):**
+   - Chứa các giải thuật thẩm định liên thực thể (cross-entity validation) giữa `AvailabilityProfile`, danh sách `ProposedTask` do AI sinh ra (qua `LLMProviderPort`), và danh sách khoảng bận từ các lộ trình khác hoặc Google Calendar:
+     - `validate_daily_ceiling(...)`: Thẩm định trần cứng Mode A (Hard Ceiling Gate).
+     - `validate_proposal_against_slots(...)`: Thẩm định vị trí khung giờ thực tế Mode B (Slot-fit & Soft Overflow $\le 30\text{m}$).
+     - `calculate_remaining_capacity(...)`: Giải thuật trừ đoạn thời gian (`Interval Subtraction`) cho đa lộ trình (`FR-AVAIL-003`).
 
 ---
 
@@ -113,7 +116,7 @@ Theo tiêu chuẩn thiết kế hướng miền (Domain-Driven Design - DDD) và
 Tại sao hệ thống FocusFlow không áp dụng cùng một cơ chế thẩm định cho cả 2 chế độ?
 1. **Đối với Mode A (Hard Ceiling Gate — Chặn cứng):**
    - Người học Mode A thiết lập quỹ thời gian trần theo con số tuyệt đối (ví dụ: Thứ 2 rảnh đúng 2 giờ).
-   - Nếu thuật toán xếp lịch nhồi nhét $2.5$ giờ vào ngày đó, người học chắc chắn sẽ không đủ thể lực hoặc thời gian để hoàn thành. Do đó, hệ thống áp dụng **Hard Ceiling Gate**: Bất kỳ sự vi phạm nào ($> 0$ phút) đều bị chặn đứng và từ chối áp dụng lịch với lỗi `422 Unprocessable Entity`.
+   - Nếu thuật toán xếp lịch nhồi nhét $2.5$ giờ vào ngày đó, người học chắc chắn sẽ không đủ thể lực hoặc thời gian để hoàn thành. Do đó, `HybridAvailabilityRuleEngine` áp dụng **Hard Ceiling Gate**: Bất kỳ sự vi phạm nào ($> 0$ phút) đều bị chặn đứng ở Tier 2 của **3-Tier Hybrid Validation Gate** (`ADR-009`) hoặc từ chối áp dụng lịch với lỗi `422 Unprocessable Entity`.
 2. **Đối với Mode B (Slot-fit Validation & Soft Overflow Tolerance):**
    - **Bản chất của Mode B:** Không chỉ cho biết tổng lượng giờ rảnh, Mode B xác định **thời điểm cụ thể** người học có thể học. Do đó, việc chỉ so sánh tổng số phút task với tổng phút rảnh trong ngày (`validate_daily_ceiling`) là **sai bản chất nghiệp vụ**.
    - **Quy tắc Kiểm tra Vị trí Thực tế (`validate_proposal_against_slots`):**
@@ -129,68 +132,50 @@ Tại sao hệ thống FocusFlow không áp dụng cùng một cơ chế thẩm 
 ### 2.4. Phạm Vi Thẩm Định Khi Chuyển Đổi Chế Độ & Trạng Thái `enabled`
 1. **Phạm vi Thẩm định (Validation Scope):**
    - Hệ thống **chỉ thẩm định nghiêm ngặt chế độ đang được kích hoạt (`active_mode`)**.
-   - Nếu người dùng lưu `mode = 'MODE_A'`, hệ thống chỉ kiểm tra các bất biến của Mode A (0.5h – 14.0h/ngày, tổng tuần $\ge 1.0$h, tính hợp lệ của `allowed_window`). Các khung giờ trong `time_slots` của Mode B dù có đang rỗng hoặc chưa hoàn thiện vẫn được giữ nguyên vẹn trong JSONB.
+   - Nếu người dùng lưu `mode = 'MODE_A'`, hệ thống chỉ kiểm tra các bất biến của Mode A (0.5h – 14.0h/ngày, tổng tuần $\ge 1.0$h, tính hợp lệ của `allowed_window`). Các khung giờ trong `time_slots` của Mode B dù có đang rỗng hoặc chưa hoàn thiện vẫn được giữ nguyên vẹn trong bảng `availability_slots`.
    - Ngược lại, khi chuyển sang lưu `mode = 'MODE_B'`, hệ thống mới kích hoạt bộ thẩm định kiểm tra chồng lấn và thời lượng tối thiểu của các khung giờ.
 2. **Ngữ nghĩa của trường `enabled`:**
    - Trường `enabled: Boolean` trong mỗi `DaySchedule` là **trạng thái dùng chung có chủ đích của ngày**: Mang ý nghĩa "Người học quyết định ngày này nghỉ hoàn toàn, không xếp bất kỳ lịch học nào, bất kể đang dùng Mode A hay Mode B".
-   - Khi `enabled = false`, toàn bộ dữ liệu `quota_hours` và `time_slots` đã nhập trước đó vẫn được bảo toàn nguyên vẹn trong JSONB (State Retention). Giao diện hiển thị cảnh báo tinh tế nếu người dùng bật lại ngày đó.
+   - Khi `enabled = false`, toàn bộ dữ liệu `quota_hours` và `time_slots` đã nhập trước đó vẫn được bảo toàn nguyên vẹn (State Retention).
 
 ---
 
-### 2.5. Xử Lý Xung Đột Với Lịch Chính Thức & Phân Tách Trách Nhiệm Với FR-PAUSE
+### 2.5. Xử Lý Xung Đột Với Lịch Chính Thức & Phân Tách Trách Nhiệm Với Domino Shift
 1. **Ứng xử khi người học sửa giảm giờ rảnh trong lúc đã có Lịch học chính thức (Official Schedule):**
-   - Áp dụng nguyên lý **Non-blocking with Advisory Warning**: Cấu hình rảnh mới luôn được phép lưu thành công ngay lập tức.
-   - Nếu phát hiện cấu hình mới làm cho các task `TODO` trong tương lai bị vượt trần hoặc rơi ra ngoài khung rảnh, hệ thống **không tự ý thay đổi hoặc hủy bỏ** lịch đã cam kết. Thay vào đó, hệ thống gắn cờ cảnh báo trên màn hình Thời khóa biểu và Dashboard, gợi ý người học bấm nút `[Tái cấu trúc lịch học bằng AI - FR-ADAPT-002]` để AI phân bổ lại lịch một cách có chủ đích.
+   - Áp dụng nguyên lý **Non-blocking with Advisory Warning**: Cấu hình rảnh mới luôn được phép lưu thành công ngay lập tức và phát sự kiện `AvailabilityUpdatedEvent` qua Transactional Outbox (`outbox_events`).
+   - Nếu phát hiện cấu hình mới làm cho các task `PENDING` trong tương lai bị vượt trần hoặc rơi ra ngoài khung rảnh, hệ thống **không tự ý thay đổi hoặc hủy bỏ** lịch đã cam kết. Thay vào đó, hệ thống gắn cờ cảnh báo trên màn hình Thời khóa biểu và Dashboard, gợi ý người học kích hoạt tái cấu trúc lịch học thích ứng.
 2. **Phân định Ranh giới Kỹ thuật Rõ ràng giữa Settings Hub và Quick Drawer:**
-   - **Cài đặt Tập trung (Settings Hub - `/settings`):** Chuyên trách cập nhật **Khuôn mẫu lặp lại hàng tuần (Weekly Recurring Template)** thông qua API `PUT /api/v1/availabilities/me`. Thao tác này ảnh hưởng tới tất cả các tuần tiếp theo.
-   - **Tương tác Nhanh (Quick Drawer tại `/schedule`):** Phục vụ việc điều chỉnh cục bộ đột xuất cho một ngày cụ thể (ví dụ: tối nay bận đột xuất muốn dời phiên học sang ngày mai). Thao tác này **tuyệt đối KHÔNG gọi `PUT /availabilities/me`** để tránh phá vỡ khuôn mẫu tuần; thay vào đó nó gọi API của phân hệ `FR-PAUSE` / `DayOverride` để dời lịch cho riêng ngày đó.
+   - **Cài đặt Tập trung (Settings Hub - `/settings`):** Chuyên trách cập nhật **Khuôn mẫu lặp lại hàng tuần (Weekly Recurring Template)** thông qua API `PUT /api/v1/availabilities/me` (thuộc Context `account`).
+   - **Tương tác Nhanh (Quick Drawer tại `/schedule`):** Phục vụ việc điều chỉnh cục bộ đột xuất cho một ngày cụ thể (ví dụ: tối nay bận đột xuất muốn dời phiên học sang ngày mai). Thao tác này **tuyệt đối KHÔNG gọi `PUT /availabilities/me`** để tránh phá vỡ khuôn mẫu tuần; thay vào đó nó gọi API của phân hệ `execution`/`evaluation` (`PauseRecord` / `DominoShiftEngine`) để dời lịch cho riêng khoảng thời gian đó.
 
 ---
 
 ## 3. Mô hình Hóa Thiết kế Hệ thống Chuẩn UML 2.5.1
 
-### 3.1. Sơ đồ Lớp Thiết kế Chi tiết (Design Class Diagram - DCD)
+### 3.1. Sơ đồ Lớp Thiết kế Chi tiết (Design Class Diagram - DCD v2.0)
 
 ```mermaid
 classDiagram
     direction TB
 
-    %% Presentation Layer
+    %% Presentation Layer (backend/src/account/presentation/)
     class AvailabilityRouter {
         <<FastAPI APIRouter>>
         +get_my_availability(user_id, use_case) AvailabilityResponseDTO
         +update_my_availability(user_id, request, use_case) AvailabilityResponseDTO
     }
 
-    class GetCurrentUserDependency {
-        <<FastAPI Depends>>
-        +get_current_user_id(request, x_user_id) UUID
+    %% Cross-Context Public API (backend/src/account/public_api.py)
+    class AvailabilityQueryPort {
+        <<Public Facade Port>>
+        +get_user_availability(user_id: UUID)* AvailabilityProfileDTO
+        +validate_schedule_proposal(user_id: UUID, tasks: List)* AvailabilityValidationResult
     }
 
-    %% Application Layer (DTOs, Ports, Use Cases)
-    class TimeSlotDTO {
-        +String start
-        +String end
-    }
-
-    class DayScheduleDTO {
-        +Boolean enabled
-        +Float quota_hours
-        +List~TimeSlotDTO~ time_slots
-    }
-
-    class WeeklyScheduleDTO {
-        +DayScheduleDTO monday
-        +DayScheduleDTO tuesday
-        +DayScheduleDTO wednesday
-        +DayScheduleDTO thursday
-        +DayScheduleDTO friday
-        +DayScheduleDTO saturday
-        +DayScheduleDTO sunday
-    }
-
+    %% Application Layer (backend/src/account/application/)
     class UpdateAvailabilityRequestDTO {
         +String mode
+        +String calendar_integration_mode
         +WeeklyScheduleDTO weekly_schedule
     }
 
@@ -198,6 +183,7 @@ classDiagram
         +String id
         +String user_id
         +String mode
+        +String calendar_integration_mode
         +WeeklyScheduleDTO weekly_schedule
         +Float total_weekly_hours
         +String updated_at
@@ -216,10 +202,11 @@ classDiagram
 
     class UpdateAvailabilityUseCase {
         -AvailabilityRepositoryPort repository
+        -AsyncUnitOfWork uow
         +execute(user_id: UUID, request: UpdateAvailabilityRequestDTO) AvailabilityResponseDTO
     }
 
-    %% Domain Layer (Core Logic)
+    %% Domain Layer (backend/src/account/domain/)
     class AvailabilityMode {
         <<Enumeration>>
         MODE_A
@@ -234,7 +221,6 @@ classDiagram
         +durationMinutes int
         +overlaps(other: TimeSlot) Boolean
         +from_str(start: String, end: String, endDayOffset: Integer, day: String)$ TimeSlot
-        +to_dict() Map
     }
 
     class DaySchedule {
@@ -247,8 +233,6 @@ classDiagram
         -List~TimeSlot~ timeSlots
         +totalSlotMinutes int
         +validateInvariants(dayName: String, mode: AvailabilityMode) void
-        +to_dict() Map
-        +from_dict(data: Map, dayName: String)$ DaySchedule
     }
 
     class WeeklySchedule {
@@ -256,20 +240,25 @@ classDiagram
         -Map~String, DaySchedule~ days
         +calculateTotalWeeklyHours(mode: AvailabilityMode) Float
         +validateInvariants(mode: AvailabilityMode) void
-        +to_dict() Map
-        +from_dict(data: Map)$ WeeklySchedule
     }
 
     class AvailabilityValidationResult {
-        <<Data Transfer / Domain Object>>
+        <<Value Object>>
         +Boolean isValid
         +Integer overflowMinutes
         +Boolean hasSoftOverflow
         +List~String~ violationReasons
     }
 
+    class HybridAvailabilityRuleEngine {
+        <<Pure Domain Service>>
+        +validate_daily_ceiling(profile: AvailabilityProfile, dayOfWeek: String, totalMinutes: Integer) AvailabilityValidationResult
+        +validate_proposal_against_slots(profile: AvailabilityProfile, dayOfWeek: String, proposedTasks: List) AvailabilityValidationResult
+        +calculate_remaining_capacity(profile: AvailabilityProfile, dayOfWeek: String, occupied: List) Object
+    }
+
     class AvailabilityProfile {
-        <<Entity / Aggregate Root>>
+        <<Aggregate Root>>
         -UUID id
         -UUID userId
         -AvailabilityMode mode
@@ -286,81 +275,89 @@ classDiagram
         +createDefault(userId: UUID)$ AvailabilityProfile
     }
 
-    %% Infrastructure Layer
-    class AvailabilityModel {
-        <<SQLAlchemy ORM>>
+    %% Infrastructure Layer (backend/src/account/infrastructure/)
+    class AvailabilityORM {
+        <<SQLAlchemy ORM: availabilities>>
         +UUID id
         +UUID user_id
         +String mode
         +String calendar_integration_mode
-        +JSONB weekly_schedule
         +DateTime created_at
         +DateTime updated_at
     }
 
-    class SqlAvailabilityRepository {
-        <<Adapter>>
+    class AvailabilitySlotORM {
+        <<SQLAlchemy ORM: availability_slots>>
+        +UUID id
+        +UUID availability_id
+        +Integer day_of_week
+        +Boolean enabled
+        +Float quota_hours
+        +Time start_time
+        +Time end_time
+        +Integer end_day_offset
+        +String preferred_period
+        +Integer min_session_minutes
+    }
+
+    class SqlAlchemyAvailabilityRepository {
+        <<Driven Adapter / Data Mapper>>
         -AsyncSession session
         +get_by_user_id(user_id: UUID) AvailabilityProfile
         +save(profile: AvailabilityProfile) AvailabilityProfile
-        -toEntity(model: AvailabilityModel) AvailabilityProfile
+        -toDomainEntity(parent: AvailabilityORM, slots: List~AvailabilitySlotORM~) AvailabilityProfile
+        -toOrmModels(profile: AvailabilityProfile) Tuple~AvailabilityORM, List~AvailabilitySlotORM~~
     }
 
     %% Relationships
-    AvailabilityRouter ..> GetCurrentUserDependency : depends on
     AvailabilityRouter ..> GetAvailabilityUseCase : invokes
     AvailabilityRouter ..> UpdateAvailabilityUseCase : invokes
     GetAvailabilityUseCase ..> AvailabilityRepositoryPort : uses
     UpdateAvailabilityUseCase ..> AvailabilityRepositoryPort : uses
-    UpdateAvailabilityUseCase ..> UpdateAvailabilityRequestDTO : consumes
-    GetAvailabilityUseCase ..> AvailabilityResponseDTO : produces
 
-    AvailabilityRepositoryPort <|.. SqlAvailabilityRepository : implements
-    SqlAvailabilityRepository ..> AvailabilityModel : queries / maps
-    SqlAvailabilityRepository ..> AvailabilityProfile : reconstructs
+    AvailabilityRepositoryPort <|.. SqlAlchemyAvailabilityRepository : implements
+    SqlAlchemyAvailabilityRepository ..> AvailabilityORM : maps parent (3NF/BCNF)
+    SqlAlchemyAvailabilityRepository ..> AvailabilitySlotORM : maps 1-N slots (3NF/BCNF)
+    SqlAlchemyAvailabilityRepository ..> AvailabilityProfile : reconstructs
 
     AvailabilityProfile "1" *-- "1" WeeklySchedule : holds
     WeeklySchedule "1" *-- "7" DaySchedule : contains
     DaySchedule "1" *-- "*" TimeSlot : contains
-    AvailabilityProfile ..> AvailabilityMode : has
-    AvailabilityProfile ..> AvailabilityValidationResult : returns
+    AvailabilityProfile ..> HybridAvailabilityRuleEngine : delegates cross-entity rules
+    HybridAvailabilityRuleEngine ..> AvailabilityValidationResult : returns
 ```
 
 ---
 
-### 3.2. Sơ đồ Tuần tự 1: Thiết lập & Thẩm định Cấu hình Rảnh (UC-AVAIL-01)
+### 3.2. Sơ đồ Tuần tự 1: Thiết lập & Thẩm định Cấu hình Rảnh (`UC-03` / `FR-AVAIL-001..002`)
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Learner as Người học (Learner)
-    participant UI as Angular 19 SPA (Client)
-    participant Router as AvailabilityRouter (/api/v1/availabilities)
-    participant AuthDep as get_current_user_id (Dependency)
-    participant UC as UpdateAvailabilityUseCase (Application)
-    participant Entity as AvailabilityProfile (Rich Domain Entity)
-    participant Repo as SqlAvailabilityRepository (Adapter)
-    participant DB as PostgreSQL 16 (availabilities Table)
+    participant UI as Angular 21+ SPA (Zoneless Signals)
+    participant Router as AvailabilityRouter (account/presentation)
+    participant UC as UpdateAvailabilityUseCase (account/application)
+    participant Entity as AvailabilityProfile & WeeklySchedule (account/domain)
+    participant Repo as SqlAlchemyAvailabilityRepository (account/infrastructure)
+    participant UoW as SqlAlchemyUoW (shared_kernel)
+    participant DB as PostgreSQL 16 (availabilities & availability_slots)
 
     Learner->>UI: Điều chỉnh Quỹ giờ (Mode A) hoặc Khung giờ (Mode B) & Bấm [Lưu cấu hình]
-    Note over UI: Client Live Validation:<br/>Kiểm tra start < end, slot >= 30m,<br/>báo lỗi trực quan trước khi gửi.
+    Note over UI: Client Live Validation (Signals):<br/>Kiểm tra start < end, slot >= 30m,<br/>báo lỗi trực quan trước khi gửi.
     
     UI->>Router: PUT /api/v1/availabilities/me (UpdateAvailabilityRequestDTO)
-    Router->>AuthDep: Xác thực & Lấy ID người dùng
-    AuthDep-->>Router: current_user_id (UUID)
-
     Router->>UC: execute(user_id, request_dto)
     
     rect rgb(240, 248, 255)
-        Note over UC,Entity: TẦNG NGHIỆP VỤ (DOMAIN LAYER)
+        Note over UC,Entity: TẦNG NGHIỆP VỤ (ACCOUNT DOMAIN LAYER)
         UC->>UC: Chuyển đổi DTO thành Domain Value Objects (TimeSlot, DaySchedule, WeeklySchedule)
         UC->>Repo: get_by_user_id(user_id)
-        Repo->>DB: SELECT * FROM availabilities WHERE user_id = :uid
-        DB-->>Repo: AvailabilityModel (hoặc None)
+        Repo->>DB: SELECT availabilities + availability_slots WHERE user_id = :uid
+        DB-->>Repo: AvailabilityORM + List[AvailabilitySlotORM]
         Repo-->>UC: existing_profile (hoặc None)
 
         alt Hồ sơ chưa tồn tại (First time)
-            Note over UC: Lazy Init: Đối với GET lần đầu, UC trả về đối tượng Default trong bộ nhớ (id=None, không INSERT CSDL).\nKhi người học gọi PUT /me lần đầu, UC tạo Entity mới và kích hoạt UPSERT.
             UC->>Entity: AvailabilityProfile(id, user_id, mode, weekly_schedule, calendar_integration_mode)
             Entity->>Entity: weekly_schedule.validate_invariants(mode)
         else Hồ sơ đã tồn tại (Cập nhật)
@@ -377,9 +374,9 @@ sequenceDiagram
         UI-->>Learner: Hiển thị thông báo lỗi chi tiết trên form
     else Dữ liệu hợp lệ 100%
         UC->>Repo: save(profile)
-        Repo->>DB: INSERT ... ON CONFLICT (user_id) DO UPDATE ... (UPSERT)
-        DB-->>Repo: Saved Record
-        Repo-->>UC: saved_profile (Entity)
+        Repo->>DB: UPSERT availabilities & đồng bộ các dòng chuẩn hóa vào availability_slots
+        UC->>UoW: commit() (Ghi kèm AvailabilityUpdatedEvent vào outbox_events)
+        DB-->>Repo: Giao dịch ACID thành công
         UC-->>Router: AvailabilityResponseDTO
         Router-->>UI: HTTP 200 OK {success: true, data: AvailabilityResponseDTO}
         UI-->>Learner: Thông báo Toast "Lưu cấu hình thời gian rảnh thành công!"
@@ -388,30 +385,31 @@ sequenceDiagram
 
 ---
 
-### 3.3. Sơ đồ Tuần tự 2: Chốt Chặn Thẩm định Trần giờ khi Áp dụng Lịch (Apply Gate)
+### 3.3. Sơ đồ Tuần tự 2: Chốt Chặn Thẩm định Trần giờ Liên Context khi Áp dụng Lịch (Apply Gate — `planning` $\to$ `account/public_api.py`)
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Learner as Người học (Learner)
-    participant UI as Angular Schedule View
-    participant ApplyUC as ApplyProposalUseCase
-    participant Profile as AvailabilityProfile (Domain Entity)
-    participant DB as PostgreSQL 16 (official_schedules & tasks)
+    participant UI as Angular 21+ Schedule View
+    participant ApplyUC as ApplyScheduleUseCase (planning/application)
+    participant AvailPort as AvailabilityQueryPort (account/public_api.py)
+    participant Engine as HybridAvailabilityRuleEngine (account/domain/services)
+    participant DB as PostgreSQL 16 (official_schedules, tasks, outbox_events)
 
     Learner->>UI: Xem trước Bản nháp Lịch (Proposal Preview) & Bấm [Áp dụng Lịch]
     UI->>ApplyUC: apply_proposal(proposal_id)
-    ApplyUC->>DB: Lấy User Availability Profile & Danh sách Tasks trong Proposal
-    DB-->>ApplyUC: availabilityProfile, proposedTasks
+    ApplyUC->>AvailPort: get_user_availability(user_id)
+    AvailPort-->>ApplyUC: availabilityProfile
 
     loop Duyệt qua từng ngày trong tuần có xếp task
         alt Chế độ Mode A
-            ApplyUC->>Profile: validate_daily_ceiling(day_of_week, total_task_minutes)
-            Profile-->>ApplyUC: AvailabilityValidationResult (is_valid, has_soft_overflow, overflow)
+            ApplyUC->>Engine: validate_daily_ceiling(profile, day_of_week, total_task_minutes)
+            Engine-->>ApplyUC: AvailabilityValidationResult (is_valid, has_soft_overflow, overflow)
         else Chế độ Mode B
-            ApplyUC->>Profile: validate_proposal_against_slots(day_of_week, day_proposed_tasks)
-            Note over Profile: Thẩm định Khung giờ Vị trí Thực tế (D-01):<br/>• Kiểm tra từng task nằm trọn trong slot rảnh<br/>• Không xung đột khoảng bận lịch ngoài<br/>• Soft Overflow <= 30m nếu chỉ tràn biên ngoài
-            Profile-->>ApplyUC: AvailabilityValidationResult (is_valid, has_soft_overflow, overflow)
+            ApplyUC->>Engine: validate_proposal_against_slots(profile, day_of_week, day_proposed_tasks)
+            Note over Engine: Thẩm định Khung giờ Vị trí Thực tế:<br/>• Kiểm tra từng task nằm trọn trong slot rảnh<br/>• Không xung đột khoảng bận lịch ngoài<br/>• Soft Overflow <= 30m nếu chỉ tràn biên ngoài
+            Engine-->>ApplyUC: AvailabilityValidationResult (is_valid, has_soft_overflow, overflow)
         end
     end
 
@@ -423,12 +421,12 @@ sequenceDiagram
             ApplyUC-->>UI: Cảnh báo Soft Overflow: "Khung học ngày Thứ 2 tràn 15 phút ngoài slot rảnh. Bạn có đồng ý?"
             Learner->>UI: Xác nhận Đồng ý
         end
-        Note over ApplyUC,DB: KIỂM TOÁN ĐỒNG THỜI (OPTIMISTIC LOCKING - D-09):<br/>Kiểm tra version Availability (updated_at) tại thời điểm ghi vs lúc nạp Preview
+        Note over ApplyUC,DB: KIỂM TOÁN ĐỒNG THỜI (OPTIMISTIC LOCKING):<br/>Kiểm tra version Availability (updated_at) tại thời điểm ghi vs lúc nạp Preview
         alt Version bị lệch (người dùng sửa Availability ở tab khác)
             ApplyUC-->>UI: HTTP 409 Conflict ("CONCURRENT_AVAILABILITY_MODIFIED")
             UI-->>Learner: Báo lỗi: "Cấu hình thời gian rảnh đã bị thay đổi ở tab khác. Vui lòng tải lại trang!"
         else Version hoàn toàn khớp (Hợp lệ)
-            ApplyUC->>DB: Unit of Work Giao dịch ACID (Rollback toàn bộ nếu lỗi):<br/>1. Cancel các task TODO tương lai thuộc phạm vi thay thế (giữ task COMPLETED/IN_PROGRESS)<br/>2. INSERT tasks mới (status = 'TODO')<br/>3. Kích hoạt Roadmap (status = 'ACTIVE')
+            ApplyUC->>DB: AsyncUnitOfWork Giao dịch ACID:<br/>1. Lưu official_schedules & cập nhật tasks<br/>2. Kích hoạt Roadmap (status = 'ACTIVE')<br/>3. Ghi OfficialScheduleAppliedEvent vào outbox_events
             DB-->>ApplyUC: Giao dịch thành công (Commit)
             ApplyUC-->>UI: HTTP 200 OK (Schedule Activated)
             UI-->>Learner: Hiển thị Thời khóa biểu chính thức được kích hoạt!
@@ -475,168 +473,131 @@ sequenceDiagram
               )
   ```
 - **Phân tích Độ phức tạp:**
-  - Thời gian (Time Complexity): $O(N \log N)$. Do số lượng khung giờ của một người học trong một ngày rất nhỏ ($N \le 6$), số phép tính tối đa $< 20$ phép toán, thời gian chạy đo được $< 0.05$ms.
+  - Thời gian (Time Complexity): $O(N \log N)$. Do số lượng khung giờ của một người học trong một ngày rất nhỏ ($N \le 6$), số phép tính tối đa $< 20$ phép toán, thời gian chạy đo được $< 0.05\text{ms}$.
   - Không gian (Space Complexity): $O(N)$ để chứa danh sách đã sắp xếp.
 
 ---
 
-### 4.2. Thuật toán Trừ Đoạn Thời gian Đa Lộ trình & Thẩm định Khung Khả thi (FR-AVAIL-003 & D-01)
-- **Mục tiêu:** 
+### 4.2. Thuật toán Trừ Đoạn Thời gian Đa Lộ trình & Thẩm định Khung Khả thi (`HybridAvailabilityRuleEngine`)
+- **Mục tiêu:**
   1. Với Mode A: Trả về `remaining_capacity_minutes: int` bằng $\text{quota\_hours} \times 60 - \sum \text{allocated\_minutes}$.
   2. Với Mode B: Trừ các khoảng thời gian bị chiếm dụng (Occupied Intervals của các Roadmap khác hoặc sự kiện bận từ Google Calendar) và trả về các khoảng rảnh còn lại (`List<TimeSlot>`).
   3. Cung cấp giải thuật `validate_proposal_against_slots` kiểm tra từng task đề xuất có nằm trọn trong các slot rảnh thực tế hay không.
-- **Mã giả giải thuật Trừ Đoạn Thời gian & Thẩm định Khung giờ:**
+- **Mã giả giải thuật trong `backend/src/account/domain/services/hybrid_availability_rule_engine.py`:**
   ```python
-  def subtract_intervals(base_slots: list[TimeSlot], occupied: list[tuple[time, time]]) -> list[TimeSlot]:
-      sorted_occupied = sorted(occupied, key=lambda x: x[0])
-      current_available = list(base_slots)
-      
-      for occ_start, occ_end in sorted_occupied:
-          next_available = []
-          for slot in current_available:
-              if slot.end_time <= occ_start or slot.start_time >= occ_end:
-                  next_available.append(slot)
-              else:
-                  if slot.start_time < occ_start:
-                      left_duration = time_diff_minutes(slot.start_time, occ_start)
-                      if left_duration >= 30:
-                          next_available.append(TimeSlot(slot.start_time, occ_start))
-                  
-                  if slot.end_time > occ_end:
-                      right_duration = time_diff_minutes(occ_end, slot.end_time)
-                      if right_duration >= 30:
-                          next_available.append(TimeSlot(occ_end, slot.end_time))
-          current_available = next_available
+  class HybridAvailabilityRuleEngine:
+      @staticmethod
+      def subtract_intervals(base_slots: list[TimeSlot], occupied: list[tuple[time, time]]) -> list[TimeSlot]:
+          sorted_occupied = sorted(occupied, key=lambda x: x[0])
+          current_available = list(base_slots)
           
-      return current_available
+          for occ_start, occ_end in sorted_occupied:
+              next_available = []
+              for slot in current_available:
+                  if slot.end_time <= occ_start or slot.start_time >= occ_end:
+                      next_available.append(slot)
+                  else:
+                      if slot.start_time < occ_start:
+                          left_duration = time_diff_minutes(slot.start_time, occ_start)
+                          if left_duration >= 30:
+                              next_available.append(TimeSlot(slot.start_time, occ_start))
+                      
+                      if slot.end_time > occ_end:
+                          right_duration = time_diff_minutes(occ_end, slot.end_time)
+                          if right_duration >= 30:
+                              next_available.append(TimeSlot(occ_end, slot.end_time))
+              current_available = next_available
+              
+          return current_available
 
-  def validate_proposal_against_slots(
-      available_slots: list[TimeSlot], 
-      proposed_tasks: list[ProposedTask]
-  ) -> AvailabilityValidationResult:
-      """Kiểm tra từng task có nằm trọn trong slot rảnh không (D-01)."""
-      for task in proposed_tasks:
-          matched = False
-          overflow_minutes = 0
-          for slot in available_slots:
-              # Task nằm hoàn toàn trong slot
-              if slot.start_time <= task.start_time and task.end_time <= slot.end_time:
-                  matched = True
-                  break
-              # Kiểm tra Soft Overflow (tràn đuôi slot <= 30 phút mà không đè slot khác)
-              if slot.start_time <= task.start_time and task.start_time < slot.end_time:
-                  overflow = time_diff_minutes(slot.end_time, task.end_time)
-                  if 0 < overflow <= 30:
+      @staticmethod
+      def validate_proposal_against_slots(
+          available_slots: list[TimeSlot], 
+          proposed_tasks: list[ProposedTask]
+      ) -> AvailabilityValidationResult:
+          """Kiểm tra từng task có nằm trọn trong slot rảnh không (D-01)."""
+          for task in proposed_tasks:
+              matched = False
+              overflow_minutes = 0
+              for slot in available_slots:
+                  # Task nằm hoàn toàn trong slot
+                  if slot.start_time <= task.start_time and task.end_time <= slot.end_time:
                       matched = True
-                      overflow_minutes = max(overflow_minutes, overflow)
                       break
-          if not matched:
-              return AvailabilityValidationResult(
-                  is_valid=False, 
-                  violation_reasons=[f"Task {task.title} [{task.start_time}-{task.end_time}] nằm ngoài khung giờ rảnh."]
-              )
-      
-      return AvailabilityValidationResult(
-          is_valid=True,
-          has_soft_overflow=(overflow_minutes > 0),
-          overflow_minutes=overflow_minutes
-      )
+                  # Kiểm tra Soft Overflow (tràn đuôi slot <= 30 phút mà không đè slot khác)
+                  if slot.start_time <= task.start_time and task.start_time < slot.end_time:
+                      overflow = time_diff_minutes(slot.end_time, task.end_time)
+                      if 0 < overflow <= 30:
+                          matched = True
+                          overflow_minutes = max(overflow_minutes, overflow)
+                          break
+              if not matched:
+                  return AvailabilityValidationResult(
+                      is_valid=False, 
+                      violation_reasons=[f"Task {task.title} [{task.start_time}-{task.end_time}] nằm ngoài khung giờ rảnh."]
+                  )
+          
+          return AvailabilityValidationResult(
+              is_valid=True,
+              has_soft_overflow=(overflow_minutes > 0),
+              overflow_minutes=overflow_minutes
+          )
   ```
 
 ---
 
-## 5. Thiết Kế Cơ Sở Dữ Liệu & Chiến Lược Lưu Trữ (Persistence Design)
+## 5. Thiết Kế Cơ Sở Dữ Liệu 3NF/BCNF & Chiến Lược Lưu Trữ (Persistence Design)
 
-### 5.1. Lược đồ Bảng Vật lý `availabilities` (PostgreSQL 16)
-Tuân thủ thiết kế chuẩn hóa tại `docs/database/schema.sql` (Bảng số 5):
+### 5.1. Lược đồ 2 Bảng Vật lý Chuẩn hóa 3NF/BCNF: `availabilities` & `availability_slots` (PostgreSQL 16)
+Tuân thủ thiết kế chuẩn hóa 24 bảng tại `docs/database/schema.sql` và `ADR-007`, cấu hình thời gian rảnh được lưu trữ chuẩn hóa 3NF/BCNF trên 2 bảng thuộc sở hữu của Bounded Context `account`:
 
 ```sql
 -- =============================================================================
--- BẢNG AVAILABILITIES (HỒ SƠ THỜI GIAN RẢNH LAI CỦA NGƯỜI HỌC)
--- Quan hệ: 1-1 với bảng users (Mỗi người học sở hữu duy nhất 1 hồ sơ thời gian rảnh)
+-- 1. BẢNG CHA: AVAILABILITIES (HỒ SƠ THỜI GIAN RẢNH LAI CỦA NGƯỜI HỌC)
+-- Quan hệ: 1-1 với bảng users
 -- =============================================================================
-
 CREATE TABLE IF NOT EXISTS availabilities (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID PRIMARY KEY,
     user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
     mode VARCHAR(10) NOT NULL DEFAULT 'MODE_A',
     calendar_integration_mode VARCHAR(20) NOT NULL DEFAULT 'NONE',
-    weekly_schedule JSONB NOT NULL,
+    timezone VARCHAR(64) NOT NULL DEFAULT 'Asia/Ho_Chi_Minh',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-    -- Ràng buộc kiểm tra tính hợp lệ của Mode
     CONSTRAINT chk_availabilities_mode CHECK (mode IN ('MODE_A', 'MODE_B')),
-
-    -- Ràng buộc kiểm tra chế độ tích hợp lịch (D-06)
-    CONSTRAINT chk_availabilities_calendar_mode CHECK (calendar_integration_mode IN ('NONE', 'EXPORT_ICS', 'CONNECTED')),
-
-    -- Ràng buộc toàn vẹn cấu trúc JSONB: Bắt buộc là JSON Object (không được là Array hay Scalar)
-    CONSTRAINT chk_availabilities_schedule_json CHECK (jsonb_typeof(weekly_schedule) = 'object')
+    CONSTRAINT chk_availabilities_calendar_mode CHECK (calendar_integration_mode IN ('NONE', 'EXPORT_ICS', 'CONNECTED'))
 );
 
--- Trigger tự động cập nhật dấu thời gian updated_at
-CREATE TRIGGER trg_availabilities_updated_at 
-BEFORE UPDATE ON availabilities 
-FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+-- =============================================================================
+-- 2. BẢNG CON CHUẨN HÓA 3NF/BCNF: AVAILABILITY_SLOTS
+-- Quan hệ: N-1 với bảng availabilities (Lưu trữ chi tiết quỹ giờ & khung giờ từng thứ)
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS availability_slots (
+    id UUID PRIMARY KEY,
+    availability_id UUID NOT NULL REFERENCES availabilities(id) ON DELETE CASCADE,
+    day_of_week SMALLINT NOT NULL CHECK (day_of_week BETWEEN 0 AND 6), -- 0: Monday .. 6: Sunday
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    quota_hours NUMERIC(4, 2) NOT NULL DEFAULT 2.0 CHECK (quota_hours >= 0.0 AND quota_hours <= 14.0),
+    allowed_window_start TIME NOT NULL DEFAULT '07:00',
+    allowed_window_end TIME NOT NULL DEFAULT '23:00',
+    preferred_period VARCHAR(16) NOT NULL DEFAULT 'ANY' CHECK (preferred_period IN ('MORNING', 'AFTERNOON', 'EVENING', 'ANY')),
+    min_session_minutes SMALLINT NOT NULL DEFAULT 30 CHECK (min_session_minutes >= 15),
+    start_time TIME NULL,
+    end_time TIME NULL,
+    end_day_offset SMALLINT NOT NULL DEFAULT 0 CHECK (end_day_offset IN (0, 1)),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_availability_slots_avail_day
+    ON availability_slots(availability_id, day_of_week);
 ```
 
-### 5.2. Cấu trúc Tài liệu JSONB Mẫu (`weekly_schedule`)
-Tài liệu JSONB lưu trữ đầy đủ 7 ngày trong tuần, tích hợp sẵn thuộc tính của cả Mode A (`quota_hours`) và Mode B (`time_slots`):
-
-```json
-{
-  "monday": {
-    "enabled": true,
-    "quota_hours": 2.5,
-    "allowed_window": { "start": "07:00", "end": "23:00" },
-    "preferred_period": "EVENING",
-    "min_session_minutes": 30,
-    "time_slots": [
-      { "start": "19:30", "end": "22:00", "end_day_offset": 0 }
-    ]
-  },
-  "tuesday": {
-    "enabled": true,
-    "quota_hours": 2.0,
-    "time_slots": [
-      { "start": "20:00", "end": "22:00" }
-    ]
-  },
-  "wednesday": {
-    "enabled": true,
-    "quota_hours": 2.5,
-    "time_slots": [
-      { "start": "19:30", "end": "22:00" }
-    ]
-  },
-  "thursday": {
-    "enabled": false,
-    "quota_hours": 0.0,
-    "time_slots": []
-  },
-  "friday": {
-    "enabled": true,
-    "quota_hours": 3.0,
-    "time_slots": [
-      { "start": "19:00", "end": "22:00" }
-    ]
-  },
-  "saturday": {
-    "enabled": true,
-    "quota_hours": 4.0,
-    "time_slots": [
-      { "start": "09:00", "end": "11:30" },
-      { "start": "14:30", "end": "16:00" }
-    ]
-  },
-  "sunday": {
-    "enabled": false,
-    "quota_hours": 0.0,
-    "time_slots": []
-  }
-}
-```
+### 5.2. Cơ chế Ánh xạ Hai chiều (Data Mapping) trong `SqlAlchemyAvailabilityRepository`
+Tại tầng Infrastructure (`backend/src/account/infrastructure/repositories/availability_repository.py`):
+- **Khi đọc (`get_by_user_id`)**: Repository thực hiện truy vấn `availabilities` kèm eager-load `availability_slots`, gom nhóm theo `day_of_week` ($0 \dots 6$) và tái tạo đầy đủ cây Value Object **`WeeklySchedule` $\to$ `DaySchedule` $\to$ `List[TimeSlot]`** cho `AvailabilityProfile`.
+- **Khi ghi (`save`)**: Sau khi `AvailabilityProfile` và `WeeklySchedule` đã kiểm chứng 100% các bất biến trong bộ nhớ, Repository chuyển đổi `WeeklySchedule` thành các bản ghi `AvailabilitySlotORM` và thực hiện cập nhật nguyên tử (atomic flush) bên trong giao dịch của `AsyncUnitOfWork`.
+- Nhờ đó, hợp đồng JSON trả về qua REST API (bên dưới) vẫn giữ nguyên cấu trúc phân cấp trực quan `weekly_schedule` cho Frontend Angular 21+, trong khi tầng lưu trữ vật lý đạt chuẩn 3NF/BCNF tuyệt đối.
 
 ---
 
@@ -649,8 +610,7 @@ Toàn bộ các endpoint tuân thủ chuẩn RESTful, sử dụng mã trạng th
 - **Mô tả:** Lấy thông tin cấu hình thời gian rảnh của người học đang đăng nhập. Nếu người học mới chưa từng cấu hình, Use Case tự động áp dụng **Lazy Initialization** trả về hồ sơ mẫu mặc định trong bộ nhớ với `id = null` (không thực hiện ghi INSERT CSDL để tránh race condition và write-side effect cho thao tác đọc). CSDL chỉ được tạo bản ghi khi người dùng gọi `PUT /me` lần đầu tiên.
 - **Tiêu đề Yêu cầu (Request Headers):**
   ```http
-  Authorization: Bearer <jwt_access_token> (hoặc qua HttpOnly Cookie)
-  X-User-Id: <uuid> (Tùy chọn: Chế độ Dev Fallback)
+  Cookie: access_token=<jwt_access_token> (hoặc Authorization: Bearer <jwt_access_token>)
   ```
 - **Mã phản hồi Thành công:** `200 OK`
 - **Thân phản hồi (Response Body):**
@@ -661,14 +621,15 @@ Toàn bộ các endpoint tuân thủ chuẩn RESTful, sử dụng mã trạng th
       "id": "0192a3b4-c5d6-7e8f-9a0b-1c2d3e4f5a6b",
       "user_id": "018f0000-0000-7000-8000-000000000001",
       "mode": "MODE_A",
+      "calendar_integration_mode": "NONE",
       "weekly_schedule": {
-        "monday": { "enabled": true, "quota_hours": 2.0, "time_slots": [{ "start": "19:30", "end": "21:30" }] },
-        "tuesday": { "enabled": true, "quota_hours": 2.0, "time_slots": [{ "start": "19:30", "end": "21:30" }] },
-        "wednesday": { "enabled": true, "quota_hours": 2.0, "time_slots": [{ "start": "19:30", "end": "21:30" }] },
-        "thursday": { "enabled": true, "quota_hours": 2.0, "time_slots": [{ "start": "19:30", "end": "21:30" }] },
-        "friday": { "enabled": true, "quota_hours": 2.0, "time_slots": [{ "start": "19:30", "end": "21:30" }] },
-        "saturday": { "enabled": true, "quota_hours": 3.0, "time_slots": [{ "start": "14:00", "end": "17:00" }] },
-        "sunday": { "enabled": true, "quota_hours": 3.0, "time_slots": [{ "start": "14:00", "end": "17:00" }] }
+        "monday": { "enabled": true, "quota_hours": 2.0, "time_slots": [{ "start": "19:30", "end": "21:30", "end_day_offset": 0 }] },
+        "tuesday": { "enabled": true, "quota_hours": 2.0, "time_slots": [{ "start": "19:30", "end": "21:30", "end_day_offset": 0 }] },
+        "wednesday": { "enabled": true, "quota_hours": 2.0, "time_slots": [{ "start": "19:30", "end": "21:30", "end_day_offset": 0 }] },
+        "thursday": { "enabled": true, "quota_hours": 2.0, "time_slots": [{ "start": "19:30", "end": "21:30", "end_day_offset": 0 }] },
+        "friday": { "enabled": true, "quota_hours": 2.0, "time_slots": [{ "start": "19:30", "end": "21:30", "end_day_offset": 0 }] },
+        "saturday": { "enabled": true, "quota_hours": 3.0, "time_slots": [{ "start": "14:00", "end": "17:00", "end_day_offset": 0 }] },
+        "sunday": { "enabled": true, "quota_hours": 3.0, "time_slots": [{ "start": "14:00", "end": "17:00", "end_day_offset": 0 }] }
       },
       "total_weekly_hours": 16.0,
       "updated_at": "2026-10-19T04:15:00.000000Z"
@@ -680,24 +641,25 @@ Toàn bộ các endpoint tuân thủ chuẩn RESTful, sử dụng mã trạng th
 
 ### 6.2. Endpoint 2: Cập nhật Cấu hình Thời gian Rảnh (UPSERT)
 - **Đường dẫn:** `PUT /api/v1/availabilities/me`
-- **Mô tả:** Cập nhật chế độ hoạt động và toàn bộ lịch tuần của người học. Nếu chưa có bản ghi, hệ thống thực hiện chèn mới; nếu đã có, thực hiện cập nhật và kích hoạt trigger cập nhật thời gian.
+- **Mô tả:** Cập nhật chế độ hoạt động và toàn bộ lịch tuần của người học.
 - **Thân yêu cầu (Request Body):**
   ```json
   {
     "mode": "MODE_B",
+    "calendar_integration_mode": "EXPORT_ICS",
     "weekly_schedule": {
       "monday": {
         "enabled": true,
         "quota_hours": 2.0,
         "time_slots": [
-          { "start": "19:00", "end": "21:00" }
+          { "start": "19:00", "end": "21:00", "end_day_offset": 0 }
         ]
       },
       "tuesday": {
         "enabled": true,
         "quota_hours": 2.0,
         "time_slots": [
-          { "start": "20:00", "end": "22:00" }
+          { "start": "20:00", "end": "22:00", "end_day_offset": 0 }
         ]
       },
       "wednesday": { "enabled": false, "quota_hours": 0.0, "time_slots": [] },
@@ -748,17 +710,17 @@ Toàn bộ các endpoint tuân thủ chuẩn RESTful, sử dụng mã trạng th
 
 ---
 
-## 7. Kiến Trúc Giao Diện Người Dùng Frontend (Angular 19 Signals Architecture)
+## 7. Kiến Trúc Giao Diện Người Dùng Frontend (Angular 21+ Zoneless Signals Architecture)
 
 ### 7.1. Phân chia Điểm Chạm UX Kép (Dual Touchpoint Strategy)
-Theo kết quả phỏng vấn `/grill-me`, phân hệ Availability cung cấp 2 điểm chạm trải nghiệm phục vụ 2 ngữ cảnh sử dụng khác nhau:
+Phân hệ Availability trên **Angular 21+ (Zoneless, Standalone, `OnPush`, PrimeNG v21 + Tailwind CSS v4 + Lucide Icons)** cung cấp 2 điểm chạm trải nghiệm phục vụ 2 ngữ cảnh sử dụng khác nhau:
 1. **Điểm chạm Quản trị Tập trung (Settings Hub - `/settings`):**
    - Đặt tại tab "Cấu hình Thời gian rảnh" trong trang Cài đặt.
    - Thích hợp khi người học muốn tinh chỉnh chi tiết, nghiên cứu các Mẫu gợi ý (Presets) hoặc thiết lập lịch rảnh ban đầu.
 2. **Điểm chạm Tương tác Nhanh (In-context Quick Drawer - `/schedule`):**
    - Đặt nút `[Điều chỉnh lịch hôm nay]` trên thanh công cụ điều khiển tuần của Thời khóa biểu (`SCR-05`).
-   - Mở ra một Slide-over Drawer từ phía bên phải màn hình phục vụ việc điều chỉnh ngoại lệ cục bộ cho ngày được chọn (dời phiên học, tăng giảm thời lượng hôm nay).
-   - **Ranh giới kỹ thuật (D-03):** Thao tác này tương tác với API của phân hệ `FR-PAUSE` (`DayOverride` / `DominoShift`) cho riêng ngày đó, **tuyệt đối không gọi `PUT /availabilities/me`** để bảo toàn khuôn mẫu tuần lặp lại vĩnh viễn.
+   - Mở ra một PrimeNG v21 Drawer từ phía bên phải màn hình phục vụ việc điều chỉnh ngoại lệ cục bộ cho ngày được chọn (dời phiên học, tăng giảm thời lượng hôm nay).
+   - **Ranh giới kỹ thuật:** Thao tác này tương tác với API của phân hệ `execution`/`evaluation` (`DominoShiftEngine`), **tuyệt đối không gọi `PUT /availabilities/me`** để bảo toàn khuôn mẫu tuần lặp lại vĩnh viễn.
 
 ---
 
@@ -768,10 +730,10 @@ Nhằm giúp người học không bị nản lòng trước việc phải tự 
    - Thứ 2 $\rightarrow$ Thứ 6: Rảnh tối 1.5h (`20:30 - 22:00`).
    - Thứ 7 & Chủ Nhật: Rảnh chiều 3.0h (`14:00 - 17:00`).
    - *Tổng quỹ tuần:* $13.5$ giờ.
-2. **Preset 2: Sinh Viên Đại Học (University Student) (Đã sửa theo D-11):**
+2. **Preset 2: Sinh Viên Đại Học (University Student):**
    - Thứ 2, 4, 6: Rảnh tối 2.5h (`19:30 - 22:00`).
    - Thứ 3, 5: Nghỉ ngơi học bài trên lớp.
-   - Thứ 7 & Chủ Nhật: Rảnh 4.0h/ngày (Sáng `08:30 - 11:30` = 3.0h và Chiều `14:30 - 16:30` = 1.0h... sửa đúng: Chiều `14:30 - 15:30` = 1.0h để tổng = 4.0h, hoặc sáng 2.5h + chiều 1.5h... ở đây chuẩn hóa: Sáng `08:30 - 11:00` 2.5h + Chiều `14:30 - 16:00` 1.5h = 4.0h/ngày).
+   - Thứ 7 & Chủ Nhật: Rảnh 4.0h/ngày (Sáng `08:30 - 11:00` = 2.5h và Chiều `14:30 - 16:00` = 1.5h).
    - *Tổng quỹ tuần:* $3 \times 2.5 + 2 \times 4.0 = 15.5$ giờ chuẩn xác 100%.
 3. **Preset 3: Học Tập Toàn Thời Gian (Full-time Bootcamper):**
    - Thứ 2 $\rightarrow$ Thứ 7: Mỗi ngày rảnh 6.0h chia làm 2 ca (Sáng `08:30 - 11:30`, Chiều `14:00 - 17:00`).
@@ -782,15 +744,15 @@ Kèm theo đó là nút tiện ích: **"Sao chép Thứ 2 sang tất cả các n
 
 ---
 
-### 7.3. Thiết Kế Quản Trị Trạng Thái Bằng Angular 19 Signals
-Ứng dụng khai thác tối đa tính năng **Fine-grained Reactivity** của Angular Signals, loại bỏ hoàn toàn sự rườm rà của Redux / NgRx:
+### 7.3. Thiết Kế Quản Trị Trạng Thái Bằng Angular 21+ Zoneless Signals
+Ứng dụng khai thác tối đa tính năng **Fine-grained Reactivity** của Angular 21+ Signals (`signal`, `computed`, `linkedSignal`, `rxResource`):
 
 ```typescript
 @Injectable({ providedIn: 'root' })
 export class AvailabilityService {
   private readonly http = inject(HttpClient);
 
-  // Core State Signals
+  // Core State Signals (Zoneless Ready)
   readonly profile = signal<AvailabilityProfile | null>(null);
   readonly activeMode = signal<AvailabilityMode>('MODE_A');
   readonly weeklySchedule = signal<WeeklySchedule>(DEFAULT_SCHEDULE);
@@ -809,7 +771,7 @@ export class AvailabilityService {
         if (mode === 'MODE_A') {
           total += dayData.quota_hours;
         } else {
-          total += dayData.time_slots.reduce((acc, s) => acc + calculateDurationMinutes(s.start, s.end), 0) / 60;
+          total += dayData.time_slots.reduce((acc, s) => acc + calculateDurationMinutes(s.start, s.end, s.end_day_offset), 0) / 60;
         }
       }
     }
@@ -828,21 +790,21 @@ export class AvailabilityService {
 
 | Mã Yêu cầu | Nguồn truy vết | Thành phần Xử lý (Component) | Phương pháp Kiểm chứng (Verification) | Tiêu chí Nghiệm thu (Acceptance Criteria) |
 | :--- | :--- | :--- | :--- | :--- |
-| **`FR-AVAIL-001`** | SRS v1.0 Mục 7.4, `OS-06`, `BUSR-03` | `AvailabilityProfile`, `DaySchedule`, Mode A View | `test_mode_a_os06_quota_bounds` | Cho phép nhập quota 0.5h – 14.0h; chặn nếu < 0.5h hoặc > 14.0h. |
-| **`FR-AVAIL-002`** | SRS v1.0 Mục 7.4, `BUSR-04` | `TimeSlot`, `DaySchedule`, Mode B View | `test_mode_b_overlapping_slots`, `test_time_slot_minimum_duration_30m` | Chặn Start $\ge$ End; chặn slot < 30m; chặn 2 slot đè giờ nhau trong ngày. |
-| **`FR-AVAIL-003`** | SRS v1.0 Mục 7.4, `OS-04`, `BUSR-05` | `calculate_remaining_capacity()` | `test_calculate_remaining_capacity_subtraction` | Phép trừ đoạn thời gian chính xác khi có lịch Roadmap khác chạy song song. |
-| **`BUSR-02`** | SRS v1.0 Mục 5.2, `ADR-009` | `validate_daily_ceiling()` | `test_rich_entity_daily_ceiling_and_validation` | Hard Ceiling chặn vượt giờ Mode A; Mode B cho phép Soft Overflow $\le 30$m. |
-| **`NFR-PERF-002`** | SRS v1.0 Mục 8.2 | CSDL PostgreSQL 16 JSONB, FastAPI Router | Integration Test `test_api_latency` | Tốc độ phản hồi API `GET /me` và `PUT /me` $\le 200$ms. |
+| **`FR-AVAIL-001`** | SRS v1.1 Mục 7.4, `OS-06`, `BUSR-03` | `AvailabilityProfile`, `DaySchedule`, Mode A View | `test_mode_a_os06_quota_bounds` | Cho phép nhập quota 0.5h – 14.0h; chặn nếu < 0.5h hoặc > 14.0h. |
+| **`FR-AVAIL-002`** | SRS v1.1 Mục 7.4, `BUSR-04` | `TimeSlot`, `DaySchedule`, Mode B View | `test_mode_b_overlapping_slots`, `test_time_slot_minimum_duration_30m` | Chặn Start $\ge$ End; chặn slot < 30m; chặn 2 slot đè giờ nhau trong ngày. |
+| **`FR-AVAIL-003`** | SRS v1.1 Mục 7.4, `OS-04`, `BUSR-05` | `HybridAvailabilityRuleEngine.calculate_remaining_capacity()` | `test_calculate_remaining_capacity_subtraction` | Phép trừ đoạn thời gian chính xác khi có lịch Roadmap khác chạy song song. |
+| **`BUSR-02`** | SRS v1.1 Mục 5.2, `ADR-009` | `HybridAvailabilityRuleEngine` (`validate_daily_ceiling` & `validate_proposal_against_slots`) | `test_rich_entity_daily_ceiling_and_validation` | Hard Ceiling chặn vượt giờ Mode A; Mode B cho phép Soft Overflow $\le 30$m. |
+| **`NFR-PERF-002`** | SRS v1.1 Mục 8.2 | PostgreSQL 16 (`availabilities` + `availability_slots`), FastAPI Router | Integration Test `test_api_latency` | Tốc độ phản hồi API `GET /me` và `PUT /me` $\le 250$ms (P95). |
 
 ---
 
 ### 8.2. Danh mục Ca Kiểm thử Tự động Chi tiết (Test Cases Specification)
 
-```
-tests/unit/domain/
+```text
+backend/tests/unit/account/domain/
 ├── test_time_slot_invariants.py
 │   ├── TC-TS-01: TimeSlot hợp lệ [19:00 - 21:00] -> duration = 120m.
-│   ├── TC-TS-02: Start >= End [21:00 - 20:00] -> Ném InvalidTimeSlotException.
+│   ├── TC-TS-02: Start >= End [21:00 - 20:00] (end_day_offset=0) -> Ném InvalidTimeSlotException.
 │   ├── TC-TS-03: Slot bằng nhau [20:00 - 20:00] -> Ném InvalidTimeSlotException.
 │   ├── TC-TS-04: Slot ngắn hơn 30 phút [20:00 - 20:25] -> Ném InvalidTimeSlotException.
 │   └── TC-TS-05: Kiểm tra overlaps() giữa 2 slot tiếp giáp vs giao thoa.
@@ -858,70 +820,68 @@ tests/unit/domain/
 ├── test_weekly_schedule_invariants.py
 │   ├── TC-WS-01: Tổng giờ cả tuần = 16.0h -> Hợp lệ.
 │   └── TC-WS-02: Tổng giờ cả tuần = 0.5h (< 1.0h) -> Ném InsufficientWeeklyAvailabilityException.
-└── test_rich_entity_validation_result.py
+└── test_hybrid_availability_rule_engine.py
     ├── TC-RE-01: Mode A Hard Ceiling: Tổng task 130m > Quỹ 120m -> is_valid = False.
-    ├── TC-RE-02: Mode B Soft Overflow: Tổng task 140m > Quỹ 120m (tràn 20m <= 30m) -> is_valid = True, has_soft_overflow = True.
-    ├── TC-RE-03: Mode B Hard Block: Tổng task 160m > Quỹ 120m (tràn 40m > 30m) -> is_valid = False.
+    ├── TC-RE-02: Mode B Soft Overflow: Task tràn 20m <= 30m ngoài slot -> is_valid = True, has_soft_overflow = True.
+    ├── TC-RE-03: Mode B Hard Block: Task tràn 40m > 30m ngoài slot -> is_valid = False.
     ├── TC-RE-04: Trừ đoạn thời gian calculate_remaining_capacity() chính xác (Mode A -> int minutes, Mode B -> List[TimeSlot]).
     ├── TC-RE-05: Thẩm định proposal vị trí thực tế validate_proposal_against_slots() (chặn task đè vào khoảng bận dù tổng phút hợp lệ).
     └── TC-RE-06: TimeSlot xử lý end_day_offset = 1 (22:30 T2 -> 00:30 T3) tính duration = 120m chuẩn xác.
 
-tests/integration/
+backend/tests/integration/account/
 └── test_availability_api.py
     ├── TC-API-01: GET /api/v1/availabilities/me lần đầu trả về Default Template (200 OK).
-    ├── TC-API-02: PUT /api/v1/availabilities/me payload chuẩn lưu thành công (200 OK).
+    ├── TC-API-02: PUT /api/v1/availabilities/me lưu chuẩn hóa vào availabilities & availability_slots (200 OK).
     ├── TC-API-03: PUT gửi quota 0.2h -> Trả về HTTP 422 {"code": "INVALID_QUOTA_BOUNDS"}.
     ├── TC-API-04: PUT gửi slot chồng lấn -> Trả về HTTP 422 {"code": "OVERLAPPING_TIME_SLOTS"}.
-    ├── TC-API-05: Chuyển đổi mode qua lại bảo toàn 100% dữ liệu JSONB (State Retention).
+    ├── TC-API-05: Chuyển đổi mode qua lại bảo toàn 100% dữ liệu trong availability_slots (State Retention).
     ├── TC-API-06: GET /api/v1/availabilities/me lần đầu trả về default profile với id = null mà không INSERT DB.
-    └── TC-API-07: Apply Gate trả về HTTP 409 Conflict khi updated_at bị thay đổi đồng thời từ phiên khác.
+    └── TC-API-07: Apply Gate (planning -> account/public_api.py) trả về HTTP 409 Conflict khi updated_at bị thay đổi đồng thời.
 ```
 
 ---
 
 ## 9. Lộ Trình Triển Khai Kỹ Thuật Từng Bước (Implementation Roadmap)
 
-Quá trình triển khai khi được kích hoạt sẽ tuân thủ nghiêm ngặt theo 6 bước có tuần tự phụ thuộc (Dependencies First):
+Quá trình triển khai tuân thủ nghiêm ngặt cấu trúc **Context-First Modular Monolith** (`backend/src/account/` và `backend/src/planning/`):
 
-```
-[BƯỚC 1: DOMAIN LAYER] 
-  ├── Tạo src/domain/exceptions/availability.py
-  ├── Tạo src/domain/models/availability.py (TimeSlot, DaySchedule, WeeklySchedule, AvailabilityProfile)
-  └── Viết & Chạy tests/unit/domain/test_availability_domain.py (Đảm bảo 100% Green)
+```text
+[BƯỚC 1: DOMAIN LAYER (backend/src/account/domain/)] 
+  ├── Tạo backend/src/account/domain/exceptions/availability.py
+  ├── Tạo backend/src/account/domain/models/availability.py (TimeSlot, DaySchedule, WeeklySchedule, AvailabilityProfile)
+  ├── Tạo backend/src/account/domain/services/hybrid_availability_rule_engine.py (HybridAvailabilityRuleEngine)
+  └── Viết & Chạy backend/tests/unit/account/domain/ (Đảm bảo 100% Green)
            │
            ▼
-[BƯỚC 2: APPLICATION LAYER]
-  ├── Tạo src/application/dtos/availability.py (Pydantic v2 Schemas)
-  ├── Tạo src/application/ports/availability_repository_port.py (Driven Port)
-  └── Tạo src/application/use_cases/availability/ (GetUseCase, UpdateUseCase)
+[BƯỚC 2: APPLICATION LAYER & PUBLIC API (backend/src/account/)]
+  ├── Tạo backend/src/account/application/dtos/availability.py (Pydantic v2 Schemas)
+  ├── Tạo backend/src/account/application/ports/availability_repository_port.py (Driven Port)
+  ├── Tạo backend/src/account/application/use_cases/availability/ (GetAvailabilityUseCase, UpdateAvailabilityUseCase)
+  └── Xuất AvailabilityQueryPort tại backend/src/account/public_api.py cho planning/evaluation gọi
            │
            ▼
-[BƯỚC 3: INFRASTRUCTURE LAYER]
-  ├── Cấu hình src/infrastructure/database/base.py (SQLAlchemy Async Engine)
-  ├── Tạo models/user_model.py & models/availability_model.py
-  ├── Tạo repositories/sql_availability_repository.py (Adapter)
-  └── Khởi tạo kịch bản Alembic migration cho bảng users và availabilities
+[BƯỚC 3: INFRASTRUCTURE LAYER (backend/src/account/infrastructure/)]
+  ├── Tạo backend/src/account/infrastructure/orm/availability_orm.py (AvailabilityORM & AvailabilitySlotORM chuẩn 3NF/BCNF)
+  ├── Tạo backend/src/account/infrastructure/repositories/availability_repository.py (SqlAlchemyAvailabilityRepository)
+  └── Cập nhật Alembic migration cho bảng availabilities và availability_slots
            │
            ▼
-[BƯỚC 4: PRESENTATION LAYER - BACKEND API]
-  ├── Tạo presentation/api/v1/dependencies/auth.py (Dev Fallback get_current_user_id)
-  ├── Tạo presentation/api/v1/endpoints/availability_router.py (GET /me, PUT /me, Exception Handlers)
-  ├── Đăng ký router vào presentation/main.py
-  └── Viết & Chạy tests/integration/test_availability_api.py
+[BƯỚC 4: PRESENTATION LAYER - BACKEND API (backend/src/account/presentation/)]
+  ├── Tạo backend/src/account/presentation/routers/availability_router.py (GET /me, PUT /me)
+  ├── Đăng ký router vào backend/src/main.py & kiểm tra import-linter
+  └── Viết & Chạy backend/tests/integration/account/test_availability_api.py
            │
            ▼
-[BƯỚC 5: FRONTEND LAYER - ANGULAR 19 SPA]
-  ├── Cập nhật core/constants/api-endpoints.ts
-  ├── Tạo core/models/availability.model.ts
-  ├── Tạo core/services/availability.service.ts (RxJS + Signals)
-  ├── Xây dựng features/settings/components/availability-config/ (Mode A, Mode B, Presets, Copy Weekdays)
-  ├── Nhúng component vào Settings Page (/settings)
-  └── Tích hợp Quick Drawer trên Schedule Page (/schedule)
+[BƯỚC 5: FRONTEND LAYER - ANGULAR 21+ SPA (frontend/src/app/)]
+  ├── Sinh kiểu tự động core/api/schema.d.ts qua openapi-typescript
+  ├── Tạo core/services/availability.service.ts (Zoneless Signals + rxResource)
+  ├── Xây dựng features/settings/components/availability-config/ (PrimeNG v21 + Tailwind CSS v4 + Lucide Icons)
+  └── Tích hợp Quick Drawer trên Schedule Page (features/schedule/)
            │
            ▼
-[BƯỚC 6: VERIFICATION & WALKTHROUGH]
-  ├── Chạy toàn bộ pytest suite backend
-  ├── Chạy pnpm build trên frontend (Typecheck & Linters)
+[BƯỚC 6: VERIFICATION & FITNESS GATE]
+  ├── Chạy pytest & lint-imports (import-linter) trên backend
+  ├── Chạy Vitest & pnpm build trên frontend Angular 21+
   └── Biên soạn tài liệu nghiệm thu kỹ thuật Walkthrough
 ```
 
