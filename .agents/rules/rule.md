@@ -39,6 +39,30 @@
 - Mock external APIs — no real API calls in tests
 - Each test must be independent and deterministic
 
+### Hexagonal Architecture
+
+- Layer dependency direction: `domain` ← `application` ← `infrastructure` / `presentation`
+- `domain/` must **never** import from `application/`, `infrastructure/`, or `presentation/`
+- `application/` must **never** import from `infrastructure/` or `presentation/`
+- Cross-layer communication uses **Port interfaces** (`application/ports/`) implemented by adapters in `infrastructure/`
+- Ports are defined as `typing.Protocol` (structural subtyping), not `ABC`
+- Dependency injection via FastAPI `Depends` — wiring lives in `presentation/` or a dedicated `dependencies.py`
+- Domain models are plain Python dataclasses — **no** SQLAlchemy, Pydantic, or FastAPI imports in `domain/`
+- Use cases in `application/use_cases/` accept DTOs from `application/dtos/`, never Pydantic request schemas from `presentation/`
+
+### Database / Persistence
+
+- ORM models live in `infrastructure/database/` — never leak into `domain/` or `application/`
+- Use SQLAlchemy 2.0 `Mapped[]` + `mapped_column()` style — no legacy `Column()` declarations
+- Table names: `snake_case`, plural (e.g., `learning_plans`)
+- Foreign key constraint naming: `fk_{child_table}_{parent_table}`
+- Index naming: `ix_{table}_{column}`
+- Unique constraint naming: `uq_{table}_{column}`
+- Repository implementations map ORM ↔ Domain entities — never return ORM models to upper layers
+- Each Alembic migration must have a working `downgrade()` — no `pass` downgrades
+- One migration per feature branch — squash if multiple revisions accumulate before merge
+- Transaction boundaries at use-case level, not inside individual repository methods
+
 ---
 
 ## 🅰 Frontend Rules (Angular v21+)
