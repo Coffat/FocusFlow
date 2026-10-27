@@ -30,43 +30,50 @@ Khi ứng dụng các Mô hình Ngôn ngữ Lớn (LLM) vào bài toán lập k�
 
 ### Phương án C: Kiến trúc LLM Đa nhà cung cấp (`LLMProviderPort`) kết hợp Cổng Kiểm duyệt Lai 3 Tầng (3-Tier Hybrid Validation Gate) & Bộ khung Offline AI Evaluation Harness (Được chọn)
 * Mọi lệnh gọi sinh kế hoạch và thẩm định đều đi qua cổng trừu tượng **`LLMProviderPort`** (`ADR-005`).
-* Kết quả đầu ra của LLM bắt buộc đi qua **Cổng Kiểm duyệt Lai 3 Tầng (3-Tier Hybrid Validation Gate)** kết hợp chặt chẽ giữa:
-  * **Tier 1:** Kiểm định cấu trúc JSON bằng **Pydantic v2 Structured Output**.
-  * **Tier 2:** Kiểm định ràng buộc cứng tất định 100% bằng **Pure Domain Services** (`HybridAvailabilityRuleEngine` và `DagCycleValidator`).
-  * **Tier 3:** Kiểm định chất lượng sư phạm bằng **Pedagogical LLM Judge** kèm cơ chế **Structured Feedback Retry (tối đa 2 vòng tự sửa lỗi)**.
+* Kết quả đầu ra của LLM khi khởi tạo lộ trình/lịch học mới (`UC-06`, `UC-07`) bắt buộc đi qua **Cổng Kiểm duyệt Lai 3 Tầng (3-Tier Hybrid Validation Gate)** kết hợp chặt chẽ giữa:
+  * **Tier 1:** Kiểm định cấu trúc JSON bằng **Pydantic v2 Structured Output** (khối thời lượng liên tục do AI sinh nằm trong `[15, 120]` phút, trong khi CSDL cho phép người học tự chỉnh thủ công trong `[15, 240]` phút).
+  * **Tier 2:** Kiểm định ràng buộc cứng tất định 100% bằng **Pure Domain Services** (`HybridAvailabilityRuleEngine` thuộc `account` và `DagCycleValidator` thuộc `execution`).
+  * **Tier 3:** Kiểm định chất lượng sư phạm bằng **Pedagogical LLM Judge** với vai trò **Cổng Tư vấn Mềm (Soft Advisory Gate)** có timeout độc lập $\le 5\text{s}$ và ngữ nghĩa **Fail-Open**, kèm cơ chế **Structured Feedback Retry (tối đa 2 vòng tự sửa lỗi)**.
+* Đối với luồng **Tái lập lịch AI Đơn Lộ trình khi Quá hạn (`AI Reschedule` từ mục `Needs Attention`)**, hệ thống **bỏ qua Cổng Kiểm duyệt 3 Tầng (bypasses the 3-Tier Hybrid Validation Gate)** để phản hồi nhanh và tránh gián đoạn trải nghiệm người dùng.
 * Xây dựng bộ công cụ **Offline AI Evaluation Harness** độc lập để chạy benchmark tự động trên 100+ kịch bản chuẩn.
 
 ---
 
 ## 3. Quyết định (Decision)
-**Chấp thuận Phương án C với kiến trúc chi tiết của Cổng Kiểm duyệt 3 Tầng và Bộ khung Đánh giá như sau:**
+**Chấp thuận Phương án C với kiến trúc chi tiết của Cổng Kiểm duyệt 3 Tầng, Luồng Tái lập lịch AI Đơn Lộ trình và Bộ khung Đánh giá như sau:**
 
 ### 3.1. Kiến trúc Cổng Kiểm duyệt Lai 3 Tầng (3-Tier Hybrid Validation Gate — `ASR-04`)
-Bộ điều phối `ProposalValidationGateOrchestrator` (tại tầng Application của Bounded Context `planning`) kiểm duyệt mọi đề xuất từ `LLMProviderPort` qua 3 tầng tuần tự trước khi cho phép lưu bản nháp `ScheduleProposal` (`status = 'DRAFT'`):
+Bộ điều phối `ProposalValidationGateOrchestrator` (tại tầng Application của Bounded Context `planning`) kiểm duyệt mọi đề xuất lịch học mới từ `LLMProviderPort` qua 3 tầng tuần tự trước khi cho phép lưu bản nháp `ScheduleProposal` (`status = 'DRAFT'`):
 
 ```mermaid
 flowchart LR
     LLM["🤖 LLMProviderPort<br/>(Gemini / OpenAI / Claude / Ollama / Mock)"] --> T1["🛡️ Tier 1: Pydantic v2<br/>Structured Output & Schema Gate"]
-    T1 -->|"Hợp lệ JSON & FK"| T2["⚙️ Tier 2: Pure Domain Services<br/>HybridAvailabilityRuleEngine + DagCycleValidator"]
-    T2 -->|"100% Thỏa Ràng buộc Cứng"| T3["🎓 Tier 3: Pedagogical LLM Judge<br/>Đánh giá Độ dốc Nhận thức & Sư phạm"]
-    T3 -->|"Đạt chuẩn"| Draft["✅ Lưu ScheduleProposal (DRAFT)<br/>& Commit AI Quota"]
+    T1 -->|"Hợp lệ JSON & AI Block [15..120m]"| T2["⚙️ Tier 2: Pure Domain Services<br/>HybridAvailabilityRuleEngine + DagCycleValidator"]
+    T2 -->|"100% Thỏa Ràng buộc Cứng"| T3["🎓 Tier 3: Pedagogical LLM Judge<br/>(Soft Advisory Gate, Timeout <= 5s, Fail-Open)"]
+    T3 -->|"Đạt chuẩn hoặc Fail-Open Advisory"| Draft["✅ Lưu ScheduleProposal (DRAFT)<br/>& Commit AI Quota"]
     T1 -.->|"Lỗi Schema (Retry <= 2)"| Retry["🔄 Structured Error Feedback Prompt"]
     T2 -.->|"Vi phạm Mode A/B hoặc Chu trình DAG (Retry <= 2)"| Retry
-    T3 -.->|"Vi phạm Sư phạm Nặng (Retry <= 2)"| Retry
+    T3 -.->|"Vi phạm Sư phạm Nặng khi còn lượt Retry (<= 2)"| Retry
     Retry --> LLM
 ```
 
 1. **Tier 1 — Cổng Cú pháp & Lược đồ (`Pydantic v2 Structured Output`):**
-   * Ép kiểu và kiểm tra tính hợp lệ của cấu trúc JSON trả về (`MilestoneListSchema`, `ProposalPlanSchema`): giới hạn độ dài chuỗi, thời lượng từng task nằm trong khoảng `[15, 180]` phút, định dạng ngày giờ ISO 8601 và tính hợp lệ của khóa tham chiếu `milestone_id`.
+   * Ép kiểu và kiểm tra tính hợp lệ của cấu trúc JSON trả về (`MilestoneListSchema`, `ProposalPlanSchema`): giới hạn độ dài chuỗi, định dạng ngày giờ ISO 8601 và tính hợp lệ của khóa tham chiếu `milestone_id`.
+   * **Phân biệt Giới hạn Thời lượng AI vs Thủ công:** Tại Tier 1, mọi khối học tập liên tục (continuous block) do AI sinh ra bắt buộc nằm trong khoảng **`[15, 120]` phút** để tránh quá tải nhận thức; trong khi đó ở tầng CSDL (`tasks.estimated_minutes`) và khi người học tự tạo/chỉnh sửa thủ công (`UC-09`), hệ thống cho phép khoảng rộng hơn là **`[15, 240]` phút**.
 2. **Tier 2 — Cổng Ràng buộc Cứng Tất định (`Pure Domain Services` — 100% Deterministic Python):**
    * **`HybridAvailabilityRuleEngine` (thuộc `account.domain`, truy cập qua `AvailabilityQueryPort`):**
      * **Mode A (Capacity / Hard Ceiling - `BUSR-03`):** Kiểm tra tổng số phút học tập được xếp trong mỗi ngày không bao giờ vượt quá trần dung lượng `max_daily_minutes` của ngày đó.
-     * **Mode B (Explicit Time Slots & Soft Overflow - `BUSR-04`):** Đối chiếu từng task với danh sách `TimeSlot` thực tế (đã nạp từ bảng `availability_slots` và trừ đi các khoảng bận từ Google Calendar OAuth2 nếu có). Cho phép dung sai tràn biên mềm (**Soft Overflow $\le 30\text{ phút}$**) nếu không đụng độ khung bận kế tiếp, đồng thời chặn tuyệt đối mọi sự chồng lấn giờ giữa các task (**Zero Overlap**).
-   * **`DagCycleValidator` (thuộc `planning.domain` - `BUSR-05`):**
+     * **Mode B (Explicit Time Slots & Soft Overflow - `BUSR-04`):** Đối chiếu từng task với danh sách `TimeSlot` thực tế (đã nạp từ bảng `availability_slots` và trừ đi các khoảng bận từ Google Calendar OAuth2 hoặc các lộ trình khác nếu có). Cho phép dung sai tràn biên mềm (**Soft Overflow $\le 30\text{ phút}$**) nếu không đụng độ khung bận kế tiếp, đồng thời chặn tuyệt đối mọi sự chồng lấn giờ giữa các task (**Zero Overlap**).
+   * **`DagCycleValidator` (thuộc `execution.domain` — `modules/execution/`, truy cập qua `StudyExecutionQueryPort` - `BUSR-05`):**
      * Kiểm tra đồ thị phụ thuộc `TaskDependency` bằng thuật toán phát hiện chu trình (Topological Sort / Kahn's Algorithm & DFS), đảm bảo đồ thị là **DAG thuần khiết (0 chu trình)** và mọi task tiên quyết đều được xếp lịch hoàn thành trước task phụ thuộc.
-3. **Tier 3 — Cổng Thẩm định Sư phạm (`PedagogicalJudgeAdapter` qua `LLMProviderPort`):**
+3. **Tier 3 — Cổng Tư vấn Sư phạm Mềm (`PedagogicalJudgeAdapter` — Soft Advisory Gate với Timeout $\le 5\text{s}$ & Fail-Open):**
    * Đánh giá tính hợp lý về mặt sư phạm và lý thuyết tải nhận thức (Cognitive Load): kiến thức nền tảng phải đặt trước kiến thức nâng cao, không dồn các nhiệm vụ độ khó cao liên tiếp nhau trong cùng một buổi.
-   * **Chính sách Fail-Open Có Kiểm soát cho Tier 3:** Trong khi Tier 1 và Tier 2 áp dụng chính sách **Fail-Closed tuyệt đối** (chặn 100% nếu vi phạm), nếu đề xuất đã vượt qua 100% kiểm định toán học ở Tier 1 & Tier 2 nhưng Tier 3 gặp timeout hoặc chỉ đưa ra khuyến nghị nhẹ, hệ thống vẫn cho phép tạo bản nháp `DRAFT` kèm nhãn gợi ý sư phạm để người học xem xét quyết định tại cổng Human-in-the-Loop (`BUSR-02`).
+   * **Ngữ nghĩa Soft Advisory Gate, Timeout Độc lập $\le 5\text{s}$ & Fail-Open:** Trong khi Tier 1 và Tier 2 áp dụng chính sách **Fail-Closed tuyệt đối** (chặn 100% nếu vi phạm), Tier 3 hoạt động như một **Cổng Tư vấn Mềm (Soft Advisory Gate)** với **timeout độc lập $\le 5\text{s}$**. Nếu đề xuất đã vượt qua 100% kiểm định toán học ở Tier 1 & Tier 2 nhưng Tier 3 bị quá thời gian ($\text{timeout} > 5\text{s}$), gặp lỗi kết nối LLM hoặc chỉ đưa ra cảnh báo sư phạm, hệ thống áp dụng ngữ nghĩa **Fail-Open**: vẫn cho phép lưu bản nháp `DRAFT` kèm nhãn khuyến nghị sư phạm (advisory warnings) để người học xem xét quyết định tại cổng Human-in-the-Loop (`BUSR-02`).
+
+### 3.1.1. Ngoại lệ Có Chủ đích: Tái lập lịch AI Đơn Lộ trình khi Quá hạn (Single-Roadmap AI Reschedule Bypasses 3-Tier Gate)
+* Khi tác vụ `Overdue Scanner` (`00:05 UTC+7`) phát hiện các task quá hạn (`scheduled_date < CURRENT_DATE` và `status != 'COMPLETED'`), hệ thống gửi thông báo Email và hiển thị các task quá hạn trong mục `Needs Attention` kèm nút **"AI Reschedule (Dời lịch hợp lý)"** trên ứng dụng Web.
+* Khi người học bấm **"AI Reschedule"** trên một lộ trình quá hạn, AI quét các task chưa hoàn thành của **riêng Lộ trình đó (that specific Roadmap)** cùng lịch học tương lai của người dùng (trừ đi các khung giờ đã bị chiếm dụng bởi các lộ trình khác hoặc lịch ngoại vi) để sắp xếp lại **chỉ các task của Lộ trình đó** (tuyệt đối không chạm tới các lộ trình hay công việc khác của người dùng).
+* Vì các task này vốn đã được thẩm định sư phạm và DAG từ lúc tạo lộ trình, luồng tái lập lịch này **bỏ qua Cổng Kiểm duyệt 3 Tầng (bypassing the 3-Tier Hybrid Validation Gate — bỏ qua hoàn toàn Tier 3 Pedagogical Judge**, chỉ kiểm tra định dạng JSON Schema và ràng buộc dung lượng/tránh xung đột cơ bản cho lộ trình đó), đồng thời tăng `reschedule_count` thêm 1 (nếu `reschedule_count >= 3` sẽ kích hoạt leo thang chống lặp `STALLED` theo `ADR-010`).
 
 ### 3.2. Cơ chế Tự sửa lỗi có Cấu trúc (Structured Feedback Self-Correction Loop)
 * Khi phát hiện bất kỳ vi phạm nào ở Tier 1 hoặc Tier 2, hệ thống không trả về thông báo chung chung mà đóng gói danh sách đối tượng lỗi chi tiết (`ConstraintViolationDTO`: mã lỗi, ngày vi phạm, số phút vượt trần hoặc cặp task tạo chu trình DAG) vào prompt phản hồi để `LLMProviderPort` tự sửa lỗi (**tối đa 2 vòng retry**).

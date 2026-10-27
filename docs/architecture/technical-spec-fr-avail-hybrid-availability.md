@@ -12,7 +12,7 @@
 | **Tác giả / Sinh viên** | Vũ Toàn Thắng |
 | **Trạng thái tài liệu** | Hoàn thiện v2.0 (Đồng bộ Context-First Modular Monolith, Rich DDD + 3NF/BCNF `availability_slots`) |
 | **Căn cứ đánh giá** | Rubric Đồ án Tốt nghiệp CNTT — HCMUTE (Tiêu chí TC2.1, TC2.3, TC2.4, TC2.7) |
-| **Truy vết SRS & Quyết định**| `SRS v1.1 (Mục 7.4)`, `OS-04`, `OS-06`, `BUSR-02`, `BUSR-03`, `BUSR-04`, `ADR-001`, `ADR-003`, `ADR-007`, `ADR-009` |
+| **Truy vết SRS & Quyết định**| `SRS v1.2 (Mục 7.4)`, `OS-04`, `OS-06`, `BUSR-02`, `BUSR-03`, `BUSR-04`, `ADR-001`, `ADR-003`, `ADR-007`, `ADR-009` |
 
 ---
 
@@ -32,7 +32,7 @@
 ## 1. Bối cảnh Thực tế & Đặt vấn đề Kỹ thuật
 
 ### 1.1. Nỗi đau Người học & Giới hạn của Các Giải pháp Hiện hành
-Khảo sát người dùng tự học (`docs/requirements/user-survey-and-benchmarking.md`) chỉ ra rằng **68% người tự học bị vỡ kế hoạch (Plan Abandonment) ngay trong 2 tuần đầu tiên** do kế hoạch học tập quá phi thực tế, không ăn khớp với quỹ thời gian rảnh thực tế của họ:
+Nghiên cứu thứ cấp (Secondary Research — Reich & Ruipérez-Valiente, *Science*, 2019 chỉ ra tỷ lệ bỏ cuộc **85–95%** ở các khóa tự học trực tuyến) kết hợp đánh giá thực nghiệm Cognitive Walkthrough (`docs/requirements/user-survey-and-benchmarking.md` — trung bình mất **52 phút** để tự lập lịch thủ công từ đầu và **25 phút** kéo thả lại lịch khi bị trễ 3 ngày) cho thấy nguyên nhân hàng đầu khiến người tự học bỏ cuộc ngay trong 2 tuần đầu tiên là kế hoạch học tập phi thực tế và không ăn khớp với quỹ thời gian rảnh thực tế của họ:
 - **Các ứng dụng To-Do truyền thống (Todoist, TickTick):** Chỉ quản lý danh sách công việc tĩnh, phó mặc hoàn toàn cho người dùng tự ước lượng và tự tìm giờ học.
 - **Lịch biểu điện tử (Google Calendar, Apple Calendar):** Quản lý sự kiện theo khung giờ cứng ngắc, đòi hỏi người dùng phải tự sắp xếp thủ công từng block giờ, tốn từ 45–60 phút mỗi tuần.
 - **Chatbot AI tạo kế hoạch dạng văn bản:** Khi được yêu cầu lập lộ trình, AI chỉ trả về danh sách bài học kèm mốc tuần chung chung ("Tuần 1: Học cú pháp cơ bản; Tuần 2: Học OOP"), hoàn toàn mù mờ về việc người học rảnh vào thứ mấy, khung giờ nào và tối đa bao nhiêu tiếng mỗi ngày.
@@ -99,7 +99,7 @@ Một trong những quyết định kiến trúc quan trọng nhất trong phiê
 ---
 
 ### 2.2. Sự Phối Hợp Giữa Rich Aggregate Root (`AvailabilityProfile`) và Pure Domain Service (`HybridAvailabilityRuleEngine`)
-Theo tiêu chuẩn Domain-Driven Design (DDD) và `Class Diagram v4.2`, tầng `backend/src/account/domain/` phân chia trách nhiệm rõ ràng giữa **Models (`domain/models/`)** và **Services (`domain/services/`)**:
+Theo tiêu chuẩn Domain-Driven Design (DDD) và `Class Diagram v5.0`, tầng `backend/src/account/domain/` phân chia trách nhiệm rõ ràng giữa **Models (`domain/models/`)** và **Services (`domain/services/`)**:
 1. **Rich Aggregate Root & Value Objects (`backend/src/account/domain/models/availability.py`):**
    - `TimeSlot`: Tự bảo vệ bất biến cục bộ ngay tại `__post_init__` ($\text{Duration} \ge 30$ phút, xử lý `end_day_offset` $0$ hoặc $1$).
    - `DaySchedule` & `WeeklySchedule`: Tự bảo vệ bất biến nội tại của cấu hình 7 ngày (cận giờ Mode A $0.5\text{h} - 14.0\text{h}$ theo `OS-06`, tổng giờ tuần $\ge 1.0\text{h}$, không chồng lấn giữa các `TimeSlot` trong cùng ngày).
@@ -282,6 +282,8 @@ classDiagram
         +UUID user_id
         +String mode
         +String calendar_integration_mode
+        +JSONB daily_quotas
+        +Integer min_session_minutes
         +DateTime created_at
         +DateTime updated_at
     }
@@ -290,14 +292,14 @@ classDiagram
         <<SQLAlchemy ORM: availability_slots>>
         +UUID id
         +UUID availability_id
-        +Integer day_of_week
-        +Boolean enabled
-        +Float quota_hours
+        +SmallInt day_of_week
         +Time start_time
         +Time end_time
-        +Integer end_day_offset
-        +String preferred_period
-        +Integer min_session_minutes
+        +SmallInt end_day_offset
+        +String slot_type
+        +Boolean is_active
+        +DateTime created_at
+        +DateTime updated_at
     }
 
     class SqlAlchemyAvailabilityRepository {
@@ -549,44 +551,48 @@ sequenceDiagram
 ## 5. Thiết Kế Cơ Sở Dữ Liệu 3NF/BCNF & Chiến Lược Lưu Trữ (Persistence Design)
 
 ### 5.1. Lược đồ 2 Bảng Vật lý Chuẩn hóa 3NF/BCNF: `availabilities` & `availability_slots` (PostgreSQL 16)
-Tuân thủ thiết kế chuẩn hóa 24 bảng tại `docs/database/schema.sql` và `ADR-007`, cấu hình thời gian rảnh được lưu trữ chuẩn hóa 3NF/BCNF trên 2 bảng thuộc sở hữu của Bounded Context `account`:
+Tuân thủ thiết kế chuẩn hóa 24 bảng tại `docs/database/schema.sql` (v3.0), `Class Diagram v5.0` và `ADR-007`, cấu hình thời gian rảnh được lưu trữ chuẩn hóa 3NF/BCNF trên 2 bảng thuộc sở hữu của Bounded Context `account` (lưu ý: cột `timezone` nằm tại bảng `users`, không lặp lại ở `availabilities`):
 
 ```sql
 -- =============================================================================
 -- 1. BẢNG CHA: AVAILABILITIES (HỒ SƠ THỜI GIAN RẢNH LAI CỦA NGƯỜI HỌC)
--- Quan hệ: 1-1 với bảng users
+-- Quan hệ: 1-1 với bảng users (cột timezone được lưu tại bảng users)
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS availabilities (
-    id UUID PRIMARY KEY,
-    user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
-    mode VARCHAR(10) NOT NULL DEFAULT 'MODE_A',
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL,
+    mode VARCHAR(20) NOT NULL DEFAULT 'MODE_A',
     calendar_integration_mode VARCHAR(20) NOT NULL DEFAULT 'NONE',
-    timezone VARCHAR(64) NOT NULL DEFAULT 'Asia/Ho_Chi_Minh',
+    daily_quotas JSONB NOT NULL DEFAULT '{}'::jsonb,
+    min_session_minutes INTEGER NOT NULL DEFAULT 30,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
+    CONSTRAINT uq_availabilities_user_id UNIQUE (user_id),
+    CONSTRAINT fk_availabilities_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     CONSTRAINT chk_availabilities_mode CHECK (mode IN ('MODE_A', 'MODE_B')),
-    CONSTRAINT chk_availabilities_calendar_mode CHECK (calendar_integration_mode IN ('NONE', 'EXPORT_ICS', 'CONNECTED'))
+    CONSTRAINT chk_availabilities_cal_mode CHECK (calendar_integration_mode IN ('NONE', 'EXPORT_ICS', 'CONNECTED')),
+    CONSTRAINT chk_availabilities_min_session CHECK (min_session_minutes BETWEEN 15 AND 120)
 );
 
 -- =============================================================================
 -- 2. BẢNG CON CHUẨN HÓA 3NF/BCNF: AVAILABILITY_SLOTS
--- Quan hệ: N-1 với bảng availabilities (Lưu trữ chi tiết quỹ giờ & khung giờ từng thứ)
+-- Quan hệ: N-1 với bảng availabilities (Ánh xạ trực tiếp sang WeeklySchedule & TimeSlot VO)
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS availability_slots (
-    id UUID PRIMARY KEY,
-    availability_id UUID NOT NULL REFERENCES availabilities(id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    availability_id UUID NOT NULL,
     day_of_week SMALLINT NOT NULL CHECK (day_of_week BETWEEN 0 AND 6), -- 0: Monday .. 6: Sunday
-    enabled BOOLEAN NOT NULL DEFAULT TRUE,
-    quota_hours NUMERIC(4, 2) NOT NULL DEFAULT 2.0 CHECK (quota_hours >= 0.0 AND quota_hours <= 14.0),
-    allowed_window_start TIME NOT NULL DEFAULT '07:00',
-    allowed_window_end TIME NOT NULL DEFAULT '23:00',
-    preferred_period VARCHAR(16) NOT NULL DEFAULT 'ANY' CHECK (preferred_period IN ('MORNING', 'AFTERNOON', 'EVENING', 'ANY')),
-    min_session_minutes SMALLINT NOT NULL DEFAULT 30 CHECK (min_session_minutes >= 15),
-    start_time TIME NULL,
-    end_time TIME NULL,
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
     end_day_offset SMALLINT NOT NULL DEFAULT 0 CHECK (end_day_offset IN (0, 1)),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    slot_type VARCHAR(20) NOT NULL DEFAULT 'FIXED' CHECK (slot_type IN ('ALLOWED', 'FIXED')),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT fk_avail_slots_availability FOREIGN KEY (availability_id) REFERENCES availabilities(id) ON DELETE CASCADE,
+    CONSTRAINT chk_avail_slots_time CHECK (end_day_offset = 1 OR end_time > start_time)
 );
 
 CREATE INDEX IF NOT EXISTS idx_availability_slots_avail_day
@@ -790,11 +796,11 @@ export class AvailabilityService {
 
 | Mã Yêu cầu | Nguồn truy vết | Thành phần Xử lý (Component) | Phương pháp Kiểm chứng (Verification) | Tiêu chí Nghiệm thu (Acceptance Criteria) |
 | :--- | :--- | :--- | :--- | :--- |
-| **`FR-AVAIL-001`** | SRS v1.1 Mục 7.4, `OS-06`, `BUSR-03` | `AvailabilityProfile`, `DaySchedule`, Mode A View | `test_mode_a_os06_quota_bounds` | Cho phép nhập quota 0.5h – 14.0h; chặn nếu < 0.5h hoặc > 14.0h. |
-| **`FR-AVAIL-002`** | SRS v1.1 Mục 7.4, `BUSR-04` | `TimeSlot`, `DaySchedule`, Mode B View | `test_mode_b_overlapping_slots`, `test_time_slot_minimum_duration_30m` | Chặn Start $\ge$ End; chặn slot < 30m; chặn 2 slot đè giờ nhau trong ngày. |
-| **`FR-AVAIL-003`** | SRS v1.1 Mục 7.4, `OS-04`, `BUSR-05` | `HybridAvailabilityRuleEngine.calculate_remaining_capacity()` | `test_calculate_remaining_capacity_subtraction` | Phép trừ đoạn thời gian chính xác khi có lịch Roadmap khác chạy song song. |
-| **`BUSR-02`** | SRS v1.1 Mục 5.2, `ADR-009` | `HybridAvailabilityRuleEngine` (`validate_daily_ceiling` & `validate_proposal_against_slots`) | `test_rich_entity_daily_ceiling_and_validation` | Hard Ceiling chặn vượt giờ Mode A; Mode B cho phép Soft Overflow $\le 30$m. |
-| **`NFR-PERF-002`** | SRS v1.1 Mục 8.2 | PostgreSQL 16 (`availabilities` + `availability_slots`), FastAPI Router | Integration Test `test_api_latency` | Tốc độ phản hồi API `GET /me` và `PUT /me` $\le 250$ms (P95). |
+| **`FR-AVAIL-001`** | SRS v1.2 Mục 7.4, `OS-06`, `BUSR-03` | `AvailabilityProfile`, `DaySchedule`, Mode A View | `test_mode_a_os06_quota_bounds` | Cho phép nhập quota 0.5h – 14.0h; chặn nếu < 0.5h hoặc > 14.0h. |
+| **`FR-AVAIL-002`** | SRS v1.2 Mục 7.4, `BUSR-04` | `TimeSlot`, `DaySchedule`, Mode B View | `test_mode_b_overlapping_slots`, `test_time_slot_minimum_duration_30m` | Chặn Start $\ge$ End; chặn slot < 30m; chặn 2 slot đè giờ nhau trong ngày. |
+| **`FR-AVAIL-003`** | SRS v1.2 Mục 7.4, `OS-04`, `BUSR-05` | `HybridAvailabilityRuleEngine.calculate_remaining_capacity()` | `test_calculate_remaining_capacity_subtraction` | Phép trừ đoạn thời gian chính xác khi có lịch Roadmap khác chạy song song. |
+| **`BUSR-02`** | SRS v1.2 Mục 5.2, `ADR-009` | `HybridAvailabilityRuleEngine` (`validate_daily_ceiling` & `validate_proposal_against_slots`) | `test_rich_entity_daily_ceiling_and_validation` | Hard Ceiling chặn vượt giờ Mode A; Mode B cho phép Soft Overflow $\le 30$m. |
+| **`NFR-PERF-002`** | SRS v1.2 Mục 8.2 | PostgreSQL 16 (`availabilities` + `availability_slots`), FastAPI Router | Integration Test `test_api_latency` | Tốc độ phản hồi API `GET /me` và `PUT /me` $\le 250$ms (P95). |
 
 ---
 

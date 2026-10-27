@@ -1,129 +1,119 @@
-# FocusFlow — Agent Instructions
+# AGENTS.md — FocusFlow
 
-## Project Context
+Hướng dẫn cho AI agent làm việc trong repo này. Đọc hết file trước khi sửa code. Chi tiết kỹ thuật nằm trong hai skill (mục 2); file này là bản tóm tắt luôn-bật.
 
-This repository contains a university graduation project in Information Technology.
+## 1. Dự án
 
-The project must be developed through a disciplined software engineering process:
+FocusFlow là hệ thống lập kế hoạch và thực thi lộ trình tự học thích ứng tích hợp AI (mô hình SRL của Zimmerman: Forethought → Performance → Self-Reflection).
 
-Idea
-→ Requirements
-→ SRS
-→ System Analysis
-→ UML
-→ Architecture
-→ Database Design
-→ Implementation
-→ Testing
-→ Documentation
-→ Thesis Defense
+| Phần | Công nghệ |
+|---|---|
+| Backend | Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2.0 async (asyncpg), Alembic, Taskiq + Redis Streams, PostgreSQL 16 |
+| Frontend | Angular 21+ (standalone, zoneless, OnPush, Signals), Tailwind CSS v4, PrimeNG v21, Lucide, openapi-typescript |
+| Kiến trúc | Context-First Modular Monolith + Hexagonal. 4 Bounded Context: `account`, `planning`, `execution`, `evaluation`, cùng `shared_kernel`. 24 bảng |
+| Hạ tầng | Docker Compose 6 container: postgres, redis, backend, worker, scheduler (replicas: 1), frontend |
+| Test | pytest + pytest-asyncio, Vitest, Playwright |
 
-## Primary Objective
+Cấu trúc repo (khớp theo thực tế nếu khác):
+```
+backend/    src/{shared_kernel,account,planning,execution,evaluation}  tests/  alembic/
+frontend/   src/app/{core,shared,features/<9 slice>}
+docs/       requirements/ (SRS)  adr/  database/ (schema.sql)  uml/
+```
 
-Help the student build a technically sound system while ensuring that the student understands the reasoning behind important decisions.
+## 2. Skill — đọc trước khi làm
 
-The agent must not optimize only for producing code quickly.
+Trước mọi tác vụ, nạp skill tương ứng và làm theo:
 
-## Working Philosophy
+- Việc backend (API, use case, domain, repository, Taskiq, migration, AI/quota, auth/bảo mật): skill `focusflow-backend`.
+- Việc frontend (component, store, route, form, SSE, timer, UI, test FE): skill `focusflow-frontend`.
+- Việc chạm cả hai (thêm tính năng đầu-cuối): nạp cả hai, làm backend trước, regenerate type FE sau.
 
-Before making significant changes:
+Nếu skill chưa được cài, đọc trực tiếp `focusflow-*/SKILL.md` và các file `references/` (vị trí do nhóm đặt, ví dụ `.agents/skills/`).
 
-1. Understand the current project state.
-2. Identify relevant requirements and constraints.
-3. Check existing documentation and design artifacts.
-4. Identify ambiguities.
-5. Ask questions when missing information materially affects the result.
-6. Explain important trade-offs.
-7. Make changes only after the intended direction is clear.
+## 3. Nguồn chân lý và cách xử lý mâu thuẫn
 
-## Source of Truth
+1. Yêu cầu nghiệp vụ, hành vi quan sát được, state machine, số Use Case: **SRS v1.2** (`UC-01..UC-25`).
+2. Cách làm kỹ thuật (thư viện, kiến trúc, hạ tầng): **ADR-001..010**.
+3. Hai nguồn lệch nhau: xem `references/spec-conflicts.md` trong skill, áp dụng cách giải quyết đã ghi, và **nói rõ với người dùng** bạn đã chọn gì, vì sao, tài liệu nào cần cập nhật. Không im lặng chọn.
+4. Chỗ SRS/ADR chưa quy định: đề xuất tối thiểu hợp lý, đánh dấu `TODO(spec)`, hỏi người dùng nếu liên quan tiền, quota, xóa dữ liệu hoặc quyền truy cập.
 
-Prefer confirmed project artifacts over assumptions.
+## 4. Luật không được vi phạm (tóm tắt)
 
-Important information should be traceable to:
+**Backend**
+- Không import chéo giữa 4 context (trừ `public_api` và `shared_kernel`). Cần dữ liệu context khác thì qua Query Port; cần phản ứng thì qua Outbox event.
+- Thứ tự phụ thuộc: `presentation → infrastructure → application → domain`. `domain` thuần Python, không I/O, không `datetime.now()`. `application` không import FastAPI/SQLAlchemy/Taskiq.
+- `Depends`/`TaskiqDepends` chỉ ở `presentation/deps.py`. Router và Taskiq task gọi cùng một use case.
+- Giao dịch qua `AsyncUnitOfWork`. Repository chỉ `add/flush`, không `commit`. Event liên context ghi `outbox_events` cùng giao dịch. Consumer idempotent qua `processed_events`.
+- Không `relationship()` hoặc JOIN giữa bảng của hai context. Mọi tài nguyên phải kiểm `user_id` (IDOR); không thuộc user thì trả 404.
+- Mọi lệnh gọi LLM đi qua `LLMProviderPort` và nằm trong vòng đời quota RESERVE → COMMIT/RELEASE/EXPIRE. Ràng buộc cứng kiểm bằng code tất định, không bằng LLM.
+- AI chỉ tạo `ScheduleProposal(DRAFT)`. Chỉ hành động Apply của người học mới ghi `OfficialSchedule`.
+- Task quá hạn không bị tự dời `scheduled_date`; chỉ gắn cờ và gửi email. Domino Shift không tăng `reschedule_count`.
+- Bảo mật: cookie JWT HttpOnly, `PyJWT` + `pwdlib[argon2]`, WebCal token chỉ lưu sha256, OAuth token mã hóa Fernet, webhook `HMAC-SHA256` + khóa lũy đẳng. Không log secret/token/PII.
+- Đổi schema bằng Alembic. Không sửa tay `docs/database/schema.sql`.
 
-- Requirements
-- SRS
-- Architecture decisions
-- UML models
-- Database design
-- Source code
-- Tests
+**Frontend**
+- Standalone + OnPush + zoneless; control flow `@if/@for(track)/@switch/@defer`; state bằng signals (không NgRx).
+- Kiểu API chỉ lấy từ `schema.d.ts` (openapi-typescript); không viết tay interface cho dữ liệu API. Không `any`.
+- Không lưu token trong JS/localStorage; `withCredentials` cho HttpClient và `EventSource`.
+- Component phức tạp dùng PrimeNG; bố cục dùng Tailwind; màu qua biến ngữ nghĩa; hỗ trợ dark mode.
+- A11y (Lighthouse ≥ 90) và responsive 375–1024px là yêu cầu, không phải bổ sung.
+- UI không auto-apply bản nháp AI, không tự dời lịch quá hạn; cảnh báo Soft Overflow phải được xác nhận.
+- Timer tính từ mốc thời gian, không đếm tick; EventSource và interval phải đóng khi destroy.
 
-If artifacts contradict each other:
+## 5. Quy trình làm việc
 
-1. Stop.
-2. Identify the contradiction.
-3. Explain its impact.
-4. Ask which decision should be authoritative.
-5. Do not silently resolve the contradiction.
+1. Hiểu yêu cầu, xác định context/slice và UC liên quan. Mơ hồ ở điểm rủi ro cao thì hỏi một câu ngắn; còn lại nêu giả định rồi làm.
+2. Đọc code lân cận, bắt chước pattern sẵn có. Không phát minh pattern mới khi đã có.
+3. Làm thay đổi nhỏ, tập trung. Không refactor lan man ngoài phạm vi yêu cầu; nếu thấy vấn đề ngoài phạm vi, ghi chú lại thay vì sửa.
+4. Viết test cùng lúc với code (domain trước). Bug mới thì viết test tái hiện trước khi sửa.
+5. Chạy cổng chất lượng (mục 6). Không báo "xong" khi chưa chạy; nếu không chạy được, nói rõ phần nào chưa kiểm chứng.
+6. Báo cáo ngắn: file đã đổi, quyết định đáng chú ý, giả định, việc cần người dùng xác nhận.
 
-## Requirements
+## 6. Lệnh kiểm tra
 
-Never invent requirements.
+Backend (`backend/`):
+```bash
+ruff check . && ruff format --check .
+mypy --strict src
+lint-imports            # phải 0 broken contracts
+pytest -q
+alembic upgrade head    # khi đổi schema; rồi diff với docs/database/schema.sql
+```
 
-Distinguish:
+Frontend (`frontend/`):
+```bash
+npm run api:gen         # khi backend đổi OpenAPI
+npx ng lint
+npx vitest run
+npx ng build --configuration production
+npx playwright test     # khi đụng luồng chính
+```
 
-- Confirmed requirement
-- Assumption
-- Open question
-- Recommendation
-- Design decision
+Chạy toàn hệ thống: `docker compose up --build`. Chế độ offline/demo dùng `LLM_PROVIDER=mock`, `PAYMENT_PROVIDER=local_mock`, `CALENDAR_PROVIDER=local_mock`.
 
-## Architecture
+## 7. Definition of Done
 
-Do not introduce major architectural patterns, technologies, services, or infrastructure without explaining why they are appropriate for the project.
+- Đúng SRS (BUSR/FR/state machine) và không phá luật mục 4.
+- Có test phù hợp và đang xanh; CI gate (ruff, mypy, import-linter, build FE) sạch.
+- Không có secret, token hoặc PII trong code, log hoặc prompt gửi LLM.
+- Nếu thêm tích hợp ngoài thì có adapter mock tương ứng.
+- Nếu đổi API: OpenAPI cập nhật, FE regenerate type, báo breaking change cho người dùng.
+- Nếu đổi schema: migration có upgrade/downgrade, schema diff xanh.
+- Mọi trạng thái UI (loading/empty/error/offline) có xử lý; a11y và responsive đã kiểm.
 
-Avoid unnecessary complexity.
+## 8. Những việc không làm khi chưa được phép
 
-## UML
+- Thêm thư viện lớn hoặc đổi công nghệ đã chốt trong ADR.
+- Thêm bảng mới hoặc đổi số lượng 24 bảng.
+- Sửa nội dung ADR/SRS (chỉ đề xuất thay đổi).
+- Xóa dữ liệu, `git push --force`, đổi cấu hình CI/CD, hoặc chạm vào file `.env` thật.
+- Gọi LLM thật hoặc cổng thanh toán thật trong test/CI.
+- Bỏ qua hoặc "tắt" lint/import-linter/mypy để cho qua; hãy sửa thiết kế.
 
-UML diagrams must model the system correctly rather than merely look professional.
+## 9. Cách giao tiếp
 
-Maintain consistency between:
-
-- Use Case
-- Activity
-- Sequence
-- Class
-- Component
-- Database models
-
-## Implementation
-
-Do not begin substantial implementation when requirements or architecture are still fundamentally unclear.
-
-When implementing an approved design:
-
-- preserve existing conventions
-- avoid unrelated refactoring
-- keep changes focused
-- update affected documentation
-- update tests where appropriate
-
-## Documentation
-
-Documentation is part of the system design.
-
-When a significant implementation or design decision changes, identify which documents or diagrams may need updating.
-
-## Teaching Mode
-
-When the student asks "why", explain the underlying software engineering concept.
-
-When a decision has meaningful alternatives, explain the trade-offs.
-
-Do not hide uncertainty.
-
-## Agent Autonomy
-
-Do not use broad autonomous execution for ambiguous architectural or requirements work.
-
-For significant changes:
-
-Explore
-→ Analyze
-→ Plan
-→ Review
-→ Implement
-→ Verify
+- Trả lời bằng tiếng Việt, ngắn gọn, đi thẳng vào kết quả. Giữ nguyên thuật ngữ kỹ thuật tiếng Anh.
+- Nói rõ cái gì đã làm, cái gì chưa chắc, cái gì cần xác nhận. Không nói quá về mức độ kiểm chứng.
+- Khi phát hiện mâu thuẫn tài liệu hoặc rủi ro nghiệp vụ, báo ngay thay vì tự xử lý âm thầm.
+- Văn bản giao diện người dùng viết bằng tiếng Việt, dùng đúng thuật ngữ trong SRS.

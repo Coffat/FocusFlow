@@ -9,10 +9,9 @@
 * **Tài liệu nguồn chân lý liên kết:**
   * Tập lệnh DDL: [`docs/database/schema.sql`](file:///Users/vuthang/Documents/FocusFlow/docs/database/schema.sql)
   * Thiết kế CSDL Chi tiết: [`docs/database/database-schema-design.md`](file:///Users/vuthang/Documents/FocusFlow/docs/database/database-schema-design.md)
-  * Đặc tả Yêu cầu SRS v1.1: [`docs/srs/srs-v1.0.md`](file:///Users/vuthang/Documents/FocusFlow/docs/srs/srs-v1.0.md)
-  * Sơ đồ Lớp UML v5.0: [`docs/uml/class-diagrams.md`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/class-diagrams.md)
-  * Đặc tả Máy trạng thái: [`docs/uml/state-machines.md`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/state-machines.md)
-  * Biểu đồ Tuần tự: [`docs/uml/sequence-diagrams.md`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/sequence-diagrams.md)
+  * Đặc tả Yêu cầu SRS v1.2: [`docs/srs/srs-v1.0.md`](file:///Users/vuthang/Documents/FocusFlow/docs/srs/srs-v1.0.md)
+  * Sơ đồ Lớp UML v5.0: [`docs/uml/class-diagrams/class_diagram.drawio`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/class-diagrams/class_diagram.drawio) \| [`docs/uml/class-diagrams.md`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/class-diagrams.md)
+  * Sơ đồ CSDL DBML: [`docs/database/schema.dbml`](file:///Users/vuthang/Documents/FocusFlow/docs/database/schema.dbml)
 
 ---
 
@@ -22,25 +21,25 @@
 > **16 Quyết định Kiến trúc & Quy chuẩn Cơ sở Dữ liệu FocusFlow v3.0 (24 Bảng):**
 > 1. **Hệ quản trị CSDL:** PostgreSQL 16 vận hành tối ưu hóa trên container Docker Compose, kết nối qua `SQLAlchemy 2.0 Async + asyncpg`.
 > 2. **Chiến lược Khóa chính:** UUIDv7 (RFC 9562, 128-bit Time-Ordered Monotonic) sinh tại tầng Backend FastAPI (`uuid_utils`/`uuid6`), Fallback tại CSDL `DEFAULT gen_random_uuid()` loại bỏ phân mảnh B-Tree và chống tấn công đoán ID (riêng `processed_events` dùng khóa chính kép `(event_id, handler_name)`).
-> 3. **Phân rã theo 4 Bounded Contexts + Shared Kernel:**
+> 3. **Phân rã theo 4 Bounded Contexts + Shared Kernel (`9 / 5 / 5 / 3 / 2`):**
 >    - **`account` (9 bảng):** `users`, `learner_profiles`, `webcal_tokens`, `availabilities`, `availability_slots`, `ai_quotas`, `ai_quota_reservations`, `ai_usage_logs`, `payment_transactions`.
->    - **`planning` (7 bảng):** `goals`, `roadmaps`, `milestones`, `official_schedules`, `tasks`, `task_dependencies`, `schedule_proposals`.
->    - **`execution` (4 bảng):** `study_sessions`, `session_tasks`, `study_notes`, `pause_records`.
->    - **`evaluation` (2 bảng):** `ai_reviews`, `schedule_change_logs`.
+>    - **`planning` (5 bảng):** `goals`, `roadmaps`, `milestones`, `official_schedules`, `schedule_proposals`.
+>    - **`execution` (5 bảng):** `tasks`, `task_dependencies`, `study_sessions`, `session_tasks`, `study_notes`.
+>    - **`evaluation` (3 bảng):** `pause_records`, `ai_reviews`, `schedule_change_logs`.
 >    - **`shared_kernel` (2 bảng):** `outbox_events`, `processed_events`.
 > 4. **Quy tắc Modular Monolith:** Giữ nguyên Foreign Key vật lý ở tầng PostgreSQL 16 để đảm bảo toàn vẹn dữ liệu 3NF/BCNF, nhưng cấm ORM JOIN chéo Bounded Context trong mã nguồn (chỉ giao tiếp qua `public_api.py` và `outbox_events`).
 > 5. **Cô lập Đa người dùng (Multi-tenant):** Sử dụng Single Surrogate FK chuẩn, `user_id` hiện diện tại các bảng gốc, kiểm soát ủy quyền sở hữu tại Application Service Layer.
-> 6. **Quản trị AI Quota 2 Pha ACID:** Tách biệt `ai_quotas` (hạn ngạch hiện tại kèm `reserved_calls`), `ai_quota_reservations` (sổ cái giữ chỗ 2 pha `RESERVED -> COMMITTED/RELEASED/EXPIRED`), và `ai_usage_logs` (nhật ký kiểm toán chi tiết).
+> 6. **Quản trị AI Quota 2 Pha ACID:** Tách biệt `ai_quotas` (hạn ngạch hiện tại kèm `reserved_calls`), `ai_quota_reservations` (sổ cái giữ chỗ 2 pha `RESERVED -> COMMITTED/RELEASED/EXPIRED` với TTL **120s (2 phút)**), và `ai_usage_logs` (nhật ký kiểm toán chi tiết).
 > 7. **Thanh toán Đa Cổng (`PaymentGatewayPort`):** Bảng `payment_transactions` lưu trữ giao dịch nâng cấp gói `PREMIUM` qua PayOS, VNPay Sandbox hoặc `MOCK`, xác thực chữ ký số `HMAC-SHA256`.
 > 8. **Thời gian rảnh Chuẩn hóa 100% 3NF:** Bảng cha `availabilities` và bảng con `availability_slots` (`day_of_week` 0–6, `start_time`, `end_time`, `end_day_offset`, `slot_type`, `is_active`) ánh xạ trực tiếp sang Value Objects `WeeklySchedule` & `TimeSlot`.
-> 9. **Quản lý Lịch & Tiên quyết DAG:** Lên lịch trực tiếp trên bảng `tasks` (`scheduled_date`, `scheduled_start`, `scheduled_end`, `official_schedule_id`); đồ thị tiên quyết `task_dependencies` kiểm định không chu trình bởi `DagCycleValidator`.
+> 9. **Quản lý Lịch & Tiên quyết DAG:** Lên lịch trực tiếp trên bảng `tasks` (`scheduled_date`, `scheduled_start`, `scheduled_end`, `official_schedule_id`); đồ thị tiên quyết `task_dependencies` kiểm định không chu trình bởi `DagCycleValidator` (thuộc Context `execution`).
 > 10. **Đề xuất Lịch 3-Tier Validation Gate:** Bảng `schedule_proposals` lưu `proposal_data` `JSONB` xem trước, chỉ lưu sau khi vượt qua cổng kiểm định 3 tầng và không tự động ghi đè lịch chính thức.
-> 11. **Phiên học Pomodoro & Heartbeat 60s:** Quan hệ Nhiều - Nhiều qua `session_tasks`; `study_sessions` duy trì `last_heartbeat_at` mỗi 60s và được quét tự động bởi **Taskiq Scheduler**.
-> 12. **Tạm dừng, Domino Shift & Kiểm toán Biến động Lịch:** Bảng `pause_records` ghi nhận khoảng nghỉ và bảng `schedule_change_logs` lưu vết kiểm toán bất biến mọi biến động lịch (`DOMINO_SHIFT`, `MANUAL_EDIT`, `AI_REPLAN`, `CALENDAR_SYNC`).
+> 11. **Phiên học Pomodoro & Heartbeat 60s:** Quan hệ Nhiều - Nhiều nội bộ `execution` qua `session_tasks`; `study_sessions` duy trì `last_heartbeat_at` mỗi 60s và được quét tự động bởi **Taskiq Scheduler**.
+> 12. **Tạm dừng, Domino Shift & Kiểm toán Biến động Lịch:** Bảng `pause_records` ghi nhận khoảng nghỉ và bảng `schedule_change_logs` lưu vết kiểm toán bất biến mọi biến động lịch (`DOMINO_SHIFT`, `MANUAL_EDIT`, `AI_REPLAN`, `CALENDAR_SYNC`) (thuộc Context `evaluation`).
 > 13. **Transactional Outbox & Idempotent Consumer:** Bảng `outbox_events` và `processed_events` đảm bảo 0% mất sự kiện và 0% xử lý trùng lặp trên **Taskiq Worker (Redis Streams)**.
 > 14. **Chiến lược Xóa Lai (Hybrid Deletion):** `CASCADE` cho các nhánh phụ thuộc vòng đời; `ON DELETE RESTRICT` trên `session_tasks.task_id` và `payment_transactions.user_id` bảo vệ lịch sử học tập và chứng từ tài chính.
 > 15. **Trạng thái & Enum:** `VARCHAR` kết hợp ràng buộc `CHECK (... IN (...))` thân thiện với Alembic migration, tránh khóa bảng.
-> 16. **Quản lý Thời gian:** `TIMESTAMPTZ` (UTC) cho mọi mốc thời gian; `timezone` mặc định `'Asia/Ho_Chi_Minh'` trong bảng `users`; hàm trigger `set_updated_at()` tự động cập nhật `updated_at`.
+> 16. **Quản lý Thời gian:** `TIMESTAMPTZ` (UTC) cho mọi mốc thời gian; `timezone` mặc định `'Asia/Ho_Chi_Minh'` trong bảng `users`; hàm trigger `fn_set_updated_at()` tự động cập nhật `updated_at` trên cả 18 bảng có cột `updated_at`.
 
 ---
 
@@ -181,7 +180,7 @@
 | `operation_type` | `VARCHAR(50)` | No | None | No | No | No | No | Tên nghiệp vụ AI | Loại thao tác yêu cầu giữ chỗ (ví dụ: `ROADMAP_GENERATION`, `SCHEDULE_PROPOSAL`, `AI_REVIEW`). |
 | `status` | `VARCHAR(20)` | No | `'RESERVED'` | No | No | No | Yes | `'RESERVED'`, `'COMMITTED'`, `'RELEASED'`, `'EXPIRED'` | Trạng thái vòng đời của bản ghi giữ chỗ (`chk_ai_quota_res_status`). |
 | `tokens_reserved` | `INTEGER` | No | `0` | No | No | No | Yes | $\ge 0$ | Số lượng token tạm ước tính/giữ chỗ (`chk_ai_quota_res_tokens`). |
-| `expires_at` | `TIMESTAMPTZ` | No | None | No | No | No | No | Dấu thời gian UTC | Thời điểm hết hạn giữ chỗ (mặc định `created_at + 60s`). |
+| `expires_at` | `TIMESTAMPTZ` | No | None | No | No | No | No | Dấu thời gian UTC | Thời điểm hết hạn giữ chỗ (mặc định `created_at + 120s (2 phút)`). |
 | `created_at` | `TIMESTAMPTZ` | No | `NOW()` | No | No | No | No | Dấu thời gian UTC | Thời điểm khởi tạo giữ chỗ Pha 1. |
 | `resolved_at` | `TIMESTAMPTZ` | Yes | None | No | No | No | Yes* | Dấu thời gian UTC | Thời điểm chốt Pha 2 (`COMMITTED`, `RELEASED` hoặc `EXPIRED`). |
 
@@ -230,7 +229,7 @@
 
 ---
 
-### PHẦN B — BOUNDED CONTEXT 2: `planning` (7 BẢNG)
+### PHẦN B — BOUNDED CONTEXT 2: `planning` (5 BẢNG)
 
 #### 2.10. Bảng `goals` (Mục tiêu Học tập)
 * **Mục đích:** Lưu trữ mục tiêu học tập gốc của người học trước khi AI sinh lộ trình thích ứng.
@@ -301,46 +300,7 @@
 
 ---
 
-#### 2.14. Bảng `tasks` (Nhiệm vụ Học tập Chi tiết Cấp 2)
-* **Mục đích:** Đầu việc học tập cụ thể, lên lịch trực tiếp qua `scheduled_date`, `scheduled_start`, `scheduled_end` và liên kết với `official_schedule_id`.
-* **Ánh xạ yêu cầu:** `FR-TASK-001`, `FR-ADAPT-003`, `BUSR-06`, `BUSR-07`.
-
-| Cột | Kiểu Dữ liệu | Null | Mặc định | PK | FK | UQ | CHECK | Miền Giá trị Hợp lệ | Quy tắc Nghiệp vụ & Ý nghĩa |
-|---|---|---|---|---|---|---|---|---|---|
-| `id` | `UUID` | No | `gen_random_uuid()` | Yes | No | Yes | No | UUIDv7 | Khóa chính nhiệm vụ. |
-| `roadmap_id` | `UUID` | No | None | No | `roadmaps(id)` | No | No | UUID tồn tại | Lộ trình chứa nhiệm vụ (`ON DELETE CASCADE`). |
-| `milestone_id` | `UUID` | No | None | No | `milestones(id)` | No | No | UUID tồn tại | Mốc kiến thức trực thuộc (`ON DELETE CASCADE`). |
-| `official_schedule_id` | `UUID` | Yes | None | No | `official_schedules(id)` | No | No | UUID tồn tại | Lịch chính thức phân bổ nhiệm vụ này (`ON DELETE SET NULL`). |
-| `title` | `VARCHAR(255)` | No | None | No | No | No | No | Chuỗi văn bản | Tên nhiệm vụ cụ thể. |
-| `description` | `TEXT` | Yes | None | No | No | No | No | Văn bản | Hướng dẫn chi tiết hoặc tài liệu tham khảo đính kèm. |
-| `estimated_minutes` | `INTEGER` | No | None | No | No | No | Yes | 15 đến 240 phút | Thời lượng ước tính hoàn thành nhiệm vụ (`chk_tasks_estimated_minutes`). |
-| `scheduled_date` | `DATE` | Yes | None | No | No | No | No | YYYY-MM-DD | Ngày xếp lịch (`NULL` = Backlog chưa xếp lịch). |
-| `scheduled_start` | `TIMESTAMPTZ` | Yes | None | No | No | No | No | Dấu thời gian UTC | Mốc thời gian bắt đầu xếp lịch. |
-| `scheduled_end` | `TIMESTAMPTZ` | Yes | None | No | No | No | Yes* | Dấu thời gian UTC | Mốc thời gian kết thúc xếp lịch (`scheduled_end > scheduled_start`). |
-| `status` | `VARCHAR(20)` | No | `'TODO'` | No | No | No | Yes | `'PENDING'`, `'TODO'`, `'IN_PROGRESS'`, `'COMPLETED'`, `'CANCELLED'` | Trạng thái nhiệm vụ (`chk_tasks_status`). |
-| `completed_at` | `TIMESTAMPTZ` | Yes | None | No | No | No | Yes** | Dấu thời gian UTC | Thời điểm đánh dấu hoàn thành nhiệm vụ (`chk_tasks_completed_at`). |
-| `reschedule_count` | `INTEGER` | No | `0` | No | No | No | Yes | $\ge 0$ | Số lần nhiệm vụ bị dời lịch tự động liên tiếp (ngưỡng chống lặp $\ge 3$). |
-| `created_at` | `TIMESTAMPTZ` | No | `NOW()` | No | No | No | No | Dấu thời gian UTC | Thời điểm tạo nhiệm vụ. |
-| `updated_at` | `TIMESTAMPTZ` | No | `NOW()` | No | No | No | No | Dấu thời gian UTC | Thời điểm sửa đổi nhiệm vụ gần nhất (Trigger `trg_tasks_updated_at`). |
-
----
-
-#### 2.15. Bảng `task_dependencies` (Quan hệ Tiên quyết Nhiệm vụ - DAG)
-* **Mục đích:** Lưu trữ quan hệ phụ thuộc có hướng giữa các nhiệm vụ trong cùng lộ trình; kiểm định không chu trình bởi `DagCycleValidator`.
-* **Ánh xạ yêu cầu:** `FR-TASK-003`, `ASR-04`.
-
-| Cột | Kiểu Dữ liệu | Null | Mặc định | PK | FK | UQ | CHECK | Miền Giá trị Hợp lệ | Quy tắc Nghiệp vụ & Ý nghĩa |
-|---|---|---|---|---|---|---|---|---|---|
-| `id` | `UUID` | No | `gen_random_uuid()` | Yes | No | Yes | No | UUIDv7 | Khóa chính cạnh quan hệ phụ thuộc. |
-| `predecessor_id` | `UUID` | No | None | No | `tasks(id)` | Yes* | No | UUID tồn tại | Nhiệm vụ tiên quyết bắt buộc xong trước (`ON DELETE CASCADE`). |
-| `successor_id` | `UUID` | No | None | No | `tasks(id)` | Yes* | Yes** | UUID tồn tại | Nhiệm vụ phụ thuộc (`predecessor_id <> successor_id`, `ON DELETE CASCADE`). |
-| `roadmap_id` | `UUID` | No | None | No | `roadmaps(id)` | No | No | UUID tồn tại | Lộ trình chung chứa cả 2 task (`ON DELETE CASCADE`). |
-| `is_mandatory` | `BOOLEAN` | No | `TRUE` | No | No | No | No | `TRUE`, `FALSE` | Cờ xác định điều kiện tiên quyết bắt buộc trước khi mở khóa task kế tiếp. |
-| `created_at` | `TIMESTAMPTZ` | No | `NOW()` | No | No | No | No | Dấu thời gian UTC | Thời điểm thiết lập cạnh phụ thuộc. |
-
----
-
-#### 2.16. Bảng `schedule_proposals` (Bản Đề xuất Lịch Xem trước từ AI - Preview Draft)
+#### 2.14. Bảng `schedule_proposals` (Bản Đề xuất Lịch Xem trước từ AI - Preview Draft)
 * **Mục đích:** Lưu trữ bản nháp đề xuất lịch xem trước từ AI sau khi vượt qua **3-Tier Hybrid Validation Gate**; tuyệt đối không tự động ghi đè lịch chính thức.
 * **Ánh xạ yêu cầu:** `FR-PLAN-005`, `BUSR-02` (Strict Apply Policy), `OS-03`, `ASR-04`.
 
@@ -357,7 +317,46 @@
 
 ---
 
-### PHẦN C — BOUNDED CONTEXT 3: `execution` (4 BẢNG)
+### PHẦN C — BOUNDED CONTEXT 3: `execution` (5 BẢNG)
+
+#### 2.15. Bảng `tasks` (Nhiệm vụ Học tập Chi tiết Cấp 2)
+* **Mục đích:** Đầu việc học tập cụ thể, lên lịch trực tiếp qua `scheduled_date`, `scheduled_start`, `scheduled_end` và liên kết với `official_schedule_id`.
+* **Ánh xạ yêu cầu:** `FR-TASK-001`, `FR-ADAPT-003`, `BUSR-06`, `BUSR-07`.
+
+| Cột | Kiểu Dữ liệu | Null | Mặc định | PK | FK | UQ | CHECK | Miền Giá trị Hợp lệ | Quy tắc Nghiệp vụ & Ý nghĩa |
+|---|---|---|---|---|---|---|---|---|---|
+| `id` | `UUID` | No | `gen_random_uuid()` | Yes | No | Yes | No | UUIDv7 | Khóa chính nhiệm vụ. |
+| `roadmap_id` | `UUID` | No | None | No | `roadmaps(id)` | No | No | UUID tồn tại | Lộ trình chứa nhiệm vụ (`ON DELETE CASCADE`, Cross-Context FK `execution -> planning`). |
+| `milestone_id` | `UUID` | No | None | No | `milestones(id)` | No | No | UUID tồn tại | Mốc kiến thức trực thuộc (`ON DELETE CASCADE`, Cross-Context FK `execution -> planning`). |
+| `official_schedule_id` | `UUID` | Yes | None | No | `official_schedules(id)` | No | No | UUID tồn tại | Lịch chính thức phân bổ nhiệm vụ này (`ON DELETE SET NULL`, Cross-Context FK `execution -> planning`). |
+| `title` | `VARCHAR(255)` | No | None | No | No | No | No | Chuỗi văn bản | Tên nhiệm vụ cụ thể. |
+| `description` | `TEXT` | Yes | None | No | No | No | No | Văn bản | Hướng dẫn chi tiết hoặc tài liệu tham khảo đính kèm. |
+| `estimated_minutes` | `INTEGER` | No | None | No | No | No | Yes | 15 đến 240 phút | Thời lượng ước tính hoàn thành nhiệm vụ (`chk_tasks_estimated_minutes`). |
+| `scheduled_date` | `DATE` | Yes | None | No | No | No | No | YYYY-MM-DD | Ngày xếp lịch (`NULL` = Backlog chưa xếp lịch). |
+| `scheduled_start` | `TIMESTAMPTZ` | Yes | None | No | No | No | Yes* | Dấu thời gian UTC | Mốc thời gian bắt đầu xếp lịch (`chk_tasks_scheduled_time_order`). |
+| `scheduled_end` | `TIMESTAMPTZ` | Yes | None | No | No | No | Yes* | Dấu thời gian UTC | Mốc thời gian kết thúc xếp lịch (`(scheduled_start IS NULL AND scheduled_end IS NULL) OR (scheduled_start IS NOT NULL AND scheduled_end IS NOT NULL AND scheduled_end > scheduled_start)`). |
+| `status` | `VARCHAR(20)` | No | `'TODO'` | No | No | No | Yes | `'TODO'`, `'IN_PROGRESS'`, `'COMPLETED'`, `'CANCELLED'` | Trạng thái nhiệm vụ (`chk_tasks_status`). |
+| `completed_at` | `TIMESTAMPTZ` | Yes | None | No | No | No | Yes** | Dấu thời gian UTC | Thời điểm đánh dấu hoàn thành nhiệm vụ (`chk_tasks_completed_at`). |
+| `reschedule_count` | `INTEGER` | No | `0` | No | No | No | Yes | $\ge 0$ | Số lần nhiệm vụ bị dời lịch tự động liên tiếp (ngưỡng chống lặp $\ge 3$). |
+| `created_at` | `TIMESTAMPTZ` | No | `NOW()` | No | No | No | No | Dấu thời gian UTC | Thời điểm tạo nhiệm vụ. |
+| `updated_at` | `TIMESTAMPTZ` | No | `NOW()` | No | No | No | No | Dấu thời gian UTC | Thời điểm sửa đổi nhiệm vụ gần nhất (Trigger `trg_tasks_updated_at`). |
+
+---
+
+#### 2.16. Bảng `task_dependencies` (Quan hệ Tiên quyết Nhiệm vụ - DAG)
+* **Mục đích:** Lưu trữ quan hệ phụ thuộc có hướng giữa các nhiệm vụ trong cùng lộ trình; kiểm định không chu trình bởi `DagCycleValidator`.
+* **Ánh xạ yêu cầu:** `FR-TASK-003`, `ASR-04`.
+
+| Cột | Kiểu Dữ liệu | Null | Mặc định | PK | FK | UQ | CHECK | Miền Giá trị Hợp lệ | Quy tắc Nghiệp vụ & Ý nghĩa |
+|---|---|---|---|---|---|---|---|---|---|
+| `id` | `UUID` | No | `gen_random_uuid()` | Yes | No | Yes | No | UUIDv7 | Khóa chính cạnh quan hệ phụ thuộc. |
+| `predecessor_id` | `UUID` | No | None | No | `tasks(id)` | Yes* | No | UUID tồn tại | Nhiệm vụ tiên quyết bắt buộc xong trước (`ON DELETE CASCADE`, Intra-Context FK). |
+| `successor_id` | `UUID` | No | None | No | `tasks(id)` | Yes* | Yes** | UUID tồn tại | Nhiệm vụ phụ thuộc (`predecessor_id <> successor_id`, `ON DELETE CASCADE`, Intra-Context FK). |
+| `roadmap_id` | `UUID` | No | None | No | `roadmaps(id)` | No | No | UUID tồn tại | Lộ trình chung chứa cả 2 task (`ON DELETE CASCADE`, Cross-Context FK `execution -> planning`). |
+| `is_mandatory` | `BOOLEAN` | No | `TRUE` | No | No | No | No | `TRUE`, `FALSE` | Cờ xác định điều kiện tiên quyết bắt buộc trước khi mở khóa task kế tiếp. |
+| `created_at` | `TIMESTAMPTZ` | No | `NOW()` | No | No | No | No | Dấu thời gian UTC | Thời điểm thiết lập cạnh phụ thuộc. |
+
+---
 
 #### 2.17. Bảng `study_sessions` (Phiên Thực thi Học tập Pomodoro / Stopwatch)
 * **Mục đích:** Quản lý buổi học tập trung, ghi nhận thời gian thực học và tín hiệu duy trì Heartbeat ping 60s.
@@ -380,14 +379,14 @@
 ---
 
 #### 2.18. Bảng `session_tasks` (Bảng Liên kết Nhiều - Nhiều giữa Phiên học và Nhiệm vụ)
-* **Mục đích:** Cho phép một phiên học chọn nhiều task, hoặc một task chia nhỏ học trong nhiều phiên; bảo vệ lịch sử học tập với `ON DELETE RESTRICT`.
+* **Mục đích:** Cho phép một phiên học chọn nhiều task, hoặc một task chia nhỏ học trong nhiều phiên; bảo vệ lịch sử học tập với `ON DELETE RESTRICT` nội bộ Context `execution`.
 * **Ánh xạ yêu cầu:** `FR-SESSION-002`, `BUSR-09`, `OS-01`.
 
 | Cột | Kiểu Dữ liệu | Null | Mặc định | PK | FK | UQ | CHECK | Miền Giá trị Hợp lệ | Quy tắc Nghiệp vụ & Ý nghĩa |
 |---|---|---|---|---|---|---|---|---|---|
 | `id` | `UUID` | No | `gen_random_uuid()` | Yes | No | Yes | No | UUIDv7 | Khóa chính bản ghi liên kết. |
-| `session_id` | `UUID` | No | None | No | `study_sessions(id)` | Yes* | No | UUID tồn tại | Khóa ngoại trỏ về phiên học (`ON DELETE CASCADE`). |
-| `task_id` | `UUID` | No | None | No | `tasks(id)` | Yes* | No | UUID tồn tại | Khóa ngoại trỏ về nhiệm vụ (`ON DELETE RESTRICT` bảo vệ lịch sử học). |
+| `session_id` | `UUID` | No | None | No | `study_sessions(id)` | Yes* | No | UUID tồn tại | Khóa ngoại trỏ về phiên học (`ON DELETE CASCADE`, Intra-Context FK). |
+| `task_id` | `UUID` | No | None | No | `tasks(id)` | Yes* | No | UUID tồn tại | Khóa ngoại trỏ về nhiệm vụ (`ON DELETE RESTRICT` bảo vệ lịch sử học, Intra-Context FK `execution -> execution`). |
 | `allocated_minutes` | `INTEGER` | No | `0` | No | No | No | Yes | $\ge 0$ | Số phút dự kiến phân bổ cho nhiệm vụ này trong phiên. |
 | `actual_minutes` | `INTEGER` | No | `0` | No | No | No | Yes | $\ge 0$ | Số phút thực học thực tế cho nhiệm vụ này trong phiên. |
 | `status_after_session` | `VARCHAR(20)` | No | `'IN_PROGRESS'` | No | No | No | Yes | `'TODO'`, `'IN_PROGRESS'`, `'COMPLETED'` | Trạng thái nhiệm vụ sau phiên (`chk_session_tasks_status_after`). |
@@ -405,14 +404,16 @@
 |---|---|---|---|---|---|---|---|---|---|
 | `id` | `UUID` | No | `gen_random_uuid()` | Yes | No | Yes | No | UUIDv7 | Khóa chính bản ghi chép. |
 | `user_id` | `UUID` | No | None | No | `users(id)` | No | No | UUID tồn tại | Người sở hữu ghi chép (`ON DELETE CASCADE`). |
-| `session_id` | `UUID` | Yes | None | No | `study_sessions(id)` | Yes* | No | UUID tồn tại | Phiên học liên kết (`ON DELETE CASCADE`). |
-| `task_id` | `UUID` | Yes | None | No | `tasks(id)` | No | No | UUID tồn tại | Nhiệm vụ liên kết (`ON DELETE SET NULL`). |
+| `session_id` | `UUID` | Yes | None | No | `study_sessions(id)` | Yes* | No | UUID tồn tại | Phiên học liên kết (`ON DELETE CASCADE`, Intra-Context FK). |
+| `task_id` | `UUID` | Yes | None | No | `tasks(id)` | No | No | UUID tồn tại | Nhiệm vụ liên kết (`ON DELETE SET NULL`, Intra-Context FK `execution -> execution`). |
 | `note_type` | `VARCHAR(20)` | No | None | No | No | Yes* | Yes | `'SCRATCHPAD'`, `'TAKEAWAY'`, `'GENERAL'` | Phân loại ghi chú (`uq_study_notes_session_type`). |
 | `content` | `TEXT` | No | `''` | No | No | No | No | Văn bản Markdown | Nội dung ghi chép của người học. |
 | `created_at` | `TIMESTAMPTZ` | No | `NOW()` | No | No | No | No | Dấu thời gian UTC | Thời điểm tạo ghi chép. |
 | `updated_at` | `TIMESTAMPTZ` | No | `NOW()` | No | No | No | No | Dấu thời gian UTC | Thời điểm sửa đổi ghi chép gần nhất (Trigger `trg_study_notes_updated_at`). |
 
 ---
+
+### PHẦN D — BOUNDED CONTEXT 4: `evaluation` (3 BẢNG)
 
 #### 2.20. Bảng `pause_records` (Lịch sử Tạm dừng Lộ trình & Tịnh tiến Domino Shift)
 * **Mục đích:** Lưu trữ các đợt tạm dừng học tập và số ngày đã tịnh tiến dời lịch tự động của toàn bộ nhiệm vụ.
@@ -421,7 +422,7 @@
 | Cột | Kiểu Dữ liệu | Null | Mặc định | PK | FK | UQ | CHECK | Miền Giá trị Hợp lệ | Quy tắc Nghiệp vụ & Ý nghĩa |
 |---|---|---|---|---|---|---|---|---|---|
 | `id` | `UUID` | No | `gen_random_uuid()` | Yes | No | Yes | No | UUIDv7 | Khóa chính bản ghi tạm dừng. |
-| `roadmap_id` | `UUID` | No | None | No | `roadmaps(id)` | No | No | UUID tồn tại | Lộ trình được tạm dừng (`ON DELETE CASCADE`). |
+| `roadmap_id` | `UUID` | No | None | No | `roadmaps(id)` | No | No | UUID tồn tại | Lộ trình được tạm dừng (`ON DELETE CASCADE`, Cross-Context FK `evaluation -> planning`). |
 | `pause_start_date` | `DATE` | No | None | No | No | No | No | YYYY-MM-DD | Ngày bắt đầu tạm dừng học. |
 | `pause_end_date` | `DATE` | No | None | No | No | No | Yes* | YYYY-MM-DD | Ngày kết thúc tạm dừng (`pause_end_date >= pause_start_date`). |
 | `shifted_days` | `INTEGER` | No | None | No | No | No | Yes** | $> 0$ | Số ngày lịch học bị tịnh tiến (`shifted_days = pause_end_date - pause_start_date + 1`). |
@@ -432,10 +433,8 @@
 
 ---
 
-### PHẦN D — BOUNDED CONTEXT 4: `evaluation` (2 BẢNG)
-
 #### 2.21. Bảng `ai_reviews` (Báo cáo Đánh giá Tiến độ & Khuyến nghị Thích ứng từ AI)
-* **Mục đích:** Lưu trữ nhận xét định tính và số liệu chuẩn hóa định kỳ tuần hoặc sau mỗi mốc kiến thức hoàn thành.
+* **Mục đích:** Lưu trữ nhận xét định tính và bản chụp số liệu `QuantitativeMetrics` định kỳ tuần hoặc sau mỗi mốc kiến thức hoàn thành, đồng bộ 100% với lớp `AIReview` & `QuantitativeMetrics` (`class-diagram.puml` v5.0 & `FR-REPORT-001/002`).
 * **Ánh xạ yêu cầu:** `FR-REPORT-001..002`, `BUSR-12`.
 
 | Cột | Kiểu Dữ liệu | Null | Mặc định | PK | FK | UQ | CHECK | Miền Giá trị Hợp lệ | Quy tắc Nghiệp vụ & Ý nghĩa |
@@ -446,15 +445,17 @@
 | `milestone_id` | `UUID` | Yes | None | No | `milestones(id)` | No | No | UUID tồn tại | Mốc kiến thức được đánh giá (bắt buộc khi `MILESTONE`, `ON DELETE CASCADE`). |
 | `review_cycle` | `VARCHAR(20)` | No | None | No | No | No | Yes | `'WEEKLY'`, `'MILESTONE'` | Chu kỳ đánh giá (`chk_ai_reviews_cycle`). |
 | `period_start` | `DATE` | Yes | None | No | No | No | No | YYYY-MM-DD | Ngày bắt đầu chu kỳ tuần (bắt buộc khi `WEEKLY`). |
-| `period_end` | `DATE` | Yes | None | No | No | No | Yes* | YYYY-MM-DD | Ngày kết thúc chu kỳ tuần (`period_end >= period_start`). |
-| `total_study_minutes` | `INTEGER` | No | `0` | No | No | No | Yes | $\ge 0$ | Tổng số phút thực học trong chu kỳ (ánh xạ `QuantitativeMetrics`). |
-| `tasks_completed` | `INTEGER` | No | `0` | No | No | No | Yes | $\ge 0$ | Số lượng nhiệm vụ đã hoàn thành trong chu kỳ. |
-| `completion_rate` | `NUMERIC(5,2)` | No | `0.00` | No | No | No | Yes | 0.00% đến 100.00% | Tỷ lệ hoàn thành so với kế hoạch ban đầu. |
-| `qualitative_feedback` | `TEXT` | No | `''` | No | No | No | No | Văn bản | Nhận xét định tính: phân tích điểm mạnh và cảnh báo điểm nghẽn. |
-| `recommendations` | `TEXT` | No | `''` | No | No | No | No | Văn bản | Đề xuất hành động điều chỉnh cụ thể cho chu kỳ tiếp theo. |
+| `period_end` | `DATE` | Yes | None | No | No | No | Yes* | YYYY-MM-DD | Ngày kết thúc chu kỳ tuần (`period_end >= period_start`, `chk_ai_reviews_period_order`). |
+| `quantitative_summary` | `JSONB` | No | `'{}'::jsonb` | No | No | No | Yes | JSON Object | Lưu 5 chỉ số của Value Object `QuantitativeMetrics`: `completion_rate`, `planned_minutes`, `actual_minutes`, `adherence_rate`, `overdue_task_count` (`chk_ai_reviews_quantitative_summary`). |
+| `strengths_feedback` | `TEXT` | No | None | No | No | No | No | Văn bản | Nhận xét định tính phân tích các điểm mạnh học tập trong chu kỳ. |
+| `bottlenecks_feedback` | `TEXT` | No | None | No | No | No | No | Văn bản | Nhận xét định tính chỉ ra điểm nghẽn và nguyên nhân trễ hạn. |
+| `action_recommendations` | `TEXT` | No | None | No | No | No | No | Văn bản | Đề xuất hành động điều chỉnh lộ trình cụ thể cho chu kỳ tiếp theo. |
+| `model_used` | `VARCHAR(100)` | No | None | No | No | No | No | Chuỗi tên model | Định danh mô hình LLM đã thực hiện sinh báo cáo đánh giá. |
 | `generated_at` | `TIMESTAMPTZ` | No | `NOW()` | No | No | No | No | Dấu thời gian UTC | Thời điểm AI sinh nội dung đánh giá. |
 | `created_at` | `TIMESTAMPTZ` | No | `NOW()` | No | No | No | No | Dấu thời gian UTC | Thời điểm lưu bản ghi. |
 | `updated_at` | `TIMESTAMPTZ` | No | `NOW()` | No | No | No | No | Dấu thời gian UTC | Thời điểm cập nhật bản ghi gần nhất (Trigger `trg_ai_reviews_updated_at`). |
+
+*\*Ràng buộc chu kỳ:* `CONSTRAINT chk_ai_reviews_period_order CHECK ((review_cycle = 'MILESTONE' AND milestone_id IS NOT NULL AND period_start IS NULL AND period_end IS NULL) OR (review_cycle = 'WEEKLY' AND milestone_id IS NULL AND period_start IS NOT NULL AND period_end IS NOT NULL AND period_end >= period_start))`.
 
 ---
 
@@ -514,45 +515,47 @@
 
 ## 3. Ma trận Ràng buộc Toàn vẹn Khóa ngoại & Chiến lược Xóa (Referential Actions Matrix — 24 Bảng)
 
-| Bảng Nguồn (Child Table) | Bounded Context | Cột Khóa Ngoại | Bảng Đích (Parent Table) | Hành vi `ON DELETE` | Mục đích Kỹ thuật & Bảo toàn Dữ liệu |
-|---|---|---|---|---|---|
-| `learner_profiles` | `account` | `user_id` | `users(id)` | `CASCADE` | Xóa hồ sơ thói quen khi tài khoản người học bị xóa. |
-| `webcal_tokens` | `account` | `user_id` | `users(id)` | `CASCADE` | Xóa token đồng bộ lịch khi tài khoản bị xóa. |
-| `availabilities` | `account` | `user_id` | `users(id)` | `CASCADE` | Xóa cấu hình thời gian rảnh khi tài khoản bị xóa. |
-| `availability_slots` | `account` | `availability_id` | `availabilities(id)` | `CASCADE` | Xóa toàn bộ khung giờ rảnh khi cấu hình rảnh bị xóa. |
-| `ai_quotas` | `account` | `user_id` | `users(id)` | `CASCADE` | Xóa hạn ngạch AI khi tài khoản bị xóa. |
-| `ai_quota_reservations` | `account` | `quota_id` | `ai_quotas(id)` | `CASCADE` | Xóa sổ cái giữ chỗ khi bản ghi hạn ngạch bị xóa. |
-| `ai_quota_reservations` | `account` | `user_id` | `users(id)` | `CASCADE` | Xóa sổ cái giữ chỗ khi tài khoản bị xóa. |
-| `ai_usage_logs` | `account` | `user_id` | `users(id)` | `CASCADE` | Xóa nhật ký kiểm toán AI khi tài khoản bị xóa. |
-| `payment_transactions` | `account` | `user_id` | `users(id)` | **`RESTRICT`** | **Bảo vệ chứng từ tài chính:** Chặn xóa cứng người dùng đã có giao dịch thanh toán. |
-| `goals` | `planning` | `user_id` | `users(id)` | `CASCADE` | Xóa mục tiêu khi người dùng xóa tài khoản. |
-| `roadmaps` | `planning` | `user_id` | `users(id)` | `CASCADE` | Xóa lộ trình khi người dùng xóa tài khoản. |
-| `roadmaps` | `planning` | `goal_id` | `goals(id)` | `CASCADE` | Xóa các lộ trình liên thuộc khi mục tiêu bị xóa. |
-| `milestones` | `planning` | `roadmap_id` | `roadmaps(id)` | `CASCADE` | Xóa mốc kiến thức khi lộ trình bị xóa. |
-| `official_schedules` | `planning` | `roadmap_id` | `roadmaps(id)` | `CASCADE` | Xóa lịch chính thức khi lộ trình bị xóa. |
-| `tasks` | `planning` | `roadmap_id` | `roadmaps(id)` | `CASCADE` | Xóa nhiệm vụ khi lộ trình bị xóa. |
-| `tasks` | `planning` | `milestone_id` | `milestones(id)` | `CASCADE` | Xóa nhiệm vụ khi mốc kiến thức bị xóa. |
-| `tasks` | `planning` | `official_schedule_id` | `official_schedules(id)` | `SET NULL` | Giữ lại task nhưng ngắt liên kết lịch khi lịch chính thức được thay thế. |
-| `task_dependencies` | `planning` | `predecessor_id` | `tasks(id)` | `CASCADE` | Tự động dọn cạnh đồ thị khi nhiệm vụ tiên quyết bị xóa. |
-| `task_dependencies` | `planning` | `successor_id` | `tasks(id)` | `CASCADE` | Tự động dọn cạnh đồ thị khi nhiệm vụ phụ thuộc bị xóa. |
-| `task_dependencies` | `planning` | `roadmap_id` | `roadmaps(id)` | `CASCADE` | Dọn dẹp cạnh đồ thị khi lộ trình bị xóa. |
-| `schedule_proposals` | `planning` | `roadmap_id` | `roadmaps(id)` | `CASCADE` | Xóa đề xuất lịch khi lộ trình bị xóa. |
-| `schedule_proposals` | `planning` | `user_id` | `users(id)` | `CASCADE` | Xóa đề xuất lịch khi tài khoản người học bị xóa. |
-| `study_sessions` | `execution` | `user_id` | `users(id)` | `CASCADE` | Xóa phiên học khi tài khoản người học bị xóa. |
-| `study_sessions` | `execution` | `roadmap_id` | `roadmaps(id)` | `CASCADE` | Xóa phiên học khi lộ trình bị xóa. |
-| `session_tasks` | `execution` | `session_id` | `study_sessions(id)` | `CASCADE` | Xóa dòng liên kết khi phiên học bị xóa. |
-| `session_tasks` | `execution` | `task_id` | `tasks(id)` | **`RESTRICT`** | **Bảo vệ lịch sử học tập:** Chặn xóa cứng nhiệm vụ đã có phiên Pomodoro ghi nhận. |
-| `study_notes` | `execution` | `user_id` | `users(id)` | `CASCADE` | Xóa ghi chép khi tài khoản bị xóa. |
-| `study_notes` | `execution` | `session_id` | `study_sessions(id)` | `CASCADE` | Xóa ghi chép gắn với phiên học khi phiên học bị xóa. |
-| `study_notes` | `execution` | `task_id` | `tasks(id)` | `SET NULL` | Giữ nguyên ghi chép học tập, chỉ gỡ liên kết task nếu task bị xóa. |
-| `pause_records` | `execution` | `roadmap_id` | `roadmaps(id)` | `CASCADE` | Xóa lịch sử tạm dừng khi lộ trình bị xóa. |
-| `ai_reviews` | `evaluation` | `roadmap_id` | `roadmaps(id)` | `CASCADE` | Xóa báo cáo AI khi lộ trình bị xóa. |
-| `ai_reviews` | `evaluation` | `user_id` | `users(id)` | `CASCADE` | Xóa báo cáo AI khi tài khoản bị xóa. |
-| `ai_reviews` | `evaluation` | `milestone_id` | `milestones(id)` | `CASCADE` | Xóa báo cáo mốc khi mốc kiến thức bị xóa. |
-| `schedule_change_logs` | `evaluation` | `roadmap_id` | `roadmaps(id)` | `CASCADE` | Xóa nhật ký biến động lịch khi lộ trình bị xóa. |
-| `schedule_change_logs` | `evaluation` | `schedule_id` | `official_schedules(id)` | `SET NULL` | Giữ nguyên nhật ký kiểm toán ngay cả khi lịch chính thức được tạo mới. |
-| `schedule_change_logs` | `evaluation` | `task_id` | `tasks(id)` | `SET NULL` | Giữ nguyên nhật ký kiểm toán nếu nhiệm vụ chưa học bị xóa. |
-| `processed_events` | `shared_kernel` | `event_id` | `outbox_events(id)` | `CASCADE` | Dọn dẹp bản ghi chống lặp khi sự kiện Outbox cũ được lưu trữ/xóa. |
+### 3.1. Ma trận Phân loại Intra-Context FK vs Cross-Context FK & Hành vi `ON DELETE` (Theo Phân rã `9 / 5 / 5 / 3 / 2`)
+
+| Bảng Nguồn (Child Table) | Bounded Context Nguồn | Cột Khóa Ngoại | Bảng Đích (Parent Table) | Bounded Context Đích | Phân loại FK | Hành vi `ON DELETE` | Mục đích Kỹ thuật & Bảo toàn Dữ liệu |
+|---|---|---|---|---|---|---|---|
+| `learner_profiles` | `account` | `user_id` | `users(id)` | `account` | **Intra-Context FK** | `CASCADE` | Xóa hồ sơ thói quen khi tài khoản người học bị xóa. |
+| `webcal_tokens` | `account` | `user_id` | `users(id)` | `account` | **Intra-Context FK** | `CASCADE` | Xóa token đồng bộ lịch khi tài khoản bị xóa. |
+| `availabilities` | `account` | `user_id` | `users(id)` | `account` | **Intra-Context FK** | `CASCADE` | Xóa cấu hình thời gian rảnh khi tài khoản bị xóa. |
+| `availability_slots` | `account` | `availability_id` | `availabilities(id)` | `account` | **Intra-Context FK** | `CASCADE` | Xóa toàn bộ khung giờ rảnh khi cấu hình rảnh bị xóa. |
+| `ai_quotas` | `account` | `user_id` | `users(id)` | `account` | **Intra-Context FK** | `CASCADE` | Xóa hạn ngạch AI khi tài khoản bị xóa. |
+| `ai_quota_reservations` | `account` | `quota_id` | `ai_quotas(id)` | `account` | **Intra-Context FK** | `CASCADE` | Xóa sổ cái giữ chỗ khi bản ghi hạn ngạch bị xóa. |
+| `ai_quota_reservations` | `account` | `user_id` | `users(id)` | `account` | **Intra-Context FK** | `CASCADE` | Xóa sổ cái giữ chỗ khi tài khoản bị xóa. |
+| `ai_usage_logs` | `account` | `user_id` | `users(id)` | `account` | **Intra-Context FK** | `CASCADE` | Xóa nhật ký kiểm toán AI khi tài khoản bị xóa. |
+| `payment_transactions` | `account` | `user_id` | `users(id)` | `account` | **Intra-Context FK** | **`RESTRICT`** | **Bảo vệ chứng từ tài chính:** Chặn xóa cứng người dùng đã có giao dịch thanh toán. |
+| `goals` | `planning` | `user_id` | `users(id)` | `account` | **Cross-Context FK** | `CASCADE` | Xóa mục tiêu khi người dùng xóa tài khoản. |
+| `roadmaps` | `planning` | `user_id` | `users(id)` | `account` | **Cross-Context FK** | `CASCADE` | Xóa lộ trình khi người dùng xóa tài khoản. |
+| `roadmaps` | `planning` | `goal_id` | `goals(id)` | `planning` | **Intra-Context FK** | `CASCADE` | Xóa các lộ trình liên thuộc khi mục tiêu bị xóa. |
+| `milestones` | `planning` | `roadmap_id` | `roadmaps(id)` | `planning` | **Intra-Context FK** | `CASCADE` | Xóa mốc kiến thức khi lộ trình bị xóa. |
+| `official_schedules` | `planning` | `roadmap_id` | `roadmaps(id)` | `planning` | **Intra-Context FK** | `CASCADE` | Xóa lịch chính thức khi lộ trình bị xóa. |
+| `schedule_proposals` | `planning` | `roadmap_id` | `roadmaps(id)` | `planning` | **Intra-Context FK** | `CASCADE` | Xóa đề xuất lịch khi lộ trình bị xóa. |
+| `schedule_proposals` | `planning` | `user_id` | `users(id)` | `account` | **Cross-Context FK** | `CASCADE` | Xóa đề xuất lịch khi tài khoản người học bị xóa. |
+| `tasks` | `execution` | `roadmap_id` | `roadmaps(id)` | `planning` | **Cross-Context FK** | `CASCADE` | Xóa nhiệm vụ khi lộ trình bị xóa (`execution` -> `planning`). |
+| `tasks` | `execution` | `milestone_id` | `milestones(id)` | `planning` | **Cross-Context FK** | `CASCADE` | Xóa nhiệm vụ khi mốc kiến thức bị xóa (`execution` -> `planning`). |
+| `tasks` | `execution` | `official_schedule_id` | `official_schedules(id)` | `planning` | **Cross-Context FK** | `SET NULL` | Giữ lại task nhưng ngắt liên kết lịch khi lịch chính thức được thay thế (`execution` -> `planning`). |
+| `task_dependencies` | `execution` | `predecessor_id` | `tasks(id)` | `execution` | **Intra-Context FK** | `CASCADE` | Tự động dọn cạnh đồ thị khi nhiệm vụ tiên quyết bị xóa (`execution` -> `execution`). |
+| `task_dependencies` | `execution` | `successor_id` | `tasks(id)` | `execution` | **Intra-Context FK** | `CASCADE` | Tự động dọn cạnh đồ thị khi nhiệm vụ phụ thuộc bị xóa (`execution` -> `execution`). |
+| `task_dependencies` | `execution` | `roadmap_id` | `roadmaps(id)` | `planning` | **Cross-Context FK** | `CASCADE` | Dọn dẹp cạnh đồ thị khi lộ trình bị xóa (`execution` -> `planning`). |
+| `study_sessions` | `execution` | `user_id` | `users(id)` | `account` | **Cross-Context FK** | `CASCADE` | Xóa phiên học khi tài khoản người học bị xóa. |
+| `study_sessions` | `execution` | `roadmap_id` | `roadmaps(id)` | `planning` | **Cross-Context FK** | `CASCADE` | Xóa phiên học khi lộ trình bị xóa. |
+| `session_tasks` | `execution` | `session_id` | `study_sessions(id)` | `execution` | **Intra-Context FK** | `CASCADE` | Xóa dòng liên kết khi phiên học bị xóa (`execution` -> `execution`). |
+| `session_tasks` | `execution` | `task_id` | `tasks(id)` | `execution` | **Intra-Context FK** | **`RESTRICT`** | **Bảo vệ lịch sử học tập:** Chặn xóa cứng nhiệm vụ đã có phiên Pomodoro ghi nhận (`execution` -> `execution`). |
+| `study_notes` | `execution` | `user_id` | `users(id)` | `account` | **Cross-Context FK** | `CASCADE` | Xóa ghi chép khi tài khoản bị xóa. |
+| `study_notes` | `execution` | `session_id` | `study_sessions(id)` | `execution` | **Intra-Context FK** | `CASCADE` | Xóa ghi chép gắn với phiên học khi phiên học bị xóa (`execution` -> `execution`). |
+| `study_notes` | `execution` | `task_id` | `tasks(id)` | `execution` | **Intra-Context FK** | `SET NULL` | Giữ nguyên ghi chép học tập, chỉ gỡ liên kết task nếu task bị xóa (`execution` -> `execution`). |
+| `pause_records` | `evaluation` | `roadmap_id` | `roadmaps(id)` | `planning` | **Cross-Context FK** | `CASCADE` | Xóa lịch sử tạm dừng khi lộ trình bị xóa (`evaluation` -> `planning`). |
+| `ai_reviews` | `evaluation` | `roadmap_id` | `roadmaps(id)` | `planning` | **Cross-Context FK** | `CASCADE` | Xóa báo cáo AI khi lộ trình bị xóa. |
+| `ai_reviews` | `evaluation` | `user_id` | `users(id)` | `account` | **Cross-Context FK** | `CASCADE` | Xóa báo cáo AI khi tài khoản bị xóa. |
+| `ai_reviews` | `evaluation` | `milestone_id` | `milestones(id)` | `planning` | **Cross-Context FK** | `CASCADE` | Xóa báo cáo mốc khi mốc kiến thức bị xóa. |
+| `schedule_change_logs` | `evaluation` | `roadmap_id` | `roadmaps(id)` | `planning` | **Cross-Context FK** | `CASCADE` | Xóa nhật ký biến động lịch khi lộ trình bị xóa. |
+| `schedule_change_logs` | `evaluation` | `schedule_id` | `official_schedules(id)` | `planning` | **Cross-Context FK** | `SET NULL` | Giữ nguyên nhật ký kiểm toán ngay cả khi lịch chính thức được tạo mới. |
+| `schedule_change_logs` | `evaluation` | `task_id` | `tasks(id)` | `execution` | **Cross-Context FK** | `SET NULL` | Giữ nguyên nhật ký kiểm toán nếu nhiệm vụ chưa học bị xóa. |
+| `processed_events` | `shared_kernel` | `event_id` | `outbox_events(id)` | `shared_kernel` | **Intra-Context FK** | `CASCADE` | Dọn dẹp bản ghi chống lặp khi sự kiện Outbox cũ được lưu trữ/xóa. |
 
 ---
 
@@ -576,7 +579,7 @@
 | `idx_roadmaps_goal_id` | `roadmaps` | `(goal_id)` | B-Tree | Không | Tối ưu hóa truy vấn các lộ trình thuộc một mục tiêu cụ thể. |
 | `idx_tasks_roadmap_scheduled_date` | `tasks` | `(roadmap_id, scheduled_date)` | B-Tree | Không | Truy vấn danh sách nhiệm vụ của lộ trình theo từng ngày học. |
 | `idx_tasks_scheduled_start` | `tasks` | `(scheduled_start)` | B-Tree Partial | `WHERE scheduled_start IS NOT NULL` | Tối ưu hóa Calendar View và feed xuất lịch iCal/WebCal. |
-| `idx_tasks_overdue` | `tasks` | `(scheduled_date)` | B-Tree Partial | `WHERE status IN ('PENDING', 'TODO') AND scheduled_date IS NOT NULL` | **Phát hiện nhiệm vụ quá hạn tất định:** Truy vấn nhanh các task trễ hạn cần dời lịch (`BUSR-06`). |
+| `idx_tasks_overdue` | `tasks` | `(scheduled_date)` | B-Tree Partial | `WHERE status IN ('TODO', 'IN_PROGRESS') AND scheduled_date IS NOT NULL` | **Phát hiện nhiệm vụ quá hạn tất định:** Truy vấn nhanh các task trễ hạn cần cảnh báo (`BUSR-06`). |
 | `idx_tasks_milestone_id` | `tasks` | `(milestone_id)` | B-Tree | Không | Lấy toàn bộ nhiệm vụ của một mốc kiến thức cụ thể. |
 | `idx_tasks_official_schedule_id` | `tasks` | `(official_schedule_id)` | B-Tree | Không | Tối ưu hóa tra cứu task thuộc lịch chính thức và dọn dẹp khóa ngoại. |
 | `idx_task_deps_successor` | `task_dependencies` | `(successor_id)` | B-Tree | Không | Kiểm tra điều kiện tiên quyết khi người học bấm Start Session. |

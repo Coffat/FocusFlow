@@ -63,10 +63,10 @@ Mỗi cấp độ trong quy trình lập kế hoạch Human-in-the-Loop (`UC-06`
 Thay vì đếm quota tạm bợ trên Redis dễ mất đồng bộ, FocusFlow chuẩn hóa quản trị hạn ngạch bằng giao dịch ACID trên PostgreSQL 16 với 3 bảng thuộc Bounded Context `account`:
 1. **Pha 1 — `RESERVE` (Trước khi gọi LLM):**
    * Thực thi `SELECT ... FROM ai_quotas WHERE user_id = :uid FOR UPDATE` để khóa hàng hạn ngạch của người học, chặn đứng 100% race condition khi người dùng bấm đúp hoặc mở nhiều tab.
-   * Kiểm tra điều kiện: `used_calls + reserved_calls < max_calls`. Nếu hợp lệ, tăng `reserved_calls = reserved_calls + 1` và tạo bản ghi mới trong bảng **`ai_quota_reservations`** với `status = 'RESERVED'` và `expires_at = NOW() + INTERVAL '5 minutes'`.
+   * Kiểm tra điều kiện: `used_calls + reserved_calls < max_calls`. Nếu hợp lệ, tăng `reserved_calls = reserved_calls + 1` và tạo bản ghi mới trong bảng **`ai_quota_reservations`** với `status = 'RESERVED'` và TTL **`120 seconds (2 minutes)`** (`expires_at = NOW() + INTERVAL '120 seconds'`).
 2. **Pha 2a — `COMMIT` (Khi LLM sinh kết quả và vượt qua cổng kiểm duyệt thành công):**
    * Trong cùng giao dịch lưu kết quả: giảm `reserved_calls = reserved_calls - 1`, tăng `used_calls = used_calls + 1`, cộng dồn `tokens_consumed`, cập nhật bản ghi `ai_quota_reservations.status = 'COMMITTED'`, và ghi nhật ký chi tiết vào bảng **`ai_usage_logs`** (model, prompt/completion tokens, latency, status).
-3. **Pha 2b — `RELEASE` / `EXPIRE` (Khi LLM lỗi, vi phạm cổng kiểm duyệt sau khi hết số lần retry, hoặc quá hạn 5 phút):**
+3. **Pha 2b — `RELEASE` / `EXPIRE` (Khi LLM lỗi, vi phạm cổng kiểm duyệt sau khi hết số lần retry, hoặc quá hạn TTL 120 giây / 2 phút):**
    * Giảm `reserved_calls = reserved_calls - 1` (không tăng `used_calls`), chuyển trạng thái `ai_quota_reservations` sang `'RELEASED'` (hoặc `'EXPIRED'` thông qua `QuotaSweeperTask` của Taskiq chạy mỗi 60s), đồng thời ghi nhận lỗi vào `ai_usage_logs`. Người học không bao giờ bị mất oan lượt gọi AI.
 
 ---

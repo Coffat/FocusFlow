@@ -1,0 +1,429 @@
+@startuml FocusFlow_Database_Diagram
+title FocusFlow — Sơ đồ Lược đồ Cơ sở Dữ liệu Vật lý (Physical Database Schema Diagram — 24 Bảng PostgreSQL 16)
+' Chuẩn hóa 3NF/BCNF theo 4 Bounded Contexts + Shared Kernel (9 / 5 / 5 / 3 / 2)
+' Đồng bộ 100% với docs/database/schema.sql và docs/database/schema.dbml (dbdiagram.io)
+
+left to right direction
+skinparam roundcorner 6
+skinparam defaultFontName "Helvetica", "Arial", sans-serif
+skinparam defaultFontSize 11
+skinparam shadowing false
+skinparam linetype ortho
+skinparam nodesep 50
+skinparam ranksep 80
+
+skinparam package {
+    BackgroundColor #F8FAFC
+    BorderColor #64748B
+    FontColor #0F172A
+    FontStyle bold
+}
+
+skinparam entity {
+    BackgroundColor #FFFFFF
+    BorderColor #1E40AF
+    HeaderBackgroundColor #EFF6FF
+    FontColor #0F172A
+}
+
+' =============================================================================
+' BOUNDED CONTEXT 1: ACCOUNT (9 TABLES)
+' =============================================================================
+package "Bounded Context 1: Account & Profile (account — 9 Bảng)" as PKG_ACCOUNT {
+
+    entity "users" as users {
+        * id : uuid <<PK>>
+        --
+        * email : varchar(255) <<UK>>
+        * password_hash : varchar(255)
+        * full_name : varchar(100)
+        * timezone : varchar(50)
+        * role : varchar(20)
+        * tier : varchar(20)
+        * is_locked : boolean
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    entity "learner_profiles" as learner_profiles {
+        * id : uuid <<PK>>
+        --
+        * user_id : uuid <<FK, UK>>
+        * optimal_focus_duration_mins : int
+        * peak_productivity_slots : jsonb
+        * estimation_bias_factor : numeric(4,2)
+        * weekly_completion_rate : numeric(5,2)
+        * total_completed_sessions : int
+        * is_cold_start : boolean
+        last_aggregated_at : timestamptz
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    entity "webcal_tokens" as webcal_tokens {
+        * id : uuid <<PK>>
+        --
+        * user_id : uuid <<FK, UK>>
+        * token_hash : varchar(64) <<UK>>
+        oauth_refresh_token_encrypted : text
+        external_calendar_id : varchar(255)
+        * is_active : boolean
+        last_used_at : timestamptz
+        rotated_at : timestamptz
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    entity "availabilities" as availabilities {
+        * id : uuid <<PK>>
+        --
+        * user_id : uuid <<FK, UK>>
+        * mode : varchar(20)
+        * calendar_integration_mode : varchar(20)
+        * daily_quotas : jsonb
+        * min_session_minutes : int
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    entity "availability_slots" as availability_slots {
+        * id : uuid <<PK>>
+        --
+        * availability_id : uuid <<FK>>
+        * day_of_week : smallint
+        * start_time : time
+        * end_time : time
+        * end_day_offset : smallint
+        * slot_type : varchar(20)
+        * is_active : boolean
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    entity "ai_quotas" as ai_quotas {
+        * id : uuid <<PK>>
+        --
+        * user_id : uuid <<FK, UK>>
+        * monthly_limit : int
+        * used_calls : int
+        * reserved_calls : int
+        * tokens_consumed : bigint
+        * cycle_start : timestamptz
+        * cycle_end : timestamptz
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    entity "ai_quota_reservations" as ai_quota_reservations {
+        * id : uuid <<PK>>
+        --
+        * quota_id : uuid <<FK>>
+        * user_id : uuid <<FK>>
+        * operation_type : varchar(50)
+        * status : varchar(20)
+        * tokens_reserved : int
+        * expires_at : timestamptz
+        * created_at : timestamptz
+        resolved_at : timestamptz
+    }
+
+    entity "ai_usage_logs" as ai_usage_logs {
+        * id : uuid <<PK>>
+        --
+        * user_id : uuid <<FK>>
+        * action_type : varchar(50)
+        * model_name : varchar(100)
+        * prompt_tokens : int
+        * completion_tokens : int
+        * total_tokens : int
+        * latency_ms : int
+        * status : varchar(20)
+        errorMessage : text
+        * created_at : timestamptz
+    }
+
+    entity "payment_transactions" as payment_transactions {
+        * id : uuid <<PK>>
+        --
+        * user_id : uuid <<FK>>
+        * transaction_ref : varchar(100) <<UK>>
+        * gateway_provider : varchar(20)
+        * amount_vnd : int
+        * currency : varchar(10)
+        * status : varchar(20)
+        qr_code_url : text
+        * webhook_signature_verified : boolean
+        paid_at : timestamptz
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    users ||--o| learner_profiles : "1:1"
+    users ||--o| webcal_tokens : "1:1"
+    users ||--o| availabilities : "1:0..1"
+    availabilities ||--o{ availability_slots : "1:N"
+    users ||--|| ai_quotas : "1:1"
+    ai_quotas ||--o{ ai_quota_reservations : "1:N"
+    users ||--o{ ai_quota_reservations : "1:N"
+    users ||--o{ ai_usage_logs : "1:N"
+    users ||--o{ payment_transactions : "1:N"
+}
+
+' =============================================================================
+' BOUNDED CONTEXT 2: PLANNING (5 TABLES)
+' =============================================================================
+package "Bounded Context 2: Roadmap & Planning (planning — 5 Bảng)" as PKG_PLANNING {
+
+    entity "goals" as goals {
+        * id : uuid <<PK>>
+        --
+        * user_id : uuid <<FK>>
+        * title : text
+        * raw_description : text
+        target_date : date
+        * status : varchar(20)
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    entity "roadmaps" as roadmaps {
+        * id : uuid <<PK>>
+        --
+        * user_id : uuid <<FK>>
+        * goal_id : uuid <<FK>>
+        * title : varchar(255)
+        description : text
+        * status : varchar(20)
+        start_date : date
+        target_date : date
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    entity "milestones" as milestones {
+        * id : uuid <<PK>>
+        --
+        * roadmap_id : uuid <<FK>>
+        * sequence_order : int
+        * title : varchar(255)
+        description : text
+        * status : varchar(20)
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    entity "official_schedules" as official_schedules {
+        * id : uuid <<PK>>
+        --
+        * roadmap_id : uuid <<FK, UK>>
+        * total_sessions : int
+        * total_planned_minutes : int
+        * activated_at : timestamptz
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    entity "schedule_proposals" as schedule_proposals {
+        * id : uuid <<PK>>
+        --
+        * roadmap_id : uuid <<FK>>
+        * user_id : uuid <<FK>>
+        * proposal_data : jsonb
+        * status : varchar(20)
+        applied_at : timestamptz
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    goals ||--o{ roadmaps : "1:N"
+    roadmaps ||--o{ milestones : "1:N"
+    roadmaps ||--o| official_schedules : "1:1"
+    roadmaps ||--o{ schedule_proposals : "1:N"
+}
+
+' =============================================================================
+' BOUNDED CONTEXT 3: EXECUTION (5 TABLES)
+' =============================================================================
+package "Bounded Context 3: Study Execution & Scheduling (execution — 5 Bảng)" as PKG_EXECUTION {
+
+    entity "tasks" as tasks {
+        * id : uuid <<PK>>
+        --
+        * roadmap_id : uuid <<FK>>
+        * milestone_id : uuid <<FK>>
+        official_schedule_id : uuid <<FK>>
+        * title : varchar(255)
+        description : text
+        * estimated_minutes : int
+        scheduled_date : date
+        scheduled_start : timestamptz
+        scheduled_end : timestamptz
+        * status : varchar(20)
+        completed_at : timestamptz
+        * reschedule_count : int
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    entity "task_dependencies" as task_dependencies {
+        * id : uuid <<PK>>
+        --
+        * predecessor_id : uuid <<FK>>
+        * successor_id : uuid <<FK>>
+        * roadmap_id : uuid <<FK>>
+        * is_mandatory : boolean
+        * created_at : timestamptz
+    }
+
+    entity "study_sessions" as study_sessions {
+        * id : uuid <<PK>>
+        --
+        * user_id : uuid <<FK>>
+        * roadmap_id : uuid <<FK>>
+        * started_at : timestamptz
+        ended_at : timestamptz
+        * planned_minutes : int
+        * actual_minutes : int
+        * status : varchar(20)
+        * last_heartbeat_at : timestamptz
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    entity "session_tasks" as session_tasks {
+        * id : uuid <<PK>>
+        --
+        * session_id : uuid <<FK>>
+        * task_id : uuid <<FK>>
+        * allocated_minutes : int
+        * actual_minutes : int
+        * status_after_session : varchar(20)
+        notes : text
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    entity "study_notes" as study_notes {
+        * id : uuid <<PK>>
+        --
+        * user_id : uuid <<FK>>
+        session_id : uuid <<FK>>
+        task_id : uuid <<FK>>
+        * note_type : varchar(20)
+        * content : text
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    tasks ||--o{ task_dependencies : "is predecessor"
+    tasks ||--o{ task_dependencies : "is successor"
+    study_sessions ||--o{ session_tasks : "1:N"
+    tasks ||--o{ session_tasks : "1:N"
+    study_sessions ||--o{ study_notes : "1:N"
+    tasks ||--o{ study_notes : "1:N"
+}
+
+' =============================================================================
+' BOUNDED CONTEXT 4: EVALUATION & ADAPTATION (3 TABLES)
+' =============================================================================
+package "Bounded Context 4: Evaluation & Adaptation (evaluation — 3 Bảng)" as PKG_EVALUATION {
+
+    entity "pause_records" as pause_records {
+        * id : uuid <<PK>>
+        --
+        * roadmap_id : uuid <<FK>>
+        * pause_start_date : date
+        * pause_end_date : date
+        * shifted_days : int
+        reason : text
+        * status : varchar(20)
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    entity "ai_reviews" as ai_reviews {
+        * id : uuid <<PK>>
+        --
+        * roadmap_id : uuid <<FK>>
+        * user_id : uuid <<FK>>
+        milestone_id : uuid <<FK>>
+        * review_cycle : varchar(20)
+        period_start : date
+        period_end : date
+        * quantitative_summary : jsonb
+        * strengths_feedback : text
+        * bottlenecks_feedback : text
+        * action_recommendations : text
+        * model_used : varchar(100)
+        * generated_at : timestamptz
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    entity "schedule_change_logs" as schedule_change_logs {
+        * id : uuid <<PK>>
+        --
+        * roadmap_id : uuid <<FK>>
+        schedule_id : uuid <<FK>>
+        task_id : uuid <<FK>>
+        * trigger_type : varchar(30)
+        reason : text
+        * affected_tasks_count : int
+        * total_shifted_minutes : int
+        * diff_payload : jsonb
+        * created_at : timestamptz
+    }
+}
+
+' =============================================================================
+' SHARED KERNEL (2 TABLES)
+' =============================================================================
+package "Shared Kernel: Infrastructure (shared_kernel — 2 Bảng)" as PKG_SHARED {
+
+    entity "outbox_events" as outbox_events {
+        * id : uuid <<PK>>
+        --
+        * aggregate_type : varchar(100)
+        * aggregate_id : uuid
+        * event_type : varchar(120)
+        * payload : jsonb
+        * status : varchar(20)
+        * retry_count : int
+        correlation_id : varchar(64)
+        * created_at : timestamptz
+        published_at : timestamptz
+    }
+
+    entity "processed_events" as processed_events {
+        * event_id : uuid <<PK, FK>>
+        * handler_name : varchar(120) <<PK>>
+        --
+        * processed_at : timestamptz
+    }
+
+    outbox_events ||--o{ processed_events : "1:N"
+}
+
+' =============================================================================
+' CROSS-CONTEXT FOREIGN KEY RELATIONSHIPS
+' =============================================================================
+users ||--o{ goals : "1:N"
+users ||--o{ roadmaps : "1:N"
+users ||--o{ schedule_proposals : "1:N"
+users ||--o{ study_sessions : "1:N"
+users ||--o{ study_notes : "1:N"
+users ||--o{ ai_reviews : "1:N"
+
+roadmaps ||--o{ tasks : "1:N"
+milestones ||--o{ tasks : "1:N"
+official_schedules ||--o{ tasks : "1:N"
+roadmaps ||--o{ task_dependencies : "1:N"
+roadmaps ||--o{ study_sessions : "1:N"
+roadmaps ||--o{ pause_records : "1:N"
+roadmaps ||--o{ ai_reviews : "1:N"
+milestones ||--o{ ai_reviews : "0..1:N"
+roadmaps ||--o{ schedule_change_logs : "1:N"
+official_schedules ||--o{ schedule_change_logs : "0..1:N"
+tasks ||--o{ schedule_change_logs : "0..1:N"
+
+@enduml

@@ -8,7 +8,7 @@
 > - [**`problem-definition.md`**](problem-definition.md) *(Định nghĩa bài toán & Ranh giới hệ thống)*
 > - [**`user-survey-and-benchmarking.md`**](user-survey-and-benchmarking.md) *(Khảo sát nhu cầu tự học & Đối sánh giải pháp)*
 > - [**`business-goals-and-kpis.md`**](business-goals-and-kpis.md) *(Hệ thống Mục tiêu & 5 KPI định lượng)*
-> - [**`../srs/srs-v1.0.md`**](../srs/srs-v1.0.md) *(Đặc tả Yêu cầu Phần mềm v1.0 — Mục 3.1 Tác nhân hệ thống)*  
+> - [**`../srs/srs-v1.0.md`**](../srs/srs-v1.0.md) *(Đặc tả Yêu cầu Phần mềm v1.2 — Mục 3.1 Tác nhân hệ thống)*  
 > **Căn cứ đánh giá học thuật:** Khung Rubric Chấm Đồ án Tốt nghiệp CNTT:
 > - **Tiêu chí TC1 (Mức 5):** "Xác định rõ người dùng mục tiêu, các bên liên quan và phân tích bối cảnh khách quan."
 > - **Tiêu chí TC2.1 (Mức 5):** "Mô hình hóa tác nhân, phân quyền và ranh giới hệ thống chuẩn mực."
@@ -21,17 +21,18 @@
 1. [Phân biệt Lý thuyết giữa Tác nhân Hệ thống & Chân dung Người dùng](#1-phân-biệt-lý-thuyết-giữa-tác-nhân-hệ-thống--chân-dung-người-dùng)
    - 1.1 [Cơ sở khoa học kỹ thuật phần mềm](#11-cơ-sở-khoa-học-kỹ-thuật-phần-mềm)
    - 1.2 [Mối quan hệ tương quan trong chu trình phát triển](#12-mối-quan-hệ-tương-quan-trong-chu-trình-phát-triển)
-2. [Đặc tả Chi tiết 4 Tác nhân Hệ thống (System Actors Specification)](#2-đặc-tả-chi-tiết-4-tác-nhân-hệ-thống-system-actors-specification)
+2. [Đặc tả Chi tiết 5 Tác nhân Hệ thống (System Actors Specification)](#2-đặc-tả-chi-tiết-5-tác-nhân-hệ-thống-system-actors-specification)
    - 2.1 [Tác nhân Người học (Learner - Primary Human Actor)](#21-tác-nhân-người-học-learner---primary-human-actor)
-   - 2.2 [Tác nhân Quản trị viên (Administrator - Platform Service Role)](#22-tác-nhân-quản-trị-viên-administrator---platform-service-role)
+   - 2.2 [Tác nhân Quản trị viên (Administrator - Platform & Operational Administrator)](#22-tác-nhân-quản-trị-viên-administrator---platform--operational-administrator)
    - 2.3 [Tác nhân Nhà cung cấp AI (External LLM Provider - External System Actor)](#23-tác-nhân-nhà-cung-cấp-ai-external-llm-provider---external-system-actor)
-   - 2.4 [Tác nhân Ứng dụng Lịch Ngoại vi (External Calendar Application - External Consumer)](#24-tác-nhân-ứng-dụng-lịch-ngoại-vi-external-calendar-application---external-consumer)
-   - 2.5 [Ma trận Trách nhiệm & Phân quyền Tác nhân (Actor Responsibility Matrix)](#25-ma-trận-trách-nhiệm--phân-quyền-tác-nhân-actor-responsibility-matrix)
+   - 2.4 [Tác nhân Ứng dụng Lịch Ngoại vi (External Calendar Application - External System Actor)](#24-tác-nhân-ứng-dụng-lịch-ngoại-vi-external-calendar-application---external-system-actor)
+   - 2.5 [Tác nhân Cổng Thanh toán Trực tuyến (Payment Gateway - External System Actor)](#25-tác-nhân-cổng-thanh-toán-trực-tuyến-payment-gateway---external-system-actor)
+   - 2.6 [Ma trận Trách nhiệm & Phân quyền Tác nhân (Actor Responsibility Matrix)](#26-ma-trận-trách-nhiệm--phân-quyền-tác-nhân-actor-responsibility-matrix)
 3. [Phân tích 3 Chân dung Người dùng Chuyên sâu (In-Depth User Personas)](#3-phân-tích-3-chân-dung-người-dùng-chuyên-sâu-in-depth-user-personas)
    - 3.1 [Phương pháp luận User Archetypes (Alan Cooper's Goal-Directed Design)](#31-phương-pháp-luận-user-archetypes-alan-coopers-goal-directed-design)
-   - 3.2 [Persona 1: Nguyễn Văn An — Sinh viên năm cuối ngành CNTT (Primary Persona - IT Student Archetype)](#32-persona-1-nguyễn-văn-an--sinh-viên-năm-cuối-ngành-cntt-primary-persona---it-student-archetype)
-   - 3.3 [Persona 2: Trần Minh Hùng — Kỹ sư Cơ khí tự học chuyển ngành IT (Secondary Persona - 24.4%)](#33-persona-2-trần-minh-hùng--kỹ-sư-cơ-khí-tự-học-chuyển-ngành-it-secondary-persona---244)
-   - 3.4 [Persona 3: Lê Thu Mai — Chuyên viên Phân tích tự học chứng chỉ AWS (Tertiary Persona - 13.4%)](#34-persona-3-lê-thu-mai--chuyên-viên-phân-tích-tự-học-chứng-chỉ-aws-tertiary-persona---134)
+   - 3.2 [Persona 1: Nguyễn Văn An — Sinh viên năm cuối ngành CNTT (Primary Persona - IT Student Archetype ~60%)](#32-persona-1-nguyễn-văn-an--sinh-viên-năm-cuối-ngành-cntt-primary-persona---it-student-archetype-60)
+   - 3.3 [Persona 2: Trần Minh Hùng — Kỹ sư Cơ khí tự học chuyển ngành IT (Secondary Persona - ~25%)](#33-persona-2-trần-minh-hùng--kỹ-sư-cơ-khí-tự-học-chuyển-ngành-it-secondary-persona---25)
+   - 3.4 [Persona 3: Lê Thu Mai — Chuyên viên Phân tích tự học chứng chỉ AWS (Tertiary Persona - ~15%)](#34-persona-3-lê-thu-mai--chuyên-viên-phân-tích-tự-học-chứng-chỉ-aws-tertiary-persona---15)
 4. [Ma trận Ánh xạ Persona sang Tính năng & Yêu cầu Kỹ thuật](#4-ma-trận-ánh-xạ-persona-sang-tính-năng--yêu-cầu-kỹ-thuật)
 5. [Góc Nhìn Cố Vấn Khóa Luận (Defense Guidance on Actors & Personas)](#5-góc-nhìn-cố-vấn-khóa-luận-defense-guidance-on-actors--personas)
 
@@ -66,31 +67,32 @@ Nhiều Personas khác nhau ngoài đời thực (Sinh viên năm cuối, Kỹ s
 
 ---
 
-## 2. Đặc tả Chi tiết 4 Tác nhân Hệ thống (System Actors Specification)
+## 2. Đặc tả Chi tiết 5 Tác nhân Hệ thống (System Actors Specification)
 
-Theo kiến trúc phân tầng trong [SRS v1.0 (Mục 3.1)](../srs/srs-v1.0.md#193-220), hệ thống FocusFlow có đúng 4 tác nhân:
+Theo kiến trúc phân tầng trong [SRS v1.2 (Mục 3.1)](../srs/srs-v1.0.md#31-các-tác-nhân-hệ-thống-system-actors), hệ thống FocusFlow có đúng 5 tác nhân:
 
 ### 2.1 Tác nhân Người học (Learner - Primary Human Actor)
 - **Bản chất:** Con người thực tế tương tác với hệ thống qua trình duyệt Web.
 - **Ranh giới tương tác:** Giao diện Web Application (Desktop & Mobile).
 - **Trách nhiệm chính:**
   - Khởi tạo tài khoản cá nhân, bảo vệ thông tin mật khẩu phiên đăng nhập.
-  - Cấu hình thời gian rảnh khả dụng (Mode A hoặc Mode B).
+  - Cấu hình thời gian rảnh khả dụng (Mode A hoặc Mode B) và hồ sơ học tập.
   - Khởi tạo mục tiêu, tương tác làm rõ và chủ động bấm nút "Apply" để lưu Schedule Proposal thành Official Schedule.
   - Vận hành các phiên học trong Study Workspace (bấm giờ Pomodoro, tick hoàn thành task, ghi Scratchpad và Key Takeaways).
-  - Kích hoạt yêu cầu sắp xếp lại (AI Reprioritization) hoặc thiết lập Tạm dừng lộ trình (Pause Roadmap) khi có biến cố.
-  - Quản lý và làm mới mã WebCal Token của chính mình.
+  - Nhận thông báo Email khi có task quá hạn (`OVERDUE`), kích hoạt **"Dời lịch hợp lý bằng AI (AI Reschedule)"** cho lộ trình bị trễ hạn hoặc thiết lập Tạm dừng lộ trình (Pause Roadmap) khi có biến cố.
+  - Đồng bộ lịch 2 chiều có kiểm soát với ứng dụng lịch ngoài, quản lý mã WebCal Token và xuất tệp `.ics`.
+  - Chọn nâng cấp gói học tập (`PREMIUM`) và thực hiện thanh toán trực tuyến qua cổng thanh toán.
 - **Cơ chế xác thực & Bảo mật:** Xác thực qua Email/Mật khẩu băm (Argon2id/bcrypt), cấp phiên làm việc bằng Session Token / JWT mang cờ bảo mật `HttpOnly`, `SameSite`. Mọi thao tác đều bị ràng buộc bởi `user_id`.
 
 ---
 
 ### 2.2 Tác nhân Quản trị viên (Administrator - Platform & Operational Administrator)
 - **Bản chất:** Tác nhân người dùng nội bộ (Internal Human Actor) thực hiện quản trị nền tảng và vận hành hệ thống.
-- **Ranh giới tương tác:** Giao diện Web Admin Portal tối giản (3 màn hình nghiệp vụ chính: Đăng nhập RBAC, Quản lý Người dùng & Hạn ngạch Quota, Dashboard Giám sát chỉ số vận hành & tiêu thụ AI), được bảo vệ nghiêm ngặt bằng cơ chế kiểm soát truy cập dựa trên vai trò (Role-Based Access Control - RBAC với `role = 'ADMIN'`).
+- **Ranh giới tương tác:** Giao diện Web Admin Portal tối giản (3 màn hình nghiệp vụ chính: Đăng nhập RBAC, Quản lý Người dùng, Gói cước, Giao dịch & Hạn ngạch Quota, Dashboard Giám sát chỉ số vận hành, tiêu thụ AI & doanh thu), được bảo vệ nghiêm ngặt bằng cơ chế kiểm soát truy cập dựa trên vai trò (Role-Based Access Control - RBAC với `role = 'ADMIN'`).
 - **Trách nhiệm chính:**
   - Xác thực phiên làm việc quản trị viên an toàn, bảo vệ các endpoint và route quản trị `/admin/*`.
-  - Quản trị danh sách người dùng, phân tầng tài khoản (`FREE` / `PREMIUM`), điều chỉnh và thiết lập lại định mức hạn ngạch gọi AI (Tokens / Requests quota) theo chính sách dịch vụ.
-  - Giám sát trạng thái hoạt động, chỉ số độ sẵn sàng (Uptime Monitor), tỷ lệ lỗi API và tổng lượng tài nguyên AI đã tiêu thụ trên toàn hệ thống.
+  - Quản trị danh sách người dùng, khóa/mở khóa tài khoản, chuyển đổi phân tầng tài khoản (`FREE` / `PREMIUM`), tra cứu lịch sử giao dịch thanh toán nâng cấp gói cước, điều chỉnh và thiết lập lại định mức hạn ngạch gọi AI (Tokens / Requests quota) theo chính sách dịch vụ.
+  - Giám sát trạng thái hoạt động, chỉ số độ sẵn sàng (Uptime Monitor), tỷ lệ lỗi API, tổng lượng tài nguyên AI đã tiêu thụ và thống kê doanh thu gói cước trên toàn hệ thống.
   - Quản trị các tham số cấu hình hệ thống nhạy cảm (API Keys, JWT Secrets).
 
 ---
@@ -99,39 +101,52 @@ Theo kiến trúc phân tầng trong [SRS v1.0 (Mục 3.1)](../srs/srs-v1.0.md#1
 - **Bản chất:** Hệ thống trí tuệ nhân tạo bên thứ ba (Google Gemini API / OpenAI API / Anthropic Claude API) cung cấp qua giao diện đám mây.
 - **Giao thức tương tác:** HTTPS RESTful API qua cổng bảo mật TLS 1.3; bắt buộc hỗ trợ **Structured JSON Outputs (JSON Schema)**.
 - **Trách nhiệm chính:**
-  - Tiếp nhận prompt chứa thông tin mục tiêu học tập đã được làm sạch (Sanitized).
-  - Sinh phản hồi phân rã Milestones, Schedule Proposal hoặc AI Review định kỳ theo đúng định dạng JSON Schema trong thời gian quy định ($\le 55$ giây).
-- **Ràng buộc an toàn:** Hệ thống FocusFlow coi External LLM là một hệ thống không đáng tin cậy hoàn toàn; mọi payload trả về đều phải đi qua **Schema Validation Gate** và không được tự động ghi đè cơ sở dữ liệu chính thức.
+  - Tiếp nhận prompt chứa thông tin mục tiêu học tập đã được làm sạch và cô lập ngữ cảnh (Sanitized & Delimited).
+  - Sinh phản hồi phân rã Milestones, Schedule Proposal, dời lịch hợp lý cho lộ trình bị quá hạn (Single-Roadmap AI Reschedule) hoặc AI Review định kỳ theo đúng định dạng JSON Schema trong thời gian quy định ($\le 55$ giây).
+- **Ràng buộc an toàn:** Hệ thống FocusFlow coi External LLM là một hệ thống không đáng tin cậy hoàn toàn; mọi payload trả về đều phải đi qua kiểm định cấu trúc/dung lượng và không được tự động ghi đè lịch của các lộ trình khác.
 
 ---
 
-### 2.4 Tác nhân Ứng dụng Lịch Ngoại vi (External Calendar Application - External Consumer)
+### 2.4 Tác nhân Ứng dụng Lịch Ngoại vi (External Calendar Application - External System Actor)
 - **Bản chất:** Các phần mềm lịch tiêu chuẩn trên thiết bị của người dùng (Google Calendar, Apple Calendar, Microsoft Outlook Calendar).
-- **Giao thức tương tác:** Giao thức **WebCal HTTP/HTTPS GET 1-Chiều** định dạng iCalendar RFC 5545 (`.ics`).
+- **Giao thức tương tác:** **Đồng bộ Lịch 2 Chiều Có Kiểm Soát (Controlled Two-Way Calendar Sync)**:
+  - *Chiều Inbound (Lịch ngoài $\rightarrow$ FocusFlow)*: Giao thức OAuth 2.0 REST API đọc dữ liệu khoảng thời gian bận (`Free/Busy intervals`) từ Google Calendar của người học.
+  - *Chiều Outbound (FocusFlow $\rightarrow$ Lịch ngoài)*: Đồng bộ sự kiện thuộc `Official Schedule` qua kết nối API, luồng **WebCal HTTP/HTTPS GET** kèm mã bảo mật `{user_secure_token}.ics`, hoặc tệp tĩnh chuẩn iCalendar **RFC 5545 (`.ics`)**.
 - **Trách nhiệm chính:**
-  - Định kỳ gửi HTTP GET request kèm mã token bảo mật ngẫu nhiên `{user_secure_token}` để kéo dữ liệu lịch học về máy cá nhân của người dùng.
-  - Hiển thị các sự kiện học tập song song với lịch sinh hoạt cá nhân.
-- **Ràng buộc bảo mật:** Tuyệt đối là luồng đọc dữ liệu một chiều (1-Way Read-Only); hệ thống FocusFlow không tiếp nhận bất kỳ thay đổi nào từ ứng dụng lịch ngoài dội ngược về.
+  - Cung cấp các khoảng thời gian bận (`Free/Busy`) để FocusFlow tự động khấu trừ dung lượng thời gian rảnh khả dụng khi lập lịch hoặc dời lịch.
+  - Tiếp nhận và hiển thị các sự kiện học tập thuộc Lịch học chính thức (`Official Schedule`) song song với lịch sinh hoạt cá nhân.
+- **Ràng buộc bảo mật & Toàn vẹn:** Chiều Inbound chỉ đọc khoảng bận `Free/Busy`, tuyệt đối không cho phép thao tác kéo thả hay xóa sự kiện trên ứng dụng lịch ngoài tự động xóa hoặc ghi đè cấu trúc Milestone/Roadmap gốc của FocusFlow (`BUSR-08`).
 
 ---
 
-### 2.5 Ma trận Trách nhiệm & Phân quyền Tác nhân (Actor Responsibility Matrix)
+### 2.5 Tác nhân Cổng Thanh toán Trực tuyến (Payment Gateway - External System Actor)
+- **Bản chất:** Hệ thống cổng thanh toán trực tuyến bên thứ ba tích hợp chuẩn công nghiệp (**PayOS / VNPay Sandbox**).
+- **Giao thức tương tác:** HTTPS RESTful API (khởi tạo đơn hàng thanh toán) và **HTTPS POST Webhook / IPN** đính kèm chữ ký số mật mã **`HMAC-SHA256`**.
+- **Trách nhiệm chính:**
+  - Tiếp nhận yêu cầu tạo đơn hàng nâng cấp gói học tập `PREMIUM` từ FocusFlow Backend và trả về liên kết thanh toán (`checkout_url`) cùng mã QR chuyển khoản (`VietQR`).
+  - Xử lý giao dịch thanh toán của Người học và gửi thông báo kết quả giao dịch tức thời về FocusFlow qua Webhook/IPN có chữ ký số `HMAC-SHA256`.
+- **Ràng buộc bảo mật & Toàn vẹn:** FocusFlow Backend bắt buộc xác thực chữ ký số `HMAC-SHA256` và kiểm tra tính bất biến (`idempotency` theo `order_code`) trước khi chuyển trạng thái giao dịch sang `PAID` và kích hoạt gói `PREMIUM` (300 lượt gọi AI/tháng, 15 lộ trình hoạt động).
 
-| Chức năng & Nghiệp vụ Hệ thống | Learner | Administrator | External LLM | External Calendar |
-|---|:---:|:---:|:---:|:---:|
-| Đăng ký, đăng nhập & quản lý phiên | **Chủ trì** | - | - | - |
-| Xác thực Admin & Kiểm soát RBAC | - | **Chủ trì** | - | - |
-| Cấu hình thời gian rảnh (Mode A / B) | **Chủ trì** | - | - | - |
-| Sinh đề xuất Milestones & Proposal | Kích hoạt & Phê duyệt | - | **Thực thi** | - |
-| Chặn vượt quỹ giờ (Backend Ceiling) | Chịu ảnh hưởng | - | - | - |
-| Thực thi phiên học trong Workspace | **Chủ trì** | - | - | - |
-| Quét quá hạn tất định (Deterministic) | Nhận thông báo | - | - | - |
-| Tạm dừng lộ trình (Domino Shift) | **Chủ trì** | - | - | - |
-| Đăng ký theo dõi WebCal Feed | Cấp & Đổi Token | - | - | **Đọc (GET)** |
-| Quản lý Hạn ngạch Quota & Mock Sandbox | Người dùng | **Quản trị toàn cục** | - | - |
-| Quản lý Danh sách Người dùng & Tier | - | **Chủ trì** | - | - |
-| Giám sát Chỉ số Vận hành & Tiêu thụ AI | - | **Chủ trì** | - | - |
-| Tổng kết định kỳ & AI Review | Yêu cầu & Đọc | - | **Phân tích** | - |
+---
+
+### 2.6 Ma trận Trách nhiệm & Phân quyền Tác nhân (Actor Responsibility Matrix)
+
+| Chức năng & Nghiệp vụ Hệ thống | Learner | Administrator | External LLM | External Calendar | Payment Gateway |
+|---|:---:|:---:|:---:|:---:|:---:|
+| Đăng ký, đăng nhập & quản lý phiên (`UC-01`, `UC-02`) | **Chủ trì** | **Chủ trì** (`ADMIN`) | - | - | - |
+| Xác thực Admin & Kiểm soát RBAC (`UC-02`, `BUSR-11`) | - | **Chủ trì** | - | - | - |
+| Cấu hình thời gian rảnh Mode A/B & Hồ sơ SRL (`UC-03`) | **Chủ trì** | - | - | **Cung cấp Free/Busy** | - |
+| Nâng cấp gói học tập Premium & Thanh toán (`UC-04`, `UC-05`) | **Chủ trì** | Đối soát (`UC-18`) | - | - | **Xử lý & Gửi Webhook** |
+| Sinh đề xuất Milestones & Schedule Proposal (`UC-06`, `UC-07`) | Kích hoạt & Phê duyệt | - | **Thực thi** | - | - |
+| Chặn vượt quỹ giờ (Backend Ceiling) & Lập thủ công (`UC-08`) | **Chủ trì** | - | - | - | - |
+| Quản lý danh mục Roadmap & Lưu trữ (`UC-09`) | **Chủ trì** | - | - | - | - |
+| Quản lý lịch học, nhiệm vụ, DAG & Thực thi phiên học (`UC-10..12`) | **Chủ trì** | - | - | - | - |
+| Đồng bộ lịch 2 chiều, WebCal Token & `.ics` (`UC-13`) | **Chủ trì** (Cấp/Reset) | - | - | **Đồng bộ Free/Busy & Đọc `.ics`** | - |
+| Tổng kết định lượng & AI Review định kỳ (`UC-14`, `UC-15`) | Yêu cầu & Đọc | - | **Phân tích** | - | - |
+| Tạm dừng lộ trình & Domino Shift (`UC-16`) | **Chủ trì** | - | - | - | - |
+| Quét quá hạn tất định + Email & AI dời lịch 1 lộ trình (`UC-17`) | Nhận Email & Kích hoạt | - | **Tái cấu trúc 1 lộ trình** | - | - |
+| Quản lý Người dùng, Gói cước, Quota & Cổng Thanh toán Trực tuyến (PayOS / VNPay Sandbox) (`UC-18`) | Người dùng thụ hưởng | **Quản trị toàn cục** | - | - | **Đối chiếu giao dịch** |
+| Giám sát Chỉ số Vận hành, Tiêu thụ AI & Doanh thu (`UC-19`) | - | **Chủ trì** | - | - | - |
 
 ---
 
@@ -148,7 +163,7 @@ Dựa trên nghiên cứu báo cáo ngành công nghệ (Stack Overflow Develope
 
 ---
 
-### 3.2 Persona 1: Nguyễn Văn An — Sinh viên năm cuối ngành CNTT (Primary Persona - IT Student Archetype)
+### 3.2 Persona 1: Nguyễn Văn An — Sinh viên năm cuối ngành CNTT (Primary Persona - IT Student Archetype ~60%)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -188,7 +203,7 @@ An đăng ký FocusFlow, nhập mục tiêu *"Tự học Backend Golang và Dock
 
 ---
 
-### 3.3 Persona 2: Trần Minh Hùng — Kỹ sư Cơ khí tự học chuyển ngành IT (Secondary Persona - 24.4%)
+### 3.3 Persona 2: Trần Minh Hùng — Kỹ sư Cơ khí tự học chuyển ngành IT (Secondary Persona - ~25%)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -228,7 +243,7 @@ Hùng sử dụng chế độ Mode A (Quỹ giờ rảnh: ngày thường 1.5 ti
 
 ---
 
-### 3.4 Persona 3: Lê Thu Mai — Chuyên viên Phân tích tự học chứng chỉ AWS (Tertiary Persona - 13.4%)
+### 3.4 Persona 3: Lê Thu Mai — Chuyên viên Phân tích tự học chứng chỉ AWS (Tertiary Persona - ~15%)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -271,13 +286,13 @@ Mai dùng FocusFlow tạo lộ trình ôn thi AWS. Sau khi Apply lịch chính t
 
 Bảng đối chiếu chứng minh thiết kế hệ thống FocusFlow giải quyết triệt để nỗi đau của từng Persona:
 
-| Nhóm Persona | Nỗi đau cốt tử | Nhu cầu chức năng | Tính năng & Module FocusFlow tương ứng | Yêu cầu Kỹ thuật trong SRS v1.0 |
+| Nhóm Persona | Nỗi đau cốt tử | Nhu cầu chức năng | Tính năng & Module FocusFlow tương ứng | Yêu cầu Kỹ thuật trong SRS v1.2 |
 |---|---|---|---|---|
 | **An (Sinh viên CNTT)** | Không biết chia nhỏ mục tiêu lớn; lười trang trí template | Tự động phân rã 2 cấp; xem trước và chỉnh sửa trước khi lưu | Module Lập kế hoạch AI: Đối thoại làm rõ $\rightarrow$ Duyệt Milestone $\rightarrow$ Proposal $\rightarrow$ Nút Apply | `FR-PLAN-001`, `FR-PLAN-002`, `FR-PLAN-003`, `BUSR-02` |
 | **An (Sinh viên CNTT)** | Mất tập trung khi mở nhiều tab tài liệu, code | Không gian phiên học tập trung, ghi chú code nhanh | Study Workspace: Pomodoro Timer + Task Checklist + Scratchpad | `FR-SESSION-001`, `FR-SESSION-002`, `NFR-PERF-002` |
 | **Hùng (Chuyển ngành)** | Quỹ thời gian phân tán, không cố định khung giờ | Xếp lịch theo tổng số giờ rảnh mỗi ngày | Chế độ Thời gian rảnh Mode A: Daily Hours Quota | `FR-AVAIL-001`, `BUSR-03` |
-| **Hùng (Chuyển ngành)** | Tăng ca đột xuất, áp lực nợ task quá hạn | Tạm dừng lộ trình mà không bị phạt, dời lịch tự động | Tính năng Pause Roadmap & Thuật toán tịnh tiến dây chuyền Domino Shift | `FR-PAUSE-001`, `FR-PAUSE-002`, `BUSR-07` |
-| **Mai (Ôn chứng chỉ)** | Chỉ xem lịch trên Google Calendar điện thoại | Đồng bộ lịch tự động về ứng dụng lịch cá nhân | Luồng đăng ký WebCal Feed 1 chiều bảo mật token (`.ics`) | `FR-CALENDAR-002`, `FR-CALENDAR-003`, `BUSR-08` |
+| **Hùng (Chuyển ngành)** | Tăng ca đột xuất, áp lực nợ task quá hạn | Tạm dừng lộ trình mà không bị phạt, hoặc dời lịch 1 lộ trình bằng AI | Tính năng Pause Roadmap (Domino Shift) & Thông báo Email quá hạn + Single-Roadmap AI Reschedule | `FR-PAUSE-001`, `FR-PAUSE-002`, `FR-ADAPT-001..003`, `BUSR-06`, `BUSR-07` |
+| **Mai (Ôn chứng chỉ)** | Chỉ xem lịch trên Google Calendar điện thoại | Đồng bộ lịch 2 chiều có kiểm soát với ứng dụng lịch cá nhân | Đồng bộ lịch 2 chiều có kiểm soát (Free/Busy Inbound + Official Outbound) & WebCal Feed bảo mật token (`.ics`) | `FR-CALENDAR-001`, `FR-CALENDAR-002`, `FR-CALENDAR-003`, `BUSR-08` |
 | **Mai (Ôn chứng chỉ)** | Học xong hay quên, thiếu đúc kết thi cử | Bắt buộc ghi nhận tóm tắt cốt lõi và tổng kết tuần | Trường bắt buộc Key Takeaways & Trợ lý AI Review định kỳ | `FR-SESSION-002`, `FR-REPORT-002`, `BUSR-09` |
 
 ---
@@ -287,7 +302,7 @@ Bảng đối chiếu chứng minh thiết kế hệ thống FocusFlow giải qu
 ### Câu hỏi Phản biện 1: "Tại sao trong tài liệu của em lại phân chia thành 'System Actors' và 'User Personas'? Sao không gộp chung lại làm một cho đơn giản?"
 > **Gợi ý trả lời bảo vệ:**  
 > *"Thưa Thầy/Cô, việc phân định rõ giữa System Actors và User Personas là chuẩn mực bắt buộc trong Công nghệ Phần mềm chuyên nghiệp (chuẩn ISO/IEC/IEEE 29148 và phương pháp UCD):*  
-> *1. **System Actor là khái niệm kiến trúc kỹ thuật:** Dùng để trả lời câu hỏi 'Hệ thống có những vai trò logic nào tương tác qua API và cơ chế phân quyền bảo mật ra sao?'. Hệ thống của em có 4 tác nhân kỹ thuật (`Learner`, `Administrator`, `External LLM`, `External Calendar`).*  
+> *1. **System Actor là khái niệm kiến trúc kỹ thuật:** Dùng để trả lời câu hỏi 'Hệ thống có những vai trò logic nào tương tác qua API và cơ chế phân quyền bảo mật ra sao?'. Hệ thống của em có 5 tác nhân kỹ thuật (`Learner`, `Administrator`, `External LLM`, `External Calendar`, `Payment Gateway`).*  
 > *2. **User Persona là công cụ thiết kế hành vi và tâm lý học:** Dùng để trả lời câu hỏi 'Người dùng thực tế là ai, họ có nỗi đau gì và họ sử dụng hệ thống trong ngữ cảnh nào?'. Cả 3 Persona An, Hùng và Mai ngoài đời đều đóng vai trò là `Learner Actor` khi đăng nhập, nhưng họ có quỹ thời gian khác nhau (Mode A vs Mode B) và thói quen khác nhau (WebCal vs Workspace Pomodoro). Sự phân định này giúp hệ thống vừa chặt chẽ về mặt kiến trúc phần mềm, vừa tối ưu công thái học cho người dùng thật."*
 
 ### Câu hỏi Phản biện 2: "Tại sao hệ thống chỉ thiết kế Web Admin Portal tối giản (3 màn hình) mà không xây dựng một hệ thống CMS/Admin đồ sộ? Thiết kế này có đáp ứng tiêu chuẩn đồ án không?"

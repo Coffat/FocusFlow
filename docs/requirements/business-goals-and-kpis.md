@@ -7,7 +7,7 @@
 > **Tài liệu liên kết:** 
 > - [**`problem-definition.md`**](problem-definition.md) *(Định nghĩa bài toán & Cơ sở yêu cầu)*
 > - [**`user-survey-and-benchmarking.md`**](user-survey-and-benchmarking.md) *(Nghiên cứu đối sánh, dữ liệu thực chứng & Khảo sát)*
-> - [**`../srs/srs-v1.0.md`**](../srs/srs-v1.0.md) *(Đặc tả Yêu cầu Phần mềm v1.0 — Mục 4, Mục 9 EVAL-01 đến EVAL-05)*  
+> - [**`../srs/srs-v1.0.md`**](../srs/srs-v1.0.md) *(Đặc tả Yêu cầu Phần mềm v1.2 — Mục 4, Mục 9 EVAL-01 đến EVAL-05)*  
 > **Căn cứ đánh giá học thuật:** Khung Rubric Chấm Đồ án Tốt nghiệp CNTT:
 > - **Tiêu chí TC1 (Mức 5):** "Xác định rõ $\ge 5$ mục tiêu/KPI cụ thể định lượng ngay từ đầu; Phân tích thực tế khách quan."
 > - **Tiêu chí TC2.1 (Mức 5):** "Đặc tả các ràng buộc định lượng, đo lường được bằng công cụ kỹ thuật."
@@ -90,7 +90,7 @@ Hệ thống FocusFlow được định hướng bởi 5 mục tiêu nghiệp v�
   Tích hợp không gian học tập thống nhất (Study Workspace) khép kín, triệt tiêu chi phí chuyển đổi ngữ cảnh (Context Switching) qua nhiều ứng dụng rời rạc, hỗ trợ người học hoàn tất các mục tiêu bài học trong ngày.
 
 - **BG-03: Bảo vệ tính liên tục của kế hoạch học tập trước các biến cố đời sống**  
-  Cung cấp cơ chế thích ứng lịch thông minh (Deterministic Overdue Detection, Domino Shift khi Pause) giúp kế hoạch tự phục hồi khi người học bận đột xuất, ngăn chặn tâm lý nản chí và từ bỏ lộ trình giữa chừng.
+  Cung cấp cơ chế thích ứng lịch thông minh (Deterministic Overdue Detection kèm Email thông báo, Single-Roadmap AI Reschedule, và Domino Shift khi Pause) giúp kế hoạch phục hồi hợp lý khi người học bận đột xuất mà không làm xáo trộn các lộ trình khác, ngăn chặn tâm lý nản chí và từ bỏ lộ trình giữa chừng.
 
 - **BG-04: Đạt độ tin cậy và trải nghiệm tương tác trực quan chuẩn mực**  
   Xây dựng giao diện web responsive đạt chuẩn tiếp cận cao (Accessibility $\ge 90$), thời gian phản hồi tức thì ($\le 500$ms) và quy trình phê duyệt Human-in-the-loop minh bạch giúp người dùng hoàn toàn làm chủ hệ thống.
@@ -102,7 +102,7 @@ Hệ thống FocusFlow được định hướng bởi 5 mục tiêu nghiệp v�
 
 ## 3. Đặc tả Chi tiết 5 Chỉ số KPI Định lượng (Detailed KPI Specifications)
 
-Đáp ứng chuẩn **Rubric TC1 Mức 5** và liên kết chặt chẽ với các mã đánh giá `EVAL-01` đến `EVAL-05` trong [SRS v1.0](../srs/srs-v1.0.md#1150-1165):
+Đáp ứng chuẩn **Rubric TC1 Mức 5** và liên kết chặt chẽ với các mã đánh giá `EVAL-01` đến `EVAL-05` trong [SRS v1.2](../srs/srs-v1.0.md#9-tiêu-chí-đánh-giá-dự-án--thử-nghiệm-evaluation-metrics--benchmarks):
 
 ### 3.1 KPI 1 — Thời gian khởi tạo lộ trình (Plan Creation Time)
 *Mã truy vết SRS:* `EVAL-01` | *Mục tiêu liên kết:* `BG-01`, `BR-001`
@@ -110,7 +110,7 @@ Hệ thống FocusFlow được định hướng bởi 5 mục tiêu nghiệp v�
 - **Định nghĩa:** Tổng thời gian thực tế tính từ thời điểm người học bắt đầu gửi thông tin mục tiêu ban đầu trên giao diện cho đến khi bản Đề xuất Lịch trình (Schedule Proposal) được người dùng chỉnh sửa, bấm nút "Apply" và Backend Validation Gate lưu trữ thành công thành Lịch chính thức (Official Schedule).
 - **Mục tiêu định lượng (Benchmark Threshold):** 
   $$\mathbf{T_{\text{plan}}} \le \mathbf{5\text{ phút (300 giây)}}$$
-  *(Đối chứng thực tế: Kết quả khảo sát Mục 3.2 cho thấy người tự học mất trung bình **48.6 phút** khi làm thủ công qua nhiều ứng dụng. FocusFlow rút ngắn $\ge 89.7\%$ thời gian thiết lập).*
+  *(Đối chứng thực tế: Nhật ký thực nghiệm công thái học Mục 3.2 & 3.5 tại tài liệu khảo sát cho thấy người tự học mất tới **52 phút** (45–60 phút) khi lập lịch thủ công qua nhiều ứng dụng. FocusFlow rút ngắn $\ge 90.4\%$ thời gian thiết lập).*
 - **Công thức tính toán:**
   $$T_{\text{plan}} = t_{\text{apply\_success}} - t_{\text{goal\_submit}}$$
   Trong đó:
@@ -153,7 +153,7 @@ Hệ thống FocusFlow được định hướng bởi 5 mục tiêu nghiệp v�
 - **Định nghĩa:** Tỷ lệ phần trăm số ngày/buổi học người dùng thực sự kích hoạt Study Workspace và tham gia học tập so với tổng số ngày/buổi học đã được lên lịch chính thức trong khoảng thời gian theo dõi của lộ trình.
 - **Mục tiêu định lượng (Benchmark Threshold):** 
   $$\mathbf{AR_{\text{plan}}} \ge \mathbf{70\%}$$
-  *(Đối chứng thực tế: Khảo sát Mục 3.4 chỉ ra 88.9% người học nản chí bỏ cuộc khi bị dồn ứ lịch. Chỉ số $\ge 70\%$ chứng minh tính hiệu quả vượt bậc của cơ chế thích ứng Domino Shift).*
+  *(Đối chứng thực tế: Nghiên cứu thứ cấp Mục 3.1 & 3.4 chỉ ra **85% – 95%** người tự học trực tuyến bỏ cuộc giữa chừng (Science 2019) và mất **25 phút** kéo thả lịch thủ công khi trễ hạn 3 ngày. Chỉ số $\ge 70\%$ chứng minh tính hiệu quả vượt bậc của cơ chế thích ứng Domino Shift và Single-Roadmap AI Reschedule).*
 - **Công thức tính toán:**
   $$AR = \left( \frac{D_{\text{attended}}}{D_{\text{scheduled}} - D_{\text{paused}}} \right) \times 100\%$$
   Trong đó:
@@ -258,11 +258,11 @@ Hệ thống cài đặt sẵn các module đo lường kỹ thuật độc lậ
 
 ### 5.1 Ma trận ánh xạ từ Nỗi đau khảo sát $\rightarrow$ KPI $\rightarrow$ SRS
 
-| Nỗi đau từ Khảo sát Thực tế ($N=45$) | Business Goal | Chỉ số KPI | Mã SRS tương ứng | Ngưỡng Benchmark Nghiệm thu |
+| Phát hiện từ Nghiên cứu Thứ cấp & Thực nghiệm Công thái học | Business Goal | Chỉ số KPI | Mã SRS tương ứng | Ngưỡng Benchmark Nghiệm thu |
 |---|---|---|---|---|
-| **82.2%** khó chia nhỏ mục tiêu; mất **48.6 phút** tạo lịch | `BG-01` | **KPI 1** (Plan Creation Time) | `EVAL-01`, `FR-PLAN-001..003` | $\le \mathbf{5}$ phút (giảm 90% thời gian) |
-| **77.8%** mệt mỏi vì dùng **3.6 công cụ** rời rạc | `BG-02` | **KPI 2** (Session Efficiency) | `EVAL-02`, `FR-SESSION-001..003` | Hoàn thành $\ge \mathbf{80\%}$ task/buổi |
-| **88.9%** nản lòng bỏ cuộc khi bị trễ hạn 2-3 ngày | `BG-03` | **KPI 3** (Plan Adherence) | `EVAL-03`, `FR-PAUSE-001`, `BUSR-07` | Tỷ lệ duy trì $\ge \mathbf{70\%}$ buổi học |
+| **73.7%** tự học công nghệ mới (*Stack Overflow 2023*); mất **52 phút** (45–60 phút) lập lịch thủ công (*Cognitive Walkthrough*) | `BG-01` | **KPI 1** (Plan Creation Time) | `EVAL-01`, `FR-PLAN-001..003` | $\le \mathbf{5}$ phút (giảm $\ge 90\%$ thời gian) |
+| Mất **23m15s** hồi phục tập trung (*ACM CHI 2005*); dùng **3–4 công cụ** rời rạc, mất **9 phút** chuẩn bị đầu phiên (*Walkthrough*) | `BG-02` | **KPI 2** (Session Efficiency) | `EVAL-02`, `FR-SESSION-001..003` | Hoàn thành $\ge \mathbf{80\%}$ task/buổi |
+| **85%–95%** bỏ cuộc giữa chừng (*Science 2019*); mất **25 phút** kéo thả lịch thủ công khi trễ hạn 3 ngày (*Walkthrough*) | `BG-03` | **KPI 3** (Plan Adherence) | `EVAL-03`, `FR-ADAPT-001..003`, `FR-PAUSE-001`, `BUSR-06`, `BUSR-07` | Tỷ lệ duy trì $\ge \mathbf{70\%}$ buổi học |
 | Người dùng e ngại lỗi phần mềm và giao diện phức tạp | `BG-04` | **KPI 4** (Task Success Rate) | `EVAL-04`, `NFR-UX-001..002` | Tỷ lệ hoàn thành tác vụ $\ge \mathbf{90\%}$ |
 | Đòi hỏi độ hoàn thiện cao, tin cậy đối với sinh viên | `BG-04` | **KPI 5** (SUS Usability Score) | `EVAL-05`, `NFR-UX-002` | Điểm $\mathbf{SUS} \ge \mathbf{80/100}$ (Grade A) |
 
@@ -274,7 +274,7 @@ Hệ thống cài đặt sẵn các module đo lường kỹ thuật độc lậ
 |---|---|---|---|
 | **KPI 1** ($T_{\text{plan}} > 5$m) | External LLM phản hồi chậm hoặc nghẽn mạng. | API latency cao từ OpenAI/Anthropic. | Áp dụng Hard Timeout 55s (`FR-AI-002`), cơ chế Auto-retry không tính quota, hỗ trợ Fallback Manual Plan tức thì. |
 | **KPI 2** ($CR < 80\%$) | AI phân bổ khối lượng task quá nặng so với thời gian rảnh. | Prompt thiếu ràng buộc thời lượng task chi tiết. | Backend Hard Ceiling Gate (`BUSR-03`) chặn không cho Apply nếu tổng thời lượng task vượt quá quỹ giờ rảnh đã cấu hình. |
-| **KPI 3** ($AR < 70\%$) | Người dùng quên lịch học hoặc bận đột xuất dài ngày. | Không có thông báo nhắc lịch và ngại dời ngày. | Đồng bộ lịch 1 chiều qua WebCal Feed (`FR-CALENDAR-002`); Nút Pause 1 chạm kích hoạt Domino Shift không phạt trễ hạn. |
+| **KPI 3** ($AR < 70\%$) | Người dùng quên lịch học hoặc bận đột xuất dài ngày. | Không có thông báo nhắc lịch và ngại dời ngày. | Gửi Email thông báo khi phát hiện task quá hạn & nút Dời lịch hợp lý bằng AI cho 1 lộ trình (`FR-ADAPT-001`, `FR-ADAPT-002`); Đồng bộ lịch 2 chiều có kiểm soát & WebCal Feed (`FR-CALENDAR-002`); Nút Pause 1 chạm kích hoạt Domino Shift không phạt trễ hạn. |
 | **KPI 4** ($TSR < 90\%$) | Giao diện gây hiểu lầm hoặc luồng thao tác có điểm nghẽn. | Thiết kế UX chưa tối ưu công thái học. | Tuân thủ Google Lighthouse Accessibility $\ge 90$ (`NFR-UX-002`); Tối giản luồng thao tác qua Wizard từng bước rõ ràng. |
 | **KPI 5** ($SUS < 80$) | Ứng dụng giật lag hoặc phản hồi chậm. | API backend xử lý chậm khi có tải. | Tối ưu hóa API phản hồi $\le 200$ms (`NFR-PERF-002`), áp dụng Optimistic UI cập nhật trạng thái tức thì trên client. |
 

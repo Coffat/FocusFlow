@@ -47,23 +47,27 @@ Nền tảng lý thuyết cốt lõi của FocusFlow là mô hình **Học tập
 2. **Chuyển tiếp & Xử lý Lũy đẳng trên Taskiq Worker tại Context `account`:**
    * `OutboxRelayTask` đẩy sự kiện qua **Redis Streams (`RedisStreamBroker`)**.
    * Taskiq Worker của Bounded Context `account` (`UpdateLearnerProfileOnSessionCompletedHandler`) nhận sự kiện, kiểm tra `event_id` trong bảng **`processed_events`** để chống xử lý trùng lặp, truy vấn dữ liệu thống kê qua `StudyExecutionQueryPort` (`execution/public_api.py`) và cập nhật bảng **`learner_profiles`**:
-     * **Thời lượng Tập trung Tối ưu ($D_{opt}$ — `preferred_session_duration`):** Tính trung vị (Median) thời lượng thực học hiệu quả khi đủ ngưỡng $\ge 5$ phiên (lọc bỏ nhiễu $< 5$ phút hoặc $> 180$ phút).
+     * **Thời lượng Tập trung Tối ưu ($D_{opt}$ — `optimal_focus_duration_mins`):** Tính trung vị (Median) thời lượng thực học hiệu quả khi đủ ngưỡng $\ge 5$ phiên (lọc bỏ nhiễu $< 5$ phút hoặc $> 180$ phút, giới hạn trong `[15, 120]` phút).
      * **Hệ số Chệch Ước lượng Thời gian ($\beta_{bias}$ — `estimation_bias_factor`):** Tỷ số giữa thời gian thực tế và thời gian dự kiến khi đủ $\ge 8$ tasks hoàn thành, được kẹp an toàn trong đoạn $[0.50, 2.00]$.
-     * **Khung Giờ Năng suất Đỉnh (`peak_productivity_window`) & Điểm Tuân thủ (`adherence_rate`):** Tổng hợp từ chuỗi phiên học trong 14 ngày gần nhất.
-   * **Cơ chế Cold Start & Quyền Tự chủ (`UC-03`):** Khi chưa đủ ngưỡng dữ liệu, hệ thống giữ giá trị mặc định chuẩn ($D_{opt} = 45\text{ phút}$, $\beta_{bias} = 1.00$). Người học có toàn quyền xem và bấm **Reset Learner Profile** về trạng thái gốc bất cứ lúc nào.
+     * **Khung Giờ Năng suất Đỉnh (`peak_productivity_slots`) & Tỷ lệ Hoàn thành Hàng tuần (`weekly_completion_rate`):** Tổng hợp từ chuỗi phiên học trong 14 ngày gần nhất.
+   * **Cơ chế Cold Start & Quyền Tự chủ (`UC-03`):** Khi chưa đủ ngưỡng dữ liệu (`is_cold_start = TRUE`), hệ thống giữ giá trị mặc định chuẩn (**$D_{opt} = 25\text{ phút}$** — `optimal_focus_duration_mins = 25`, $\beta_{bias} = 1.00$ — `estimation_bias_factor = 1.00`, `peak_productivity_slots = ["MORNING", "EVENING"]`). Người học có toàn quyền xem và bấm **Reset Learner Profile** về trạng thái gốc bất cứ lúc nào.
 
-### 3.2. Cơ chế Ngắt mạch Chống lặp Quá hạn (Overdue Anti-Loop Circuit Breaker — `reschedule_count >= 3`)
-1. **Quét Định kỳ bằng `TaskiqScheduler` (`replicas: 1`):**
-   * `TaskiqScheduler` kích hoạt `OverdueAntiLoopSweeperTask` (tại Bounded Context `evaluation` / `planning`) sử dụng khóa hàng **`SELECT ... FOR UPDATE SKIP LOCKED`** để quét các nhiệm vụ quá hạn chưa hoàn thành mà không bao giờ gây xung đột giữa các worker.
-2. **Ngưỡng Ngắt mạch `reschedule_count >= 3` (`BUSR-06`, `UC-17`):**
-   * Dựa trên Lý thuyết Động lực Thời gian (Temporal Motivation Theory — Steel, 2007), nếu một nhiệm vụ bị dời lịch quá hạn chạm ngưỡng **`reschedule_count >= 3`**, hệ thống lập tức **ngắt mạch tự động dời lịch**, đánh dấu trạng thái cần can thiệp (`STALLED`) và phát sự kiện `TaskStalledThresholdReachedEvent`.
+### 3.2. Cơ chế Cảnh báo Email Quá hạn, Tái lập lịch AI Đơn Lộ trình & Ngắt mạch Chống lặp (`reschedule_count >= 3`)
+1. **Quét Nhiệm vụ Quá hạn lúc `00:05 UTC+7` & Cảnh báo Email (Không tự động sửa ngầm `scheduled_date`):**
+   * `TaskiqScheduler` (`replicas: 1`) kích hoạt `OverdueAntiLoopSweeperTask` (`Overdue Scanner` tại Bounded Context `evaluation` phối hợp với `execution`) lúc **`00:05 UTC+7`** hàng ngày với khóa hàng **`SELECT ... FOR UPDATE SKIP LOCKED`** để phát hiện các nhiệm vụ bị quá hạn (`scheduled_date < CURRENT_DATE` và `status != 'COMPLETED'`).
+   * Khi phát hiện task quá hạn, tác vụ nền **tuyệt đối KHÔNG tự ý sửa ngầm `scheduled_date` (does NOT silently mutate `scheduled_date`)**. Thay vào đó, hệ thống gửi **Email Notification** tới địa chỉ email đã đăng ký của người học (qua `EmailNotificationPort` / SMTP Adapter) và hiển thị các task quá hạn trong mục **`Needs Attention`** kèm nút **"AI Reschedule (Dời lịch hợp lý)"** khi người học đăng nhập vào ứng dụng Web.
+2. **Tái lập lịch AI Đơn Lộ trình Bỏ qua Cổng 3 Tầng (Single-Roadmap AI Reschedule without 3-Tier Gate):**
+   * Khi người học chủ động bấm nút **"AI Reschedule (Dời lịch hợp lý)"** trên một lộ trình có task quá hạn, AI quét danh sách các task chưa hoàn thành của **riêng Lộ trình đó (that specific Roadmap)** cùng lịch trình tương lai của người học (trừ đi các khung giờ đã bị chiếm dụng bởi các lộ trình khác hoặc lịch ngoại vi) để sắp xếp lại **chỉ các task của Lộ trình đó** (tuyệt đối không chạm vào các lộ trình hay công việc khác của người học).
+   * Thao tác tái lập lịch này **bỏ qua Cổng Kiểm duyệt 3 Tầng (bypasses the 3-Tier Hybrid Validation Gate — bỏ qua Tier 3 Pedagogical Judge**, chỉ kiểm tra định dạng JSON Schema và ràng buộc dung lượng/tránh xung đột cơ bản cho lộ trình đó), đồng thời tăng biến đếm **`reschedule_count`** của các task được dời lịch thêm 1.
+3. **Ngưỡng Ngắt mạch Chống lặp `reschedule_count >= 3` (`BUSR-06`, `UC-17`):**
+   * Dựa trên Lý thuyết Động lực Thời gian (Temporal Motivation Theory — Steel, 2007), nếu một nhiệm vụ bị dời lịch quá hạn chạm ngưỡng **`reschedule_count >= 3`**, hệ thống lập tức **ngắt mạch tái lập lịch**, đánh dấu trạng thái cần can thiệp (**`STALLED`**) và phát sự kiện `TaskStalledThresholdReachedEvent`.
    * Trên giao diện Angular 21+ (`tasks` feature slice), hệ thống hiển thị **Hộp thoại Can thiệp Thích ứng (SRL Intervention Dialog)** yêu cầu người học chọn 1 trong 3 giải pháp chủ động:
      1. **Cam kết Ngày Cố định Mới (Re-commit):** Chọn lại khung giờ cụ thể và đặt lại cam kết.
      2. **Nhờ AI Chia nhỏ Nhiệm vụ (AI Micro-Stepping):** Gọi `LLMProviderPort` tách nhiệm vụ đang bị quá tải thành 2–3 nhiệm vụ nhỏ dễ hoàn thành hơn ($\le 30\text{ phút}$).
      3. **Đưa về Backlog / Hủy bỏ (Move to Backlog / Cancel):** Giải phóng áp lực cho lịch học hiện tại.
-3. **Phân lập Tuyệt đối với `DominoShiftEngine` & Kiểm toán trong `schedule_change_logs` (`BUSR-07`, `UC-16`):**
-   * Khi người học chủ động **Tạm dừng và Tiếp tục Lộ trình (`Pause / Resume Roadmap` - `UC-16`)**, Pure Domain Service **`DominoShiftEngine`** thực hiện tịnh tiến toàn bộ các nhiệm vụ chưa hoàn thành theo số ngày tạm dừng `shifted_days` mà **KHÔNG làm tăng `reschedule_count`** của từng task (vì đây là quyết định điều chỉnh kế hoạch chủ động toàn cục, không phải hành vi trì hoãn cá nhân).
-   * Mọi thao tác dịch lịch (cả Domino Shift lẫn Reschedule quá hạn) đều bắt buộc ghi nhận bản ghi kiểm toán bất biến vào bảng **`schedule_change_logs`** (lưu rõ loại thay đổi, số ngày dịch chuyển, lý do và mốc thời gian).
+4. **Phân lập Tuyệt đối với `DominoShiftEngine` (`pause_records`) & Kiểm toán trong `schedule_change_logs` (`BUSR-07`, `UC-16`):**
+   * Khi người học chủ động **Tạm dừng và Tiếp tục Lộ trình (`Pause / Resume Roadmap` - `UC-16`, lưu tại bảng `pause_records` thuộc Context `evaluation`)**, Pure Domain Service **`DominoShiftEngine`** thực hiện tịnh tiến toàn bộ các nhiệm vụ chưa hoàn thành theo số ngày tạm dừng `shifted_days` mà **KHÔNG làm tăng `reschedule_count`** của từng task (vì đây là quyết định điều chỉnh kế hoạch chủ động toàn cục, không phải hành vi trì hoãn cá nhân).
+   * Mọi thao tác dịch lịch (cả Domino Shift lẫn AI Reschedule quá hạn) đều bắt buộc ghi nhận bản ghi kiểm toán bất biến vào bảng **`schedule_change_logs`** (lưu rõ loại thay đổi, số ngày dịch chuyển, lý do và mốc thời gian).
 
 ---
 

@@ -5,11 +5,11 @@
 **Căn cứ đánh giá học thuật:** Khung Rubric Đồ án Tốt nghiệp CNTT — Tiêu chí TC1, TC2.1 & TC2.3 (Mức 5)  
 **Tài liệu liên kết nguồn:**
 - Định nghĩa bài toán & Yêu cầu: [`docs/requirements/problem-definition.md`](file:///Users/vuthang/Documents/FocusFlow/docs/requirements/problem-definition.md), [`docs/requirements/business-goals-and-kpis.md`](file:///Users/vuthang/Documents/FocusFlow/docs/requirements/business-goals-and-kpis.md)
-- Đặc tả yêu cầu phần mềm (SRS v1.1): [`docs/srs/srs-v1.0.md`](file:///Users/vuthang/Documents/FocusFlow/docs/srs/srs-v1.0.md)
-- Sơ đồ ca sử dụng & Mô hình hành vi: [`docs/uml/UC_Dia.drawio`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/UC_Dia.drawio), [`docs/uml/sequence-diagrams.md`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/sequence-diagrams.md), [`docs/uml/state-machines.md`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/state-machines.md)
-- Biểu đồ Lớp (Domain Model & DCD v4.2): [`docs/uml/class-diagrams.md`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/class-diagrams.md)
+- Đặc tả yêu cầu phần mềm (SRS v1.2): [`docs/srs/srs-v1.0.md`](file:///Users/vuthang/Documents/FocusFlow/docs/srs/srs-v1.0.md)
+- Sơ đồ ca sử dụng & Luồng nghiệp vụ: [`docs/uml/use-cases/UC_Master.drawio`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/use-cases/UC_Master.drawio), [`docs/uml/use-case-specifications.md`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/use-case-specifications.md)
+- Biểu đồ Lớp (Domain Model & DCD v5.0): [`docs/uml/class-diagrams/class_diagram.drawio`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/class-diagrams/class_diagram.drawio), [`docs/uml/class-diagrams.md`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/class-diagrams.md)
 - Mô hình C4 & Thành phần: [`docs/architecture/c4-model-components.md`](file:///Users/vuthang/Documents/FocusFlow/docs/architecture/c4-model-components.md)
-- Thiết kế cơ sở dữ liệu (24 bảng 3NF/BCNF): [`docs/database/database-schema-design.md`](file:///Users/vuthang/Documents/FocusFlow/docs/database/database-schema-design.md), [`docs/database/schema.sql`](file:///Users/vuthang/Documents/FocusFlow/docs/database/schema.sql)
+- Thiết kế cơ sở dữ liệu (24 bảng 3NF/BCNF, dbdiagram.io DBML): [`docs/database/schema.dbml`](file:///Users/vuthang/Documents/FocusFlow/docs/database/schema.dbml), [`docs/database/database-schema-design.md`](file:///Users/vuthang/Documents/FocusFlow/docs/database/database-schema-design.md), [`docs/database/schema.sql`](file:///Users/vuthang/Documents/FocusFlow/docs/database/schema.sql)
 - Các bản ghi quyết định kiến trúc: [`docs/decisions/`](file:///Users/vuthang/Documents/FocusFlow/docs/decisions) (`ADR-001` đến `ADR-010`)
 
 ---
@@ -58,7 +58,7 @@ Hệ thống được thiết kế để thỏa mãn 5 chỉ số KPI định l�
 | **ASR-01** | **Modularity & Maintainability** (Tính mô-đun & Bảo trì) | Khi thêm mới hoặc sửa đổi một quy tắc nghiệp vụ trong 1 Bounded Context (ví dụ: `evaluation`), không có bất kỳ file nội bộ nào của 3 Context còn lại bị ảnh hưởng. | **Context-First Modular Monolith** (`account`, `planning`, `execution`, `evaluation`, `shared_kernel`); giao tiếp duy nhất qua `public_api.py` (Read-only Query Port) và **Transactional Outbox**; kiểm chứng tự động bằng **`import-linter`**. |
 | **ASR-02** | **Data Integrity & Consistency** (Toàn vẹn & Nhất quán dữ liệu) | Khi nhiều luồng cùng yêu cầu gọi AI hoặc khi sự kiện hoàn thành phiên học kích hoạt cập nhật chéo module, hệ thống đảm bảo **0% race condition** trên hạn ngạch AI và **0% mất sự kiện** nếu worker sập giữa chừng. | **2-Phase ACID Quota Reservation** (`SELECT ... FOR UPDATE` trên `ai_quotas` + `ai_quota_reservations`); **Transactional Outbox (`outbox_events`) + Idempotent Consumer (`processed_events`)** đẩy qua **Taskiq Redis Streams (`XACK`)**. |
 | **ASR-03** | **Performance & Responsiveness** (Hiệu năng & Phản hồi thời gian thực) | Khi người học yêu cầu AI phân rã mục tiêu lớn (mất 8–20 giây), giao diện hiển thị token đầu tiên (**TTFT**) trong $\le 2.5\text{s}$ (P95); API CRUD phản hồi trong $\le 250\text{ms}$ (P95). | **Uniform 2-Stage SSE Streaming** (`POST` khởi tạo/giữ chỗ $\to$ `GET` `EventSource` bọc qua RxJS `toSignal()` trên **Angular 21+ Zoneless**); **SQLAlchemy 2.0 Async (`asyncpg`)**. |
-| **ASR-04** | **AI Output Reliability & Safety** (Độ tin cậy của đầu ra AI) | Khi LLM sinh lộ trình hoặc lịch học bị ảo giác (vượt trần Mode A/B, tạo chu trình DAG, sai JSON), **100% lịch trình vi phạm bị chặn** trước khi lưu bản nháp `DRAFT`. | **3-Tier Hybrid Validation Gate** (`Tier 1`: Pydantic v2 Structured Output $\to$ `Tier 2`: Pure Domain Rule Engine `HybridAvailabilityRuleEngine` & `DagCycleValidator` $\to$ `Tier 3`: Pedagogical LLM Judge kèm tối đa 2 vòng tự sửa lỗi). |
+| **ASR-04** | **AI Output Reliability & Safety** (Độ tin cậy của đầu ra AI) | Khi LLM sinh lộ trình hoặc lịch học bị ảo giác (vượt trần Mode A/B, tạo chu trình DAG, sai JSON), **100% lịch trình vi phạm bị chặn** trước khi lưu bản nháp `DRAFT`. | **3-Tier Hybrid Validation Gate** (`Tier 1`: Pydantic v2 Structured Output $\to$ `Tier 2`: Pure Domain Rule Engine `HybridAvailabilityRuleEngine` & `DagCycleValidator` là 2 cổng chặn cứng kích hoạt tối đa 2 vòng tự sửa lỗi $\to$ `Tier 3`: `PedagogicalJudgeAdapter` là cổng tư vấn mềm $\le 5\text{s}$ timeout, Fail-Open đính kèm `pedagogical_warnings`). |
 | **ASR-05** | **Fault Tolerance & Recoverability** (Khả năng chịu lỗi & Phục hồi) | Khi người học mất kết nối mạng hoặc đóng trình duyệt đột ngột lúc đang chạy Pomodoro, hệ thống bảo toàn tiến độ với độ lệch tối đa **$\le 60\text{s}$** và tự động thu hồi phiên treo sau **5 phút**. | **60s Client Heartbeat** ghi trực tiếp xuống PostgreSQL + **Taskiq Scheduler (`replicas: 1`)** quét định kỳ mỗi 60s với `SELECT ... FOR UPDATE SKIP LOCKED`. |
 | **ASR-06** | **Portability & Vendor Independence** (Độc lập nhà cung cấp) | Khi đổi nhà cung cấp LLM (Gemini, OpenAI, Claude, Ollama) hoặc chạy bảo vệ khóa luận **offline không có Internet**, hệ thống chuyển đổi chỉ qua cấu hình `.env` mà **không sửa code**. | **Hexagonal Output Ports** (`LLMProviderPort` dùng `LiteLLM`/Strategy + `MockLLMAdapter`; `PaymentGatewayPort` hỗ trợ PayOS/VNPay Sandbox + `LocalMockPaymentAdapter`; `CalendarSyncPort` hỗ trợ Google OAuth2/WebCal + `LocalCalendarAdapter`). |
 
@@ -86,7 +86,7 @@ Hệ thống được thiết kế để thỏa mãn 5 chỉ số KPI định l�
 ## 3. Bối cảnh & Phạm vi (Context and Scope)
 
 ### 3.1 Bối cảnh Nghiệp vụ (Business Context - C4 Level 1)
-Hệ thống FocusFlow tương tác với **5 Tác nhân & Hệ thống Ngoại vi (5 External Actors / Integrations)** đồng bộ tuyệt đối với `SRS v1.1` và `19 Use Cases`:
+Hệ thống FocusFlow tương tác với **5 Tác nhân & Hệ thống Ngoại vi (5 External Actors / Integrations)** đồng bộ tuyệt đối với `SRS v1.2` và `19 Use Cases`:
 
 ```mermaid
 flowchart TD
@@ -148,8 +148,8 @@ flowchart TD
 | Xử lý tác vụ nền thuần `async/await`, đặt lịch định kỳ không trùng lặp và đảm bảo At-least-once Event Delivery | **Taskiq + Redis 7 Streams (`RedisStreamBroker` với Consumer Groups `XREADGROUP`/`XACK`) + `TaskiqScheduler` (`replicas: 1`) + `taskiq-fastapi`**, kết hợp **Transactional Outbox (`outbox_events`)** và **Idempotent Consumer (`processed_events`)**. | **ADR-004** |
 | Hiển thị tiến trình sinh lộ trình AI mượt mà, chống mất kết nối hoặc trừ Quota kép khi F5 trình duyệt | **Uniform 2-Stage Server-Sent Events (SSE)** (`POST` khởi tạo và giữ chỗ Quota $\to$ `GET` `EventSource` stream) kết hợp **2-Phase ACID Quota Reservation** (`ai_quotas` + `ai_quota_reservations`). | **ADR-005** |
 | Lưu trữ dữ liệu chuẩn hóa học thuật 3NF/BCNF, vẫn giữ được mô hình Rich DDD ở tầng code | **PostgreSQL 16 với 24 bảng chuẩn 3NF/BCNF**, khóa chính **UUIDv7**, giữ Single Surrogate FK ở mức DB nhưng cấm ORM JOIN chéo Context. Ánh xạ Value Objects (`WeeklySchedule`, `TimeSlot`) xuống bảng chuẩn hóa `availability_slots` qua Repository. | **ADR-007** |
-| Ngăn chặn ảo giác AI (Hallucination) tạo lịch học vượt quá sức người học hoặc phụ thuộc vòng | **3-Tier Hybrid Validation Gate**: Tier 1 (Pydantic v2 Schema) $\to$ Tier 2 (Pure Domain Services: `HybridAvailabilityRuleEngine` & `DagCycleValidator`) $\to$ Tier 3 (`PedagogicalJudgeAdapter` với tối đa 2 vòng tự sửa lỗi). | **ADR-009** |
-| Cá nhân hóa theo chu kỳ Zimmerman SRL và ngăn chặn vòng lặp dời lịch vô tận khi người học trì hoãn | **Learner Profile Memory** (`learner_profiles` cập nhật bất đồng bộ sau mỗi phiên học/đánh giá) và cơ chế **Anti-Loop Escalation** (`tasks.reschedule_count >= 3` chuyển sang gợi ý chia nhỏ/giảm tải thay vì tiếp tục Domino Shift). | **ADR-010** |
+| Ngăn chặn ảo giác AI (Hallucination) tạo lịch học vượt quá sức người học hoặc phụ thuộc vòng | **3-Tier Hybrid Validation Gate**: Tier 1 (Pydantic v2 Schema) $\to$ Tier 2 (Pure Domain Services: `HybridAvailabilityRuleEngine` & `DagCycleValidator`) là 2 cổng chặn cứng (kích hoạt tối đa 2 vòng tự sửa lỗi) $\to$ Tier 3 (`PedagogicalJudgeAdapter` — cổng tư vấn mềm $\le 5\text{s}$ timeout, Fail-Open đính kèm `pedagogical_warnings`). | **ADR-009** |
+| Cá nhân hóa theo chu kỳ Zimmerman SRL và ngăn chặn vòng lặp dời lịch vô tận khi người học trì hoãn | **Learner Profile Memory** (`learner_profiles` cập nhật bất đồng bộ sau mỗi phiên học/đánh giá), giải thuật tịnh tiến lịch khi tạm dừng (**Domino Shift** — `UC-16`), và cơ chế **Overdue Anti-Loop Escalation** (`tasks.reschedule_count >= 3` khi gọi AI Reschedule tại `UC-17` chuyển sang trạng thái `STALLED` để gợi ý chia nhỏ/giảm tải). | **ADR-010** |
 
 ---
 
@@ -225,48 +225,48 @@ backend/src/
 │   ├── infrastructure/               # 9 ORM Models (availabilities + availability_slots, etc.), Repositories, PayOSAdapter, LocalMockPaymentAdapter, Argon2/PyJWT/Fernet Adapters
 │   ├── presentation/                 # Routers (/auth, /profile, /availabilities, /billing, /admin/users), Taskiq Tasks (QuotaReservationSweeperTask, LearnerProfileAggregatorTask), deps.py
 │   └── public_api.py                 # Facade/Query DTOs & Protocols cho Context khác gọi đọc đồng bộ
-├── planning/                         # Bounded Context 2: Goal, Roadmap, Milestone, Task & Schedule
+├── planning/                         # Bounded Context 2: Goal, Roadmap, Milestone & Schedule
 │   ├── domain/
-│   │   ├── models/                   # Rich Aggregates: Goal, Roadmap, Milestone, Task, TaskDependency, OfficialSchedule, ScheduleProposal
-│   │   └── services/                 # Pure Domain Service: DagCycleValidator
+│   │   └── models/                   # Rich Aggregates: Goal, Roadmap, Milestone, OfficialSchedule, ScheduleProposal
 │   ├── application/                  # UC-06..UC-09 Use Cases, 3-Tier Validation Gate Orchestrator
-│   ├── infrastructure/               # 7 ORM Models, Repositories, PedagogicalJudgeAdapter
-│   ├── presentation/                 # Routers (/goals, /roadmaps, /tasks, /schedules), Taskiq Tasks, deps.py
-│   └── public_api.py                 # Task/Roadmap Read Query Interface & Events
-├── execution/                        # Bounded Context 3: Study Session, Pomodoro Workspace & Calendar Sync
+│   ├── infrastructure/               # 5 ORM Models (goals, roadmaps, milestones, official_schedules, schedule_proposals), Repositories, PedagogicalJudgeAdapter
+│   ├── presentation/                 # Routers (/goals, /roadmaps, /schedules), Taskiq Tasks, deps.py
+│   └── public_api.py                 # Roadmap/Schedule Read Query Interface & Events
+├── execution/                        # Bounded Context 3: Task DAG, Study Session, Pomodoro Workspace & Calendar Sync
 │   ├── domain/
-│   │   └── models/                   # Rich Aggregates: StudySession, SessionTask, StudyNote, PauseRecord
+│   │   ├── models/                   # Rich Aggregates: Task, TaskDependency, StudySession, SessionTask, StudyNote
+│   │   └── services/                 # Pure Domain Service: DagCycleValidator
 │   ├── application/                  # UC-10..UC-13 Use Cases, Ports (CalendarSyncPort)
-│   ├── infrastructure/               # 4 ORM Models, Repositories, GoogleCalendarOAuthAdapter, IcsFeedGenerator, LocalCalendarAdapter
-│   ├── presentation/                 # Routers (/sessions, /notes, /calendar), Taskiq Tasks (AbandonedSessionSweeperTask, CalendarSyncTask), deps.py
-│   └── public_api.py                 # Execution Query Interface & Events
-└── evaluation/                       # Bounded Context 4: Analytics, AI Review & Schedule Adaptation
+│   ├── infrastructure/               # 5 ORM Models (tasks, task_dependencies, study_sessions, session_tasks, study_notes), Repositories, GoogleCalendarOAuthAdapter, IcsFeedGenerator, LocalCalendarAdapter
+│   ├── presentation/                 # Routers (/tasks, /sessions, /notes, /calendar), Taskiq Tasks (AbandonedSessionSweeperTask, CalendarSyncTask), deps.py
+│   └── public_api.py                 # Task & Execution Query Interface & Events
+└── evaluation/                       # Bounded Context 4: Pause Management, Analytics, AI Review & Schedule Adaptation
     ├── domain/
-    │   ├── models/                   # Rich Aggregates & VOs: AIReview, ScheduleChangeLog, QuantitativeMetrics
+    │   ├── models/                   # Rich Aggregates & VOs: PauseRecord, AIReview, ScheduleChangeLog, QuantitativeMetrics
     │   └── services/                 # Pure Domain Service: DominoShiftEngine
-    ├── application/                  # UC-14..UC-17, UC-19 Use Cases
-    ├── infrastructure/               # 2 ORM Models, Repositories
-    ├── presentation/                 # Routers (/analytics, /reviews, /adaptation, /admin/monitoring), Taskiq Tasks (OverdueAntiLoopSweeperTask), deps.py
+    ├── application/                  # UC-14..UC-17, UC-19 Use Cases, Ports (EmailNotificationPort)
+    ├── infrastructure/               # 3 ORM Models (pause_records, ai_reviews, schedule_change_logs), Repositories, SmtpEmailNotificationAdapter
+    ├── presentation/                 # Routers (/pauses, /analytics, /reviews, /adaptation, /admin/monitoring), Taskiq Tasks (OverdueAntiLoopSweeperTask), deps.py
     └── public_api.py                 # Evaluation Query Interface & Events
 ```
 
 #### Sự kết hợp hài hòa giữa Rich Aggregate Roots và Pure Domain Services
-Để đạt chuẩn DDD học thuật (khớp `Class Diagram v4.2`), tầng `domain/` của mỗi Bounded Context kết hợp:
-1. **Rich Aggregate Roots & Value Objects (`domain/models/`)**: Tự bảo vệ các bất biến nội tại (local invariants) của thực thể như `TimeSlot` ($\ge 30\text{m}$, `end_day_offset`), `WeeklySchedule`, `AvailabilityProfile`, `Roadmap`, `StudySession`, `AIQuota`.
+Để đạt chuẩn DDD học thuật (khớp `Class Diagram v5.0`), tầng `domain/` của mỗi Bounded Context kết hợp:
+1. **Rich Aggregate Roots & Value Objects (`domain/models/`)**: Tự bảo vệ các bất biến nội tại (local invariants) của thực thể như `TimeSlot` ($\ge 30\text{m}$, `end_day_offset`), `WeeklySchedule`, `AvailabilityProfile`, `Roadmap`, `Task`, `StudySession`, `PauseRecord`, `AIQuota`.
 2. **Pure Domain Services (`domain/services/`)**: Chứa các thuật toán nghiệp vụ phức tạp hoặc phối hợp nhiều cấu trúc dữ liệu mà không làm phình to một Entity đơn lẻ:
    - `HybridAvailabilityRuleEngine` (`account/domain/services/`): Thẩm định trần giờ rảnh Mode A (Hard Ceiling), khớp khung giờ vị trí thực tế Mode B (Slot-fit & Soft Overflow $\le 30\text{m}$) và trừ đoạn thời gian bận đa lộ trình (`Interval Subtraction`).
-   - `DagCycleValidator` (`planning/domain/services/`): Kiểm tra chu trình đồ thị có hướng (DFS/Kahn $O(V+E)$) trên tập `TaskDependency` trước khi lưu lộ trình.
-   - `DominoShiftEngine` (`evaluation/domain/services/`): Giải thuật tất định tịnh tiến các `Task` chưa hoàn thành qua các ngày khả dụng tiếp theo (< 50ms) và kiểm tra ngưỡng chống lặp `reschedule_count >= 3`.
+   - `DagCycleValidator` (`execution/domain/services/`): Kiểm tra chu trình đồ thị có hướng (DFS/Kahn $O(V+E)$) trên tập `TaskDependency` trước khi lưu lộ trình hoặc cập nhật phụ thuộc công việc.
+   - `DominoShiftEngine` (`evaluation/domain/services/`): Giải thuật tất định tịnh tiến các `Task` chưa hoàn thành qua các ngày khả dụng tiếp theo (< 50ms) khi tạm dừng/tiếp tục lộ trình (`PauseRecord`) và kiểm tra ngưỡng chống lặp `reschedule_count >= 3`.
 
 ### 5.3 Ma trận Trách nhiệm, Sở hữu Dữ liệu (24 Bảng 3NF/BCNF) & Giao tiếp Liên Context
 
 | Bounded Context | Trách nhiệm cốt lõi (Single Sentence Responsibility) | Bảng PostgreSQL 16 sở hữu (Tổng: 24 bảng 3NF/BCNF) | Giao diện công khai (`public_api.py`) | Sự kiện phát ra (Outbox Domain Events) |
 | :--- | :--- | :--- | :--- | :--- |
 | **`shared_kernel`** | Cung cấp hạt nhân kỹ thuật dùng chung: Base Aggregate, `AsyncUnitOfWork`, In-Process Event Bus, Transactional Outbox Relay, Taskiq Broker và Provider-Agnostic LLM Adapter. | `outbox_events`, `processed_events` **(2 bảng)** | `AsyncUnitOfWork`, `DomainEvent`, `LLMProviderPort` | — |
-| **`account`** | Quản lý định danh, xác thực, hồ sơ năng lực SRL, cấu hình lịch rảnh Mode A/B, hạn ngạch AI 2 pha, nhật ký token AI và thanh toán nâng cấp gói. | `users`, `learner_profiles`, `availabilities`, `availability_slots`, `webcal_tokens`, `ai_quotas`, `ai_quota_reservations`, `ai_usage_logs`, `payment_transactions` **(9 bảng)** | `AvailabilityQueryPort`, `QuotaFacadePort` (Reserve/Commit/Release), `LearnerProfileQueryPort`, `WebCalTokenQueryPort` | `UserUpgradedToPremiumEvent`, `AvailabilityUpdatedEvent` |
-| **`planning`** | Quản lý mục tiêu, lộ trình, cột mốc, DAG công việc, cổng kiểm duyệt AI 3 tầng và áp dụng lịch học chính thức. | `goals`, `roadmaps`, `milestones`, `official_schedules`, `tasks`, `task_dependencies`, `schedule_proposals` **(7 bảng)** | `RoadmapTaskQueryPort` (đọc thông tin Task/Roadmap/Schedule cho phiên học và đánh giá) | `OfficialScheduleAppliedEvent`, `RoadmapPausedEvent`, `TaskStalledThresholdReachedEvent` |
-| **`execution`** | Vận hành không gian học tập Pomodoro/Stopwatch, ghi nhận Heartbeat 60s, thu hồi phiên học treo và đồng bộ lịch 2 chiều / WebCal `.ics`. | `study_sessions`, `session_tasks`, `study_notes`, `pause_records` **(4 bảng)** | `StudyExecutionQueryPort` (cung cấp thống kê phiên học cho báo cáo đánh giá) | `StudySessionCompletedEvent`, `StudySessionAbandonedEvent`, `ExternalCalendarBusyUpdatedEvent` |
-| **`evaluation`** | Tính toán chỉ số định lượng (Adherence, Velocity), sinh nhận xét AI theo chu kỳ SRL, thực thi dịch lịch Domino Shift và kiểm soát chống lặp quá hạn. | `ai_reviews`, `schedule_change_logs` **(2 bảng)** | `EvaluationMetricsQueryPort` | `DominoShiftRequestedEvent`, `AIReviewGeneratedEvent` |
+| **`account`** | Quản lý định danh, xác thực, hồ sơ năng lực SRL, cấu hình lịch rảnh Mode A/B, hạn ngạch AI 2 pha, nhật ký token AI và thanh toán nâng cấp gói. | `users`, `learner_profiles`, `webcal_tokens`, `availabilities`, `availability_slots`, `ai_quotas`, `ai_quota_reservations`, `ai_usage_logs`, `payment_transactions` **(9 bảng)** | `AvailabilityQueryPort`, `QuotaFacadePort` (Reserve/Commit/Release), `LearnerProfileQueryPort`, `WebCalTokenQueryPort` | `UserUpgradedToPremiumEvent`, `AvailabilityUpdatedEvent` |
+| **`planning`** | Quản lý mục tiêu, lộ trình, cột mốc, cổng kiểm duyệt AI 3 tầng và áp dụng lịch học chính thức. | `goals`, `roadmaps`, `milestones`, `official_schedules`, `schedule_proposals` **(5 bảng)** | `RoadmapScheduleQueryPort` (đọc thông tin Roadmap/Milestone/Schedule cho thực thi và đánh giá) | `OfficialScheduleAppliedEvent`, `RoadmapPausedEvent` |
+| **`execution`** | Quản lý công việc, đồ thị phụ thuộc DAG (`DagCycleValidator`), vận hành không gian học tập Pomodoro/Stopwatch, ghi nhận Heartbeat 60s, thu hồi phiên học treo và đồng bộ lịch 2 chiều / WebCal `.ics`. | `tasks`, `task_dependencies`, `study_sessions`, `session_tasks`, `study_notes` **(5 bảng)** | `StudyExecutionQueryPort` (cung cấp thông tin Task/DAG và thống kê phiên học cho lập kế hoạch và đánh giá) | `StudySessionCompletedEvent`, `StudySessionAbandonedEvent`, `ExternalCalendarBusyUpdatedEvent`, `TaskStalledThresholdReachedEvent` |
+| **`evaluation`** | Quản lý bảo lưu/tạm dừng lộ trình (`pause_records`), tính toán chỉ số định lượng (Adherence, Velocity), sinh nhận xét AI theo chu kỳ SRL, thực thi dịch lịch Domino Shift, quét thông báo email quá hạn và tái lập lịch AI đơn lộ trình (Single-Roadmap AI Reschedule). | `pause_records`, `ai_reviews`, `schedule_change_logs` **(3 bảng)** | `EvaluationMetricsQueryPort` | `DominoShiftRequestedEvent`, `AIReviewGeneratedEvent`, `OverdueTasksDetectedEvent` |
 
 > [!NOTE]
 > **Nguyên tắc Ranh giới Dữ liệu trong PostgreSQL 16 (24 Bảng 3NF/BCNF):**  
@@ -279,7 +279,16 @@ backend/src/
   - **Local & Feature State:** Native Angular **Signals** (`signal`, `computed`, `linkedSignal`, `rxResource`) bên trong các `@Injectable` Services (`AuthService`, `WorkspaceSessionService`, `AvailabilityService`).
   - **Streaming & Async:** `HttpClient` + `EventSource` bọc thành RxJS `Observable` trong `AiSseStreamingService` và chuyển đổi sang Signal bằng `toSignal()`, tự động hủy đăng ký qua `takeUntilDestroyed()`.
 - **Đồng bộ Hợp đồng API & Kiểm thử:** Sinh tự động `core/api/schema.d.ts` từ OpenAPI 3.1 của FastAPI bằng **`openapi-typescript`**; kiểm thử đơn vị bằng **Vitest** và kiểm thử E2E bằng **Playwright**.
-- **9 Feature Modules (`frontend/src/app/features/`):** `auth`, `dashboard`, `roadmaps`, `workspace`, `schedule`, `tasks`, `analytics`, `settings`, và **`admin`** (`UC-18`, `UC-19`).
+- **9 Feature Modules (`frontend/src/app/features/`):**
+  - `auth/` (`UC-01`, `UC-02`): Đăng ký, đăng nhập, quản lý phiên.
+  - `dashboard/`: Tổng quan tiến độ hôm nay, mục `Needs Attention` cảnh báo quá hạn và nút `AI Reschedule (Dời lịch hợp lý)`.
+  - `planning/` (`UC-06..UC-09`, tương ứng `roadmaps/`): Khởi tạo mục tiêu, duyệt Milestones, sinh & duyệt Schedule Proposal.
+  - `workspace/` (`UC-11`, `UC-12`): Không gian học tập trung Pomodoro/Stopwatch, ghi chú `StudyNote`, Heartbeat 60s.
+  - `calendar/` (`UC-10`, `UC-13`, tương ứng `schedule/`): Xem lịch học chính thức và đồng bộ lịch ngoại vi Google Calendar OAuth2 / WebCal `.ics`.
+  - `tasks/` (`UC-09`, `UC-17`): Quản lý danh sách công việc, đồ thị phụ thuộc DAG và hộp thoại can thiệp `STALLED`.
+  - `analytics/` (`UC-14..UC-16`): Biểu đồ thống kê định lượng, đánh giá AI Review định kỳ và bảo lưu/dời lịch lộ trình.
+  - `settings/` (`UC-03..UC-05`): Thiết lập thời gian rảnh Mode A/B & hồ sơ năng lực SRL (`UC-03`), nâng cấp gói Premium (`UC-04`) và thanh toán trực tuyến (`UC-05`).
+  - `admin/` (`UC-18`, `UC-19`): Cổng quản trị người dùng, hạn ngạch Quota và giám sát telemetry AI.
 
 ### 5.5 Kiểm soát Kiến trúc Tự động (Architectural Fitness Functions)
 Sử dụng **`import-linter`** trong `backend/pyproject.toml` làm cổng chặn tự động (Quality Gate):
@@ -294,14 +303,14 @@ Sử dụng **`import-linter`** trong `backend/pyproject.toml` làm cổng chặ
 - **Tác nhân:** Learner $\to$ `Angular 21+ SPA` $\to$ `RoadmapRouter` (`planning`) $\to$ `QuotaFacadePort` (`account`) $\to$ `GenerateProposalUseCase` $\to$ `LLMProviderPort` (`LiteLLM`) $\to$ `3-Tier Validation Gate` $\to$ PostgreSQL 16.
 - **Cơ chế vận hành:**
   1. **Giai đoạn 1 — Khởi tạo & Giữ chỗ ACID (`POST /api/v1/roadmaps/{id}/proposals/init`):**
-     - `QuotaFacadePort` khóa dòng `SELECT ... FOR UPDATE` trên bảng `ai_quotas`, tăng `reserved_tokens`/`reserved_calls` và tạo bản ghi `PENDING` trong bảng **`ai_quota_reservations`** (kèm `expires_at = NOW() + 2 minutes`). Trả về `reservation_id` và `stream_url`.
+     - `QuotaFacadePort` khóa dòng `SELECT ... FOR UPDATE` trên bảng `ai_quotas`, tăng `reserved_tokens`/`reserved_calls` và tạo bản ghi trạng thái **`'RESERVED'`** trong bảng **`ai_quota_reservations`** (với TTL **`120 seconds (2 minutes)`**, `expires_at = NOW() + INTERVAL '120 seconds'`). Trả về `reservation_id` và `stream_url`.
   2. **Giai đoạn 2 — Stream SSE & Kiểm duyệt 3 Tầng (`GET /api/v1/roadmaps/{id}/proposals/stream?reservation_id=...`):**
      - `AiSseStreamingService` trên Angular 21+ mở kết nối `EventSource`.
      - Backend gọi `LLMProviderPort` (sau khi qua `PromptSanitizer`) để stream quá trình sinh Milestones/Tasks.
      - Kết quả sinh ra đi qua **3-Tier Hybrid Validation Gate**:
        - *Tier 1 (Syntactic):* Pydantic v2 Structured Output validation.
-       - *Tier 2 (Deterministic Domain Rules):* `DagCycleValidator` kiểm tra không có chu trình phụ thuộc; `HybridAvailabilityRuleEngine` kiểm tra trần giờ Mode A (Hard Ceiling) hoặc khớp khung giờ Mode B (Soft Overflow $\le 30\text{m}$).
-       - *Tier 3 (Pedagogical LLM Judge):* `PedagogicalJudgeAdapter` đánh giá độ dốc nhận thức. Nếu vi phạm Tier 2 hoặc Tier 3, hệ thống tự động đính kèm lỗi vào prompt phản hồi (tối đa 2 vòng self-correction).
+       - *Tier 2 (Deterministic Domain Rules):* `DagCycleValidator` kiểm tra không có chu trình phụ thuộc; `HybridAvailabilityRuleEngine` kiểm tra trần giờ Mode A (Hard Ceiling) hoặc khớp khung giờ Mode B (Soft Overflow $\le 30\text{m}$). Nếu vi phạm **Tier 1 hoặc Tier 2 (Hard Blocking Gates)**, hệ thống tự động đính kèm lỗi vào prompt phản hồi (tối đa 2 vòng self-correction).
+       - *Tier 3 (Pedagogical LLM Judge — Soft Advisory Gate):* `PedagogicalJudgeAdapter` đánh giá độ dốc nhận thức với timeout $\le 5\text{s}$ và cơ chế **Fail-Open**; chỉ đính kèm cảnh báo `pedagogical_warnings` vào bản nháp mà không chặn luồng hay kích hoạt vòng lặp gọi lại LLM.
   3. **Giai đoạn 3 — Chốt hoặc Hoàn trả Quota:**
      - Thành công: Chuyển `ai_quota_reservations.status = 'COMMITTED'`, cộng lượt vào `ai_quotas`, ghi nhận chi tiết token/độ trễ vào **`ai_usage_logs`** và lưu `schedule_proposals` (`DRAFT`).
      - Lỗi hoặc Timeout 55s: Chuyển `ai_quota_reservations.status = 'RELEASED'`, hoàn trả `reserved_calls` ngay lập tức cho người học.
@@ -309,17 +318,18 @@ Sử dụng **`import-linter`** trong `backend/pyproject.toml` làm cổng chặ
 ### 6.2 Luồng Sự kiện Liên Module qua Transactional Outbox & Taskiq Redis Streams
 - **Tác nhân:** `StudySessionUseCase` (`execution`) $\to$ `SqlAlchemyUoW` (`outbox_events`) $\to$ `OutboxRelayTask` (Taskiq) $\to$ `RedisStreamBroker` $\to$ `Taskiq Worker` $\to$ `account` & `evaluation`.
 - **Cơ chế vận hành:**
-  1. Khi người học hoàn thành phiên học (`UC-10`), trong cùng **1 giao dịch ACID PostgreSQL**, `execution` cập nhật `study_sessions` (`COMPLETED`), `session_tasks`, và ghi sự kiện `StudySessionCompletedEvent` vào bảng **`outbox_events`** (`status = 'PENDING'`).
+  1. Khi người học hoàn thành phiên học (`UC-11`, `UC-12`), trong cùng **1 giao dịch ACID PostgreSQL**, `execution` cập nhật `study_sessions` (`COMPLETED`), `session_tasks`, và ghi sự kiện `StudySessionCompletedEvent` vào bảng **`outbox_events`** (`status = 'PENDING'`).
   2. `OutboxRelayTask` đọc các bản ghi `outbox_events` chưa gửi (sử dụng `FOR UPDATE SKIP LOCKED`), đẩy thông điệp vào **Redis Streams** qua Taskiq `RedisStreamBroker` và đánh dấu `PUBLISHED`.
   3. `Taskiq Worker` tiêu thụ sự kiện qua Consumer Group (`XREADGROUP`), kiểm tra chống trùng lặp bằng cách chèn `(event_id, handler_name)` vào bảng **`processed_events`** trước khi cập nhật `learner_profiles` (trong `account`) và kích hoạt tính toán chỉ số SRL (trong `evaluation`), sau đó gửi `XACK`.
 
-### 6.3 Luồng Tạm dừng Lộ trình, Tịnh tiến Domino Shift & Chống Lặp Quá hạn (`UC-12`, `UC-16`)
-- **Tác nhân:** Learner $\to$ `AdaptationRouter` (`evaluation`) $\to$ `DominoShiftEngine` $\to$ `planning` & `schedule_change_logs`.
+### 6.3 Luồng Tạm dừng Lộ trình (`DominoShiftEngine`), Cảnh báo Email Quá hạn & Tái lập lịch AI Đơn Lộ trình (`UC-16`, `UC-17`)
+- **Tác nhân:** `OverdueAntiLoopSweeperTask` (`00:05 UTC+7`) / Learner $\to$ `AdaptationRouter` (`evaluation`) $\to$ `EmailNotificationPort` / `LLMProviderPort` / `DominoShiftEngine` $\to$ `execution` & `schedule_change_logs`.
 - **Cơ chế vận hành:**
-  1. `DominoShiftEngine` tính toán quỹ ngày khả dụng tiếp theo dựa trên `AvailabilityQueryPort` và dời các task chưa hoàn thành trong $< 50\text{ms}$ mà không tốn chi phí gọi AI, đồng thời ghi vết kiểm toán vào bảng **`schedule_change_logs`**.
-  2. **Kiểm soát Chống Lặp (Anti-Loop Escalation — `ADR-010`):** Mỗi lần một task bị dời lịch quá hạn, `tasks.reschedule_count` tăng lên 1. Khi `reschedule_count >= 3` (do `OverdueAntiLoopSweeperTask` phát hiện), hệ thống phát sự kiện `TaskStalledThresholdReachedEvent`, khóa tự động Domino Shift cho task đó và kích hoạt gợi ý chia nhỏ đầu việc (Micro-task Split) hoặc giảm tải lộ trình.
+  1. **Tạm dừng & Tiếp tục Lộ trình (`Pause / Resume` — `UC-16`):** Khi người học chủ động tạm dừng và tiếp tục lộ trình (lưu tại `pause_records` thuộc `evaluation`), `DominoShiftEngine` tính toán quỹ ngày khả dụng tiếp theo dựa trên `AvailabilityQueryPort` và dời các task chưa hoàn thành trong $< 50\text{ms}$ mà không tốn chi phí gọi AI, không tăng `reschedule_count`, đồng thời ghi vết kiểm toán vào bảng **`schedule_change_logs`**.
+  2. **Quét Nhiệm vụ Quá hạn & Cảnh báo Email (`Overdue Scanner` lúc `00:05 UTC+7`):** Khi phát hiện các task bị quá hạn (`scheduled_date < CURRENT_DATE` và `status != 'COMPLETED'`), tác vụ nền **KHÔNG tự động thay đổi ngầm `scheduled_date` (does NOT silently mutate `scheduled_date`)**. Thay vào đó, hệ thống gửi **Email Notification** tới địa chỉ email đăng ký của người học (qua `EmailNotificationPort` / `SmtpEmailNotificationAdapter`) và hiển thị các task quá hạn trong mục **`Needs Attention`** kèm nút **"AI Reschedule (Dời lịch hợp lý)"** khi người học đăng nhập vào ứng dụng Web.
+  3. **Tái lập lịch AI Đơn Lộ trình Bỏ qua Cổng 3 Tầng (Single-Roadmap AI Reschedule without 3-Tier Gate) & Chống Lặp (`ADR-009`, `ADR-010`):** Khi người học bấm nút **"AI Reschedule"** trên một lộ trình có task quá hạn, AI quét danh sách các task chưa hoàn thành của **riêng Lộ trình đó (that specific Roadmap)** cùng lịch học tương lai của người dùng (trừ đi các khung giờ đã bị chiếm dụng bởi các lộ trình khác hoặc lịch ngoại vi) để sắp xếp lại **chỉ các task của Lộ trình đó** (tuyệt đối không chạm tới các lộ trình hay công việc khác của người dùng). Luồng này **bỏ qua Cổng Kiểm duyệt 3 Tầng (bypassing the 3-Tier Hybrid Validation Gate — bỏ qua Tier 3 Pedagogical Judge**, chỉ kiểm tra định dạng JSON Schema và ràng buộc dung lượng/tránh xung đột cơ bản cho lộ trình đó), đồng thời tăng `tasks.reschedule_count` thêm 1. Khi `reschedule_count >= 3`, hệ thống kích hoạt cơ chế leo thang chống lặp (`STALLED` anti-loop escalation), phát sự kiện `TaskStalledThresholdReachedEvent` và hiển thị hộp thoại can thiệp chia nhỏ đầu việc (Micro-task Split) hoặc giảm tải phạm vi.
 
-### 6.4 Luồng Đồng bộ Phiên học Heartbeat 60s & Quét Phiên Treo Taskiq (`UC-10`, `OS-01`, `OS-07`)
+### 6.4 Luồng Đồng bộ Phiên học Heartbeat 60s & Quét Phiên Treo Taskiq (`UC-11`, `UC-12`, `OS-01`, `OS-07`)
 - **Tác nhân:** `WorkspaceSessionService` (Angular 21+) $\to$ `SessionRouter` (`execution`) $\to$ PostgreSQL 16 $\leftrightarrow$ `TaskiqScheduler` (`replicas: 1`) $\leftrightarrow$ `Taskiq Worker`.
 - **Cơ chế vận hành:**
   1. Trong phiên học Pomodoro/Stopwatch, Angular SPA gửi Heartbeat mỗi **60 giây** cập nhật trực tiếp `actual_minutes` và `last_heartbeat_at = NOW()` vào bảng `study_sessions` (độ lệch dữ liệu tối đa $\le 60\text{s}$).
@@ -382,7 +392,7 @@ Hệ thống FocusFlow áp dụng **Mô hình Triển khai Hybrid (Hybrid Deploy
 - Cung cấp **`MockLLMAdapter`** trả về dữ liệu mẫu tất định (deterministic streaming response) phục vụ kiểm thử tự động CI/CD và kịch bản bảo vệ đồ án khi mất kết nối Internet.
 
 ### 8.3 Quản trị Hạn ngạch AI 2 Pha ACID & Cổng Thanh toán (`ADR-005`, `ADR-007`)
-- **2-Phase ACID Quota Reservation:** Ngăn chặn hoàn toàn lỗi trừ oan lượt gọi AI khi mạng đứt hoặc race condition khi người dùng mở nhiều tab nhờ sự phối hợp giữa bảng `ai_quotas` (khóa dòng `SELECT ... FOR UPDATE`) và bảng **`ai_quota_reservations`** (`PENDING` $\to$ `COMMITTED` / `RELEASED` / `EXPIRED`).
+- **2-Phase ACID Quota Reservation:** Ngăn chặn hoàn toàn lỗi trừ oan lượt gọi AI khi mạng đứt hoặc race condition khi người dùng mở nhiều tab nhờ sự phối hợp giữa bảng `ai_quotas` (khóa dòng `SELECT ... FOR UPDATE`) và bảng **`ai_quota_reservations`** (khởi tạo ở trạng thái **`'RESERVED'`** với TTL **`120 seconds (2 minutes)`** $\to$ `'COMMITTED'` / `'RELEASED'` / `'EXPIRED'`).
 - **Giám sát Token & Chi phí (`UC-19`):** Mọi lời gọi LLM đều được ghi nhận số lượng `prompt_tokens`, `completion_tokens`, `latency_ms`, `model_name` và trạng thái vào bảng **`ai_usage_logs`** để Admin theo dõi trên Dashboard giám sát.
 - **Nâng cấp Gói Cước (`UC-05`):** Tích hợp qua `PaymentGatewayPort` với 2 adapter: `PayOSAdapter` / `VNPaySandboxAdapter` (tạo mã VietQR và nhận Webhook `HMAC-SHA256`) và `LocalMockPaymentAdapter` (môi trường giả lập kích hoạt nâng cấp tức thời khi demo offline).
 
@@ -393,8 +403,8 @@ Hệ thống vận hành **6 tác vụ nền và định kỳ** thông qua `Task
 | :--- | :--- | :--- | :--- |
 | **`OutboxRelayTask`** | `shared_kernel` | Định kỳ mỗi **5–10 giây** (hoặc trigger tức thời) | Quét bảng `outbox_events` (`status = 'PENDING'`) với `FOR UPDATE SKIP LOCKED`, đẩy sự kiện vào Redis Streams và cập nhật `PUBLISHED`. |
 | **`AbandonedSessionSweeperTask`** | `execution` | Định kỳ mỗi **60 giây** | Quét các phiên `study_sessions` (`IN_PROGRESS`) mất heartbeat $> 5$ phút (`OS-07`), phân định `PARTIAL_COMPLETED` / `CANCELLED` (`OS-01`) với `FOR UPDATE SKIP LOCKED`. |
-| **`QuotaReservationSweeperTask`** | `account` | Định kỳ mỗi **60 giây** | Thu hồi các bản ghi `ai_quota_reservations` bị treo ở trạng thái `PENDING` quá hạn (`expires_at < NOW()`), hoàn trả `reserved_calls` về `ai_quotas`. |
-| **`OverdueAntiLoopSweeperTask`** | `evaluation` | Định kỳ mỗi ngày (**00:05 UTC**) | Quét các `tasks` quá hạn, tăng `reschedule_count`; nếu `reschedule_count >= 3` thì phát sự kiện `TaskStalledThresholdReachedEvent` (`ADR-010`). |
+| **`QuotaReservationSweeperTask`** | `account` | Định kỳ mỗi **60 giây** | Thu hồi các bản ghi `ai_quota_reservations` bị treo ở trạng thái **`'RESERVED'`** quá hạn TTL **`120 seconds (2 minutes)`** (`expires_at < NOW()`), chuyển sang `'EXPIRED'` và hoàn trả `reserved_calls` về `ai_quotas`. |
+| **`OverdueAntiLoopSweeperTask`** (`Overdue Scanner`) | `evaluation` | Định kỳ mỗi ngày (**00:05 UTC+7**) | Quét các `tasks` quá hạn (`scheduled_date < CURRENT_DATE` và `status != 'COMPLETED'`). **Không tự động sửa ngầm `scheduled_date`**; gửi Email Notification qua `EmailNotificationPort` (SMTP Adapter) tới email người dùng và đẩy cảnh báo vào mục `Needs Attention` trên Web kèm nút **"AI Reschedule (Dời lịch hợp lý)"** (chỉ dời lịch các task chưa xong của riêng lộ trình đó, bỏ qua cổng 3-Tier Gate và tăng `reschedule_count`, chạm ngưỡng `>= 3` sẽ chuyển sang `STALLED` — `ADR-010`). |
 | **`LearnerProfileAggregatorTask`** | `account` | Event-driven (từ Outbox) & Hàng tuần (**Chủ Nhật 23:55**) | Lắng nghe `StudySessionCompletedEvent`, tính toán lại vận tốc học tập (Velocity), độ tuân thủ (Adherence) vào `learner_profiles` và kích hoạt sinh `ai_reviews`. |
 | **`CalendarSyncTask`** | `execution` | Event-driven & Định kỳ mỗi **15 phút** | Đồng bộ 2 chiều có kiểm soát với Google Calendar qua `CalendarSyncPort` (kéo Free/Busy slots và đẩy lịch học `OfficialSchedule`). |
 
@@ -414,8 +424,8 @@ Dự án FocusFlow quản trị kiến trúc thông qua **10 bản ghi quyết �
 | **ADR-006** | [`ADR-006-deployment-strategy.md`](file:///Users/vuthang/Documents/FocusFlow/docs/decisions/ADR-006-deployment-strategy.md) | Chiến lược Triển khai Hybrid 6 Containers | Đồng bộ 6 containers (`frontend`, `backend`, `worker`, `scheduler` với `replicas: 1`, `postgres`, `redis` bật AOF) trên Docker Compose Local và Cloud PaaS. |
 | **ADR-007** | [`ADR-007-database-schema-and-persistence.md`](file:///Users/vuthang/Documents/FocusFlow/docs/decisions/ADR-007-database-schema-and-persistence.md) | Thiết kế CSDL Quan hệ 24 Bảng 3NF/BCNF & Toàn vẹn ACID | Chuẩn hóa **24 bảng vật lý 3NF/BCNF** trên PostgreSQL 16, khóa chính **UUIDv7**, giữ Single Surrogate FK ở mức DB nhưng cấm ORM JOIN chéo Context; chuẩn hóa `availability_slots` cho `WeeklySchedule` VO. |
 | **ADR-008** | [`ADR-008-security-architecture-and-tokens.md`](file:///Users/vuthang/Documents/FocusFlow/docs/decisions/ADR-008-security-architecture-and-tokens.md) | Kiến trúc Bảo mật Đa tầng & Quản lý Token | Xác thực `PyJWT` (`HttpOnly` Cookie) + Redis Refresh Token Rotation, băm mật khẩu `pwdlib[argon2]`, mã hóa OAuth token bằng **Fernet**, xác thực Webhook **`HMAC-SHA256`**, băm WebCal **SHA-256** và khử PII qua `structlog`. |
-| **ADR-009** | [`ADR-009-ai-constraint-validation-and-evaluation-harness.md`](file:///Users/vuthang/Documents/FocusFlow/docs/decisions/ADR-009-ai-constraint-validation-and-evaluation-harness.md) | Cổng Kiểm duyệt Ràng buộc AI 3 Tầng (3-Tier Hybrid Validation Gate) | Kết hợp tuần tự: Tier 1 (Pydantic v2 Schema) $\to$ Tier 2 (Pure Domain Services: `HybridAvailabilityRuleEngine`, `DagCycleValidator`) $\to$ Tier 3 (`PedagogicalJudgeAdapter` + tối đa 2 vòng self-correction). |
-| **ADR-010** | [`ADR-010-learner-profile-memory-and-anti-loop.md`](file:///Users/vuthang/Documents/FocusFlow/docs/decisions/ADR-010-learner-profile-memory-and-anti-loop.md) | Bộ nhớ Hồ sơ Người học SRL & Cơ chế Chống lặp Quá hạn | Duy trì `learner_profiles` theo lý thuyết Zimmerman SRL và chặn vòng lặp Domino Shift vô tận khi `tasks.reschedule_count >= 3` bằng leo thang xử lý (Micro-task Split / Scope Reduction). |
+| **ADR-009** | [`ADR-009-ai-constraint-validation-and-evaluation-harness.md`](file:///Users/vuthang/Documents/FocusFlow/docs/decisions/ADR-009-ai-constraint-validation-and-evaluation-harness.md) | Cổng Kiểm duyệt Ràng buộc AI 3 Tầng (3-Tier Hybrid Validation Gate) | Kết hợp tuần tự: Tier 1 (Pydantic v2 Schema) $\to$ Tier 2 (Pure Domain Services: `HybridAvailabilityRuleEngine`, `DagCycleValidator`) là 2 cổng chặn cứng (tối đa 2 vòng self-correction) $\to$ Tier 3 (`PedagogicalJudgeAdapter` là cổng tư vấn mềm $\le 5\text{s}$ timeout, Fail-Open đính kèm `pedagogical_warnings`). |
+| **ADR-010** | [`ADR-010-learner-profile-memory-and-anti-loop.md`](file:///Users/vuthang/Documents/FocusFlow/docs/decisions/ADR-010-learner-profile-memory-and-anti-loop.md) | Bộ nhớ Hồ sơ Người học SRL & Cơ chế Chống lặp Quá hạn | Duy trì `learner_profiles` theo lý thuyết Zimmerman SRL, tách biệt Domino Shift khi tạm dừng lộ trình (`UC-16`) với cơ chế chặn vòng lặp tái lập lịch AI đơn lộ trình (`UC-17`) khi `tasks.reschedule_count >= 3` bằng leo thang xử lý `STALLED` (Micro-task Split / Scope Reduction). |
 
 ---
 
@@ -423,7 +433,7 @@ Dự án FocusFlow quản trị kiến trúc thông qua **10 bản ghi quyết �
 
 Hệ thống được ánh xạ chặt chẽ theo tiêu chuẩn chất lượng **ISO/IEC 25010:2023**:
 
-| Thuộc tính Chất lượng (ISO 25010) | Chỉ số Định lượng (SRS v1.1 & ASR) | Giải pháp Kiến trúc & Fitness Function |
+| Thuộc tính Chất lượng (ISO 25010) | Chỉ số Định lượng (SRS v1.2 & ASR) | Giải pháp Kiến trúc & Fitness Function |
 | :--- | :--- | :--- |
 | **Performance Efficiency** | API CRUD latency $\le 250\text{ms}$ (P95); AI SSE TTFT $\le 2.5\text{s}$; Hard Timeout $55\text{s}$ (`NFR-PERF-001..002`, `ASR-03`) | FastAPI + SQLAlchemy 2.0 `asyncpg`, B-Tree Partial Indexes trên UUIDv7, Uniform 2-Stage SSE, Angular 21+ Zoneless Signals. |
 | **Modularity & Maintainability** | 0 vi phạm phụ thuộc giữa 4 Bounded Contexts; 100% Domain Layer thuần Python (`ASR-01`) | Context-First Modular Monolith + Hexagonal Architecture; kiểm chứng tự động qua **`import-linter`** (`forbidden` & `layers` contracts). |
@@ -458,5 +468,5 @@ Hệ thống được ánh xạ chặt chẽ theo tiêu chuẩn chất lượng 
 | **2-Phase ACID Quota Reservation** | Cơ chế quản lý hạn ngạch AI 2 pha (`Reserve` vào bảng `ai_quota_reservations` trước khi stream SSE $\to$ `Commit` khi hoàn tất hoặc `Release` khi lỗi/timeout). |
 | **3-Tier Hybrid Validation Gate** | Cổng kiểm duyệt đầu ra AI 3 tầng: Pydantic Schema (Tier 1) $\to$ Pure Domain Rule Engines (`HybridAvailabilityRuleEngine`, `DagCycleValidator`) (Tier 2) $\to$ Pedagogical LLM Judge (Tier 3). |
 | **Transactional Outbox** | Mẫu thiết kế ghi nhận Domain Event vào bảng `outbox_events` trong cùng giao dịch ACID với dữ liệu nghiệp vụ, sau đó đẩy qua Taskiq Redis Streams và chống trùng bằng `processed_events`. |
-| **Domino Shift & Anti-Loop** | Giải thuật tất định (`DominoShiftEngine`) dời các task chưa học sang ngày rảnh kế tiếp; tự động dừng và chuyển sang gợi ý chia nhỏ task khi `reschedule_count >= 3`. |
+| **Domino Shift & Overdue Anti-Loop** | **Domino Shift** (`DominoShiftEngine`, `UC-16`) là giải thuật tất định dời lịch hàng loạt khi tạm dừng/tiếp tục lộ trình mà không gọi AI và không tăng `reschedule_count`; **Overdue Anti-Loop** (`UC-17`) là cơ chế cảnh báo email quá hạn + nút `AI Reschedule` đơn lộ trình (bỏ qua 3-Tier Gate), tự động chuyển sang trạng thái `STALLED` gợi ý chia nhỏ task khi `reschedule_count >= 3`. |
 | **Zimmerman SRL** | Lý thuyết Học tập Tự điều chỉnh gồm 3 pha: *Forethought* (Lập kế hoạch `planning`), *Performance* (Thực thi Pomodoro `execution`), và *Self-Reflection* (Đánh giá & Thích ứng `evaluation`). |

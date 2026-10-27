@@ -1,7 +1,7 @@
 @startuml FocusFlow_Class_Diagram
-title FocusFlow — UML 2.5 Class Diagram v5.0 (4 Bounded Contexts + Shared Kernel — 24 DB Tables Mapping)
-' Chuẩn ký hiệu: OMG UML 2.5.1 Superstructure, IBM Developer (Donald Bell), Eric Evans (DDD)
-' Cấu trúc: 23 Lớp Thực thể (Entities), 3 Kiểu Dữ liệu Giá trị (<<dataType>>), 3 Dịch vụ Miền Thuần khiết (<<domainService>>), 16 Kiểu Liệt kê (<<enumeration>>)
+title FocusFlow — UML 2.5 Domain Class Diagram (4 Bounded Contexts — 54 Classifiers)
+' Chuẩn ký hiệu: OMG UML 2.5.1 Superstructure, IBM Developer (Donald Bell), Eric Evans & Vaughn Vernon (DDD)
+' Cấu trúc (54 Classifiers): 20 Lớp Thực thể (<<entity>>), 2 Lớp Liên kết (<<associationClass>>), 4 Đối tượng Giá trị (<<valueObject>>), 3 Dịch vụ Miền Thuần khiết (<<domainService>>), 25 Kiểu Liệt kê (<<enumeration>>)
 
 left to right direction
 skinparam classAttributeIconSize 0
@@ -29,7 +29,7 @@ skinparam class {
     FontColor #0F172A
 }
 
-skinparam class<<dataType>> {
+skinparam class<<valueObject>> {
     BackgroundColor #F0FDF4
     HeaderBackgroundColor #DCFCE7
     BorderColor #15803D
@@ -41,6 +41,12 @@ skinparam class<<domainService>> {
     BorderColor #7E22CE
 }
 
+skinparam class<<associationClass>> {
+    BackgroundColor #EFF6FF
+    HeaderBackgroundColor #DBEAFE
+    BorderColor #1D4ED8
+}
+
 skinparam enum {
     BackgroundColor #FFFBEB
     HeaderBackgroundColor #FEF3C7
@@ -50,23 +56,27 @@ skinparam enum {
 ' =============================================================================
 ' PACKAGE 1: ACCOUNT, PROFILE, AVAILABILITY & QUOTA (Bounded Context: account)
 ' =============================================================================
-package "Package 1: AccountProfileAndQuota (account)" as PKG_IDENTITY {
+package "Package 1: AccountProfileAndQuota (account)" as PKG_ACCOUNT {
 
-    class User {
+    class User <<entity>> {
         - userId : UUID
         - email : String {unique}
         - passwordHash : String
         - fullName : String
         - timezone : String = "Asia/Ho_Chi_Minh"
         - role : UserRole = LEARNER
+        - status : AccountStatus = ACTIVE
         - tier : SubscriptionTier = FREE
-        - isLocked : Boolean = false
+        - premiumExpiresAt : DateTime [0..1]
+        - createdAt : DateTime
+        - updatedAt : DateTime
         --
-        + authenticate(rawPassword : String) : Boolean
-        + canCreateActiveRoadmap(currentActiveCount : Integer) : Boolean
-        + upgradeTier(newTier : SubscriptionTier) : void
+        + verifyCredentials(rawPassword : String) : Boolean
+        + updateProfile(fullName : String, timezone : String) : void
         + lockAccount(reason : String) : void
         + unlockAccount() : void
+        + upgradeToPremium(expiresAt : DateTime) : void
+        + downgradeToFree() : void
     }
 
     enum UserRole <<enumeration>> {
@@ -74,48 +84,63 @@ package "Package 1: AccountProfileAndQuota (account)" as PKG_IDENTITY {
         ADMIN
     }
 
+    enum AccountStatus <<enumeration>> {
+        ACTIVE
+        LOCKED
+    }
+
     enum SubscriptionTier <<enumeration>> {
         FREE
         PREMIUM
     }
 
-    class AvailabilityProfile {
+    class AvailabilityProfile <<entity>> {
         - availabilityId : UUID
-        - mode : AvailabilityMode = MODE_A
-        - calendarIntegrationMode : CalendarIntegrationMode = NONE
+        - userId : UUID
+        - maxDailyHours : Decimal = 4.0
+        - maxWeeklyHours : Decimal = 20.0
+        - schedulingMode : SchedulingMode = MODE_A
+        - updatedAt : DateTime
         --
-        + getDailyCeilingMinutes(dayOfWeek : Integer) : Integer
-        + validateHardCeiling(date : Date, totalMinutes : Integer) : Boolean
-        + validateModeBWindow(slot : TimeSlot, allowSoftOverflow : Boolean) : Boolean
-        + deductBusyIntervals(busySlots : TimeSlot [0..*]) : TimeSlot [0..*]
+        + updateConfiguration(maxDailyHours : Decimal, maxWeeklyHours : Decimal, mode : SchedulingMode) : void
     }
 
-    enum AvailabilityMode <<enumeration>> {
+    enum SchedulingMode <<enumeration>> {
         MODE_A
         MODE_B
     }
 
-    enum CalendarIntegrationMode <<enumeration>> {
-        NONE
-        EXPORT_ICS
-        CONNECTED
+    enum DayOfWeek <<enumeration>> {
+        MON
+        TUE
+        WED
+        THU
+        FRI
+        SAT
+        SUN
     }
 
-    class WeeklySchedule <<dataType>> {
-        + dailyQuotas : Map<DayOfWeek, Decimal>
-        + allowedWindows : TimeSlot [0..*]
-        + fixedSlots : TimeSlot [0..*]
-        + minSessionMinutes : Integer = 30
+    enum PreferredPeriod <<enumeration>> {
+        MORNING
+        AFTERNOON
+        EVENING
+        ANY
+    }
+
+    class WeeklySchedule <<valueObject>> {
+        + dayOfWeek : DayOfWeek
+        + availableHours : Decimal
+        + preferredPeriod : PreferredPeriod = ANY
+        + isRestDay : Boolean = false
         --
-        + validateModeABounds() : Boolean
-        + hasOverlappingSlots() : Boolean
+        + getEffectiveMinutes() : Integer
     }
 
-    class TimeSlot <<dataType>> {
-        + dayOfWeek : Integer
-        + startTime : Time
-        + endTime : Time
-        + endDayOffset : Integer = 0
+    class TimeSlot <<valueObject>> {
+        + slotId : UUID
+        + dayOfWeek : DayOfWeek
+        + startTime : LocalTime
+        + endTime : LocalTime
         --
         + durationMinutes() : Integer
         + overlapsWith(other : TimeSlot) : Boolean
@@ -123,108 +148,152 @@ package "Package 1: AccountProfileAndQuota (account)" as PKG_IDENTITY {
 
     class HybridAvailabilityRuleEngine <<domainService>> {
         --
-        + evaluateHardCeiling(profile : AvailabilityProfile, date : Date, candidateMinutes : Integer, committedTasks : Task [0..*]) : Boolean
-        + evaluateModeBPlacement(profile : AvailabilityProfile, candidateSlot : TimeSlot, isLastTaskOfDay : Boolean) : Boolean
-        + computeNetFreeWindows(profile : AvailabilityProfile, externalBusySlots : TimeSlot [0..*]) : TimeSlot [0..*]
+        + validateDailyCeiling(profile : AvailabilityProfile, date : LocalDate, totalMinutes : Integer) : Boolean
+        + validateModeBWindow(profile : AvailabilityProfile, slot : TimeSlot, durationMinutes : Integer) : Boolean
+        + computeNetFreeWindows(profile : AvailabilityProfile, busyIntervals : TimeSlot[*], targetDate : LocalDate) : TimeSlot[*]
     }
 
-    class LearnerProfile {
+    class LearnerProfile <<entity>> {
         - profileId : UUID
-        - optimalFocusDurationMins : Integer = 25
-        - peakProductivitySlots : String [1..*] = ["MORNING", "EVENING"]
-        - estimationBiasFactor : Decimal = 1.00
-        - weeklyCompletionRate : Decimal = 0.00
-        - totalCompletedSessions : Integer = 0
-        - isColdStart : Boolean = true
+        - userId : UUID
+        - preferredSessionMinutes : Integer = 45
+        - breakDurationMinutes : Integer = 10
+        - learningPace : LearningPace = BALANCED
+        - peakProductivitySlots : PreferredPeriod[1..*]
+        - rollingAdherenceRate : Decimal = 0.0
+        - actualVelocityMultiplier : Decimal = 1.0
         - lastAggregatedAt : DateTime [0..1]
         --
-        + recalculateFromHistory(sessions : StudySession [0..*], tasks : Task [0..*]) : void
-        + resetToColdStart() : void
-        + isEligibleForAggregation() : Boolean
+        + updateSelfDeclaredPreferences(sessionMinutes : Integer, breakMinutes : Integer, pace : LearningPace) : void
+        + recalculateRollingMetrics(completedSessionsCount : Integer, adherenceRate : Decimal, velocityMultiplier : Decimal) : void
     }
 
-    class WebCalToken {
+    enum LearningPace <<enumeration>> {
+        RELAXED
+        BALANCED
+        INTENSIVE
+    }
+
+    class CalendarConnection <<entity>> {
+        - connectionId : UUID
+        - userId : UUID
+        - provider : CalendarProvider = GOOGLE_CALENDAR
+        - externalCalendarId : String
+        - encryptedRefreshToken : String
+        - status : ConnectionStatus = CONNECTED
+        - lastSyncedAt : DateTime [0..1]
+        - createdAt : DateTime
+        --
+        + markSynced(syncedAt : DateTime) : void
+        + markRevoked() : void
+        + disconnect() : void
+    }
+
+    enum CalendarProvider <<enumeration>> {
+        GOOGLE_CALENDAR
+    }
+
+    enum ConnectionStatus <<enumeration>> {
+        CONNECTED
+        REVOKED
+        DISCONNECTED
+    }
+
+    class WebCalToken <<entity>> {
         - tokenId : UUID
+        - userId : UUID
         - tokenHash : String {unique}
         - isActive : Boolean = true
-        - lastUsedAt : DateTime [0..1]
+        - createdAt : DateTime
         - rotatedAt : DateTime [0..1]
         --
-        + rotate(newTokenHash : String) : void
-        + deactivate() : void
-        + verifyHash(candidateHash : String) : Boolean
-        + recordAccess(accessedAt : DateTime) : void
+        + rotateToken(newTokenHash : String) : void
+        + verifyTokenHash(candidateHash : String) : Boolean
     }
 
-    class AIQuota {
+    class AIQuota <<entity>> {
         - quotaId : UUID
+        - userId : UUID
         - monthlyLimit : Integer = 30
-        - usedCalls : Integer = 0
-        - reservedCalls : Integer = 0
-        - /remainingCalls : Integer {readOnly}
-        - tokensConsumed : Long = 0
-        - cycleStart : DateTime
-        - cycleEnd : DateTime
+        - usedCount : Integer = 0
+        - reservedCount : Integer = 0
+        - billingCycleStart : LocalDate
+        - billingCycleEnd : LocalDate
         --
-        + hasAvailableQuota() : Boolean
-        + reserveCall(operationType : String, estimatedTokens : Integer, ttlSeconds : Integer) : AIQuotaReservation
-        + commitReservation(reservation : AIQuotaReservation, actualTokens : Integer) : void
-        + releaseReservation(reservation : AIQuotaReservation) : void
-        + resetMonthlyCycle(newStart : DateTime, newEnd : DateTime) : void
-        + applyTierLimit(tier : SubscriptionTier) : void
+        + availableCredits() : Integer
+        + reserveCredit(operationType : AIOperationType, ttlSeconds : Integer) : AIQuotaReservation
+        + resetMonthlyCycle(cycleStart : LocalDate, cycleEnd : LocalDate) : void
+        + syncLimitWithTier(tier : SubscriptionTier) : void
     }
 
-    class AIQuotaReservation {
+    enum AIOperationType <<enumeration>> {
+        GOAL_CLARIFICATION
+        ROADMAP_GENERATION
+        SCHEDULE_PROPOSAL
+        AI_RESCHEDULE
+        AI_PROGRESS_REVIEW
+        TASK_MICRO_STEPPING
+    }
+
+    class AIQuotaReservation <<entity>> {
         - reservationId : UUID
-        - operationType : String
-        - status : QuotaReservationStatus = RESERVED
-        - tokensReserved : Integer = 0
+        - quotaId : UUID
+        - operationType : AIOperationType
+        - status : ReservationStatus = RESERVED
         - expiresAt : DateTime
+        - createdAt : DateTime
         - resolvedAt : DateTime [0..1]
         --
-        + commit(resolvedAt : DateTime) : void
-        + release(resolvedAt : DateTime) : void
-        + markExpired(resolvedAt : DateTime) : void
-        + isExpired(now : DateTime) : Boolean
+        + commit() : void
+        + release() : void
+        + markExpired() : void
     }
 
-    enum QuotaReservationStatus <<enumeration>> {
+    enum ReservationStatus <<enumeration>> {
         RESERVED
         COMMITTED
         RELEASED
         EXPIRED
     }
 
-    class AIUsageLog {
-        - logId : UUID
-        - actionType : String
-        - modelName : String = "gpt-4o-mini"
-        - promptTokens : Integer = 0
-        - completionTokens : Integer = 0
-        - totalTokens : Integer = 0
-        - latencyMs : Integer = 0
-        - status : String = "SUCCESS"
-        - errorMessage : String [0..1]
+    class AIUsageLog <<entity>> {
+        - usageLogId : UUID
+        - userId : UUID
+        - reservationId : UUID [0..1]
+        - operationType : AIOperationType
+        - providerName : String
+        - modelName : String
+        - promptTokens : Integer
+        - completionTokens : Integer
+        - latencyMs : Integer
+        - status : AIExecutionStatus
+        - createdAt : DateTime
         --
-        + isSuccessful() : Boolean
-        + calculateTotalTokens() : Integer
+        + totalTokens() : Integer
     }
 
-    class PaymentTransaction {
+    enum AIExecutionStatus <<enumeration>> {
+        SUCCESS
+        VALIDATION_FAILED
+        PROVIDER_TIMEOUT
+        PROVIDER_ERROR
+    }
+
+    class PaymentTransaction <<entity>> {
         - transactionId : UUID
-        - transactionRef : String {unique}
-        - gatewayProvider : String = "PAYOS"
+        - userId : UUID
+        - orderCode : String {unique}
         - amountVnd : Integer
-        - currency : String = "VND"
         - status : PaymentStatus = PENDING
-        - qrCodeUrl : String [0..1]
-        - webhookSignatureVerified : Boolean = false
+        - expiresAt : DateTime
         - paidAt : DateTime [0..1]
+        - createdAt : DateTime
         --
-        + verifyWebhookSignature(payload : String, signature : String) : Boolean
-        + markPaid(paidAt : DateTime) : Boolean
-        + markCancelled(reason : String) : void
-        + markRefunded(refundedAt : DateTime) : void
+        + markPaid(paidAt : DateTime) : void
+        + markFailed() : void
+        + markCancelled() : void
+        + markExpired() : void
+        + isExpired(now : DateTime) : Boolean
     }
 
     enum PaymentStatus <<enumeration>> {
@@ -232,31 +301,44 @@ package "Package 1: AccountProfileAndQuota (account)" as PKG_IDENTITY {
         PAID
         FAILED
         CANCELLED
-        REFUNDED
+        EXPIRED
     }
 
     ' Local Enum & Service Dependencies (Package 1)
     User ..> UserRole
+    User ..> AccountStatus
     User ..> SubscriptionTier
-    AvailabilityProfile ..> AvailabilityMode
-    AvailabilityProfile ..> CalendarIntegrationMode
-    AvailabilityProfile ..> HybridAvailabilityRuleEngine : delegates multi-roadmap rules >
+    AvailabilityProfile ..> SchedulingMode
+    WeeklySchedule ..> DayOfWeek
+    WeeklySchedule ..> PreferredPeriod
+    TimeSlot ..> DayOfWeek
+    HybridAvailabilityRuleEngine ..> AvailabilityProfile
     HybridAvailabilityRuleEngine ..> WeeklySchedule
     HybridAvailabilityRuleEngine ..> TimeSlot
-    AIQuotaReservation ..> QuotaReservationStatus
+    LearnerProfile ..> LearningPace
+    LearnerProfile ..> PreferredPeriod
+    CalendarConnection ..> CalendarProvider
+    CalendarConnection ..> ConnectionStatus
+    AIQuota ..> AIOperationType
+    AIQuota ..> SubscriptionTier
+    AIQuotaReservation ..> AIOperationType
+    AIQuotaReservation ..> ReservationStatus
+    AIUsageLog ..> AIOperationType
+    AIUsageLog ..> AIExecutionStatus
     PaymentTransaction ..> PaymentStatus
 
     ' Intra-package Compositions & Associations (Package 1)
     User "user\n1" *-- "availabilityProfile\n0..1" AvailabilityProfile
-    User "user\n1" *-- "learnerProfile\n0..1" LearnerProfile
+    User "user\n1" *-- "learnerProfile\n1" LearnerProfile
     User "user\n1" *-- "aiQuota\n1" AIQuota
+    User "user\n1" *-- "calendarConnection\n0..1" CalendarConnection
     User "user\n1" *-- "webCalToken\n0..1" WebCalToken
-    User "user\n1" -- "aiUsageLogs\n*" AIUsageLog
-    User "payer\n1" -- "payments\n*" PaymentTransaction
+    User "user\n1" -- "aiUsageLogs\n0..*" AIUsageLog
+    User "payer\n1" -- "payments\n0..*" PaymentTransaction
 
-    AIQuota "quota\n1" *-- "reservations\n*" AIQuotaReservation
-    AvailabilityProfile "profile\n1" *-- "weeklySchedule\n1" WeeklySchedule
-    WeeklySchedule "schedule\n1" *-- "timeSlots\n*" TimeSlot
+    AIQuota "quota\n1" *-- "reservations\n0..*" AIQuotaReservation
+    AvailabilityProfile "profile\n1" *-- "weeklySchedules\n7" WeeklySchedule
+    AvailabilityProfile "profile\n1" *-- "timeSlots\n0..*" TimeSlot
 }
 
 ' =============================================================================
@@ -264,39 +346,55 @@ package "Package 1: AccountProfileAndQuota (account)" as PKG_IDENTITY {
 ' =============================================================================
 package "Package 2: RoadmapAndPlanning (planning)" as PKG_PLANNING {
 
-    class Goal {
+    class Goal <<entity>> {
         - goalId : UUID
+        - userId : UUID
         - title : String
         - rawDescription : String
-        - targetDate : Date [0..1]
-        - status : GoalStatus = ACTIVE
+        - clarificationContext : String [0..1]
+        - targetDate : LocalDate
+        - skillLevel : SkillLevel = BEGINNER
+        - status : GoalStatus = DRAFT
+        - createdAt : DateTime
         --
-        + sanitizePromptContext() : String
-        + getDaysRemaining(currentDate : Date) : Integer
-        + archive() : void
+        + recordClarification(answers : String) : void
+        + activateGoal() : void
+        + archiveGoal() : void
+    }
+
+    enum SkillLevel <<enumeration>> {
+        BEGINNER
+        INTERMEDIATE
+        ADVANCED
     }
 
     enum GoalStatus <<enumeration>> {
+        DRAFT
+        CLARIFIED
         ACTIVE
         COMPLETED
         ARCHIVED
     }
 
-    class Roadmap {
+    class Roadmap <<entity>> {
         - roadmapId : UUID
+        - goalId : UUID
+        - userId : UUID
         - title : String
-        - description : String [0..1]
+        - targetDate : LocalDate
         - status : RoadmapStatus = INITIALIZED
-        - startDate : Date [0..1]
-        - targetDate : Date [0..1]
+        - totalEstimatedMinutes : Integer = 0
+        - completionPercentage : Decimal = 0.0
+        - createdAt : DateTime
+        - updatedAt : DateTime
         --
-        + validateMilestoneCount() : Boolean
-        + activateWithSchedule(proposal : ScheduleProposal) : OfficialSchedule
-        + pause(startDate : Date, endDate : Date, reason : String) : PauseRecord
-        + applyDominoShift(shiftedDays : Integer, fromDate : Date) : Integer
-        + resume(resumedAt : Date) : void
-        + evaluateCompletion() : Boolean
+        + activate() : void
+        + pause() : void
+        + resume(shiftedDays : Integer) : void
         + archive() : void
+        + markCompleted() : void
+        + updateMetadata(title : String, targetDate : LocalDate) : void
+        + recalculateProgress(completedMinutes : Integer, totalMinutes : Integer) : void
     }
 
     enum RoadmapStatus <<enumeration>> {
@@ -307,16 +405,17 @@ package "Package 2: RoadmapAndPlanning (planning)" as PKG_PLANNING {
         ARCHIVED
     }
 
-    class Milestone {
+    class Milestone <<entity>> {
         - milestoneId : UUID
-        - sequenceOrder : Integer
+        - roadmapId : UUID
         - title : String
-        - description : String [0..1]
+        - sequenceOrder : Integer
+        - targetStartDate : LocalDate [0..1]
+        - targetEndDate : LocalDate [0..1]
         - status : MilestoneStatus = PENDING
         --
         + approve() : void
-        + reorder(newOrder : Integer) : void
-        + isCompleted() : Boolean
+        + updateProgressStatus(allTasksDone : Boolean, anyTaskStarted : Boolean) : void
     }
 
     enum MilestoneStatus <<enumeration>> {
@@ -326,13 +425,15 @@ package "Package 2: RoadmapAndPlanning (planning)" as PKG_PLANNING {
         COMPLETED
     }
 
-    class ScheduleProposal {
+    class ScheduleProposal <<entity>> {
         - proposalId : UUID
-        - proposalData : Object
+        - roadmapId : UUID
+        - userId : UUID
         - status : ProposalStatus = DRAFT
+        - validationAttemptCount : Integer = 1
+        - createdAt : DateTime
         - appliedAt : DateTime [0..1]
         --
-        + validateHybridGate(profile : AvailabilityProfile, existingTasks : Task [0..*]) : Boolean
         + markApplied(appliedAt : DateTime) : void
         + discard() : void
     }
@@ -343,36 +444,49 @@ package "Package 2: RoadmapAndPlanning (planning)" as PKG_PLANNING {
         DISCARDED
     }
 
-    class OfficialSchedule {
+    class ProposedTask <<valueObject>> {
+        + tempTaskCode : String
+        + milestoneSequenceOrder : Integer
+        + title : String
+        + estimatedMinutes : Integer
+        + proposedDate : LocalDate
+        + proposedStartTime : LocalTime [0..1]
+        + prerequisiteTempCodes : String[*]
+        --
+        + isWithinAIDurationBounds() : Boolean
+    }
+
+    class OfficialSchedule <<entity>> {
         - scheduleId : UUID
-        - totalSessions : Integer = 0
-        - totalPlannedMinutes : Integer = 0
-        - activatedAt : DateTime
+        - roadmapId : UUID
+        - userId : UUID
+        - versionNumber : Integer = 1
+        - strategy : MergeStrategy = MERGE_EXISTING
+        - publishedAt : DateTime
+        - updatedAt : DateTime
         --
-        + mergeFutureTasks(newTasks : Task [1..*], fromDate : Date) : void
-        + recalculateTotals(scheduledTasks : Task [0..*]) : void
-        + exportIcsEvents() : String
+        + incrementVersion(strategy : MergeStrategy) : void
     }
 
-    class DagCycleValidator <<domainService>> {
-        --
-        + validateAcyclicGraph(tasks : Task [0..*], dependencies : TaskDependency [0..*]) : Boolean
-        + canAddEdge(predecessorId : UUID, successorId : UUID, existingEdges : TaskDependency [0..*]) : Boolean
-        + topologicalSort(tasks : Task [0..*], dependencies : TaskDependency [0..*]) : Task [0..*]
+    enum MergeStrategy <<enumeration>> {
+        MERGE_EXISTING
+        FUTURE_SHIFT
     }
 
-    ' Local Enum & Service Dependencies (Package 2)
+    ' Local Enum Dependencies (Package 2)
+    Goal ..> SkillLevel
     Goal ..> GoalStatus
     Roadmap ..> RoadmapStatus
     Milestone ..> MilestoneStatus
     ScheduleProposal ..> ProposalStatus
-    ScheduleProposal ..> DagCycleValidator : validates Tier-2 DAG >
+    OfficialSchedule ..> MergeStrategy
 
     ' Intra-package Compositions & Associations (Package 2)
-    Goal "goal\n1" -- "roadmaps\n1..*" Roadmap
+    Goal "goal\n1" -- "roadmap\n0..1" Roadmap
     Roadmap "roadmap\n1" *-- "milestones\n1..* {ordered}" Milestone
-    Roadmap "1" *-- "officialSchedule\n0..1" OfficialSchedule
-    Roadmap "roadmap\n1" *-- "proposals\n*" ScheduleProposal
+    Roadmap "roadmap\n1" -- "officialSchedule\n0..1" OfficialSchedule
+    Roadmap "roadmap\n1" *-- "proposals\n0..*" ScheduleProposal
+    ScheduleProposal "proposal\n1" *-- "proposedTasks\n1..*" ProposedTask
 }
 
 ' =============================================================================
@@ -380,59 +494,73 @@ package "Package 2: RoadmapAndPlanning (planning)" as PKG_PLANNING {
 ' =============================================================================
 package "Package 3: StudyExecutionAndScheduling (execution)" as PKG_EXECUTION {
 
-    class Task {
+    class Task <<entity>> {
         - taskId : UUID
+        - roadmapId : UUID
+        - milestoneId : UUID
+        - scheduleId : UUID [0..1]
+        - parentTaskId : UUID [0..1]
         - title : String
         - description : String [0..1]
         - estimatedMinutes : Integer
-        - scheduledDate : Date [0..1]
-        - startTime : Time [0..1]
-        - endTime : Time [0..1]
+        - actualMinutes : Integer = 0
+        - scheduledDate : LocalDate [0..1]
+        - scheduledStartTime : LocalTime [0..1]
         - status : TaskStatus = TODO
-        - completedAt : DateTime [0..1]
+        - isOverdue : Boolean = false
         - rescheduleCount : Integer = 0
-        - /isOverdue : Boolean {readOnly}
-        - /isStalled : Boolean {readOnly}
-        - /isBlocked : Boolean {readOnly}
+        - completedAt : DateTime [0..1]
         --
-        + markCompleted(completedAt : DateTime) : void
-        + reopen() : void
+        + startExecution() : void
+        + markCompleted(spentMinutes : Integer, completedAt : DateTime) : void
+        + cancelTask() : void
+        + rescheduleTo(newDate : LocalDate, newStartTime : LocalTime [0..1], incrementCounter : Boolean) : void
         + moveToBacklog() : void
-        + reschedule(newDate : Date, start : Time [0..1], end : Time [0..1], isAuto : Boolean) : void
-        + addPrerequisite(predecessor : Task) : TaskDependency
-        + hasDependencyCycle(candidatePredecessor : Task) : Boolean
+        + markOverdue() : void
+        + splitIntoSubtasks(subtaskTitles : String[2..3]) : Task[2..3]
     }
 
     enum TaskStatus <<enumeration>> {
-        PENDING
         TODO
         IN_PROGRESS
         COMPLETED
         CANCELLED
     }
 
-    class TaskDependency {
+    class TaskDependency <<associationClass>> {
         - dependencyId : UUID
-        - isMandatory : Boolean = true
-        --
-        + validateNoCycle(dagTasks : Task [0..*]) : Boolean
-        + isSatisfied(predecessor : Task) : Boolean
+        - prerequisiteTaskId : UUID
+        - dependentTaskId : UUID
+        - createdAt : DateTime
     }
 
-    class StudySession {
+    class DagCycleValidator <<domainService>> {
+        --
+        + canAddDependency(existingTasks : Task[*], prerequisiteTaskId : UUID, dependentTaskId : UUID) : Boolean
+        + validateProposalAcyclicity(proposedTasks : ProposedTask[*]) : Boolean
+        + validateTopologicalOrder(tasks : Task[*]) : Boolean
+    }
+
+    class StudySession <<entity>> {
         - sessionId : UUID
+        - userId : UUID
+        - timerMode : TimerMode = POMODORO
+        - plannedDurationMinutes : Integer
+        - effectiveDurationMinutes : Integer = 0
+        - status : SessionStatus = IN_PROGRESS
         - startedAt : DateTime
         - endedAt : DateTime [0..1]
-        - plannedMinutes : Integer
-        - actualMinutes : Integer = 0
-        - status : SessionStatus = IN_PROGRESS
         - lastHeartbeatAt : DateTime
         --
-        + recordHeartbeat(pingAt : DateTime) : void
-        + isHeartbeatTimedOut(now : DateTime, timeoutMinutes : Integer = 5) : Boolean
-        + completeNormally(endedAt : DateTime) : void
-        + resolveInterruption(endedAt : DateTime) : SessionStatus
-        + upsertNote(type : NoteType, content : String) : StudyNote
+        + recordHeartbeat(timestamp : DateTime) : void
+        + finishSession(endedAt : DateTime, effectiveMinutes : Integer) : void
+        + stopEarly(endedAt : DateTime, effectiveMinutes : Integer) : void
+        + resolveAbandoned(now : DateTime) : void
+    }
+
+    enum TimerMode <<enumeration>> {
+        POMODORO
+        STOPWATCH
     }
 
     enum SessionStatus <<enumeration>> {
@@ -442,180 +570,160 @@ package "Package 3: StudyExecutionAndScheduling (execution)" as PKG_EXECUTION {
         CANCELLED
     }
 
-    class SessionTask {
+    class SessionTask <<associationClass>> {
         - sessionTaskId : UUID
         - allocatedMinutes : Integer = 0
-        - timeSpentMinutes : Integer = 0
         - isCompletedInSession : Boolean = false
         --
-        + recordProgress(spentMinutes : Integer, completed : Boolean) : void
+        + recordTimeSpent(minutes : Integer, markDone : Boolean) : void
     }
 
-    class StudyNote {
+    class StudyNote <<entity>> {
         - noteId : UUID
+        - sessionId : UUID
+        - taskId : UUID
+        - userId : UUID
         - noteType : NoteType
-        - content : String = ""
+        - content : String
+        - createdAt : DateTime
+        - updatedAt : DateTime
         --
         + updateContent(newContent : String) : void
-        + sanitizeForAIReview() : String
     }
 
     enum NoteType <<enumeration>> {
         SCRATCHPAD
-        TAKEAWAY
-        GENERAL
+        KEY_TAKEAWAY
     }
 
-    ' Local Enum Dependencies (Package 3)
+    ' Local Enum & Service Dependencies (Package 3)
     Task ..> TaskStatus
+    Task ..> DagCycleValidator : <<use>>
+    StudySession ..> TimerMode
     StudySession ..> SessionStatus
     StudyNote ..> NoteType
 
     ' Intra-package Relationships (Package 3)
-    Task "successor\n1" *--- "dependencies\n*" TaskDependency
-    Task "1" <--- "*" TaskDependency : prerequisite <
-    StudySession "sessions\n*" -- "tasks\n1..*" Task
+    Task "parentTask\n0..1" -- "subTasks\n0..*" Task : parent / subtasks >
+    Task "prerequisite\n0..*" -- "dependent\n0..*" Task : prerequisites >
+    (Task, Task) .. TaskDependency
+    StudySession "sessions\n0..*" -- "tasks\n1..*" Task : executes >
     (StudySession, Task) .. SessionTask
-    StudySession "session\n1" *-- "notes\n0..2" StudyNote
+    StudySession "session\n1" *-- "notes\n0..*" StudyNote
+    Task "task\n1" -- "notes\n0..*" StudyNote
 }
 
 ' =============================================================================
 ' PACKAGE 4: EVALUATION & ADAPTATION (Bounded Context: evaluation)
 ' =============================================================================
-package "Package 4: EvaluationAndAdaptation (evaluation)" as PKG_ADAPTATION {
+package "Package 4: EvaluationAndAdaptation (evaluation)" as PKG_EVALUATION {
 
-    class PauseRecord {
+    class PauseRecord <<entity>> {
         - pauseId : UUID
-        - pauseStartDate : Date
-        - pauseEndDate : Date
-        - shiftedDays : Integer
+        - roadmapId : UUID
+        - userId : UUID
         - reason : String [0..1]
+        - pausedAt : DateTime
+        - expectedResumeDate : LocalDate [0..1]
+        - resumedAt : DateTime [0..1]
+        - shiftedDays : Integer = 0
         --
-        + calculateShiftedDays() : Integer
-        + isActiveOn(date : Date) : Boolean
+        + completeResume(resumedAt : DateTime, shiftedDays : Integer) : void
     }
 
-    class AIReview {
+    class AIReview <<entity>> {
         - reviewId : UUID
-        - reviewCycle : ReviewCycle
-        - periodStart : Date [0..1]
-        - periodEnd : Date [0..1]
-        - strengthsFeedback : String
-        - bottlenecksFeedback : String
-        - actionRecommendations : String
-        - generatedAt : DateTime
+        - roadmapId : UUID
+        - userId : UUID
+        - cycleType : ReviewCycle = WEEKLY
+        - periodStart : LocalDate
+        - periodEnd : LocalDate
+        - strengthsSummary : String
+        - bottlenecksAnalysis : String
+        - actionableSuggestions : String[1..*]
+        - createdAt : DateTime
         --
-        + validatePeriodInvariant() : Boolean
+        + hasVerifiedMetrics() : Boolean
     }
 
     enum ReviewCycle <<enumeration>> {
         WEEKLY
-        MILESTONE
+        SESSION_BATCH
     }
 
-    class QuantitativeMetrics <<dataType>> {
-        + completionRate : Decimal
-        + plannedMinutes : Integer
-        + actualMinutes : Integer
+    class QuantitativeMetrics <<valueObject>> {
+        + scheduledTasksCount : Integer
+        + completedOnTimeCount : Integer
+        + overdueTasksCount : Integer
+        + totalEffectiveMinutes : Integer
         + adherenceRate : Decimal
-        + overdueTaskCount : Integer
+        + currentStreakDays : Integer
+        + estimationAccuracyRatio : Decimal
         --
-        + calculateEfficiencyRatio() : Decimal
+        + isConsistentWith(other : QuantitativeMetrics) : Boolean
     }
 
-    class ScheduleChangeLog {
-        - logId : UUID
-        - triggerType : ChangeActorType
-        - reason : String [0..1]
-        - affectedTasksCount : Integer = 1
-        - totalShiftedMinutes : Integer = 0
-        - diffPayload : Object
-        - changedAt : DateTime
-        --
-        + formatAuditEntry() : String
+    class ScheduleChangeLog <<entity>> {
+        - changeLogId : UUID
+        - roadmapId : UUID
+        - taskId : UUID [0..1]
+        - userId : UUID
+        - triggerType : ChangeTriggerType
+        - previousDate : LocalDate [0..1]
+        - newDate : LocalDate [0..1]
+        - reasonSummary : String
+        - createdAt : DateTime
     }
 
-    enum ChangeActorType <<enumeration>> {
-        DOMINO_SHIFT
+    enum ChangeTriggerType <<enumeration>> {
         MANUAL_EDIT
+        DOMINO_SHIFT
         AI_REPLAN
-        CALENDAR_SYNC
     }
 
     class DominoShiftEngine <<domainService>> {
         --
-        + calculateShiftedSchedule(pendingTasks : Task [0..*], pauseRecord : PauseRecord, profile : AvailabilityProfile) : ScheduleChangeLog
-        + shiftTaskToNextAvailableDate(task : Task, shiftedDays : Integer, profile : AvailabilityProfile) : Date
+        + calculateShiftedDays(pausedAt : DateTime, resumedAt : DateTime) : Integer
+        + computeShiftedDates(pendingTaskDates : LocalDate[*], shiftedDays : Integer, restDays : DayOfWeek[*]) : LocalDate[*]
     }
 
     ' Local Enum Dependencies & Compositions (Package 4)
     AIReview ..> ReviewCycle
     AIReview "review\n1" *-- "metrics\n1" QuantitativeMetrics
-    ScheduleChangeLog ..> ChangeActorType
+    ScheduleChangeLog ..> ChangeTriggerType
     DominoShiftEngine ..> PauseRecord
-    DominoShiftEngine ..> ScheduleChangeLog : produces audit log >
+    DominoShiftEngine ..> ScheduleChangeLog : produces >
 }
 
 ' =============================================================================
-' PACKAGE 5: SHARED KERNEL & TRANSACTIONAL OUTBOX (shared_kernel)
-' =============================================================================
-package "Package 5: SharedKernel (shared_kernel)" as PKG_SHARED {
-
-    class OutboxEvent {
-        - eventId : UUID
-        - aggregateType : String
-        - aggregateId : UUID
-        - eventType : String
-        - payload : Object
-        - status : OutboxEventStatus = PENDING
-        - retryCount : Integer = 0
-        - correlationId : String [0..1]
-        - createdAt : DateTime
-        - publishedAt : DateTime [0..1]
-        --
-        + markPublished(publishedAt : DateTime) : void
-        + recordRetryFailure() : void
-    }
-
-    enum OutboxEventStatus <<enumeration>> {
-        PENDING
-        PUBLISHED
-        FAILED
-    }
-
-    class ProcessedEvent {
-        - eventId : UUID
-        - handlerName : String
-        - processedAt : DateTime
-        --
-        + isDuplicate(candidateEventId : UUID, candidateHandler : String) : Boolean
-    }
-
-    OutboxEvent ..> OutboxEventStatus
-    OutboxEvent "outboxEvent\n1" -- "processedHandlers\n*" ProcessedEvent
-}
-
-' =============================================================================
-' CROSS-PACKAGE RELATIONSHIPS (INTER-BOUNDED CONTEXT)
+' CROSS-PACKAGE DEPENDENCIES BY IDENTITY (ADR-001 & ADR-007 §3.2 <<ref>>)
 ' =============================================================================
 
-' Identity -> Planning
-User "owner\n1" -- "goals\n*" Goal
-User "learner\n1" -- "roadmaps\n*" Roadmap
-ScheduleProposal ..> HybridAvailabilityRuleEngine : validates Tier-2 ceiling >
+' Planning references Account by userId
+Goal ..> User : <<ref>> userId
+Roadmap ..> User : <<ref>> userId
+ScheduleProposal ..> User : <<ref>> userId
+OfficialSchedule ..> User : <<ref>> userId
 
-' Planning -> Execution
-Milestone "milestone\n1" -- "tasks\n*" Task
-OfficialSchedule "officialSchedule\n0..1" o-- "scheduledTasks\n*" Task
-Roadmap "roadmap\n1" -- "studySessions\n*" StudySession
-TaskDependency ..> DagCycleValidator : delegates cycle check >
+' Execution references Planning & Account by ID
+Task ..> Roadmap : <<ref>> roadmapId
+Task ..> Milestone : <<ref>> milestoneId
+Task ..> OfficialSchedule : <<ref>> scheduleId
+StudySession ..> User : <<ref>> userId
+StudyNote ..> User : <<ref>> userId
 
-' Planning & Execution -> Adaptation & Analytics
-Roadmap "roadmap\n1" *-- "pauseHistory\n*" PauseRecord
-Roadmap "roadmap\n1" *-- "changeLogs\n*" ScheduleChangeLog
-Roadmap "roadmap\n1" -- "aiReviews\n*" AIReview
-Roadmap ..> DominoShiftEngine : delegates Domino Shift >
-AIReview "*" --> "reviewedMilestone\n0..1" Milestone
-ScheduleChangeLog "*" --> "affectedTask\n0..1" Task
+' Evaluation references Planning, Execution & Account by ID
+PauseRecord ..> Roadmap : <<ref>> roadmapId
+PauseRecord ..> User : <<ref>> userId
+AIReview ..> Roadmap : <<ref>> roadmapId
+AIReview ..> User : <<ref>> userId
+ScheduleChangeLog ..> Roadmap : <<ref>> roadmapId
+ScheduleChangeLog ..> Task : <<ref>> taskId
+ScheduleChangeLog ..> User : <<ref>> userId
+
+' Cross-Context Validation & Calculation Service Dependencies (via Application Orchestration)
+ScheduleProposal ..> HybridAvailabilityRuleEngine : <<ref>> validates ceiling
+ScheduleProposal ..> DagCycleValidator : <<ref>> validates acyclicity
+DominoShiftEngine ..> DayOfWeek : <<ref>> restDays
 
 @enduml

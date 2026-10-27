@@ -11,9 +11,9 @@
 -- =============================================================================
 
 -- =============================================================================
--- 0. HÀM TRIGGER DÙNG CHUNG CẬP NHẬT UPDATED_AT
+-- 0. HÀM TRIGGER DÙNG CHUNG CẬP NHẬT UPDATED_AT (18 BẢNG CÓ CỘT UPDATED_AT)
 -- =============================================================================
-CREATE OR REPLACE FUNCTION set_updated_at()
+CREATE OR REPLACE FUNCTION fn_set_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
     NEW.updated_at = NOW();
@@ -242,9 +242,9 @@ CREATE TABLE payment_transactions (
 );
 
 -- =============================================================================
--- BOUNDED CONTEXT 2: PLANNING (`planning` — 7 BẢNG)
--- Trách nhiệm: Quản lý mục tiêu, lộ trình, cột mốc, DAG công việc, cổng kiểm duyệt
---              AI 3 tầng và áp dụng lịch học chính thức (Frozen Baseline).
+-- BOUNDED CONTEXT 2: PLANNING (`planning` — 5 BẢNG)
+-- Trách nhiệm: Quản lý mục tiêu, lộ trình, cột mốc, lịch học chính thức (Frozen Baseline)
+--              và đề xuất lịch xem trước qua cổng kiểm duyệt AI 3 tầng.
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
@@ -323,7 +323,33 @@ CREATE TABLE official_schedules (
 );
 
 -- -----------------------------------------------------------------------------
--- 14. BẢNG TASKS (Nhiệm vụ Học tập Chi tiết Cấp 2)
+-- 14. BẢNG SCHEDULE_PROPOSALS (Bản Đề xuất Lịch Xem trước từ AI - Preview Draft)
+-- Chứa proposal_data JSONB xem trước, chỉ lưu sau khi qua 3-Tier Validation Gate
+-- -----------------------------------------------------------------------------
+CREATE TABLE schedule_proposals (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    roadmap_id UUID NOT NULL,
+    user_id UUID NOT NULL,
+    proposal_data JSONB NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'DRAFT',
+    applied_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT fk_schedule_proposals_roadmap FOREIGN KEY (roadmap_id) REFERENCES roadmaps(id) ON DELETE CASCADE,
+    CONSTRAINT fk_schedule_proposals_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT chk_schedule_proposals_status CHECK (status IN ('DRAFT', 'APPLIED', 'DISCARDED')),
+    CONSTRAINT chk_schedule_proposals_data CHECK (jsonb_typeof(proposal_data) = 'object')
+);
+
+-- =============================================================================
+-- BOUNDED CONTEXT 3: EXECUTION (`execution` — 5 BẢNG)
+-- Trách nhiệm: Quản lý nhiệm vụ học tập chi tiết (tasks), đồ thị tiên quyết DAG
+--              (task_dependencies), vận hành không gian học tập Pomodoro/Stopwatch,
+--              ghi nhận Heartbeat 60s, thu hồi phiên học treo và ghi chú phiên học.
+-- =============================================================================
+
+-- -----------------------------------------------------------------------------
+-- 15. BẢNG TASKS (Nhiệm vụ Học tập Chi tiết Cấp 2)
 -- Lên lịch trực tiếp qua scheduled_date, scheduled_start, scheduled_end
 -- -----------------------------------------------------------------------------
 CREATE TABLE tasks (
@@ -346,10 +372,11 @@ CREATE TABLE tasks (
     CONSTRAINT fk_tasks_milestone FOREIGN KEY (milestone_id) REFERENCES milestones(id) ON DELETE CASCADE,
     CONSTRAINT fk_tasks_official_schedule FOREIGN KEY (official_schedule_id) REFERENCES official_schedules(id) ON DELETE SET NULL,
     CONSTRAINT chk_tasks_estimated_minutes CHECK (estimated_minutes BETWEEN 15 AND 240),
-    CONSTRAINT chk_tasks_status CHECK (status IN ('PENDING', 'TODO', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED')),
+    CONSTRAINT chk_tasks_status CHECK (status IN ('TODO', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED')),
     CONSTRAINT chk_tasks_reschedule_count CHECK (reschedule_count >= 0),
-    CONSTRAINT chk_tasks_schedule_dates CHECK (
-        scheduled_start IS NULL OR scheduled_end IS NULL OR scheduled_end > scheduled_start
+    CONSTRAINT chk_tasks_scheduled_time_order CHECK (
+        (scheduled_start IS NULL AND scheduled_end IS NULL)
+        OR (scheduled_start IS NOT NULL AND scheduled_end IS NOT NULL AND scheduled_end > scheduled_start)
     ),
     CONSTRAINT chk_tasks_completed_at CHECK (
         (status = 'COMPLETED' AND completed_at IS NOT NULL) OR
@@ -358,7 +385,7 @@ CREATE TABLE tasks (
 );
 
 -- -----------------------------------------------------------------------------
--- 15. BẢNG TASK_DEPENDENCIES (Quan hệ Tiên quyết Giữa các Nhiệm vụ - DAG)
+-- 16. BẢNG TASK_DEPENDENCIES (Quan hệ Tiên quyết Giữa các Nhiệm vụ - DAG)
 -- Quản lý đồ thị có hướng không chu trình (DAG), kiểm định bởi DagCycleValidator
 -- -----------------------------------------------------------------------------
 CREATE TABLE task_dependencies (
@@ -374,31 +401,6 @@ CREATE TABLE task_dependencies (
     CONSTRAINT fk_task_deps_roadmap FOREIGN KEY (roadmap_id) REFERENCES roadmaps(id) ON DELETE CASCADE,
     CONSTRAINT chk_task_deps_not_self CHECK (predecessor_id <> successor_id)
 );
-
--- -----------------------------------------------------------------------------
--- 16. BẢNG SCHEDULE_PROPOSALS (Bản Đề xuất Lịch Xem trước từ AI - Preview Draft)
--- Chứa proposal_data JSONB xem trước, chỉ lưu sau khi qua 3-Tier Validation Gate
--- -----------------------------------------------------------------------------
-CREATE TABLE schedule_proposals (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    roadmap_id UUID NOT NULL,
-    user_id UUID NOT NULL,
-    proposal_data JSONB NOT NULL,
-    status VARCHAR(20) NOT NULL DEFAULT 'DRAFT',
-    applied_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT fk_schedule_proposals_roadmap FOREIGN KEY (roadmap_id) REFERENCES roadmaps(id) ON DELETE CASCADE,
-    CONSTRAINT fk_schedule_proposals_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT chk_schedule_proposals_status CHECK (status IN ('DRAFT', 'APPLIED', 'DISCARDED')),
-    CONSTRAINT chk_schedule_proposals_data CHECK (jsonb_typeof(proposal_data) = 'object')
-);
-
--- =============================================================================
--- BOUNDED CONTEXT 3: EXECUTION (`execution` — 4 BẢNG)
--- Trách nhiệm: Vận hành không gian học tập Pomodoro/Stopwatch, ghi nhận Heartbeat 60s,
---              thu hồi phiên học treo, ghi chú phiên học và lịch sử tạm dừng.
--- =============================================================================
 
 -- -----------------------------------------------------------------------------
 -- 17. BẢNG STUDY_SESSIONS (Phiên Thực thi Học tập Pomodoro / Stopwatch)
@@ -470,6 +472,13 @@ CREATE TABLE study_notes (
     CONSTRAINT uq_study_notes_session_type UNIQUE (session_id, note_type)
 );
 
+-- =============================================================================
+-- BOUNDED CONTEXT 4: EVALUATION (`evaluation` — 3 BẢNG)
+-- Trách nhiệm: Quản lý lịch sử tạm dừng & tịnh tiến Domino Shift (pause_records),
+--              tính toán chỉ số định lượng (QuantitativeMetrics), sinh báo cáo
+--              AI Review theo chu kỳ SRL và lưu vết kiểm toán biến động lịch.
+-- =============================================================================
+
 -- -----------------------------------------------------------------------------
 -- 20. BẢNG PAUSE_RECORDS (Lịch sử Tạm dừng Lộ trình & Tịnh tiến Domino Shift)
 -- shifted_days khớp chính xác số ngày tạm dừng (pause_end_date - pause_start_date + 1)
@@ -491,15 +500,9 @@ CREATE TABLE pause_records (
     CONSTRAINT chk_pause_records_status CHECK (status IN ('ACTIVE', 'COMPLETED', 'CANCELLED'))
 );
 
--- =============================================================================
--- BOUNDED CONTEXT 4: EVALUATION (`evaluation` — 2 BẢNG)
--- Trách nhiệm: Tính toán chỉ số định lượng (QuantitativeMetrics), sinh báo cáo
---              AI Review theo chu kỳ SRL và lưu vết kiểm toán biến động lịch.
--- =============================================================================
-
 -- -----------------------------------------------------------------------------
 -- 21. BẢNG AI_REVIEWS (Báo cáo Đánh giá Tiến độ & Khuyến nghị Thích ứng từ AI)
--- Cột số chuẩn hóa ánh xạ sang QuantitativeMetrics + nhận xét định tính TEXT
+-- quantitative_summary JSONB lưu 5 chỉ số của QuantitativeMetrics + 3 trường nhận xét TEXT + model_used
 -- -----------------------------------------------------------------------------
 CREATE TABLE ai_reviews (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -509,11 +512,11 @@ CREATE TABLE ai_reviews (
     review_cycle VARCHAR(20) NOT NULL,
     period_start DATE,
     period_end DATE,
-    total_study_minutes INTEGER NOT NULL DEFAULT 0,
-    tasks_completed INTEGER NOT NULL DEFAULT 0,
-    completion_rate NUMERIC(5, 2) NOT NULL DEFAULT 0.00,
-    qualitative_feedback TEXT NOT NULL DEFAULT '',
-    recommendations TEXT NOT NULL DEFAULT '',
+    quantitative_summary JSONB NOT NULL DEFAULT '{}'::jsonb,
+    strengths_feedback TEXT NOT NULL,
+    bottlenecks_feedback TEXT NOT NULL,
+    action_recommendations TEXT NOT NULL,
+    model_used VARCHAR(100) NOT NULL,
     generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -521,10 +524,8 @@ CREATE TABLE ai_reviews (
     CONSTRAINT fk_ai_reviews_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     CONSTRAINT fk_ai_reviews_milestone FOREIGN KEY (milestone_id) REFERENCES milestones(id) ON DELETE CASCADE,
     CONSTRAINT chk_ai_reviews_cycle CHECK (review_cycle IN ('WEEKLY', 'MILESTONE')),
-    CONSTRAINT chk_ai_reviews_minutes CHECK (total_study_minutes >= 0),
-    CONSTRAINT chk_ai_reviews_tasks CHECK (tasks_completed >= 0),
-    CONSTRAINT chk_ai_reviews_rate CHECK (completion_rate BETWEEN 0.00 AND 100.00),
-    CONSTRAINT chk_ai_reviews_period CHECK (
+    CONSTRAINT chk_ai_reviews_quantitative_summary CHECK (jsonb_typeof(quantitative_summary) = 'object'),
+    CONSTRAINT chk_ai_reviews_period_order CHECK (
         (review_cycle = 'MILESTONE' AND milestone_id IS NOT NULL AND period_start IS NULL AND period_end IS NULL) OR
         (review_cycle = 'WEEKLY' AND milestone_id IS NULL AND period_start IS NOT NULL AND period_end IS NOT NULL AND period_end >= period_start)
     )
@@ -560,7 +561,7 @@ CREATE TABLE schedule_change_logs (
 );
 
 -- =============================================================================
--- SHARED KERNEL (`shared_kernel` — 2 BẢNG)
+-- BOUNDED CONTEXT 5 / SHARED KERNEL (`shared_kernel` — 2 BẢNG)
 -- Trách nhiệm: Đảm bảo phát sự kiện liên Bounded Context tin cậy (Transactional Outbox)
 --              và tiêu thụ sự kiện bất biến (Idempotent Consumer) trên Taskiq Worker.
 -- =============================================================================
@@ -602,26 +603,28 @@ CREATE TABLE processed_events (
 );
 
 -- =============================================================================
--- TRIGGERS: TỰ ĐỘNG CẬP NHẬT UPDATED_AT CHO TẤT CẢ CÁC BẢNG CÓ CỘT UPDATED_AT
+-- 6. TRIGGERS: TỰ ĐỘNG CẬP NHẬT UPDATED_AT CHO TẤT CẢ 18 BẢNG CÓ CỘT UPDATED_AT
 -- =============================================================================
-CREATE TRIGGER trg_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-CREATE TRIGGER trg_learner_profiles_updated_at BEFORE UPDATE ON learner_profiles FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-CREATE TRIGGER trg_webcal_tokens_updated_at BEFORE UPDATE ON webcal_tokens FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-CREATE TRIGGER trg_availabilities_updated_at BEFORE UPDATE ON availabilities FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-CREATE TRIGGER trg_availability_slots_updated_at BEFORE UPDATE ON availability_slots FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-CREATE TRIGGER trg_ai_quotas_updated_at BEFORE UPDATE ON ai_quotas FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-CREATE TRIGGER trg_payment_transactions_updated_at BEFORE UPDATE ON payment_transactions FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-CREATE TRIGGER trg_goals_updated_at BEFORE UPDATE ON goals FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-CREATE TRIGGER trg_roadmaps_updated_at BEFORE UPDATE ON roadmaps FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-CREATE TRIGGER trg_milestones_updated_at BEFORE UPDATE ON milestones FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-CREATE TRIGGER trg_official_schedules_updated_at BEFORE UPDATE ON official_schedules FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-CREATE TRIGGER trg_tasks_updated_at BEFORE UPDATE ON tasks FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-CREATE TRIGGER trg_schedule_proposals_updated_at BEFORE UPDATE ON schedule_proposals FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-CREATE TRIGGER trg_study_sessions_updated_at BEFORE UPDATE ON study_sessions FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-CREATE TRIGGER trg_session_tasks_updated_at BEFORE UPDATE ON session_tasks FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-CREATE TRIGGER trg_study_notes_updated_at BEFORE UPDATE ON study_notes FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-CREATE TRIGGER trg_pause_records_updated_at BEFORE UPDATE ON pause_records FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-CREATE TRIGGER trg_ai_reviews_updated_at BEFORE UPDATE ON ai_reviews FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+CREATE TRIGGER trg_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+CREATE TRIGGER trg_learner_profiles_updated_at BEFORE UPDATE ON learner_profiles FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+CREATE TRIGGER trg_webcal_tokens_updated_at BEFORE UPDATE ON webcal_tokens FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+CREATE TRIGGER trg_availabilities_updated_at BEFORE UPDATE ON availabilities FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+CREATE TRIGGER trg_availability_slots_updated_at
+    BEFORE UPDATE ON availability_slots
+    FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+CREATE TRIGGER trg_ai_quotas_updated_at BEFORE UPDATE ON ai_quotas FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+CREATE TRIGGER trg_payment_transactions_updated_at BEFORE UPDATE ON payment_transactions FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+CREATE TRIGGER trg_goals_updated_at BEFORE UPDATE ON goals FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+CREATE TRIGGER trg_roadmaps_updated_at BEFORE UPDATE ON roadmaps FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+CREATE TRIGGER trg_milestones_updated_at BEFORE UPDATE ON milestones FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+CREATE TRIGGER trg_official_schedules_updated_at BEFORE UPDATE ON official_schedules FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+CREATE TRIGGER trg_schedule_proposals_updated_at BEFORE UPDATE ON schedule_proposals FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+CREATE TRIGGER trg_tasks_updated_at BEFORE UPDATE ON tasks FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+CREATE TRIGGER trg_study_sessions_updated_at BEFORE UPDATE ON study_sessions FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+CREATE TRIGGER trg_session_tasks_updated_at BEFORE UPDATE ON session_tasks FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+CREATE TRIGGER trg_study_notes_updated_at BEFORE UPDATE ON study_notes FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+CREATE TRIGGER trg_pause_records_updated_at BEFORE UPDATE ON pause_records FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+CREATE TRIGGER trg_ai_reviews_updated_at BEFORE UPDATE ON ai_reviews FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
 
 -- =============================================================================
 -- CHỈ MỤC HIỆU NĂNG & BẢO VỆ ĐỒNG THỜI (INDEXES & PARTIAL CONSTRAINTS)
@@ -674,7 +677,7 @@ CREATE INDEX idx_tasks_roadmap_scheduled_date ON tasks(roadmap_id, scheduled_dat
 CREATE INDEX idx_tasks_scheduled_start ON tasks(scheduled_start) WHERE scheduled_start IS NOT NULL;
 
 -- 2.10 Phát hiện nhiệm vụ quá hạn (Deterministic Overdue Query)
-CREATE INDEX idx_tasks_overdue ON tasks(scheduled_date) WHERE status IN ('PENDING', 'TODO') AND scheduled_date IS NOT NULL;
+CREATE INDEX idx_tasks_overdue ON tasks(scheduled_date) WHERE status IN ('TODO', 'IN_PROGRESS') AND scheduled_date IS NOT NULL;
 
 -- 2.11 Nhiệm vụ theo mốc kiến thức và lịch chính thức
 CREATE INDEX idx_tasks_milestone_id ON tasks(milestone_id);

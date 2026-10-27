@@ -1,0 +1,79 @@
+<mxfile host="app.diagrams.net" modified="2026-10-27T03:50:00.000Z" agent="FocusFlow-UML" version="24.0.0">
+  <diagram name="Module-1-Account-Profile-Billing" id="FF-UC-Mod-1">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="800" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Actors Primary (Left) -->
+        <mxCell id="actor-learner" value="Người học&#xa;(Learner)" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;fillColor=#EBF8FF;strokeColor=#2B6CB0;fontStyle=1;fontColor=#1A202C;" vertex="1" parent="1">
+          <mxGeometry x="80" y="240" width="50" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="actor-admin" value="Quản trị viên&#xa;(Administrator)" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;fillColor=#FEFCBF;strokeColor=#B7791F;fontStyle=1;fontColor=#1A202C;" vertex="1" parent="1">
+          <mxGeometry x="80" y="440" width="50" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- System Boundary -->
+        <mxCell id="mod-boundary" value="Hệ thống FocusFlow — Module 1: Quản lý Tài khoản, Hồ sơ &amp; Gói học tập" style="shape=rect;html=1;verticalAlign=top;fontStyle=1;whiteSpace=wrap;align=center;fillColor=#F7FAFC;strokeColor=#2B6CB0;fontSize=14;fontColor=#1A202C;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="220" y="80" width="620" height="520" as="geometry" />
+        </mxCell>
+
+        <!-- Use Cases -->
+        <mxCell id="uc-01" value="UC-01&#xa;Đăng ký tài khoản người học" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="270" y="140" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-02" value="UC-02&#xa;Đăng nhập hệ thống&#xa;(bao gồm luồng Đăng xuất)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="270" y="230" width="220" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-03" value="UC-03&#xa;Thiết lập thời gian rảnh và hồ sơ học tập&#xa;(Hybrid Mode A/B &amp; Hồ sơ SRL)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="270" y="320" width="250" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-04" value="UC-04&#xa;Nâng cấp gói học tập (Premium)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="270" y="430" width="230" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-05" value="UC-05&#xa;Thanh toán trực tuyến&#xa;(Tạo đơn / QR &amp; Xác thực Webhook)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="580" y="430" width="230" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Secondary Supporting Actors (Right) -->
+        <mxCell id="sys-calendar" value="&amp;lt;&amp;lt;system&amp;gt;&amp;gt;&#xa;Ứng dụng Lịch ngoài&#xa;(Google / Apple Calendar)" style="shape=rect;html=1;whiteSpace=wrap;fillColor=#EDF2F7;strokeColor=#4A5568;fontStyle=1;fontColor=#1A202C;align=center;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="930" y="325" width="180" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="sys-payment" value="&amp;lt;&amp;lt;system&amp;gt;&amp;gt;&#xa;Cổng thanh toán&#xa;(PayOS / VNPay Sandbox)" style="shape=rect;html=1;whiteSpace=wrap;fillColor=#EDF2F7;strokeColor=#4A5568;fontStyle=1;fontColor=#1A202C;align=center;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="930" y="430" width="180" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Associations -->
+        <mxCell id="edge-learner-uc01" edge="1" parent="1" source="actor-learner" target="uc-01" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-learner-uc02" edge="1" parent="1" source="actor-learner" target="uc-02" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-admin-uc02" edge="1" parent="1" source="actor-admin" target="uc-02" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-learner-uc03" edge="1" parent="1" source="actor-learner" target="uc-03" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-learner-uc04" edge="1" parent="1" source="actor-learner" target="uc-04" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Include UC04 -> UC05 -->
+        <mxCell id="edge-include-uc04-uc05" value="&amp;lt;&amp;lt;include&amp;gt;&amp;gt;" edge="1" parent="1" source="uc-04" target="uc-05" style="endArrow=open;dashed=1;html=1;strokeColor=#4A5568;strokeWidth=1.5;endFill=0;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Secondary Actor Links -->
+        <mxCell id="edge-uc03-cal" edge="1" parent="1" source="uc-03" target="sys-calendar" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-uc05-pay" edge="1" parent="1" source="uc-05" target="sys-payment" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

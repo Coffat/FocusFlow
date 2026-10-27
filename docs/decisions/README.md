@@ -14,7 +14,7 @@
 Hồ sơ Quyết định Kiến trúc (Architecture Decision Records - ADR) ghi lại các quyết định kỹ thuật cốt lõi có tầm ảnh hưởng lớn tới cấu trúc, tính mô-đun, độ tin cậy dữ liệu, hiệu năng và khả năng bảo trì của hệ thống FocusFlow v2.0. Mỗi bản ghi ADR giải trình tường minh:
 * **Ngữ cảnh & Vấn đề (Context):** Lý do phải đưa ra quyết định kỹ thuật và các yêu cầu có ý nghĩa kiến trúc (ASR) liên quan.
 * **Các phương án xem xét (Alternatives Considered):** So sánh khách quan ít nhất 2–3 giải pháp công nghệ/mô hình khả thi.
-* **Quyết định (Decision):** Giải pháp được phê duyệt chính thức và đồng bộ 100% giữa SRS v1.1, 19 Use Cases, Class Diagram v4.2, Database Schema (24 bảng) và Codebase.
+* **Quyết định (Decision):** Giải pháp được phê duyệt chính thức và đồng bộ 100% giữa SRS v1.2, 19 Use Cases, Class Diagram v5.0, Database Schema (24 bảng) và Codebase.
 * **Lý do & Đánh đổi (Rationale & Trade-Offs):** Cân nhắc kỹ lưỡng giữa lợi ích thu được và chi phí/độ phức tạp kỹ thuật phải đánh đổi.
 * **Hệ quả & Kiểm chứng (Consequences & Verification):** Ảnh hưởng tích cực, biện pháp giảm thiểu rủi ro và cơ chế kiểm chứng tự động (Architectural Fitness Functions).
 
@@ -105,5 +105,5 @@ stateDiagram-v2
 ```
 
 ### Nguyên tắc Bất biến:
-1. **Truy vết đa chiều (End-to-End Traceability):** Mọi quyết định trong ADR phải khớp 100% với SRS v1.1, 19 Use Cases, Class Diagram v4.2 và 24 bảng PostgreSQL 16.
+1. **Truy vết đa chiều (End-to-End Traceability):** Mọi quyết định trong ADR phải khớp 100% với SRS v1.2, 19 Use Cases, Class Diagram v5.0 và 24 bảng PostgreSQL 16.
 2. **Tính khả chứng thực tiễn (Executable Verification):** Mỗi quyết định kiến trúc đều đi kèm cơ chế kiểm chứng tự động (`import-linter`, `mypy --strict`, `pytest-asyncio`, `vitest`, `playwright`, hoặc `schema.sql` constraints).

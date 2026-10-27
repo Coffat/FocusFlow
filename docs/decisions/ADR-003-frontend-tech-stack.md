@@ -59,15 +59,15 @@ Trong bản thiết kế sơ bộ v1.0, việc dự kiến dùng Angular 19 kèm
 
 ### 3.5. Cấu trúc 9 Feature Slices & Kiểm thử Tự động (Vitest + Playwright)
 Tổ chức thư mục `frontend/src/app/features/` thành **9 Feature Slices** độc lập (nạp lười qua `loadComponent` / `loadChildren`), bao phủ trọn vẹn 19 Use Cases:
-1. `auth`: Đăng ký, đăng nhập, quên mật khẩu, khởi tạo Onboarding (`UC-01`, `UC-02`).
-2. `dashboard`: Tổng quan tiến độ hôm nay, hạn ngạch AI, truy cập nhanh phiên học.
-3. `roadmaps`: Thiết lập mục tiêu, AI sinh & duyệt Milestones, sinh & duyệt Schedule Proposal (`UC-06`..`UC-09`).
-4. `workspace`: Không gian học tập Pomodoro/Stopwatch, ghi chú Markdown (`StudyNote`), Heartbeat 60s (`UC-10`..`UC-12`).
-5. `schedule`: Lịch học chính thức dạng Calendar/Timeline, đồng bộ Google Calendar OAuth2 & WebCal `.ics` (`UC-08`, `UC-13`).
-6. `tasks`: Quản lý danh sách công việc, đồ thị phụ thuộc DAG và xử lý cảnh báo chống lặp quá hạn (`STALLED` intervention dialog - `UC-09`, `UC-17`).
-7. `analytics`: Biểu đồ thống kê định lượng (Adherence, Velocity), báo cáo đánh giá AI định kỳ SRL (`UC-14`, `UC-15`).
-8. `settings` / `billing`: Quản lý hồ sơ năng lực SRL (`UC-03`), cấu hình lịch rảnh Mode A/B (`UC-04`), và **nâng cấp gói Premium / thanh toán QR (`UC-05` — `billing`)**.
-9. `admin`: Cổng quản trị người dùng, hạn ngạch (`UC-18`) và bảng giám sát sức khỏe hệ thống, nhật ký AI (`UC-19`).
+1. `auth/`: Đăng ký, đăng nhập, quên mật khẩu, khởi tạo Onboarding (`UC-01`, `UC-02`).
+2. `dashboard/`: Tổng quan tiến độ hôm nay, mục `Needs Attention` cảnh báo quá hạn (kèm nút `AI Reschedule`), hạn ngạch AI, truy cập nhanh phiên học.
+3. `planning/` (tương ứng `roadmaps/` — `UC-06..UC-09`): Thiết lập mục tiêu, AI sinh & duyệt Milestones, sinh & duyệt Schedule Proposal.
+4. `workspace/` (`UC-11`, `UC-12`): Không gian học tập Pomodoro/Stopwatch, ghi chú Markdown (`StudyNote`), Heartbeat 60s.
+5. `calendar/` (tương ứng `schedule/` — `UC-10`, `UC-13`): Lịch học chính thức dạng Calendar/Timeline, đồng bộ Google Calendar OAuth2 & WebCal `.ics`.
+6. `tasks/` (`UC-09`, `UC-17`): Quản lý danh sách công việc, đồ thị phụ thuộc DAG và xử lý cảnh báo chống lặp quá hạn (`STALLED` intervention dialog).
+7. `analytics/` (`UC-14..UC-16`): Biểu đồ thống kê định lượng (Adherence, Velocity), báo cáo đánh giá AI định kỳ SRL và tạm dừng/tiếp tục lộ trình.
+8. `settings/` (`UC-03..UC-05`, bao gồm `billing`): Thiết lập lịch rảnh Mode A/B & hồ sơ năng lực SRL (`UC-03`), nâng cấp gói Premium (`UC-04`), và **thanh toán QR (`UC-05` — `billing`)**.
+9. `admin/` (`UC-18`, `UC-19`): Cổng quản trị người dùng, hạn ngạch (`UC-18`) và bảng giám sát sức khỏe hệ thống, nhật ký AI (`UC-19`).
 
 * **Công cụ Kiểm thử:** Sử dụng **Vitest** tốc độ cao cho Unit Test (Signal Stores, Components, Pipes) và **Playwright** cho kiểm thử tích hợp đầu-cuối (E2E User Flows).
 

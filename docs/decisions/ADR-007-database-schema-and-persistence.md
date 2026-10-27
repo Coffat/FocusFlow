@@ -10,9 +10,9 @@
 ---
 
 ## 1. Ngữ cảnh & Đặt vấn đề (Context)
-Trong quá trình đối chiếu chéo toàn diện giữa tài liệu Nghiệp vụ (`SRS v1.1`, `19 Use Cases`, `Class Diagram v4.2`) và tài liệu Thiết kế Cơ sở Dữ liệu, nhóm phát triển đã phát hiện và cần giải quyết dứt điểm **3 mâu thuẫn thiết kế tồn đọng** từ phiên bản v1.0:
+Trong quá trình đối chiếu chéo toàn diện giữa tài liệu Nghiệp vụ (`SRS v1.2`, `19 Use Cases`, `Class Diagram v5.0`) và tài liệu Thiết kế Cơ sở Dữ liệu (`schema.sql` v3.0), nhóm phát triển đã phát hiện và cần giải quyết dứt điểm **3 vấn đề thiết kế trọng tâm** từ phiên bản v1.0:
 1. **Lệch số lượng bảng giữa các tài liệu (15 vs 16 vs 19 vs 24 bảng):** Các bản ghi ADR cũ chỉ nhắc tới 15 hoặc 16 bảng, thiếu các bảng quan trọng phục vụ thanh toán (`payment_transactions`), kiểm toán dời lịch (`schedule_change_logs`), nhật ký tiêu thụ AI (`ai_usage_logs`), và đặc biệt là cặp bảng đảm bảo tính nhất quán sự kiện liên module (`outbox_events`, `processed_events`).
-2. **Mâu thuẫn giữa Khóa ngoại Phức hợp (Composite FK) trong ADR-007 cũ và Khóa ngoại Đơn (Single Surrogate FK) trong `database-schema-design.md`:** Bản nháp ADR-007 cũ từng đề xuất sao chép cột `user_id` xuống mọi bảng con (`schedule_proposals`, `study_sessions`, `ai_reviews`) để làm Composite FK `(roadmap_id, user_id)`. Cách làm này gây **dư thừa dữ liệu bắc cầu (Transitive Dependency: `id -> roadmap_id -> goal_id -> user_id`)**, vi phạm nguyên tắc chuẩn hóa 3NF/BCNF nghiêm ngặt mà Hội đồng chấm thi yêu cầu.
+2. **Chiến lược Khóa ngoại Đơn (Single Surrogate FK) kết hợp Định danh Tương quan Đa người thuê Liên Context (Cross-Context Tenant Correlation IDs — `user_id`, `roadmap_id`):** Trong kiến trúc **Context-First Modular Monolith** cấm tuyệt đối ORM JOIN chéo Bounded Context (`ADR-001`), nếu các bảng ở các Context hạ nguồn (`schedule_proposals`, `study_sessions`, `ai_reviews`, `tasks`) hoàn toàn không lưu định danh tương quan (`user_id` hoặc `roadmap_id` trên `tasks`), mọi thao tác kiểm tra quyền sở hữu chống tấn công IDOR (`NFR-SEC-004`) sẽ buộc phải thực hiện nhiều cuộc gọi RPC nội bộ qua `public_api.py` gây suy giảm hiệu năng. Ngược lại, nếu dùng Khóa ngoại Phức hợp (Composite FK `(roadmap_id, user_id)`) cứng nhắc ở mọi cấp, lược đồ sẽ trở nên cồng kềnh. Do đó, cần làm rõ cơ chế giữ Single Surrogate Primary/Foreign Key chuẩn 3NF/BCNF kết hợp với **Cross-Context Tenant Correlation IDs** được bảo vệ bởi bất biến tầng ứng dụng.
 3. **Mâu thuẫn biểu diễn Lịch rảnh (`availability_slots` vs cột `JSONB weekly_schedule`):** Tài liệu CSDL thiết kế bảng con chuẩn hóa `availability_slots` đạt chuẩn 3NF, trong khi một số tài liệu kiến trúc cũ lại mô tả lưu mảng JSONB `weekly_schedule` trong bảng `availabilities` còn Class Diagram mô tả các Value Objects `WeeklySchedule` và `TimeSlot`.
 
 ---
@@ -23,13 +23,13 @@ Trong quá trình đối chiếu chéo toàn diện giữa tài liệu Nghiệp 
 * *Ưu điểm:* Cô lập vật lý giống Microservices.
 * *Nhược điểm:* Mất khả năng bảo vệ toàn vẹn tham chiếu (Referential Integrity) ở cấp hệ quản trị CSDL; khó chứng minh thiết kế lược đồ quan hệ chuẩn 3NF/BCNF hoàn chỉnh trước Hội đồng bảo vệ đồ án.
 
-### Phương án B: Dùng Khóa ngoại Phức hợp (Composite FK) kèm cột `user_id` dư thừa và Lưu Lịch rảnh bằng JSONB (Bản nháp cũ)
-* *Ưu điểm:* Truy vấn nhanh `user_id` mà không cần đi qua bảng cha.
-* *Nhược điểm:* Vi phạm chuẩn 3NF do phụ thuộc bắc cầu (`roadmap_id` đã xác định duy nhất `goal_id` và `user_id`); lưu khung giờ rảnh trong JSONB khiến CSDL không thể kiểm tra ràng buộc `start_time < end_time` hay `day_of_week` bằng các `CHECK` constraints quan hệ chuẩn.
+### Phương án B: Dùng Khóa ngoại Phức hợp (Composite FK) Cồng kềnh và Lưu toàn bộ Khung giờ Lịch rảnh bằng mảng JSONB (Bản nháp cũ)
+* *Ưu điểm:* Gom toàn bộ cấu trúc tuần vào một cột JSONB.
+* *Nhược điểm:* Lưu mảng lặp các khung giờ rảnh trong JSONB khiến CSDL không thể kiểm tra ràng buộc `start_time < end_time` hay `day_of_week` bằng các `CHECK` constraints quan hệ chuẩn 3NF.
 
-### Phương án C: Đồng bộ Tuyệt đối 24 Bảng Chuẩn 3NF/BCNF trên PostgreSQL 16 (`public` schema), Khóa ngoại Đơn (Single Surrogate FK), Bảng con `availability_slots` & Cấm ORM JOIN Chéo Context ở Tầng Ứng dụng (Được chọn)
+### Phương án C: Đồng bộ Tuyệt đối 24 Bảng Chuẩn 3NF/BCNF trên PostgreSQL 16 (`public` schema), Single Surrogate FK + Cross-Context Tenant Correlation IDs (`user_id`, `roadmap_id`), Bảng con `availability_slots` & Cấm ORM JOIN Chéo Context (Được chọn)
 * Chuẩn hóa chính thức **24 bảng trong schema `public` của PostgreSQL 16** đạt chuẩn **3NF/BCNF** nghiêm ngặt.
-* Sử dụng **Khóa ngoại Đơn thay thế (Single Surrogate Foreign Keys - `UUIDv7`)** ở cấp CSDL để bảo toàn 3NF không dư thừa cột `user_id`, đồng thời **cấm tuyệt đối SQLAlchemy ORM JOIN hoặc import ORM Model chéo Bounded Context** trong mã nguồn ứng dụng.
+* Sử dụng **Khóa ngoại Đơn thay thế (Single Surrogate Foreign Keys - `UUIDv7`)** kết hợp giữ lại có chủ đích các cột **Cross-Context Tenant Correlation IDs** (`user_id` trên `schedule_proposals`, `study_sessions`, `ai_reviews`, `pause_records`... và `roadmap_id` trên `tasks`) để kiểm tra quyền sở hữu chống IDOR trong thời gian $O(1)$ không cần JOIN chéo Context (`NFR-SEC-004`).
 * Giữ nguyên bảng con chuẩn hóa **`availability_slots`** trong PostgreSQL 16 và thực hiện ánh xạ (mapping) bên trong `SqlAlchemyAvailabilityRepository` sang các Domain Value Objects `WeeklySchedule` và `TimeSlot`.
 
 ---
@@ -38,29 +38,28 @@ Trong quá trình đối chiếu chéo toàn diện giữa tài liệu Nghiệp 
 **Chấp thuận Phương án C với 5 trụ cột thiết kế CSDL v2.0:**
 
 ### 3.1. Phân bổ Chính thức 24 Bảng Chuẩn 3NF/BCNF theo 4 Bounded Contexts + `shared_kernel`
-Toàn bộ 24 bảng nằm trong schema `public` của PostgreSQL 16, trong đó mỗi bảng thuộc quyền **sở hữu ghi độc quyền (Exclusive Write Ownership)** của đúng một Bounded Context:
+Toàn bộ 24 bảng nằm trong schema `public` của PostgreSQL 16, trong đó mỗi bảng thuộc quyền **sở hữu ghi độc quyền (Exclusive Write Ownership)** của đúng một Bounded Context (đồng bộ 100% với `Class Diagram v5.0` và `schema.sql` v3.0):
 
 | Phân vùng (Bounded Context) | Số lượng | Danh sách các Bảng PostgreSQL 16 Sở hữu |
 | :--- | :---: | :--- |
-| **1. `account`** | **9 bảng** | `users`, `learner_profiles`, `availabilities`, `availability_slots`, `webcal_tokens`, `ai_quotas`, `ai_quota_reservations`, `ai_usage_logs`, `payment_transactions` |
-| **2. `planning`** | **7 bảng** | `goals`, `roadmaps`, `milestones`, `official_schedules`, `tasks`, `task_dependencies`, `schedule_proposals` |
-| **3. `execution`** | **4 bảng** | `study_sessions`, `session_tasks`, `study_notes`, `pause_records` |
-| **4. `evaluation`** | **2 bảng** | `ai_reviews`, `schedule_change_logs` |
+| **1. `account`** | **9 bảng** | `users`, `learner_profiles`, `webcal_tokens`, `availabilities`, `availability_slots`, `ai_quotas`, `ai_quota_reservations`, `ai_usage_logs`, `payment_transactions` |
+| **2. `planning`** | **5 bảng** | `goals`, `roadmaps`, `milestones`, `official_schedules`, `schedule_proposals` |
+| **3. `execution`** | **5 bảng** | `tasks`, `task_dependencies`, `study_sessions`, `session_tasks`, `study_notes` |
+| **4. `evaluation`** | **3 bảng** | `pause_records`, `ai_reviews`, `schedule_change_logs` |
 | **5. `shared_kernel`** | **2 bảng** | `outbox_events`, `processed_events` |
 | **Tổng cộng toàn hệ thống** | **24 bảng** | **Đạt chuẩn 3NF / BCNF 100% với Khóa chính `UUIDv7` tuần tự thời gian** |
 
-### 3.2. Khóa Ngoại Đơn (Single Surrogate Foreign Keys) tại CSDL kết hợp Cấm ORM JOIN Chéo Context
-1. **Ở cấp độ CSDL Vật lý (`PostgreSQL 16`):**
-   * Loại bỏ hoàn toàn thiết kế Composite FK dư thừa `user_id` ở các bảng con tầng sâu. Mọi liên kết quan hệ đều sử dụng **Single Surrogate Foreign Key (`UUIDv7`)** chuẩn mực (ví dụ: `roadmaps.goal_id -> goals.id`, `milestones.roadmap_id -> roadmaps.id`, `schedule_proposals.roadmap_id -> roadmaps.id`, `study_sessions.roadmap_id -> roadmaps.id`, `ai_reviews.roadmap_id -> roadmaps.id`).
-   * Cách thiết kế này khớp 100% với [`database-schema-design.md`](file:///Users/vuthang/Documents/FocusFlow/docs/database/database-schema-design.md), loại bỏ hoàn toàn phụ thuộc bắc cầu và bảo toàn chuẩn **3NF/BCNF** thuần khiết.
-   * Quyền sở hữu dữ liệu của người dùng (Multi-tenant Ownership / Chống IDOR) được kiểm tra chặt chẽ thông qua truy vấn xác thực quyền sở hữu tại Repository/Query Port trước khi thực hiện thao tác.
+### 3.2. Khóa Ngoại Đơn (Single Surrogate FK), Định danh Tương quan Liên Context (`user_id`, `roadmap_id`) & Cấm ORM JOIN Chéo Context
+1. **Ở cấp độ CSDL Vật lý (`PostgreSQL 16` — `schema.sql` v3.0):**
+   * Mọi liên kết quan hệ đều sử dụng **Single Surrogate Foreign Key (`UUIDv7`)** chuẩn mực.
+   * **Lý giải Kiến trúc về Cross-Context Tenant Correlation IDs (`user_id` và `roadmap_id`):** Trong kiến trúc **Context-First Modular Monolith** nơi việc thực hiện câu lệnh `JOIN` ORM chéo Bounded Context bị cấm tuyệt đối (`ADR-001`), cột `user_id` (trên `schedule_proposals`, `study_sessions`, `study_notes`, `pause_records`, `ai_reviews`, `schedule_change_logs`) và cột `roadmap_id` (trên `tasks` thuộc `execution`, trong khi `milestones`/`roadmaps` thuộc `planning`) được giữ lại có chủ đích với vai trò là **Định danh Tương quan Người thuê Liên Context (Cross-Context Tenant Correlation IDs)**. Thiết kế này cho phép từng Bounded Context thực thi kiểm tra quyền sở hữu chống tấn công **IDOR (`NFR-SEC-004`) với độ phức tạp $O(1)$ không cần JOIN (Zero-Join Ownership Check)** ngay trên bảng cục bộ của mình, đồng thời vẫn duy trì tính toàn vẹn chuẩn 3NF/BCNF thông qua các khóa ngoại đơn và bất biến ở tầng Application/Use Case khi khởi tạo thực thể.
 2. **Ở cấp độ Mã nguồn Ứng dụng (`SQLAlchemy 2.0 ORM`):**
    * Giữ các ràng buộc `FOREIGN KEY` vật lý ở DDL SQL để đảm bảo tính toàn vẹn dữ liệu cấp cuối (Defense-in-Depth), nhưng **cấm tuyệt đối việc khai báo `relationship()` hoặc viết câu lệnh SQLAlchemy `JOIN` trực tiếp giữa các bảng thuộc hai Bounded Context khác nhau**.
    * Mọi nhu cầu tra cứu dữ liệu liên Context bắt buộc đi qua `public_api.py` (Read-Only Query Port) của Context sở hữu bảng đó (`ADR-001`).
 
 ### 3.3. Giải quyết Triệt để Bài toán Lịch Rảnh: Bảng `availability_slots` $\leftrightarrow$ Value Objects `WeeklySchedule` & `TimeSlot`
-* **Tại tầng CSDL (`PostgreSQL 16`):** Lưu trữ các khung giờ rảnh trong bảng con chuẩn hóa **`availability_slots`** (`id`, `availability_id`, `day_of_week`, `start_time`, `end_time`, `slot_type`, ...) có khóa ngoại trỏ về `availabilities(id) ON DELETE CASCADE`. Điều này cho phép kiểm tra ràng buộc toàn vẹn từng khung giờ bằng SQL `CHECK` constraints và đạt chuẩn 3NF tuyệt đối (không lưu mảng lặp trong cột JSONB).
-* **Tại tầng Domain (`account.domain`):** Aggregate Root `AvailabilityProfile` giữ đối tượng giá trị bất biến **`WeeklySchedule`** chứa tập hợp các **`TimeSlot`** (đồng bộ 100% với `Class Diagram v4.2`) để phục vụ tính toán trong `HybridAvailabilityRuleEngine`.
+* **Tại tầng CSDL (`PostgreSQL 16`):** Lưu trữ các khung giờ rảnh trong bảng con chuẩn hóa **`availability_slots`** (`id`, `availability_id`, `day_of_week`, `start_time`, `end_time`, `end_day_offset`, `slot_type`, `is_active`, ...) có khóa ngoại trỏ về `availabilities(id) ON DELETE CASCADE`. Điều này cho phép kiểm tra ràng buộc toàn vẹn từng khung giờ bằng SQL `CHECK` constraints và đạt chuẩn 3NF tuyệt đối (không lưu mảng lặp các khung giờ trong cột JSONB).
+* **Tại tầng Domain (`account.domain`):** Aggregate Root `AvailabilityProfile` giữ đối tượng giá trị bất biến **`WeeklySchedule`** chứa tập hợp các **`TimeSlot`** (đồng bộ 100% với `Class Diagram v5.0`) để phục vụ tính toán trong `HybridAvailabilityRuleEngine`.
 * **Tại tầng Infrastructure (`SqlAlchemyAvailabilityRepository`):** Repository đảm nhận vai trò **Data Mapper** nạp bảng `availabilities` cùng danh sách `availability_slots` (qua `selectinload`) và tái cấu trúc thành `WeeklySchedule` / `TimeSlot` khi đọc lên Domain, cũng như đồng bộ ngược lại các dòng `availability_slots` khi lưu Aggregate Root.
 
 ### 3.4. Chuẩn hóa 5 Bảng Nghiệp vụ & Hạ tầng Bổ sung cùng `ai_usage_logs`
@@ -83,7 +82,7 @@ Bản thiết kế v2.0 chính thức chuẩn hóa đầy đủ các bảng ph�
 
 | Tiêu chí | Quyết định Lựa chọn v2.0 | Lý do & Giá trị Đạt được |
 | :--- | :--- | :--- |
-| **Chuẩn hóa 3NF/BCNF** | Khóa ngoại đơn (Single Surrogate FK) + Bảng con `availability_slots`. | Loại bỏ hoàn toàn cột `user_id` dư thừa bắc cầu và mảng JSONB lặp; thuyết phục tuyệt đối Hội đồng chấm thi về lý thuyết CSDL quan hệ. |
+| **Chuẩn hóa 3NF/BCNF & Chống IDOR $O(1)$** | Khóa ngoại đơn (Single Surrogate FK) + Cross-Context Tenant Correlation IDs (`user_id`, `roadmap_id`) + Bảng con `availability_slots`. | Đảm bảo kiểm tra quyền sở hữu chống IDOR (`NFR-SEC-004`) trong $O(1)$ mà không cần ORM JOIN chéo Context, đồng thời giữ cấu trúc bảng con `availability_slots` chuẩn 3NF/BCNF. |
 | **Cô lập Bounded Context** | Giữ FK vật lý ở PostgreSQL nhưng cấm ORM JOIN chéo Context. | Vừa có lưới an toàn Referential Integrity ở cấp DB, vừa giữ mã nguồn các Bounded Context độc lập hoàn toàn (`ASR-01`). |
 | **Đồng bộ Tài liệu 100%** | Thống nhất con số **24 bảng** trên mọi tài liệu (`ERD`, `DDL`, `Class Diagram`, `ADRs`). | Xóa bỏ hoàn toàn mâu thuẫn giữa các phiên bản tài liệu cũ. |
 
