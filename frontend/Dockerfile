@@ -1,5 +1,5 @@
 # ==========================================
-# Stage 1: Build Angular 19 SPA
+# Stage 1: Build Angular 21 SPA
 # ==========================================
 FROM node:22-alpine AS builder
 

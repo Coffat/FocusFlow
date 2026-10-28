@@ -10,6 +10,7 @@ from src.account.presentation.routers import router as account_router
 from src.evaluation.presentation.routers import router as evaluation_router
 from src.execution.presentation.routers import router as execution_router
 from src.planning.presentation.routers import router as planning_router
+from src.presentation.api.v1.routers.auth import router as auth_router
 from src.shared_kernel.config import get_settings
 from src.shared_kernel.infrastructure.worker.broker import broker
 from src.shared_kernel.logging import configure_logging, correlation_id_ctx
@@ -66,6 +67,7 @@ def create_app() -> FastAPI:
             correlation_id_ctx.reset(token)
 
     app.include_router(account_router)
+    app.include_router(auth_router, prefix="/api/v1")
     app.include_router(planning_router)
     app.include_router(execution_router)
     app.include_router(evaluation_router)

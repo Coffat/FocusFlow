@@ -1,0 +1,136 @@
+<main class="otp-card">
+  <!-- Brand Header -->
+  <div class="brand-header">
+    <img
+      src="assets/logo.svg"
+      [alt]="'auth.otp.logoAlt' | translate"
+      class="brand-logo"
+    />
+    <h1 class="headline-title">
+      <span class="material-symbols-outlined title-icon">verified_user</span>
+      <span>{{ 'auth.otp.enterCodeTitle' | translate }}</span>
+    </h1>
+    <p class="headline-subtitle">
+      <span>{{ 'auth.otp.dispatchedSubtitle' | translate }} </span>
+      <strong class="email-highlight">{{ email }}</strong>. 
+      <span>{{ 'auth.otp.enterBelowToVerify' | translate }}</span>
+      <a routerLink="/sign-up" class="change-email-link">
+        {{ 'auth.otp.changeEmail' | translate }}
+      </a>
+    </p>
+  </div>
+
+  <!-- Status Banners -->
+  @if (errorMessage) {
+    <div class="error-banner">
+      <span class="material-symbols-outlined">error</span>
+      <span>{{ errorMessage }}</span>
+    </div>
+  }
+
+  @if (successMessage) {
+    <div class="success-banner">
+      <span class="material-symbols-outlined">check_circle</span>
+      <span>{{ successMessage }}</span>
+    </div>
+  }
+
+  <!-- OTP Form -->
+  <form (submit)="$event.preventDefault(); verifyOtp()" class="otp-form">
+    <div class="otp-section">
+      <div class="otp-header-row">
+        <label class="otp-meta-label">{{ 'auth.otp.temporalCodeLabel' | translate }}</label>
+        @if (isAutoFilled) {
+          <span class="otp-autofill-tag">{{ 'auth.otp.autoFillDetected' | translate }}</span>
+        }
+      </div>
+
+      <!-- 6-digit Grid -->
+      <div class="otp-grid" id="otp-container">
+        @for (digit of otpDigits; track $index; let i = $index) {
+          <input
+            #digitInput
+            type="text"
+            inputmode="numeric"
+            maxlength="1"
+            class="otp-cell"
+            [class.filled]="digit.length > 0"
+            [placeholder]="'·'"
+            [value]="digit"
+            (input)="onDigitInput($event, i)"
+            (keydown)="onDigitKeyDown($event, i)"
+            (paste)="onDigitPaste($event)"
+            autocomplete="one-time-code"
+            [attr.aria-label]="'Digit ' + (i + 1)"
+          />
+        }
+      </div>
+    </div>
+
+    <!-- Resend Row -->
+    <div class="resend-row">
+      <span class="resend-meta">
+        <span class="material-symbols-outlined schedule-icon">schedule</span>
+        <span>{{ 'auth.otp.didntReceiveCode' | translate }}</span>
+      </span>
+      <div class="resend-action">
+        @if (cooldownSeconds() > 0) {
+          <span class="timer-countdown">{{ formattedCooldown() }}</span>
+        } @else {
+          <button
+            pButton
+            type="button"
+            class="resend-button"
+            (click)="resendOtp()"
+            [disabled]="isLoading"
+          >
+            {{ 'auth.otp.resendCodeNow' | translate }}
+          </button>
+        }
+      </div>
+    </div>
+
+    <!-- CTA Verify Button -->
+    <button
+      pButton
+      type="button"
+      (click)="verifyOtp()"
+      class="submit-button"
+      [disabled]="fullOtp.length !== 6 || isLoading"
+    >
+      @if (isLoading) {
+        <span class="material-symbols-outlined spin-icon">progress_activity</span>
+      } @else {
+        <span class="submit-text">{{ 'auth.otp.verifyAndProceed' | translate }}</span>
+        <span class="arrow-glyph">→</span>
+      }
+    </button>
+
+    <!-- Alternate Actions -->
+    <div class="alternate-actions">
+      <button
+        pButton
+        type="button"
+        class="action-link-btn"
+        (click)="onUseBackupKey()"
+      >
+        <span class="material-symbols-outlined">vpn_key</span>
+        <span>{{ 'auth.otp.useBackupKey' | translate }}</span>
+      </button>
+      <span class="action-divider">•</span>
+      <a routerLink="/sign-in" class="action-link-btn">
+        <span class="material-symbols-outlined">arrow_back</span>
+        <span>{{ 'auth.otp.backToSignIn' | translate }}</span>
+      </a>
+    </div>
+  </form>
+
+  <!-- Cryptographic Session Lock Card -->
+  <div class="session-lock-banner">
+    <span class="material-symbols-outlined banner-icon">shield</span>
+    <div class="banner-content">
+      <strong class="banner-title">{{ 'auth.otp.sessionLockTitle' | translate }}:</strong>
+      <span class="banner-text"> {{ 'auth.otp.sessionLockText' | translate }}</span>
+    </div>
+  </div>
+</main>

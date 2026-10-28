@@ -1,0 +1,39 @@
+<header class="app-header-bar">
+  <div class="header-container" [class.with-brand]="showBrand">
+    @if (showBrand) {
+      <div class="brand-cluster">
+        <a routerLink="/" class="brand-link">
+          <img
+            src="assets/logo.svg"
+            alt="FocusFlow"
+            class="brand-icon"
+          />
+          <span class="brand-name">FocusFlow</span>
+        </a>
+      </div>
+    }
+
+    <!-- Language Switcher Bar -->
+    <div class="lang-switcher">
+      <button
+        pButton
+        type="button"
+        class="lang-button"
+        [class.active]="translationService.currentLang() === 'vi'"
+        (click)="switchLanguage('vi')"
+      >
+        VI
+      </button>
+      <span class="lang-divider">|</span>
+      <button
+        pButton
+        type="button"
+        class="lang-button"
+        [class.active]="translationService.currentLang() === 'en'"
+        (click)="switchLanguage('en')"
+      >
+        EN
+      </button>
+    </div>
+  </div>
+</header>
