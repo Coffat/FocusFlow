@@ -96,5 +96,30 @@ class ScheduleChangeLogAdapter(ScheduleChangeLogPort):
             created_at=row.created_at,
         )
 
+    async def record_change_log(
+        self,
+        *,
+        roadmap_id: UUID,
+        trigger_type: str = "AI_REPLAN",
+        schedule_id: UUID | None = None,
+        task_id: UUID | None = None,
+        reason: str | None = None,
+        affected_tasks_count: int = 1,
+        total_shifted_minutes: int = 0,
+        diff_payload: dict[str, Any] | None = None,
+        now: datetime | None = None,
+    ) -> ScheduleChangeLogEntryDTO:
+        return await self.log_schedule_change(
+            roadmap_id=roadmap_id,
+            trigger_type=trigger_type,
+            schedule_id=schedule_id,
+            task_id=task_id,
+            reason=reason,
+            affected_tasks_count=affected_tasks_count,
+            total_shifted_minutes=total_shifted_minutes,
+            diff_payload=diff_payload,
+            now=now,
+        )
+
 
 SqlAlchemyScheduleChangeLogAdapter = ScheduleChangeLogAdapter

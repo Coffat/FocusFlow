@@ -45,6 +45,24 @@ class SqlAlchemyAvailabilityQueryAdapter(AvailabilityQueryPort):
         weekly_capacity_minutes = int(
             profile.weekly_schedule.calculate_total_weekly_hours(profile.mode) * 60
         )
+        daily_quota_minutes = {
+            day_name: int(round(d.quota_hours * 60)) if d.enabled else 0
+            for day_name, d in profile.weekly_schedule.days.items()
+        }
+        disabled_weekdays = tuple(
+            day_name for day_name, d in profile.weekly_schedule.days.items() if not d.enabled
+        )
+        availability_slots = tuple(
+            {
+                "day_of_week": day_name,
+                "start_time": slot.start_time.strftime("%H:%M"),
+                "end_time": slot.end_time.strftime("%H:%M"),
+                "end_day_offset": slot.end_day_offset,
+                "is_active": d.enabled,
+            }
+            for day_name, d in profile.weekly_schedule.days.items()
+            for slot in d.time_slots
+        )
 
         return AvailabilitySnapshotDTO(
             user_id=profile.user_id,
@@ -52,6 +70,9 @@ class SqlAlchemyAvailabilityQueryAdapter(AvailabilityQueryPort):
             daily_cap_minutes=daily_cap_minutes,
             weekly_capacity_minutes=weekly_capacity_minutes,
             updated_at=profile.updated_at.isoformat() if is_persisted else None,
+            daily_quota_minutes=daily_quota_minutes,
+            availability_slots=availability_slots,
+            disabled_weekdays=disabled_weekdays,
         )
 
     async def validate_schedule_proposal(

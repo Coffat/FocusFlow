@@ -79,6 +79,9 @@ class AvailabilitySnapshotDTO:
     daily_cap_minutes: int
     weekly_capacity_minutes: int
     updated_at: str | None = None
+    daily_quota_minutes: dict[str, int] = field(default_factory=dict)
+    availability_slots: tuple[dict[str, Any], ...] = ()
+    disabled_weekdays: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

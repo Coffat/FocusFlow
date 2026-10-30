@@ -79,3 +79,17 @@ class ScheduleChangeLogPort(Protocol):
         diff_payload: dict[str, Any] | None = None,
         now: datetime | None = None,
     ) -> ScheduleChangeLogEntryDTO: ...
+
+    async def record_change_log(
+        self,
+        *,
+        roadmap_id: UUID,
+        trigger_type: str = "AI_REPLAN",
+        schedule_id: UUID | None = None,
+        task_id: UUID | None = None,
+        reason: str | None = None,
+        affected_tasks_count: int = 1,
+        total_shifted_minutes: int = 0,
+        diff_payload: dict[str, Any] | None = None,
+        now: datetime | None = None,
+    ) -> ScheduleChangeLogEntryDTO: ...
