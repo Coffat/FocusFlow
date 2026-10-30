@@ -50,6 +50,12 @@ from src.account.domain.exceptions.auth_exceptions import (
     InvalidTokenError,
     TokenExpiredError,
 )
+from src.account.infrastructure.adapters.learner_profile_query_adapter import (
+    LearnerProfileQueryAdapter,
+)
+from src.account.infrastructure.adapters.quota_facade_adapter import (
+    QuotaFacadeAdapter,
+)
 from src.account.infrastructure.caching.otp_repository import OtpRepository
 from src.account.infrastructure.caching.redis_client import RefreshTokenRepository
 from src.account.infrastructure.orm.user_orm import UserORM
@@ -66,6 +72,7 @@ from src.account.infrastructure.security.jwt_token_provider import (
     JwtTokenProvider,
 )
 from src.account.presentation.tasks import dispatch_otp_email
+from src.account.public_api import LearnerProfileQueryPort, QuotaFacadePort
 from src.shared_kernel.application.uow import AsyncUnitOfWork
 from src.shared_kernel.infrastructure.database.session import get_async_session
 from src.shared_kernel.infrastructure.database.sqlalchemy_uow import (
@@ -336,3 +343,16 @@ def get_update_availability_use_case(
     uow: AsyncUnitOfWork = Depends(get_account_uow),
 ) -> UpdateAvailabilityUseCase:
     return UpdateAvailabilityUseCase(repository=repository, uow=uow)
+
+
+# --- Cross-Context Port Providers (Quota & Learner Profile) ---
+def get_quota_facade(
+    session: AsyncSession = Depends(get_account_db_session),
+) -> QuotaFacadePort:
+    return QuotaFacadeAdapter(session=session)
+
+
+def get_learner_profile_query_port(
+    session: AsyncSession = Depends(get_account_db_session),
+) -> LearnerProfileQueryPort:
+    return LearnerProfileQueryAdapter(session=session)

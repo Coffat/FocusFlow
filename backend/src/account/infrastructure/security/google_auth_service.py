@@ -31,8 +31,11 @@ class GoogleAuthService:
             InvalidCredentialsError: When token is invalid, expired, or audience mismatches.
         """
         try:
-            payload = id_token.verify_oauth2_token(
-                token_str, google_requests.Request(), self.client_id
+            req_adapter: Any = google_requests.Request()
+            payload: dict[str, Any] = dict(
+                id_token.verify_oauth2_token(  # type: ignore[no-untyped-call]
+                    token_str, req_adapter, self.client_id
+                )
             )
             # Ensure issuer is trusted Google authority
             issuer = payload.get("iss", "")
@@ -68,7 +71,7 @@ class GoogleAuthService:
                 if response.status_code != 200:
                     logger.warning(f"Google userinfo returned status {response.status_code}")
                     raise InvalidCredentialsError("Invalid or expired Google access token.")
-                data = response.json()
+                data: dict[str, Any] = dict(response.json())
                 if "email_verified" not in data and "verified_email" in data:
                     data["email_verified"] = data["verified_email"]
                 return data

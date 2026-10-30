@@ -60,7 +60,8 @@ class RefreshTokenRepository:
         key = f"refresh_token:{token_hash}"
         raw = await client.get(key)
         if raw:
-            return json.loads(raw)
+            parsed: dict[str, Any] = dict(json.loads(raw))
+            return parsed
         return None
 
     @staticmethod
@@ -76,5 +77,6 @@ class RefreshTokenRepository:
         family_key = f"token_family:{family_id}"
         tokens = await client.smembers(family_key)
         for t_hash in tokens:
-            await client.delete(f"refresh_token:{t_hash}")
+            t_str = t_hash.decode("utf-8") if isinstance(t_hash, bytes) else str(t_hash)
+            await client.delete(f"refresh_token:{t_str}")
         await client.delete(family_key)

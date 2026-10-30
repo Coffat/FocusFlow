@@ -1,21 +1,38 @@
-from dataclasses import dataclass
-from typing import Protocol
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Any, Protocol
 from uuid import UUID
 
-from src.account.domain.events.availability_events import AvailabilityUpdatedEvent
 from src.shared_kernel.domain.events import DomainEvent
+from src.shared_kernel.domain.exceptions import DomainError
 
 __all__ = [
     "AvailabilityGateResultDTO",
     "AvailabilityQueryPort",
     "AvailabilitySnapshotDTO",
     "AvailabilityUpdatedEvent",
+    "InsufficientQuotaError",
+    "LearnerProfileDTO",
+    "LearnerProfileQueryPort",
     "ProposedTaskBlockDTO",
+    "QuotaExceededError",
+    "QuotaExceededException",
+    "QuotaExhaustedError",
     "QuotaFacadePort",
+    "QuotaReservationNotFoundError",
     "UserQueryPort",
     "UserSnapshotDTO",
     "UserUpgradedToPremiumEvent",
 ]
+
+
+@dataclass(frozen=True, kw_only=True)
+class AvailabilityUpdatedEvent(DomainEvent):
+    """Published when a learner updates their Mode A/B availability profile (UC-03)."""
+
+    user_id: UUID
+    availability_mode: str
+    aggregate_type: str = "AvailabilityProfile"
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -24,6 +41,33 @@ class UserUpgradedToPremiumEvent(DomainEvent):
 
     user_id: UUID
     plan_tier: str = "PRO"
+
+
+class QuotaExceededError(DomainError):
+    """Raised when a user does not have sufficient AI credits/quota for an operation (BUSR-10)."""
+
+    def __init__(
+        self,
+        message: str = "Hạn ngạch AI của bạn không đủ để thực hiện thao tác này.",
+        code: str = "QUOTA_EXHAUSTED",
+    ) -> None:
+        super().__init__(message=message, code=code)
+
+
+class QuotaReservationNotFoundError(DomainError):
+    """Raised when an AI quota reservation cannot be found."""
+
+    def __init__(
+        self,
+        message: str = "Không tìm thấy bản ghi giữ chỗ hạn ngạch AI.",
+        code: str = "QUOTA_RESERVATION_NOT_FOUND",
+    ) -> None:
+        super().__init__(message=message, code=code)
+
+
+QuotaExceededException = QuotaExceededError
+QuotaExhaustedError = QuotaExceededError
+InsufficientQuotaError = QuotaExceededError
 
 
 @dataclass(frozen=True)
@@ -76,15 +120,56 @@ class AvailabilityQueryPort(Protocol):
 
 
 class QuotaFacadePort(Protocol):
-    """Cross-context port for 2-Phase ACID AI Quota Reservation (ADR-003)."""
+    """Cross-context port for 2-Phase ACID AI Quota Reservation (ADR-005 / BUSR-10)."""
 
-    async def reserve_quota(self, user_id: UUID, operation_type: str, cost: int = 1) -> UUID: ...
+    async def reserve_quota(
+        self,
+        user_id: UUID,
+        operation_type: str = "ROADMAP_GEN",
+        cost: int = 1,
+        ttl_seconds: int = 120,
+    ) -> UUID: ...
 
     async def commit_reservation(
-        self, reservation_id: UUID, prompt_tokens: int, completion_tokens: int
+        self,
+        reservation_id: UUID,
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
+        model_name: str = "gemini-2.5-flash",
     ) -> None: ...
 
-    async def release_reservation(self, reservation_id: UUID, reason: str) -> None: ...
+    async def release_reservation(
+        self,
+        reservation_id: UUID,
+        reason: str = "RELEASED",
+    ) -> None: ...
+
+    async def expire_stale_reservations(self, now: datetime | None = None) -> int: ...
+
+
+@dataclass(frozen=True)
+class LearnerProfileDTO:
+    """Read-only Learner Profile DTO exposed to Planning & Evaluation contexts (ADR-010)."""
+
+    user_id: UUID
+    opt_session_minutes: int = 45
+    estimation_bias_beta: float = 1.0
+    peak_productivity_slots: dict[str, Any] = field(default_factory=dict)
+    is_cold_start: bool = True
+
+    @property
+    def optimal_focus_duration_mins(self) -> int:
+        return self.opt_session_minutes
+
+    @property
+    def estimation_bias_factor(self) -> float:
+        return self.estimation_bias_beta
+
+
+class LearnerProfileQueryPort(Protocol):
+    """Cross-context read-only query port for Zimmerman SRL Learner Profile (UC-07/08, ADR-010)."""
+
+    async def get_learner_profile(self, user_id: UUID) -> LearnerProfileDTO: ...
 
 
 @dataclass(frozen=True)

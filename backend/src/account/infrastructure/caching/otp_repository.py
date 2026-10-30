@@ -41,7 +41,8 @@ class OtpRepository:
         raw_data = await client.get(f"otp:{purpose}:{clean_id}")
         if not raw_data:
             return None
-        return json.loads(raw_data)
+        parsed: dict[str, Any] = dict(json.loads(raw_data))
+        return parsed
 
     @classmethod
     async def save_otp(
