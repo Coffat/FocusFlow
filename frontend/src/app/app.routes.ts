@@ -86,6 +86,11 @@ export const routes: Routes = [
     loadChildren: () => import('./features/schedule/schedule.routes').then(m => m.SCHEDULE_ROUTES)
   },
   {
+    path: 'availability',
+    canActivate: [authGuard],
+    loadComponent: () => import('./features/settings/components/availability-config/availability-config.component').then(m => m.AvailabilityConfigComponent)
+  },
+  {
     path: 'tasks',
     canActivate: [authGuard],
     loadChildren: () => import('./features/tasks/tasks.routes').then(m => m.TASKS_ROUTES)

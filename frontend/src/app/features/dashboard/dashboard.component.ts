@@ -1,5 +1,5 @@
 import { Component, OnInit, DestroyRef, inject } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ButtonModule } from 'primeng/button';
 import { AuthService } from '../../core/services/auth.service';
@@ -9,7 +9,7 @@ import { UserProfile } from '../../models/auth.interface';
 
 @Component({
   selector: 'app-dashboard',
-  imports: [ButtonModule, TranslatePipe],
+  imports: [ButtonModule, TranslatePipe, RouterLink],
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.scss'
 })

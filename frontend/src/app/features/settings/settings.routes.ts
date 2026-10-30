@@ -4,5 +4,10 @@ export const SETTINGS_ROUTES: Routes = [
   {
     path: '',
     loadComponent: () => import('./components/settings-page.component').then(m => m.SettingsPageComponent)
+  },
+  {
+    path: 'availability',
+    redirectTo: '/availability',
+    pathMatch: 'full'
   }
 ];

@@ -4,6 +4,40 @@
     <div class="nav-left">
       <img src="assets/logo.svg" alt="FocusFlow" class="brand-logo" />
       <span class="brand-title">FocusFlow</span>
+
+      <!-- Primary Navigation Links -->
+      <nav class="hidden md:flex items-center gap-1 ml-6 text-sm font-medium">
+        <a
+          routerLink="/dashboard"
+          class="px-3 py-1.5 rounded-lg bg-[var(--surface-container-high,#e8eae6)] font-semibold text-[var(--foreground)]"
+        >
+          Bảng điều khiển
+        </a>
+        <a
+          routerLink="/availability"
+          class="px-3 py-1.5 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--surface-container)] transition-colors"
+        >
+          Thời gian rảnh
+        </a>
+        <a
+          routerLink="/roadmaps"
+          class="px-3 py-1.5 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--surface-container)] transition-colors"
+        >
+          Lộ trình AI
+        </a>
+        <a
+          routerLink="/schedule"
+          class="px-3 py-1.5 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--surface-container)] transition-colors"
+        >
+          Lịch học
+        </a>
+        <a
+          routerLink="/settings"
+          class="px-3 py-1.5 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--surface-container)] transition-colors"
+        >
+          Cài đặt
+        </a>
+      </nav>
     </div>
 
     <div class="nav-right">
@@ -24,6 +58,89 @@
     </div>
   </header>
 
-  <!-- Blank Page Content -->
-  <main class="dashboard-empty-canvas"></main>
+  <!-- Main Content Area with Quick Access Cards -->
+  <main class="max-w-6xl mx-auto w-full p-6 md:p-8 space-y-8 flex-1">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight">Xin chào, {{ currentUser.fullName || currentUser.email || 'Học viên' }}!</h1>
+      <p class="text-sm text-[var(--muted-foreground)] mt-1">Chọn tính năng bạn muốn thao tác để bắt đầu lộ trình học tập thích ứng.</p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <!-- Card 1: Availability -->
+      <a
+        routerLink="/availability"
+        class="block p-6 rounded-2xl border border-[var(--border)] bg-[var(--card)] hover:border-[var(--primary)] hover:shadow-md transition-all group"
+      >
+        <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
+          <span class="text-2xl">⏰</span>
+        </div>
+        <h3 class="font-bold text-base text-[var(--foreground)] group-hover:text-[var(--primary)] transition-colors">
+          Thời Gian Rảnh Lai
+        </h3>
+        <p class="text-xs text-[var(--muted-foreground)] mt-2 leading-relaxed">
+          Cấu hình quỹ giờ rảnh linh hoạt (Mode A) hoặc khung giờ cố định (Mode B) để AI tự động tối ưu hóa lịch.
+        </p>
+        <span class="inline-flex items-center text-xs font-semibold text-emerald-600 dark:text-emerald-400 mt-4">
+          Cấu hình ngay &rarr;
+        </span>
+      </a>
+
+      <!-- Card 2: Roadmaps -->
+      <a
+        routerLink="/roadmaps"
+        class="block p-6 rounded-2xl border border-[var(--border)] bg-[var(--card)] hover:border-[var(--primary)] hover:shadow-md transition-all group"
+      >
+        <div class="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-400 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
+          <span class="text-2xl">🗺️</span>
+        </div>
+        <h3 class="font-bold text-base text-[var(--foreground)] group-hover:text-[var(--primary)] transition-colors">
+          Lập Kế Hoạch AI & Duyệt Lịch
+        </h3>
+        <p class="text-xs text-[var(--muted-foreground)] mt-2 leading-relaxed">
+          Sinh cột mốc thời gian thực (2-Stage SSE), xem trước đề xuất lịch học, kiểm tra tràn mềm và phê duyệt lịch.
+        </p>
+        <span class="inline-flex items-center text-xs font-semibold text-blue-600 dark:text-blue-400 mt-4">
+          Tạo lộ trình &rarr;
+        </span>
+      </a>
+
+      <!-- Card 3: Schedule -->
+      <a
+        routerLink="/schedule"
+        class="block p-6 rounded-2xl border border-[var(--border)] bg-[var(--card)] hover:border-[var(--primary)] hover:shadow-md transition-all group"
+      >
+        <div class="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 dark:bg-purple-950 dark:text-purple-400 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
+          <span class="text-2xl">📅</span>
+        </div>
+        <h3 class="font-bold text-base text-[var(--foreground)] group-hover:text-[var(--primary)] transition-colors">
+          Lịch Học Tập
+        </h3>
+        <p class="text-xs text-[var(--muted-foreground)] mt-2 leading-relaxed">
+          Xem lịch biểu tuần, phiên học đã kích hoạt và theo dõi các nhiệm vụ học tập theo thời gian biểu.
+        </p>
+        <span class="inline-flex items-center text-xs font-semibold text-purple-600 dark:text-purple-400 mt-4">
+          Xem lịch &rarr;
+        </span>
+      </a>
+
+      <!-- Card 4: Settings -->
+      <a
+        routerLink="/settings"
+        class="block p-6 rounded-2xl border border-[var(--border)] bg-[var(--card)] hover:border-[var(--primary)] hover:shadow-md transition-all group"
+      >
+        <div class="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-400 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
+          <span class="text-2xl">⚙️</span>
+        </div>
+        <h3 class="font-bold text-base text-[var(--foreground)] group-hover:text-[var(--primary)] transition-colors">
+          Cài Đặt Hệ Thống
+        </h3>
+        <p class="text-xs text-[var(--muted-foreground)] mt-2 leading-relaxed">
+          Theo dõi hạn ngạch AI Credits (2-Phase Reserve/Commit), tùy chọn giao diện và cài đặt ứng dụng.
+        </p>
+        <span class="inline-flex items-center text-xs font-semibold text-amber-600 dark:text-amber-400 mt-4">
+          Mở cài đặt &rarr;
+        </span>
+      </a>
+    </div>
+  </main>
 </div>

@@ -5,10 +5,13 @@ WORKDIR /app
 # Enable bytecode compilation
 ENV UV_COMPILE_BYTECODE=1
 ENV PYTHONUNBUFFERED=1
-ENV PATH="/app/.venv/bin:$PATH"
+ENV UV_PROJECT_ENVIRONMENT="/opt/venv"
+ENV PATH="/opt/venv/bin:$PATH"
 
 # Copy project specification files
 COPY pyproject.toml README.md ./
+COPY alembic.ini ./
+COPY alembic/ ./alembic/
 
 # Install dependencies using uv sync
 RUN uv sync --frozen --no-install-project --no-dev || uv sync --no-install-project --no-dev

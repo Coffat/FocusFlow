@@ -1,6 +1,6 @@
 import { test, expect, Page, APIRequestContext } from '@playwright/test';
 
-const BACKEND_API_URL = process.env['BACKEND_API_URL'] || 'http://localhost:8001/api/v1';
+const BACKEND_API_URL = process.env['BACKEND_API_URL'] || 'http://localhost:8000/api/v1';
 
 interface MockAvailabilityState {
   id: string | null;

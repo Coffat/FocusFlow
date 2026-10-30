@@ -7,9 +7,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
     isRelativeApi ||
     req.url.startsWith(API_BASE_URL) ||
     req.url.startsWith('http://localhost:8000') ||
-    req.url.startsWith('http://127.0.0.1:8000') ||
-    req.url.startsWith('http://localhost:8001') ||
-    req.url.startsWith('http://127.0.0.1:8001');
+    req.url.startsWith('http://127.0.0.1:8000');
 
   const token = localStorage.getItem('access_token') || '';
   const headers: Record<string, string> = {};

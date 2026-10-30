@@ -50,6 +50,8 @@ export class AuthService {
   readonly isAuthenticatedSubject = new BehaviorSubject<boolean>(false);
   readonly isAuthenticated$ = this.isAuthenticatedSubject.asObservable();
 
+  private sessionCheck$: Observable<boolean> | null = null;
+
   constructor() {
     this.initAuth();
   }
@@ -79,10 +81,16 @@ export class AuthService {
     this.isAuthenticatedSubject.next(false);
   }
 
-  initAuth(): void {
-    // Attempt session restoration via HttpOnly cookie first (ADR-008)
-    this.http.get<BackendUserPayload>(AUTH_ENDPOINTS.ME, { withCredentials: true }).subscribe({
-      next: (user: BackendUserPayload) => {
+  checkSession(): Observable<boolean> {
+    if (this.currentUser() !== null || this.isAuthenticatedSubject.value) {
+      return of(true);
+    }
+    if (this.sessionCheck$) {
+      return this.sessionCheck$;
+    }
+
+    this.sessionCheck$ = this.http.get<BackendUserPayload>(AUTH_ENDPOINTS.ME, { withCredentials: true }).pipe(
+      map((user: BackendUserPayload) => {
         const mappedUser: UserProfile = {
           id: user.id,
           email: user.email,
@@ -92,14 +100,21 @@ export class AuthService {
           createdAt: user.created_at
         };
         this.setUser(mappedUser);
-      },
-      error: (_err: Error) => {
-        const token = localStorage.getItem('access_token') || '';
-        if (!token) {
-          this.clearSession();
-        }
-      }
-    });
+        this.sessionCheck$ = null;
+        return true;
+      }),
+      catchError(() => {
+        this.clearSession();
+        this.sessionCheck$ = null;
+        return of(false);
+      })
+    );
+
+    return this.sessionCheck$;
+  }
+
+  initAuth(): void {
+    this.checkSession().subscribe();
   }
 
   login(credentials: { email: string; password: string }): Observable<User> {

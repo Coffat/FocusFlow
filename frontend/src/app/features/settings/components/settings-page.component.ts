@@ -1,4 +1,5 @@
 import { Component, inject } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { SettingsService } from '../services/settings.service';
 import { CardComponent, CardHeaderDirective, CardTitleDirective, CardDescriptionDirective } from '../../../shared/ui/card/card.component';
 import { ButtonDirective } from '../../../shared/ui/button/button.directive';
@@ -9,19 +10,42 @@ import { AvailabilityConfigComponent } from './availability-config/availability-
   selector: 'app-settings-page',
   standalone: true,
   imports: [
+    RouterLink,
     CardComponent,
     CardHeaderDirective,
     CardTitleDirective,
     CardDescriptionDirective,
+    ButtonDirective,
     BadgeDirective,
     AvailabilityConfigComponent
   ],
   template: `
     <div class="max-w-4xl mx-auto w-full p-6 space-y-8">
-      <div>
-        <h1 class="text-2xl font-bold tracking-tight">Cài Đặt Hệ Thống</h1>
-        <p class="text-sm text-[var(--muted-foreground)]">Quản lý tùy chọn cá nhân, hạn ngạch AI và phiên bảo mật</p>
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-2xl font-bold tracking-tight">Cài Đặt Hệ Thống</h1>
+          <p class="text-sm text-[var(--muted-foreground)]">Quản lý tùy chọn cá nhân, hạn ngạch AI và phiên bảo mật</p>
+        </div>
+        <a routerLink="/availability" appButton variant="outline">
+          ⏰ Quản lý Thời Gian Rảnh
+        </a>
       </div>
+
+      <!-- Quick Link to Availability -->
+      <app-card>
+        <div appCardHeader class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h3 appCardTitle>Thời Gian Rảnh Lai (Hybrid Availability)</h3>
+            <p appCardDescription>
+              Trang cấu hình quỹ giờ linh hoạt (Mode A) và khung giờ cố định (Mode B) hiện là trang độc lập tại
+              <code class="px-1.5 py-0.5 rounded bg-[var(--muted)] text-xs font-mono">/availability</code>.
+            </p>
+          </div>
+          <a routerLink="/availability" appButton variant="default">
+            Mở trang Lịch Rảnh &rarr;
+          </a>
+        </div>
+      </app-card>
 
       <!-- Availability Management Section (FR-AVAIL v2.0) -->
       <app-availability-config />
