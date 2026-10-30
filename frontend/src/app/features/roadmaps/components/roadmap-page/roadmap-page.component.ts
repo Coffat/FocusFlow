@@ -11,6 +11,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { RoadmapService } from '../../services/roadmap.service';
+import { AvailabilityService } from '../../../../core/services/availability.service';
 import { BadgeDirective, BadgeVariant } from '../../../../shared/ui/badge/badge.directive';
 
 @Component({
@@ -28,12 +29,14 @@ import { BadgeDirective, BadgeVariant } from '../../../../shared/ui/badge/badge.
 })
 export class RoadmapPageComponent implements OnInit {
   readonly roadmapService = inject(RoadmapService);
+  readonly availabilityService = inject(AvailabilityService);
   private readonly destroyRef = inject(DestroyRef);
 
   readonly Number = Number;
 
   // Local Form Signals for Creating a New Goal & Roadmap
   readonly showCreateForm = signal<boolean>(false);
+  readonly showOnboardingModal = signal<boolean>(false);
   readonly newGoalTitle = signal<string>('');
   readonly newGoalDescription = signal<string>('');
   readonly newStartDate = signal<string>('2026-11-02');
@@ -54,10 +57,56 @@ export class RoadmapPageComponent implements OnInit {
 
   ngOnInit(): void {
     this.roadmapService.loadRoadmaps();
+    this.availabilityService.loadMyAvailability();
   }
 
   toggleCreateForm(): void {
-    this.showCreateForm.update(v => !v);
+    if (this.showCreateForm()) {
+      this.showCreateForm.set(false);
+      return;
+    }
+
+    const checkAndOpen = () => {
+      if (!this.availabilityService.hasConfiguredAvailability()) {
+        this.showOnboardingModal.set(true);
+      } else {
+        this.showCreateForm.set(true);
+      }
+    };
+
+    if (!this.availabilityService.profile()) {
+      this.availabilityService.loadMyAvailability(() => {
+        checkAndOpen();
+      });
+    } else {
+      checkAndOpen();
+    }
+  }
+
+  closeOnboardingModal(): void {
+    this.showOnboardingModal.set(false);
+  }
+
+  onConnectGoogleCalendar(): void {
+    this.availabilityService.setCalendarIntegrationMode('CONNECTED');
+    this.availabilityService.saveMyAvailability((res) => {
+      if (res) {
+        this.roadmapService.successMessage.set('Đã liên kết Google Calendar thành công!');
+        this.showOnboardingModal.set(false);
+        this.showCreateForm.set(true);
+      }
+    });
+  }
+
+  onSelectPreset(presetId: 'BUSY_PRO' | 'UNI_STUDENT' | 'BOOTCAMPER'): void {
+    this.availabilityService.applyPreset(presetId);
+    this.availabilityService.saveMyAvailability((res) => {
+      if (res) {
+        this.roadmapService.successMessage.set('Đã áp dụng mẫu quỹ giờ rảnh thành công!');
+        this.showOnboardingModal.set(false);
+        this.showCreateForm.set(true);
+      }
+    });
   }
 
   onSelectRoadmap(event: Event): void {
@@ -70,6 +119,10 @@ export class RoadmapPageComponent implements OnInit {
   onCreateRoadmap(): void {
     const title = this.newGoalTitle().trim();
     if (!title) {
+      return;
+    }
+    if (!this.availabilityService.hasConfiguredAvailability()) {
+      this.showOnboardingModal.set(true);
       return;
     }
     this.roadmapService.createRoadmap({

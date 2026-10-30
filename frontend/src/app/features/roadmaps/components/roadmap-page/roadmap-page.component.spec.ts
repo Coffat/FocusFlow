@@ -6,6 +6,7 @@ import { RoadmapPageComponent } from './roadmap-page.component';
 import { RoadmapService } from '../../services/roadmap.service';
 import { API_ENDPOINTS } from '../../../../core/constants/api-endpoints';
 import { RoadmapDetailResponse, ScheduleProposalResponse } from '../../models/roadmap.model';
+import { createDefaultSchedule } from '../../../../core/services/availability.service';
 
 describe('RoadmapPageComponent (WBS 6.3 3-Step AI Planning & Approval Workspace)', () => {
   let component: RoadmapPageComponent;
@@ -56,7 +57,7 @@ describe('RoadmapPageComponent (WBS 6.3 3-Step AI Planning & Approval Workspace)
       imports: [RoadmapPageComponent],
       providers: [
         RoadmapService,
-        provideRouter([]),
+        provideRouter([{ path: 'availability', component: RoadmapPageComponent }]),
         provideHttpClient(),
         provideHttpClientTesting(),
       ],
@@ -73,6 +74,17 @@ describe('RoadmapPageComponent (WBS 6.3 3-Step AI Planning & Approval Workspace)
     listReq.flush([mockDetail]);
     const detailReq = httpTesting.expectOne(API_ENDPOINTS.ROADMAPS.DETAIL(mockDetail.id));
     detailReq.flush(mockDetail);
+    const availReq = httpTesting.expectOne(API_ENDPOINTS.SETTINGS.AVAILABILITY);
+    availReq.flush({
+      id: '018f0000-0000-7000-8000-000000000055',
+      user_id: mockDetail.user_id,
+      mode: 'MODE_A',
+      calendar_integration_mode: 'NONE',
+      min_session_minutes: 30,
+      weekly_schedule: createDefaultSchedule(),
+      total_weekly_hours: 16.0,
+      updated_at: '2026-10-30T08:00:00Z',
+    });
     fixture.detectChanges();
   });
 
@@ -282,5 +294,191 @@ describe('RoadmapPageComponent (WBS 6.3 3-Step AI Planning & Approval Workspace)
 
     fixture.destroy();
     expect(closeSpy).toHaveBeenCalled();
+  });
+
+  describe('Onboarding Modal Cấu hình Rảnh lai (FR-PLAN-001)', () => {
+    beforeEach(() => {
+      // Simulate unconfigured user profile (id is null, not saved yet)
+      component.availabilityService.profile.set({
+        id: null,
+        user_id: mockDetail.user_id,
+        mode: 'MODE_A',
+        calendar_integration_mode: 'NONE',
+        min_session_minutes: 30,
+        weekly_schedule: createDefaultSchedule(),
+        total_weekly_hours: 16.0,
+        updated_at: '2026-10-30T08:00:00Z',
+      });
+      fixture.detectChanges();
+    });
+
+    it('mở Onboarding Modal khi người dùng chưa có cấu hình rảnh và click "+ Tạo Mục tiêu & Lộ trình mới"', () => {
+      component.toggleCreateForm();
+      fixture.detectChanges();
+
+      expect(component.showOnboardingModal()).toBe(true);
+      expect(component.showCreateForm()).toBe(false);
+
+      const compiled = fixture.nativeElement as HTMLElement;
+      const modal = compiled.querySelector('[data-testid="availability-onboarding-modal"]');
+      expect(modal).toBeTruthy();
+
+      const modalTitle = modal?.querySelector('#onboarding-modal-title');
+      expect(modalTitle?.textContent).toContain('Thiết lập Nguồn Thời gian Rảnh cho AI');
+
+      // Close modal
+      const closeBtn = modal?.querySelector('[data-testid="close-onboarding-modal-btn"]') as HTMLButtonElement;
+      expect(closeBtn).toBeTruthy();
+      closeBtn.click();
+      fixture.detectChanges();
+
+      expect(component.showOnboardingModal()).toBe(false);
+    });
+
+    it('liên kết Google Calendar: đổi mode sang CONNECTED, gọi PUT API, đóng modal và mở form tạo lộ trình', () => {
+      component.toggleCreateForm();
+      fixture.detectChanges();
+
+      const compiled = fixture.nativeElement as HTMLElement;
+      const connectBtn = compiled.querySelector(
+        '[data-testid="onboard-connect-google-btn"]'
+      ) as HTMLButtonElement;
+      expect(connectBtn).toBeTruthy();
+
+      connectBtn.click();
+
+      const putReq = httpTesting.expectOne(API_ENDPOINTS.SETTINGS.AVAILABILITY);
+      expect(putReq.request.method).toBe('PUT');
+      expect(putReq.request.body.calendar_integration_mode).toBe('CONNECTED');
+
+      putReq.flush({
+        id: 'avail-connected-id',
+        user_id: mockDetail.user_id,
+        mode: 'MODE_A',
+        calendar_integration_mode: 'CONNECTED',
+        min_session_minutes: 30,
+        weekly_schedule: createDefaultSchedule(),
+        total_weekly_hours: 16.0,
+        updated_at: '2026-10-30T08:00:00Z',
+      });
+      fixture.detectChanges();
+
+      expect(component.showOnboardingModal()).toBe(false);
+      expect(component.showCreateForm()).toBe(true);
+      expect(component.roadmapService.successMessage()).toBe('Đã liên kết Google Calendar thành công!');
+    });
+
+    it('chọn Preset Busy Pro: áp dụng 13.5h, gọi PUT API, đóng modal và mở form tạo lộ trình', () => {
+      component.toggleCreateForm();
+      fixture.detectChanges();
+
+      const compiled = fixture.nativeElement as HTMLElement;
+      const presetBtn = compiled.querySelector(
+        '[data-testid="onboard-preset-busy-pro"]'
+      ) as HTMLButtonElement;
+      expect(presetBtn).toBeTruthy();
+
+      presetBtn.click();
+
+      const putReq = httpTesting.expectOne(API_ENDPOINTS.SETTINGS.AVAILABILITY);
+      expect(putReq.request.method).toBe('PUT');
+
+      putReq.flush({
+        id: 'avail-busy-pro-id',
+        user_id: mockDetail.user_id,
+        mode: 'MODE_A',
+        calendar_integration_mode: 'NONE',
+        min_session_minutes: 30,
+        weekly_schedule: component.availabilityService.weeklySchedule(),
+        total_weekly_hours: 13.5,
+        updated_at: '2026-10-30T08:00:00Z',
+      });
+      fixture.detectChanges();
+
+      expect(component.availabilityService.totalWeeklyHours()).toBe(13.5);
+      expect(component.showOnboardingModal()).toBe(false);
+      expect(component.showCreateForm()).toBe(true);
+      expect(component.roadmapService.successMessage()).toBe('Đã áp dụng mẫu quỹ giờ rảnh thành công!');
+    });
+
+    it('chọn Preset Uni Student: áp dụng 15.5h, gọi PUT API, đóng modal và mở form tạo lộ trình', () => {
+      component.toggleCreateForm();
+      fixture.detectChanges();
+
+      const compiled = fixture.nativeElement as HTMLElement;
+      const presetBtn = compiled.querySelector(
+        '[data-testid="onboard-preset-uni-student"]'
+      ) as HTMLButtonElement;
+      expect(presetBtn).toBeTruthy();
+
+      presetBtn.click();
+
+      const putReq = httpTesting.expectOne(API_ENDPOINTS.SETTINGS.AVAILABILITY);
+      expect(putReq.request.method).toBe('PUT');
+
+      putReq.flush({
+        id: 'avail-student-id',
+        user_id: mockDetail.user_id,
+        mode: 'MODE_A',
+        calendar_integration_mode: 'NONE',
+        min_session_minutes: 30,
+        weekly_schedule: component.availabilityService.weeklySchedule(),
+        total_weekly_hours: 15.5,
+        updated_at: '2026-10-30T08:00:00Z',
+      });
+      fixture.detectChanges();
+
+      expect(component.availabilityService.totalWeeklyHours()).toBe(15.5);
+      expect(component.showOnboardingModal()).toBe(false);
+      expect(component.showCreateForm()).toBe(true);
+    });
+
+    it('chọn Preset Bootcamper: áp dụng 36.0h, gọi PUT API, đóng modal và mở form tạo lộ trình', () => {
+      component.toggleCreateForm();
+      fixture.detectChanges();
+
+      const compiled = fixture.nativeElement as HTMLElement;
+      const presetBtn = compiled.querySelector(
+        '[data-testid="onboard-preset-bootcamper"]'
+      ) as HTMLButtonElement;
+      expect(presetBtn).toBeTruthy();
+
+      presetBtn.click();
+
+      const putReq = httpTesting.expectOne(API_ENDPOINTS.SETTINGS.AVAILABILITY);
+      expect(putReq.request.method).toBe('PUT');
+
+      putReq.flush({
+        id: 'avail-bootcamp-id',
+        user_id: mockDetail.user_id,
+        mode: 'MODE_A',
+        calendar_integration_mode: 'NONE',
+        min_session_minutes: 30,
+        weekly_schedule: component.availabilityService.weeklySchedule(),
+        total_weekly_hours: 36.0,
+        updated_at: '2026-10-30T08:00:00Z',
+      });
+      fixture.detectChanges();
+
+      expect(component.availabilityService.totalWeeklyHours()).toBe(36.0);
+      expect(component.showOnboardingModal()).toBe(false);
+      expect(component.showCreateForm()).toBe(true);
+    });
+
+    it('hiển thị link tùy chỉnh dẫn sang /availability và đóng modal khi click', () => {
+      component.toggleCreateForm();
+      fixture.detectChanges();
+
+      const compiled = fixture.nativeElement as HTMLElement;
+      const customLink = compiled.querySelector(
+        '[data-testid="onboard-custom-config-link"]'
+      ) as HTMLAnchorElement;
+      expect(customLink).toBeTruthy();
+      expect(customLink.getAttribute('routerLink') || customLink.getAttribute('href')).toContain('/availability');
+
+      customLink.click();
+      fixture.detectChanges();
+      expect(component.showOnboardingModal()).toBe(false);
+    });
   });
 });

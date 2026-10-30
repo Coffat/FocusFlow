@@ -267,7 +267,7 @@
     @case (1) {
       <div class="space-y-6" data-testid="step-1-panel">
         <!-- Create New Goal & Roadmap Card -->
-        @if (showCreateForm() || !selectedDetail()) {
+        @if (showCreateForm()) {
           <section class="arch-card">
             <div class="card-header-flex">
               <div>
@@ -342,15 +342,13 @@
             </div>
 
             <div class="form-footer-actions">
-              @if (selectedDetail()) {
-                <button
-                  type="button"
-                  (click)="showCreateForm.set(false)"
-                  class="btn-pill-action ghost"
-                >
-                  Hủy
-                </button>
-              }
+              <button
+                type="button"
+                (click)="showCreateForm.set(false)"
+                class="btn-pill-action ghost"
+              >
+                Hủy
+              </button>
               <button
                 type="button"
                 data-testid="submit-create-roadmap-btn"
@@ -361,6 +359,32 @@
                 <span class="material-symbols-outlined">add_task</span>
                 <span>Tạo Mục tiêu & Lộ trình</span>
               </button>
+            </div>
+          </section>
+        }
+
+        <!-- Empty State when no roadmap is selected and form is closed -->
+        @if (!selectedDetail() && !showCreateForm()) {
+          <section class="arch-card text-center py-12 px-6">
+            <div class="max-w-md mx-auto space-y-4">
+              <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[var(--surface-container-high)] text-[var(--primary)] mb-2">
+                <span class="material-symbols-outlined text-3xl">route</span>
+              </div>
+              <h2 class="text-xl font-semibold font-serif text-[var(--on-surface)]">Chưa có Lộ trình Học tập</h2>
+              <p class="text-sm text-[var(--secondary)]">
+                Bắt đầu bằng cách tạo mục tiêu học tập đầu tiên để AI phân rã thành các cột mốc thích ứng theo mô hình Zimmerman SRL.
+              </p>
+              <div>
+                <button
+                  type="button"
+                  data-testid="empty-create-roadmap-btn"
+                  (click)="toggleCreateForm()"
+                  class="btn-pill-action primary mx-auto inline-flex"
+                >
+                  <span class="material-symbols-outlined">add</span>
+                  <span>Tạo Mục tiêu & Lộ trình mới</span>
+                </button>
+              </div>
             </div>
           </section>
         }
@@ -1125,5 +1149,141 @@
         }
       </div>
     }
+  }
+
+  <!-- Availability Onboarding Modal (FR-PLAN-001 Hybrid Preset & Google Calendar) -->
+  @if (showOnboardingModal()) {
+    <div
+      class="modal-backdrop"
+      (click)="closeOnboardingModal()"
+      aria-hidden="true"
+    ></div>
+
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="onboarding-modal-title"
+      data-testid="availability-onboarding-modal"
+      class="onboarding-modal-container"
+    >
+      <!-- Modal Header -->
+      <div class="modal-header">
+        <div class="header-icon-badge">
+          <span class="material-symbols-outlined">tune</span>
+        </div>
+        <div class="pr-8">
+          <h2 id="onboarding-modal-title" class="modal-title font-serif">
+            Thiết lập Nguồn Thời gian Rảnh cho AI
+          </h2>
+          <p class="modal-subtitle">
+            Để AI có thể tối ưu và phân bổ lộ trình học tập chính xác không trùng lịch, hãy chọn cách FocusFlow đọc thời gian rảnh của bạn:
+          </p>
+        </div>
+        <button
+          type="button"
+          data-testid="close-onboarding-modal-btn"
+          (click)="closeOnboardingModal()"
+          class="modal-close-btn"
+          aria-label="Đóng popup cấu hình rảnh"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="modal-body space-y-6">
+        <!-- Khối 1: Liên kết Google Calendar -->
+        <div class="onboard-card highlight-card">
+          <div class="card-left-content">
+            <div class="calendar-icon-box">
+              <span class="material-symbols-outlined">calendar_month</span>
+            </div>
+            <div class="card-texts">
+              <h3 class="card-action-title">Liên kết Google Calendar</h3>
+              <p class="card-action-desc">
+                Tự động đọc các khung giờ bận (Free/Busy) từ lịch Google của bạn để AI tránh trùng lịch học.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            data-testid="onboard-connect-google-btn"
+            [disabled]="availabilityService.saving()"
+            (click)="onConnectGoogleCalendar()"
+            class="btn-connect-google"
+          >
+            <span class="material-symbols-outlined">sync</span>
+            <span>Liên kết ngay</span>
+          </button>
+        </div>
+
+        <!-- Hairline divider with text -->
+        <div class="modal-divider">
+          <div class="divider-line"></div>
+          <span class="divider-text">Hoặc chọn nhanh quỹ giờ mẫu (Preset):</span>
+          <div class="divider-line"></div>
+        </div>
+
+        <!-- Khối 2: Tự thiết lập thời gian rảnh (Hybrid Preset & Custom) -->
+        <div class="presets-grid">
+          <button
+            type="button"
+            data-testid="onboard-preset-busy-pro"
+            [disabled]="availabilityService.saving()"
+            (click)="onSelectPreset('BUSY_PRO')"
+            class="preset-chip-btn"
+          >
+            <div class="chip-icon-title">
+              <span class="material-symbols-outlined">work</span>
+              <span class="chip-title">Người đi làm bận rộn</span>
+            </div>
+            <span class="chip-hours-badge">13.5h/tuần</span>
+          </button>
+
+          <button
+            type="button"
+            data-testid="onboard-preset-uni-student"
+            [disabled]="availabilityService.saving()"
+            (click)="onSelectPreset('UNI_STUDENT')"
+            class="preset-chip-btn"
+          >
+            <div class="chip-icon-title">
+              <span class="material-symbols-outlined">school</span>
+              <span class="chip-title">Sinh viên đại học</span>
+            </div>
+            <span class="chip-hours-badge">15.5h/tuần</span>
+          </button>
+
+          <button
+            type="button"
+            data-testid="onboard-preset-bootcamper"
+            [disabled]="availabilityService.saving()"
+            (click)="onSelectPreset('BOOTCAMPER')"
+            class="preset-chip-btn"
+          >
+            <div class="chip-icon-title">
+              <span class="material-symbols-outlined">rocket_launch</span>
+              <span class="chip-title">Học tập trung toàn thời gian</span>
+            </div>
+            <span class="chip-hours-badge">36h/tuần</span>
+          </button>
+        </div>
+
+        <!-- Custom Config Link with notice -->
+        <div class="custom-link-box">
+          <a
+            routerLink="/availability"
+            data-testid="onboard-custom-config-link"
+            (click)="closeOnboardingModal()"
+            class="custom-config-link"
+          >
+            <span>Tùy chỉnh chi tiết lịch 7 ngày →</span>
+          </a>
+          <p class="custom-link-hint">
+            Lưu ý: Sau khi tùy chỉnh tại trang Thời gian rảnh, bạn hãy quay lại trang Lộ trình để AI tạo kế hoạch.
+          </p>
+        </div>
+      </div>
+    </div>
   }
 </div>

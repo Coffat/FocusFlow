@@ -278,4 +278,53 @@ describe('AvailabilityService', () => {
     expect(service.saveSuccessMessage()).toBe('Đã lưu cấu hình thời gian rảnh thành công!');
     expect(service.saving()).toBe(false);
   });
+
+  describe('hasConfiguredAvailability()', () => {
+    it('trả về false khi profile là null hoặc profile.id là null (chưa từng lưu)', () => {
+      service.profile.set(null);
+      expect(service.hasConfiguredAvailability()).toBe(false);
+
+      service.profile.set({
+        id: null,
+        user_id: 'user-1',
+        mode: 'MODE_A',
+        calendar_integration_mode: 'NONE',
+        min_session_minutes: 30,
+        weekly_schedule: createDefaultSchedule(),
+        total_weekly_hours: 16.0,
+        updated_at: '2026-10-30T08:00:00Z',
+      });
+      expect(service.hasConfiguredAvailability()).toBe(false);
+    });
+
+    it('trả về true khi calendar_integration_mode là CONNECTED', () => {
+      service.profile.set({
+        id: 'avail-id-123',
+        user_id: 'user-1',
+        mode: 'MODE_A',
+        calendar_integration_mode: 'CONNECTED',
+        min_session_minutes: 30,
+        weekly_schedule: createDefaultSchedule(),
+        total_weekly_hours: 16.0,
+        updated_at: '2026-10-30T08:00:00Z',
+      });
+      service.setCalendarIntegrationMode('CONNECTED');
+      expect(service.hasConfiguredAvailability()).toBe(true);
+    });
+
+    it('trả về true khi profile đã lưu hợp lệ và tổng giờ tuần >= 1.0h', () => {
+      service.profile.set({
+        id: 'avail-id-123',
+        user_id: 'user-1',
+        mode: 'MODE_A',
+        calendar_integration_mode: 'NONE',
+        min_session_minutes: 30,
+        weekly_schedule: createDefaultSchedule(),
+        total_weekly_hours: 16.0,
+        updated_at: '2026-10-30T08:00:00Z',
+      });
+      service.setCalendarIntegrationMode('NONE');
+      expect(service.hasConfiguredAvailability()).toBe(true);
+    });
+  });
 });

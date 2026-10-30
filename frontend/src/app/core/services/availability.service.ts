@@ -556,7 +556,29 @@ export class AvailabilityService {
     });
   }
 
-  loadMyAvailability(): void {
+  hasConfiguredAvailability(): boolean {
+    const prof = this.profile();
+    if (!prof || !prof.id) {
+      return false;
+    }
+
+    if (this.calendarIntegrationMode() === 'CONNECTED' || prof.calendar_integration_mode === 'CONNECTED') {
+      return true;
+    }
+
+    const schedule = this.weeklySchedule();
+    if (!schedule || Object.keys(schedule).length === 0) {
+      return false;
+    }
+
+    if (this.totalWeeklyHours() <= 0) {
+      return false;
+    }
+
+    return this.isWeeklyValid();
+  }
+
+  loadMyAvailability(callback?: (res: AvailabilityResponseDTO | null) => void): void {
     this.loading.set(true);
     this.errorMessage.set(null);
 
@@ -581,10 +603,12 @@ export class AvailabilityService {
               this.allowedWindow.set({ start: firstAw.start, end: firstAw.end });
             }
           }
+          callback?.(res);
         }),
         catchError((err: HttpErrorResponse) => {
           const message = err.error?.message || err.message || 'Không thể tải cấu hình thời gian rảnh.';
           this.errorMessage.set(message);
+          callback?.(null);
           return of(null);
         }),
         finalize(() => {
@@ -594,9 +618,10 @@ export class AvailabilityService {
       .subscribe();
   }
 
-  saveMyAvailability(): void {
+  saveMyAvailability(callback?: (res: AvailabilityResponseDTO | null) => void): void {
     if (!this.isWeeklyValid()) {
       this.errorMessage.set('Vui lòng điều chỉnh lại cấu hình tuần hợp lệ trước khi lưu.');
+      callback?.(null);
       return;
     }
 
@@ -624,10 +649,12 @@ export class AvailabilityService {
             }
           }
           this.saveSuccessMessage.set('Đã lưu cấu hình thời gian rảnh thành công!');
+          callback?.(res);
         }),
         catchError((err: HttpErrorResponse) => {
           const detailMsg = err.error?.message || err.error?.detail || err.message || 'Không thể lưu cấu hình thời gian rảnh.';
           this.errorMessage.set(detailMsg);
+          callback?.(null);
           return of(null);
         }),
         finalize(() => {
