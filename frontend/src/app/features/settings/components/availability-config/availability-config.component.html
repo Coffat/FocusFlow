@@ -1,0 +1,707 @@
+<div class="availability-workspace">
+  <!-- Page Header -->
+  <header class="page-header">
+    <div class="header-top-row">
+      <span class="system-badge">
+        <span class="material-symbols-outlined">tune</span>
+        <span>FR-AVAIL v2.0 &bull; Hybrid Availability</span>
+      </span>
+      <span class="system-badge">
+        <span class="material-symbols-outlined">psychology</span>
+        <span>Zimmerman SRL: Forethought Phase</span>
+      </span>
+    </div>
+    <h1 class="page-title">Cấu Hình Thời Gian Rảnh Lai</h1>
+    <p class="page-subtitle">
+      Thiết lập quỹ thời gian và các khung giờ rảnh lặp lại hàng tuần để AI tối ưu hóa phân bổ lộ trình học tập thích ứng.
+    </p>
+  </header>
+
+  <!-- Loading State Skeleton / Banner -->
+  @if (service.loading()) {
+    <div
+      aria-busy="true"
+      role="status"
+      data-testid="availability-loading"
+      class="loading-banner"
+    >
+      <span class="material-symbols-outlined animate-spin">progress_activity</span>
+      <span>Đang tải cấu hình thời gian rảnh của bạn...</span>
+    </div>
+  }
+
+  <!-- 2-Column Architectural Layout -->
+  <div class="layout-grid">
+    <!-- LEFT COLUMN: Mode Switcher, Weekly Hours, Presets, General Options -->
+    <aside class="column-left">
+      <!-- 1. Mode Switcher Segmented Control -->
+      <section class="arch-card">
+        <div class="arch-card-header">
+          <h2 class="arch-card-title">
+            <span class="material-symbols-outlined">dashboard_customize</span>
+            <span>Chế độ Lập lịch</span>
+          </h2>
+          <p class="arch-card-desc">Lựa chọn mô hình tính toán thời gian rảnh phù hợp với thói quen học</p>
+        </div>
+
+        <div
+          role="tablist"
+          aria-label="Chế độ cấu hình thời gian rảnh"
+          class="mode-segmented-control"
+        >
+          <button
+            type="button"
+            role="tab"
+            data-testid="mode-a-tab"
+            [attr.aria-selected]="service.activeMode() === 'MODE_A'"
+            (click)="setMode('MODE_A')"
+            class="mode-tab-button"
+            [class.active]="service.activeMode() === 'MODE_A'"
+          >
+            <span class="material-symbols-outlined">timelapse</span>
+            <span class="mode-tab-label">Chế độ A: Quỹ giờ linh hoạt</span>
+            <span class="mode-tab-hint">Theo tổng giờ mỗi ngày</span>
+          </button>
+
+          <button
+            type="button"
+            role="tab"
+            data-testid="mode-b-tab"
+            [attr.aria-selected]="service.activeMode() === 'MODE_B'"
+            (click)="setMode('MODE_B')"
+            class="mode-tab-button"
+            [class.active]="service.activeMode() === 'MODE_B'"
+          >
+            <span class="material-symbols-outlined">calendar_clock</span>
+            <span class="mode-tab-label">Chế độ B: Khung giờ cố định</span>
+            <span class="mode-tab-hint">Theo các mốc giờ cụ thể</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- 2. Weekly Hours Metric & Mechanical Drafting Meter -->
+      <section class="arch-card">
+        <div class="arch-card-header">
+          <h2 class="arch-card-title">
+            <span class="material-symbols-outlined">speed</span>
+            <span>Quỹ Giờ Học Tuần</span>
+          </h2>
+          <p class="arch-card-desc">Tổng dung lượng thời gian sẵn sàng đầu tư cho tuần này</p>
+        </div>
+
+        <div class="metric-container">
+          <div class="metric-number-row">
+            <div>
+              <div
+                data-testid="total-weekly-hours"
+                class="metric-value"
+              >
+                {{ service.totalWeeklyHours().toFixed(1) }}
+                <span class="metric-unit">giờ / tuần</span>
+              </div>
+            </div>
+
+            <div>
+              @if (service.isWeeklyValid()) {
+                <span
+                  appBadge
+                  variant="success"
+                  data-testid="weekly-valid-badge"
+                  class="badge-capsule valid"
+                >
+                  <span class="material-symbols-outlined">check_circle</span>
+                  <span>Đạt chuẩn (≥ 1.0h/tuần)</span>
+                </span>
+              } @else {
+                <span
+                  appBadge
+                  variant="destructive"
+                  data-testid="weekly-invalid-badge"
+                  class="badge-capsule invalid"
+                >
+                  <span class="material-symbols-outlined">warning</span>
+                  <span>
+                    @if (service.totalWeeklyHours() < 1.0) {
+                      Cần tối thiểu 1.0 giờ/tuần
+                    } @else {
+                      Chưa hợp lệ
+                    }
+                  </span>
+                </span>
+              }
+            </div>
+          </div>
+
+          <!-- Architectural Mechanical Drafting Meter -->
+          <div class="mechanical-meter">
+            <div class="meter-track">
+              <div
+                class="meter-fill"
+                [class.exceeded]="service.totalWeeklyHours() > 40"
+                [style.width.%]="Math.min(100, (service.totalWeeklyHours() / 40) * 100)"
+              ></div>
+              <!-- Target 15h marker -->
+              <div
+                class="meter-target-marker"
+                [style.left.%]="(15 / 40) * 100"
+                title="Khuyến nghị: 15h/tuần"
+              ></div>
+            </div>
+
+            <div class="meter-ticks">
+              <span class="meter-tick-label">0h</span>
+              <span class="meter-tick-label">10h</span>
+              <span class="meter-tick-label">15h (Chuẩn)</span>
+              <span class="meter-tick-label">25h</span>
+              <span class="meter-tick-label">40h+</span>
+            </div>
+
+            <div class="meter-legend">
+              <span>Mốc khuyến nghị tuần: 15.0h</span>
+              <span>
+                {{ (service.totalWeeklyHours() / 7).toFixed(1) }}h TB/ngày
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. Productivity Presets Cluster -->
+      <section class="arch-card">
+        <div class="arch-card-header">
+          <h2 class="arch-card-title">
+            <span class="material-symbols-outlined">magic_button</span>
+            <span>Mẫu Cấu Hình Gợi Ý</span>
+          </h2>
+          <p class="arch-card-desc">Áp dụng nhanh thiết lập phổ biến của các nhóm học viên</p>
+        </div>
+
+        <div class="preset-cluster">
+          <button
+            type="button"
+            data-testid="preset-busy-pro"
+            (click)="service.applyPreset('BUSY_PRO')"
+            class="preset-button"
+          >
+            <div class="preset-left">
+              <span class="material-symbols-outlined">work</span>
+              <span>Người đi làm bận rộn</span>
+            </div>
+            <span class="preset-tag">13.5h/tuần</span>
+          </button>
+
+          <button
+            type="button"
+            data-testid="preset-uni-student"
+            (click)="service.applyPreset('UNI_STUDENT')"
+            class="preset-button"
+          >
+            <div class="preset-left">
+              <span class="material-symbols-outlined">school</span>
+              <span>Sinh viên đại học</span>
+            </div>
+            <span class="preset-tag">15.5h/tuần</span>
+          </button>
+
+          <button
+            type="button"
+            data-testid="preset-bootcamper"
+            (click)="service.applyPreset('BOOTCAMPER')"
+            class="preset-button"
+          >
+            <div class="preset-left">
+              <span class="material-symbols-outlined">rocket_launch</span>
+              <span>Học toàn thời gian</span>
+            </div>
+            <span class="preset-tag">36.0h/tuần</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- 4. General AI Scheduling Options -->
+      <section class="arch-card">
+        <div class="arch-card-header">
+          <h2 class="arch-card-title">
+            <span class="material-symbols-outlined">settings_suggest</span>
+            <span>Tùy Chọn Lập Lịch Chung</span>
+          </h2>
+          <p class="arch-card-desc">Quy tắc phiên học tối thiểu & tích hợp lịch ngoại vi</p>
+        </div>
+
+        <div class="field-group">
+          <label for="min-session-select" class="field-label">
+            <span class="material-symbols-outlined">schedule</span>
+            <span>Thời lượng phiên học tối thiểu</span>
+          </label>
+          <select
+            id="min-session-select"
+            data-testid="min-session-select"
+            [value]="service.minSessionMinutes()"
+            (change)="onMinSessionChange($event)"
+            class="select-control"
+          >
+            <option [value]="15">15 phút &bull; Micro-learning</option>
+            <option [value]="30">30 phút &bull; Chuẩn Pomodoro</option>
+            <option [value]="45">45 phút &bull; Tập trung trung bình</option>
+            <option [value]="60">60 phút &bull; Phiên học sâu 1h</option>
+            <option [value]="90">90 phút &bull; Deep Work 1.5h</option>
+            <option [value]="120">120 phút &bull; Chuyên đề 2h</option>
+          </select>
+        </div>
+
+        <div class="field-group">
+          <label for="calendar-mode-select" class="field-label">
+            <span class="material-symbols-outlined">sync</span>
+            <span>Đồng bộ Lịch ngoại vi (Calendar Sync)</span>
+          </label>
+          <select
+            id="calendar-mode-select"
+            data-testid="calendar-mode-select"
+            [value]="service.calendarIntegrationMode()"
+            (change)="onCalendarModeChange($event)"
+            class="select-control"
+          >
+            <option value="NONE">Chỉ dùng nội bộ (Internal Only)</option>
+            <option value="EXPORT_ICS">Xuất WebCal iCalendar (.ics)</option>
+            <option value="CONNECTED">Đồng bộ 2 chiều Google Calendar</option>
+          </select>
+        </div>
+
+        <!-- Mode A Allowed Window Configuration -->
+        @if (service.activeMode() === 'MODE_A') {
+          <div class="field-group pt-2 border-t border-[var(--outline-variant)]">
+            <label class="field-label mb-1">
+              <span class="material-symbols-outlined">wb_twilight</span>
+              <span>Khung giờ cho phép xếp lịch trong ngày (Mode A)</span>
+            </label>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label for="allowed-window-start" class="block text-[11px] text-[var(--secondary)] mb-1">
+                  Bắt đầu sớm nhất
+                </label>
+                <input
+                  id="allowed-window-start"
+                  data-testid="allowed-window-start"
+                  type="time"
+                  [value]="service.allowedWindow().start"
+                  (change)="onAllowedWindowChange('start', $event)"
+                  class="text-input-arch font-mono"
+                />
+              </div>
+              <div>
+                <label for="allowed-window-end" class="block text-[11px] text-[var(--secondary)] mb-1">
+                  Kết thúc muộn nhất
+                </label>
+                <input
+                  id="allowed-window-end"
+                  data-testid="allowed-window-end"
+                  type="time"
+                  [value]="service.allowedWindow().end"
+                  (change)="onAllowedWindowChange('end', $event)"
+                  class="text-input-arch font-mono"
+                />
+              </div>
+            </div>
+          </div>
+        }
+      </section>
+    </aside>
+
+    <!-- RIGHT COLUMN: 7 Days Interactive Schedule -->
+    <main class="column-right">
+      <!-- Toolbar Header -->
+      <div class="days-header-toolbar">
+        <div>
+          <h2 class="days-section-title">
+            <span class="material-symbols-outlined">view_week</span>
+            @if (service.activeMode() === 'MODE_A') {
+              <span>Lịch Trình 7 Ngày &bull; Quỹ Giờ Linh Hoạt</span>
+            } @else {
+              <span>Lịch Trình 7 Ngày &bull; Các Khung Giờ Cố Định</span>
+            }
+          </h2>
+          <span class="text-xs text-[var(--secondary)]">
+            Gạt công tắc để Bật hoặc Tắt ngày nghỉ
+          </span>
+        </div>
+
+        <button
+          type="button"
+          data-testid="batch-copy-monday"
+          (click)="service.copyMondayToWeekdays()"
+          class="batch-copy-btn"
+          title="Sao chép thiết lập của Thứ Hai sang Thứ Ba đến Thứ Sáu"
+        >
+          <span class="material-symbols-outlined">content_copy</span>
+          <span>Sao chép Thứ 2 sang T3–T6</span>
+        </button>
+      </div>
+
+      <!-- 7 Days Grid -->
+      <div class="space-y-3">
+        @for (day of daysOfWeek; track day) {
+          @let dayData = service.weeklySchedule()[day];
+          @let dayErrors = service.dailyErrors()[day];
+
+          <section
+            [attr.data-testid]="'day-card-' + day"
+            class="day-card"
+            [class.disabled]="!dayData.enabled"
+            [class.has-error]="dayData.enabled && dayErrors.length > 0"
+          >
+            <!-- Day Header Row -->
+            <div class="day-header-row">
+              <div class="day-title-cluster">
+                <button
+                  type="button"
+                  role="switch"
+                  [attr.data-testid]="'toggle-day-' + day"
+                  [attr.aria-checked]="dayData.enabled"
+                  [attr.aria-label]="'Bật lịch học cho ' + dayLabels[day]"
+                  (click)="service.toggleDayEnabled(day)"
+                  class="switch-control"
+                  [class.checked]="dayData.enabled"
+                >
+                  <span class="switch-thumb"></span>
+                </button>
+
+                <div>
+                  <span class="day-name">{{ dayLabels[day] }}</span>
+                  @if (!dayData.enabled) {
+                    <span class="day-status-pill">(Đang nghỉ)</span>
+                  }
+                </div>
+              </div>
+
+              <!-- Daily Summary Badge -->
+              <div>
+                @if (dayData.enabled) {
+                  @if (service.activeMode() === 'MODE_A') {
+                    <span class="day-summary-badge">
+                      {{ dayData.quota_hours }} giờ / ngày
+                    </span>
+                  } @else {
+                    <span class="day-summary-badge">
+                      {{ getDaySlotHours(dayData.time_slots) }} giờ ({{ dayData.time_slots.length }} khung)
+                    </span>
+                  }
+                } @else {
+                  <span class="day-summary-badge muted">
+                    Nghỉ ngơi
+                  </span>
+                }
+              </div>
+            </div>
+
+            <!-- Day Body when Enabled -->
+            @if (dayData.enabled) {
+              <div class="day-body">
+                <!-- MODE A VIEW: Quota Slider + Preferred Periods -->
+                @if (service.activeMode() === 'MODE_A') {
+                  <div class="mode-a-grid">
+                    <!-- Quota Hours Slider & Stepper -->
+                    <div class="quota-control-cluster">
+                      <div class="quota-label-row">
+                        <label
+                          [attr.for]="'quota-range-' + day"
+                          class="text-[var(--secondary)] font-medium"
+                        >
+                          Quỹ thời gian học:
+                        </label>
+                        <span class="quota-hours-display">
+                          {{ dayData.quota_hours }} giờ
+                        </span>
+                      </div>
+
+                      <div class="quota-slider-stepper-row">
+                        <button
+                          type="button"
+                          [disabled]="dayData.quota_hours <= 0.5"
+                          [attr.aria-label]="'Giảm quỹ giờ ' + dayLabels[day]"
+                          (click)="adjustDayQuota(day, -0.5)"
+                          class="stepper-btn"
+                        >
+                          -
+                        </button>
+
+                        <input
+                          [id]="'quota-range-' + day"
+                          [attr.data-testid]="'quota-range-' + day"
+                          type="range"
+                          min="0.5"
+                          max="14.0"
+                          step="0.5"
+                          [value]="dayData.quota_hours"
+                          (input)="onQuotaRangeInput(day, $event)"
+                          class="arch-range-input"
+                        />
+
+                        <button
+                          type="button"
+                          [disabled]="dayData.quota_hours >= 14.0"
+                          [attr.aria-label]="'Tăng quỹ giờ ' + dayLabels[day]"
+                          (click)="adjustDayQuota(day, 0.5)"
+                          class="stepper-btn"
+                        >
+                          +
+                        </button>
+                      </div>
+
+                      <!-- Quick Quota Chips -->
+                      <div class="quick-quota-chips">
+                        <span class="chip-label">Nhanh:</span>
+                        @for (q of [1.0, 1.5, 2.0, 3.5, 4.0]; track q) {
+                          <button
+                            type="button"
+                            [attr.aria-pressed]="dayData.quota_hours === q"
+                            (click)="service.updateDayQuota(day, q)"
+                            class="quick-chip-btn"
+                            [class.selected]="dayData.quota_hours === q"
+                          >
+                            {{ q }}h
+                          </button>
+                        }
+                      </div>
+                    </div>
+
+                    <!-- Preferred Period Buttons -->
+                    <div class="periods-cluster">
+                      <span class="text-xs font-medium text-[var(--secondary)]">
+                        Buổi học ưu tiên:
+                      </span>
+                      <div
+                        class="period-buttons-grid"
+                        role="group"
+                        [attr.aria-label]="'Buổi học ưu tiên ' + dayLabels[day]"
+                      >
+                        <button
+                          type="button"
+                          [attr.data-testid]="'period-MORNING-' + day"
+                          [attr.aria-pressed]="dayData.preferred_period === 'MORNING'"
+                          (click)="service.updateDayPeriod(day, 'MORNING')"
+                          class="period-btn"
+                          [class.active]="dayData.preferred_period === 'MORNING'"
+                        >
+                          <span class="material-symbols-outlined">wb_twilight</span>
+                          <span>Sáng</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          [attr.data-testid]="'period-AFTERNOON-' + day"
+                          [attr.aria-pressed]="dayData.preferred_period === 'AFTERNOON'"
+                          (click)="service.updateDayPeriod(day, 'AFTERNOON')"
+                          class="period-btn"
+                          [class.active]="dayData.preferred_period === 'AFTERNOON'"
+                        >
+                          <span class="material-symbols-outlined">light_mode</span>
+                          <span>Chiều</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          [attr.data-testid]="'period-EVENING-' + day"
+                          [attr.aria-pressed]="dayData.preferred_period === 'EVENING'"
+                          (click)="service.updateDayPeriod(day, 'EVENING')"
+                          class="period-btn"
+                          [class.active]="dayData.preferred_period === 'EVENING'"
+                        >
+                          <span class="material-symbols-outlined">dark_mode</span>
+                          <span>Tối</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          [attr.data-testid]="'period-ANY-' + day"
+                          [attr.aria-pressed]="dayData.preferred_period === 'ANY' || !dayData.preferred_period"
+                          (click)="service.updateDayPeriod(day, 'ANY')"
+                          class="period-btn"
+                          [class.active]="dayData.preferred_period === 'ANY' || !dayData.preferred_period"
+                        >
+                          <span class="material-symbols-outlined">sync_alt</span>
+                          <span>Linh hoạt</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                }
+
+                <!-- MODE B VIEW: Fixed Time Slots List -->
+                @if (service.activeMode() === 'MODE_B') {
+                  <div class="slots-cluster">
+                    @for (slot of dayData.time_slots; track $index) {
+                      @let slotIndex = $index;
+                      @let durationMin = getSlotDuration(slot);
+
+                      <div
+                        [attr.data-testid]="'slot-row-' + day + '-' + slotIndex"
+                        class="slot-row"
+                      >
+                        <span class="slot-index">
+                          #{{ slotIndex + 1 }}
+                        </span>
+
+                        <div class="flex items-center gap-1.5">
+                          <input
+                            type="time"
+                            [attr.data-testid]="'slot-start-' + day + '-' + slotIndex"
+                            [value]="slot.start"
+                            (change)="onSlotFieldChange(day, slotIndex, 'start', $event)"
+                            class="slot-time-input font-mono"
+                            [attr.aria-label]="'Giờ bắt đầu khung ' + (slotIndex + 1) + ' ' + dayLabels[day]"
+                          />
+                          <span class="material-symbols-outlined slot-arrow">arrow_forward</span>
+                          <input
+                            type="time"
+                            [attr.data-testid]="'slot-end-' + day + '-' + slotIndex"
+                            [value]="slot.end"
+                            (change)="onSlotFieldChange(day, slotIndex, 'end', $event)"
+                            class="slot-time-input font-mono"
+                            [attr.aria-label]="'Giờ kết thúc khung ' + (slotIndex + 1) + ' ' + dayLabels[day]"
+                          />
+                        </div>
+
+                        <label class="offset-checkbox-label">
+                          <input
+                            type="checkbox"
+                            [attr.data-testid]="'slot-offset-' + day + '-' + slotIndex"
+                            [checked]="slot.end_day_offset === 1"
+                            (change)="onSlotOffsetChange(day, slotIndex, $event)"
+                          />
+                          <span>+1 ngày (qua đêm)</span>
+                        </label>
+
+                        <div class="ml-auto flex items-center gap-2">
+                          <span
+                            class="slot-duration-badge"
+                            [class.warning]="durationMin < 30"
+                          >
+                            {{ durationMin }} phút
+                          </span>
+
+                          <button
+                            type="button"
+                            [attr.data-testid]="'remove-slot-' + day + '-' + slotIndex"
+                            (click)="service.removeTimeSlot(day, slotIndex)"
+                            class="remove-slot-btn"
+                            [attr.aria-label]="'Xóa khung giờ ' + (slotIndex + 1) + ' ' + dayLabels[day]"
+                          >
+                            <span class="material-symbols-outlined">delete</span>
+                          </button>
+                        </div>
+                      </div>
+                    }
+
+                    <div class="pt-1">
+                      <button
+                        type="button"
+                        [attr.data-testid]="'add-slot-' + day"
+                        (click)="service.addTimeSlot(day)"
+                        class="add-slot-btn"
+                      >
+                        <span class="material-symbols-outlined">add</span>
+                        <span>Thêm khung giờ</span>
+                      </button>
+                    </div>
+                  </div>
+                }
+
+                <!-- Daily Validation Errors -->
+                @if (dayErrors.length > 0) {
+                  <div
+                    role="alert"
+                    [attr.data-testid]="'day-errors-' + day"
+                    class="day-errors-box"
+                  >
+                    @for (err of dayErrors; track err) {
+                      <div class="error-item">
+                        <span class="material-symbols-outlined">warning</span>
+                        <span>{{ err }}</span>
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          </section>
+        }
+      </div>
+    </main>
+  </div>
+
+  <!-- Sticky Bottom Action & Validation Bar -->
+  <footer class="sticky-action-bar">
+    @if (service.errorMessage()) {
+      <div role="alert" class="alert-inline error">
+        <div class="alert-left">
+          <span class="material-symbols-outlined">error</span>
+          <span>{{ service.errorMessage() }}</span>
+        </div>
+        <button type="button" (click)="clearError()" class="alert-close-btn">Đóng</button>
+      </div>
+    }
+
+    @if (service.saveSuccessMessage()) {
+      <div
+        role="status"
+        data-testid="save-success-banner"
+        class="alert-inline success"
+      >
+        <div class="alert-left">
+          <span class="material-symbols-outlined">check_circle</span>
+          <span>{{ service.saveSuccessMessage() }}</span>
+        </div>
+        <button type="button" (click)="clearSuccess()" class="alert-close-btn">Đóng</button>
+      </div>
+    }
+
+    <div class="action-bar-content">
+      <div class="action-bar-summary">
+        <div>
+          <div class="action-bar-title">Tổng quỹ thời gian tuần:</div>
+          <div class="action-bar-hours font-mono">
+            {{ service.totalWeeklyHours().toFixed(1) }} giờ / tuần
+          </div>
+        </div>
+
+        @if (service.isWeeklyValid()) {
+          <span
+            appBadge
+            variant="success"
+            class="badge-capsule valid hidden sm:inline-flex"
+          >
+            <span class="material-symbols-outlined">verified</span>
+            <span>Sẵn sàng lưu & đồng bộ</span>
+          </span>
+        } @else {
+          <span
+            appBadge
+            variant="destructive"
+            class="badge-capsule invalid hidden sm:inline-flex"
+          >
+            <span class="material-symbols-outlined">warning</span>
+            <span>Chưa đạt chuẩn tối thiểu</span>
+          </span>
+        }
+      </div>
+
+      <button
+        type="button"
+        appButton
+        size="lg"
+        data-testid="save-availability-btn"
+        [disabled]="!service.isWeeklyValid() || service.saving()"
+        (click)="service.saveMyAvailability()"
+        class="save-cta-button"
+      >
+        @if (service.saving()) {
+          <span class="material-symbols-outlined animate-spin">progress_activity</span>
+          <span>Đang lưu...</span>
+        } @else {
+          <span class="material-symbols-outlined">save</span>
+          <span>Lưu cấu hình thời gian rảnh</span>
+        }
+      </button>
+    </div>
+  </footer>
+</div>
