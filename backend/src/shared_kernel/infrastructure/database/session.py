@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import NullPool
 
 from src.shared_kernel.config import get_settings
 
@@ -20,7 +21,7 @@ settings = get_settings()
 engine: AsyncEngine = create_async_engine(
     settings.database_url,
     echo=False,
-    pool_pre_ping=True,
+    poolclass=NullPool,
     future=True,
 )
 

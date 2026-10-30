@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     # Environment
     environment: str = "development"
     debug: bool = True
-    backend_cors_origins: str = '["http://localhost:3000", "http://127.0.0.1:3000"]'
+    backend_cors_origins: str = '["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:4200", "http://127.0.0.1:4200"]'
 
     # PostgreSQL 16 (Asyncpg)
     database_url: str = (
@@ -35,6 +35,18 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 7
     fernet_key: str = ""
+    google_client_id: str = ""
+
+    # Mail & OTP Configuration (ADR-008, Mailpit on localhost:1025 in dev/test)
+    email_backend: str = "smtp"
+    email_host: str = "localhost"
+    email_port: int = 1025
+    email_user: str = ""
+    email_pass: str = ""
+    email_from: str = "FocusFlow Support <no-reply@focusflow.local>"
+    otp_ttl_seconds: int = 300
+    otp_cooldown_seconds: int = 60
+    otp_max_attempts: int = 3
 
     # Provider-Agnostic LLM (ADR-006: gemini | openai | anthropic | ollama | mock)
     llm_provider: str = "gemini"
