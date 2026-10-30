@@ -1,0 +1,509 @@
+from collections.abc import Sequence
+from datetime import date, datetime, time, timedelta
+from uuid import UUID
+
+from src.planning.domain.services.validation_types import (
+    SOFT_OVERFLOW_MAX_MINUTES,
+    AvailabilityConfigurationDTO,
+    AvailabilitySlotDTO,
+    ConstraintViolationDTO,
+    SoftOverflowWarningDTO,
+    normalize_weekday_name,
+    parse_hhmm_or_time,
+    parse_iso_date,
+    parse_iso_datetime,
+)
+
+
+def _to_int(val: object, default: int = 0) -> int:
+    if val is None:
+        return default
+    if isinstance(val, bool):
+        return int(val)
+    if isinstance(val, (int, float)):
+        return int(val)
+    try:
+        return int(str(val).strip())
+    except ValueError:
+        return default
+
+
+def _slot_minute_range(slot: AvailabilitySlotDTO) -> tuple[int, int]:
+    s_t = parse_hhmm_or_time(slot.start_time)
+    e_t = parse_hhmm_or_time(slot.end_time)
+    if s_t is None or e_t is None:
+        return 0, 0
+    s_m = s_t.hour * 60 + s_t.minute
+    e_m = e_t.hour * 60 + e_t.minute
+    # Support cross-midnight slots (e.g. 23:00-01:00) via end_day_offset=1 or end_time <= start_time
+    offset = 1 if (slot.end_day_offset == 1 or e_m <= s_m) else 0
+    return s_m, e_m + offset * 1440
+
+
+def _task_minute_range_on_base_date(
+    base_date: date,
+    start_dt: datetime | None,
+    end_dt: datetime | None,
+    start_t: time | None,
+    end_t: time | None,
+) -> tuple[int, int] | None:
+    if start_dt is not None and end_dt is not None:
+        s_day_diff = (start_dt.date() - base_date).days
+        e_day_diff = (end_dt.date() - base_date).days
+        s_m = s_day_diff * 1440 + start_dt.hour * 60 + start_dt.minute
+        e_m = e_day_diff * 1440 + end_dt.hour * 60 + end_dt.minute
+        if e_m <= s_m:
+            e_m += 1440
+        return s_m, e_m
+
+    if start_t is not None and end_t is not None:
+        s_m = start_t.hour * 60 + start_t.minute
+        e_m = end_t.hour * 60 + end_t.minute
+        if e_m <= s_m:
+            e_m += 1440
+        return s_m, e_m
+
+    return None
+
+
+class SpatioTemporalRuleEngine:
+    """Pure Python Tier 2 deterministic validator for Mode A, Mode B, Soft Overflow, and EDF conflicts."""
+
+    @staticmethod
+    def is_higher_or_equal_edf_priority(
+        existing_target_date: date | None,
+        current_target_date: date | None,
+        existing_roadmap_id: UUID | None = None,
+        current_roadmap_id: UUID | None = None,
+    ) -> bool:
+        """OS-04 Earliest Deadline First (EDF):
+        Other ACTIVE roadmaps occupy slots/quota if their target_date is earlier than or equal
+        to the current roadmap's target_date (or if existing tasks are already committed in an
+        active schedule, BUSR-05 states new schedules only place into remaining free space; when
+        two active roadmaps contend, earlier target_date wins).
+        """
+        if existing_target_date is None and current_target_date is None:
+            return True
+        if existing_target_date is not None and current_target_date is None:
+            return True
+        if existing_target_date is None and current_target_date is not None:
+            return True
+        assert existing_target_date is not None and current_target_date is not None
+        if existing_target_date < current_target_date:
+            return True
+        if existing_target_date == current_target_date:
+            if existing_roadmap_id is not None and current_roadmap_id is not None:
+                return str(existing_roadmap_id) <= str(current_roadmap_id)
+            return True
+        # Even when current roadmap has an earlier target_date, existing active roadmap tasks
+        # already occupy physical time; however if the caller checks EDF priority, we still flag
+        # cross-roadmap conflict so no overbooking occurs.
+        return True
+
+    @classmethod
+    def validate_mode_a_quota(
+        cls,
+        *,
+        tasks: Sequence[dict[str, object]],
+        availability: AvailabilityConfigurationDTO,
+        existing_tasks: Sequence[object] = (),
+        current_roadmap_target_date: date | None = None,
+    ) -> list[ConstraintViolationDTO]:
+        violations: list[ConstraintViolationDTO] = []
+
+        # Group proposed tasks by scheduled_date
+        tasks_by_date: dict[date, list[tuple[int, dict[str, object]]]] = {}
+        for idx, raw_task in enumerate(tasks):
+            sched_date = parse_iso_date(raw_task.get("scheduled_date"))
+            if sched_date is None:
+                continue
+            tasks_by_date.setdefault(sched_date, []).append((idx, raw_task))
+
+        # Group existing active roadmap tasks by scheduled_date
+        existing_minutes_by_date: dict[date, int] = {}
+        existing_edf_by_date: dict[date, list[tuple[str, int, date | None]]] = {}
+        for ext in existing_tasks:
+            status = str(getattr(ext, "status", "TODO")).upper()
+            if status in ("CANCELLED", "COMPLETED"):
+                continue
+            ext_date = parse_iso_date(getattr(ext, "scheduled_date", None))
+            if ext_date is None:
+                continue
+            ext_mins = int(getattr(ext, "estimated_minutes", 0) or 0)
+            ext_title = str(getattr(ext, "title", "Existing Task"))
+            ext_target = parse_iso_date(getattr(ext, "roadmap_target_date", None))
+            existing_minutes_by_date[ext_date] = (
+                existing_minutes_by_date.get(ext_date, 0) + ext_mins
+            )
+            existing_edf_by_date.setdefault(ext_date, []).append((ext_title, ext_mins, ext_target))
+
+        for sched_date, day_items in sorted(tasks_by_date.items(), key=lambda x: x[0]):
+            weekday_name = normalize_weekday_name(sched_date)
+            weekday_idx = sched_date.weekday()
+
+            if weekday_name in {d.lower() for d in availability.disabled_weekdays}:
+                first_idx = day_items[0][0]
+                violations.append(
+                    ConstraintViolationDTO(
+                        task_index=first_idx,
+                        field="scheduled_date",
+                        rule_code="DAY_DISABLED",
+                        expected_bound="0 minutes (weekday disabled)",
+                        actual_value=f"{sched_date.isoformat()} ({weekday_name})",
+                        suggested_fix=f"Dời các nhiệm vụ ngày {sched_date.isoformat()} sang ngày học đang bật.",
+                    )
+                )
+                continue
+
+            quota_mins: int | None = None
+            if weekday_name in availability.daily_quota_minutes:
+                quota_mins = int(availability.daily_quota_minutes[weekday_name])
+            elif weekday_idx in availability.daily_quota_minutes:
+                quota_mins = int(availability.daily_quota_minutes[weekday_idx])
+            elif str(weekday_idx) in availability.daily_quota_minutes:
+                quota_mins = int(availability.daily_quota_minutes[str(weekday_idx)])
+            else:
+                quota_mins = int(availability.default_daily_quota_minutes)
+
+            proposed_sum = sum(_to_int(item.get("estimated_minutes", 0)) for _, item in day_items)
+            occupied_sum = existing_minutes_by_date.get(sched_date, 0)
+            total_sum = proposed_sum + occupied_sum
+
+            if total_sum > quota_mins:
+                last_idx = day_items[-1][0]
+                overflow = total_sum - quota_mins
+                if occupied_sum > 0:
+                    edf_notes = ", ".join(
+                        f"'{t}' ({m}p, EDF target={td.isoformat() if td else 'N/A'})"
+                        for t, m, td in existing_edf_by_date.get(sched_date, [])
+                    )
+                    rule_code = (
+                        "CROSS_ROADMAP_EDF_QUOTA_CONFLICT"
+                        if any(
+                            td is not None
+                            and (
+                                current_roadmap_target_date is None
+                                or td <= current_roadmap_target_date
+                            )
+                            for _, _, td in existing_edf_by_date.get(sched_date, [])
+                        )
+                        else "MODE_A_DAILY_QUOTA_EXCEEDED"
+                    )
+                    violations.append(
+                        ConstraintViolationDTO(
+                            task_index=last_idx,
+                            field="estimated_minutes",
+                            rule_code=rule_code,
+                            expected_bound=f"<= {quota_mins} phút/ngày (còn trống {max(0, quota_mins - occupied_sum)} phút)",
+                            actual_value=f"{total_sum} phút (đề xuất {proposed_sum}p + lộ trình khác {occupied_sum}p: {edf_notes})",
+                            suggested_fix=(
+                                f"Giảm ít nhất {overflow} phút trong ngày {sched_date.isoformat()} hoặc dời nhiệm vụ sang ngày khác."
+                            ),
+                        )
+                    )
+                else:
+                    violations.append(
+                        ConstraintViolationDTO(
+                            task_index=last_idx,
+                            field="estimated_minutes",
+                            rule_code="MODE_A_DAILY_QUOTA_EXCEEDED",
+                            expected_bound=f"<= {quota_mins} phút/ngày ({weekday_name})",
+                            actual_value=f"{total_sum} phút vào ngày {sched_date.isoformat()}",
+                            suggested_fix=(
+                                f"Giảm ít nhất {overflow} phút trong ngày {sched_date.isoformat()} hoặc chia nhiệm vụ sang ngày khác."
+                            ),
+                        )
+                    )
+
+        return violations
+
+    @classmethod
+    def validate_mode_b_slots(
+        cls,
+        *,
+        tasks: Sequence[dict[str, object]],
+        availability: AvailabilityConfigurationDTO,
+        existing_tasks: Sequence[object] = (),
+        current_roadmap_target_date: date | None = None,
+    ) -> tuple[list[ConstraintViolationDTO], list[SoftOverflowWarningDTO]]:
+        violations: list[ConstraintViolationDTO] = []
+        warnings: list[SoftOverflowWarningDTO] = []
+
+        # Map active slots by weekday name ("monday".."sunday")
+        slots_by_weekday: dict[str, list[tuple[int, int]]] = {}
+        for slot in availability.availability_slots:
+            if not slot.is_active:
+                continue
+            wname = normalize_weekday_name(slot.day_of_week)
+            s_m, e_m = _slot_minute_range(slot)
+            if e_m > s_m:
+                slots_by_weekday.setdefault(wname, []).append((s_m, e_m))
+
+        # Merge contiguous slots per weekday
+        for wname, raw_ranges in list(slots_by_weekday.items()):
+            sorted_r = sorted(raw_ranges, key=lambda r: r[0])
+            merged: list[tuple[int, int]] = [sorted_r[0]]
+            for cur_s, cur_e in sorted_r[1:]:
+                prev_s, prev_e = merged[-1]
+                if cur_s <= prev_e:
+                    merged[-1] = (prev_s, max(prev_e, cur_e))
+                else:
+                    merged.append((cur_s, cur_e))
+            slots_by_weekday[wname] = merged
+
+        # Parse proposed tasks and assign each to its logical anchor date
+        # (including cross-midnight tasks that start late on date D and end early on D+1)
+        parsed_task_entries: list[tuple[int, dict[str, object], date, int, int, int]] = []
+        for idx, raw_task in enumerate(tasks):
+            est_mins = _to_int(raw_task.get("estimated_minutes", 0))
+            sched_date = parse_iso_date(raw_task.get("scheduled_date"))
+            start_dt = parse_iso_datetime(raw_task.get("scheduled_start"))
+            end_dt = parse_iso_datetime(raw_task.get("scheduled_end"))
+            start_t = parse_hhmm_or_time(
+                raw_task.get("scheduled_start") or raw_task.get("start_time")
+            )
+            end_t = parse_hhmm_or_time(raw_task.get("scheduled_end") or raw_task.get("end_time"))
+
+            if sched_date is None and start_dt is not None:
+                sched_date = start_dt.date()
+
+            if (
+                sched_date is None
+                or (start_dt is None and start_t is None)
+                or (end_dt is None and end_t is None)
+            ):
+                violations.append(
+                    ConstraintViolationDTO(
+                        task_index=idx,
+                        field="scheduled_start",
+                        rule_code="MODE_B_MISSING_TIME_BOUNDS",
+                        expected_bound="scheduled_date, scheduled_start, and scheduled_end required in Mode B",
+                        actual_value=f"date={sched_date}, start={raw_task.get('scheduled_start')}, end={raw_task.get('scheduled_end')}",
+                        suggested_fix="Cung cấp đầy đủ scheduled_date, scheduled_start và scheduled_end cho từng nhiệm vụ trong Mode B.",
+                    )
+                )
+                continue
+
+            m_range = _task_minute_range_on_base_date(sched_date, start_dt, end_dt, start_t, end_t)
+            if m_range is None:
+                continue
+            t_s, t_e = m_range
+            actual_duration = t_e - t_s
+            if actual_duration <= 0:
+                violations.append(
+                    ConstraintViolationDTO(
+                        task_index=idx,
+                        field="scheduled_end",
+                        rule_code="INVALID_TASK_TIME_ORDER",
+                        expected_bound="scheduled_end > scheduled_start",
+                        actual_value=f"{actual_duration} phút",
+                        suggested_fix="Chỉnh lại giờ kết thúc lớn hơn giờ bắt đầu.",
+                    )
+                )
+                continue
+
+            if abs(actual_duration - est_mins) > 1:
+                violations.append(
+                    ConstraintViolationDTO(
+                        task_index=idx,
+                        field="estimated_minutes",
+                        rule_code="MODE_B_DURATION_MISMATCH",
+                        expected_bound=f"estimated_minutes == (scheduled_end - scheduled_start) ({actual_duration} phút)",
+                        actual_value=f"estimated_minutes={est_mins} phút nhưng khoảng giờ là {actual_duration} phút",
+                        suggested_fix=f"Đồng bộ estimated_minutes={actual_duration} hoặc điều chỉnh scheduled_end khớp với {est_mins} phút.",
+                    )
+                )
+
+            parsed_task_entries.append((idx, raw_task, sched_date, t_s, t_e, est_mins))
+
+        # Group proposed tasks by scheduled_date
+        by_date: dict[date, list[tuple[int, dict[str, object], date, int, int, int]]] = {}
+        for entry in parsed_task_entries:
+            by_date.setdefault(entry[2], []).append(entry)
+
+        # Group existing active tasks by scheduled_date for cross-roadmap overlap check (OS-04)
+        existing_by_date: dict[date, list[tuple[str, int, int, date | None]]] = {}
+        for ext in existing_tasks:
+            status = str(getattr(ext, "status", "TODO")).upper()
+            if status in ("CANCELLED", "COMPLETED"):
+                continue
+            ext_date = parse_iso_date(getattr(ext, "scheduled_date", None))
+            ext_start_dt = parse_iso_datetime(getattr(ext, "scheduled_start", None))
+            ext_end_dt = parse_iso_datetime(getattr(ext, "scheduled_end", None))
+            ext_start_t = parse_hhmm_or_time(getattr(ext, "scheduled_start", None))
+            ext_end_t = parse_hhmm_or_time(getattr(ext, "scheduled_end", None))
+            if ext_date is None and ext_start_dt is not None:
+                ext_date = ext_start_dt.date()
+            if ext_date is None:
+                continue
+            ext_range = _task_minute_range_on_base_date(
+                ext_date, ext_start_dt, ext_end_dt, ext_start_t, ext_end_t
+            )
+            if ext_range is None:
+                continue
+            ext_title = str(getattr(ext, "title", "Existing Task"))
+            ext_target = parse_iso_date(getattr(ext, "roadmap_target_date", None))
+            existing_by_date.setdefault(ext_date, []).append(
+                (ext_title, ext_range[0], ext_range[1], ext_target)
+            )
+
+        for sched_date, entries in sorted(by_date.items(), key=lambda x: x[0]):
+            sorted_entries = sorted(entries, key=lambda e: (e[3], e[4]))
+            weekday_name = normalize_weekday_name(sched_date)
+            day_slots = slots_by_weekday.get(weekday_name, [])
+
+            # Also check if a task starting early in the morning (e.g. 00:15) belongs to previous day's cross-midnight slot
+            prev_date = sched_date - timedelta(days=1)
+            prev_weekday = normalize_weekday_name(prev_date)
+            prev_day_cross_slots = [
+                (s_m - 1440, e_m - 1440)
+                for s_m, e_m in slots_by_weekday.get(prev_weekday, [])
+                if e_m > 1440
+            ]
+            effective_slots = sorted([*prev_day_cross_slots, *day_slots], key=lambda r: r[0])
+
+            # 1. Check self-overlap within proposed tasks on the same date
+            for i in range(len(sorted_entries) - 1):
+                idx1, task1, _, s1, e1, _ = sorted_entries[i]
+                idx2, task2, _, s2, e2, _ = sorted_entries[i + 1]
+                if s1 < e2 and s2 < e1:
+                    violations.append(
+                        ConstraintViolationDTO(
+                            task_index=idx2,
+                            field="scheduled_start",
+                            rule_code="TASK_TIME_OVERLAP",
+                            expected_bound=f"Không chồng lấn với nhiệm vụ #{idx1} ('{task1.get('title')}')",
+                            actual_value=f"Nhiệm vụ #{idx1} và #{idx2} ('{task2.get('title')}') trùng giờ trong ngày {sched_date.isoformat()}",
+                            suggested_fix="Dời khung giờ bắt đầu của nhiệm vụ sau thời điểm kết thúc của nhiệm vụ trước.",
+                        )
+                    )
+
+            # 2. Check Cross-Roadmap EDF overlap against existing active tasks
+            day_existing = existing_by_date.get(sched_date, [])
+            for idx, raw_task, _, t_s, t_e, _ in sorted_entries:
+                for ext_title, occ_s, occ_e, ext_target in day_existing:
+                    if t_s < occ_e and occ_s < t_e:
+                        edf_info = (
+                            f" (EDF ưu tiên lộ trình có target_date={ext_target.isoformat()})"
+                            if ext_target is not None
+                            and (
+                                current_roadmap_target_date is None
+                                or ext_target <= current_roadmap_target_date
+                            )
+                            else ""
+                        )
+                        violations.append(
+                            ConstraintViolationDTO(
+                                task_index=idx,
+                                field="scheduled_start",
+                                rule_code="CROSS_ROADMAP_EDF_SLOT_CONFLICT",
+                                expected_bound=f"Không trùng khung giờ đã xếp của lộ trình ACTIVE khác ('{ext_title}'){edf_info}",
+                                actual_value=f"Nhiệm vụ '{raw_task.get('title')}' trùng khung giờ với '{ext_title}' vào ngày {sched_date.isoformat()}",
+                                suggested_fix="Chọn khung giờ rảnh khác trong ngày hoặc chuyển sang ngày khác chưa bị lộ trình ưu tiên EDF chiếm.",
+                            )
+                        )
+
+            # 3. Check each task against availability slots & Soft Overflow rule (BUSR-04)
+            if not effective_slots:
+                for idx, raw_task, _, _, _, _ in sorted_entries:
+                    violations.append(
+                        ConstraintViolationDTO(
+                            task_index=idx,
+                            field="scheduled_date",
+                            rule_code="NO_AVAILABILITY_SLOT_FOR_DAY",
+                            expected_bound=f"Ngày có khung giờ rảnh (Mode B) — {weekday_name} không có slot",
+                            actual_value=f"{sched_date.isoformat()} ({weekday_name})",
+                            suggested_fix=f"Dời nhiệm vụ '{raw_task.get('title')}' sang ngày có cấu hình khung giờ rảnh.",
+                        )
+                    )
+                continue
+
+            last_entry_idx_on_day = sorted_entries[-1][0]
+            for pos, (idx, raw_task, _, t_s, t_e, _) in enumerate(sorted_entries):
+                is_last_task_of_day = (
+                    pos == (len(sorted_entries) - 1) or idx == last_entry_idx_on_day
+                )
+                title_str = str(raw_task.get("title", f"Task #{idx}"))
+
+                matched_exact = False
+                matched_soft_overflow = 0
+                hard_overflow_amount = 0
+
+                for slot_s, slot_e in effective_slots:
+                    if slot_s <= t_s and t_e <= slot_e:
+                        matched_exact = True
+                        break
+                    if slot_s <= t_s < slot_e and t_e > slot_e:
+                        overflow = t_e - slot_e
+                        # Check if it collides with another proposed task after it
+                        overlaps_next_task = any(
+                            other_s < t_e
+                            for other_idx, _, _, other_s, _, _ in sorted_entries
+                            if other_idx != idx and other_s >= t_s
+                        )
+                        if (
+                            0 < overflow <= SOFT_OVERFLOW_MAX_MINUTES
+                            and is_last_task_of_day
+                            and not overlaps_next_task
+                        ):
+                            matched_soft_overflow = overflow
+                            break
+                        hard_overflow_amount = max(hard_overflow_amount, overflow)
+
+                if matched_exact:
+                    continue
+
+                if matched_soft_overflow > 0:
+                    warnings.append(
+                        SoftOverflowWarningDTO(
+                            task_index=idx,
+                            task_title=title_str,
+                            scheduled_date=sched_date,
+                            overflow_minutes=matched_soft_overflow,
+                            message=(
+                                f"Nhiệm vụ cuối ngày '{title_str}' ({sched_date.isoformat()}) "
+                                f"tràn {matched_soft_overflow} phút sau mốc kết thúc khung giờ rảnh (<= 30 phút). "
+                                "Cần xác nhận Soft Overflow trước khi Apply."
+                            ),
+                        )
+                    )
+                    continue
+
+                slot_bounds_str = ", ".join(
+                    f"{(s // 60) % 24:02d}:{s % 60:02d}-{(e // 60) % 24:02d}:{e % 60:02d}"
+                    + (" (+1d)" if e >= 1440 else "")
+                    for s, e in effective_slots
+                )
+                if hard_overflow_amount > SOFT_OVERFLOW_MAX_MINUTES:
+                    violations.append(
+                        ConstraintViolationDTO(
+                            task_index=idx,
+                            field="scheduled_end",
+                            rule_code="OVERFLOW_EXCEEDS_30M",
+                            expected_bound=(
+                                f"Tràn tối đa {SOFT_OVERFLOW_MAX_MINUTES} phút ở nhiệm vụ cuối ngày "
+                                f"(khung rảnh: {slot_bounds_str})"
+                            ),
+                            actual_value=f"Tràn {hard_overflow_amount} phút vào ngày {sched_date.isoformat()}",
+                            suggested_fix=(
+                                f"Rút ngắn thời lượng nhiệm vụ '{title_str}' ít nhất "
+                                f"{hard_overflow_amount - SOFT_OVERFLOW_MAX_MINUTES} phút hoặc chia nhỏ nhiệm vụ."
+                            ),
+                        )
+                    )
+                else:
+                    violations.append(
+                        ConstraintViolationDTO(
+                            task_index=idx,
+                            field="scheduled_start",
+                            rule_code="OUTSIDE_AVAILABILITY_SLOT",
+                            expected_bound=f"Nằm gọn trong khung giờ rảnh Mode B ({slot_bounds_str})",
+                            actual_value=(
+                                f"Nhiệm vụ '{title_str}' [{(t_s // 60) % 24:02d}:{t_s % 60:02d}-"
+                                f"{(t_e // 60) % 24:02d}:{t_e % 60:02d}] nằm ngoài slot"
+                            ),
+                            suggested_fix=f"Đặt giờ học của '{title_str}' nằm trong khung [{slot_bounds_str}].",
+                        )
+                    )
+
+        return violations, warnings
