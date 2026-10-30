@@ -44,10 +44,11 @@ Trong bản thiết kế sơ bộ v1.0, việc dự kiến dùng Angular 19 kèm
 * 100% components là **Standalone Components** (`standalone: true`), sử dụng `ChangeDetectionStrategy.OnPush`, cú pháp Control Flow hiện đại (`@if`, `@for`, `@switch`, `@defer`) và Signal Inputs/Outputs (`input()`, `output()`, `model()`).
 * Khi bộ đếm Pomodoro cập nhật mỗi 1 giây, Angular chỉ cập nhật đúng text node chứa giá trị Signal mà không quét lại cây component cha.
 
-### 3.2. Hệ thống Thiết kế: Tailwind CSS v4 + PrimeNG v21 + Lucide Icons
+### 3.2. Hệ thống Thiết kế: Tailwind CSS v4 + PrimeNG v21 + Lucide Icons & Auth Styling Chuyên biệt
 * **PrimeNG v21 (Styled Mode với Semantic CSS Variables):** Cung cấp đầy đủ các thành phần phức tạp đạt chuẩn WAI-ARIA (Table, Dialog, Drawer, Select, DatePicker, Timeline, ProgressBar, Toast, ConfirmPopup) được tùy biến đồng bộ qua hệ thống biến CSS ngữ nghĩa (`--p-primary-color`, `--p-surface-*`) hỗ trợ cả Light Mode và Dark Mode tập trung.
-* **Tailwind CSS v4:** Sử dụng cho bố cục (Flexbox/Grid), khoảng cách (Spacing), Typography và hiệu ứng vi tương tác (Micro-interactions).
+* **Tailwind CSS v4:** Sử dụng cho bố cục (Flexbox/Grid), khoảng cách (Spacing), Typography và hiệu ứng vi tương tác (Micro-interactions) trên các phân hệ nội bộ.
 * **Lucide Icons (`lucide-angular`):** Bộ icon vector tối giản, sắc nét và đồng nhất.
+* **Thiết kế Chuyên biệt cho Phân hệ Xác thực (Auth Feature Slice — `UC-01`, `UC-02`):** Giao diện Auth áp dụng hệ thống thiết kế UI & SCSS chuyên biệt của Duẩn: Bộ màu Brand Tokens (`assets/color/palette.json`, `light.json`), hệ thống đa ngôn ngữ song ngữ (`assets/i18n/{vi,en}.json` qua `TranslationService` & `TranslatePipe`), và SCSS Component Styling cho 4 luồng (`sign-in`, `sign-up`, `forgot-password`, `otp-validation`). Thiết kế này tối ưu hóa tối đa trải nghiệm người dùng đầu tiên (First Impression) với hiệu ứng động mượt mà, phân tích độ mạnh mật khẩu theo entropy, và lưới nhập mã OTP 6 ô độc lập.
 
 ### 3.3. Quản lý Trạng thái bằng Native Angular Signals & Cầu nối RxJS SSE
 * **Feature Store Services với Native Signals:** Mỗi phân hệ sở hữu các `@Injectable` Store Service quản lý trạng thái bằng `signal()`, `computed()`, `linkedSignal()` và `rxResource()` (không dùng NgRx cồng kềnh).

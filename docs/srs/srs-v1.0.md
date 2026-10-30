@@ -560,47 +560,57 @@ Mục này chuẩn hóa toàn bộ các máy trạng thái (State Machines) củ
 
 ### 7.1 Xác thực & Quản lý Tài khoản, Hồ sơ (FR-AUTH)
 
-#### FR-AUTH-001: Đăng ký tài khoản Người học
-- **Tiêu đề**: Đăng ký tài khoản Learner mới.
-- **Mô tả**: Hệ thống phải cho phép người dùng mới đăng ký tài khoản Learner bằng địa chỉ email và mật khẩu hợp lệ.
+#### FR-AUTH-001: Đăng ký tài khoản Người học & Xác thực OTP
+- **Tiêu đề**: Đăng ký tài khoản Learner mới qua xác thực OTP hoặc Google OAuth2 SSO.
+- **Mô tả**: Hệ thống phải cho phép người dùng mới đăng ký tài khoản Learner bằng quy trình xác thực Email OTP 2 bước (chống tài khoản rác và brute-force) hoặc đăng ký nhanh thông qua Google OAuth2 Single Sign-On (SSO).
 - **Tiền điều kiện**: Người dùng chưa đăng nhập hệ thống.
 - **Tác nhân kích hoạt**: Người dùng gửi biểu mẫu đăng ký (`UC-01`).
-- **Dữ liệu đầu vào**: Họ tên hiển thị (`full_name`), Địa chỉ Email, Mật khẩu, Xác nhận mật khẩu, Múi giờ mặc định (`timezone`, mặc định `'Asia/Ho_Chi_Minh'`).
-- **Luồng chính**:
-  1. Người dùng nhập thông tin đăng ký và bấm "Đăng ký".
-  2. Hệ thống kiểm tra định dạng email và độ mạnh mật khẩu (tối thiểu 8 ký tự, gồm chữ và số).
-  3. Hệ thống kiểm tra tính duy nhất của email trong hệ thống.
-  4. Hệ thống băm mật khẩu bằng thuật toán mã hóa một chiều an toàn (tuân thủ `NFR-SEC-002`), khởi tạo tài khoản User ở trạng thái hoạt động với phân tầng mặc định là `FREE`, khởi tạo hồ sơ thói quen mặc định (Cold Start) và cấp hạn ngạch AI ban đầu theo `OS-02`.
-  5. Hệ thống thiết lập phiên đăng nhập an toàn và chuyển hướng người dùng đến luồng Onboarding.
-- **Luồng thay thế**: Không có.
+- **Dữ liệu đầu vào**: Họ tên hiển thị (`full_name`), Địa chỉ Email, Mật khẩu, Xác nhận mật khẩu, Múi giờ mặc định (`timezone`, mặc định `'Asia/Ho_Chi_Minh'`), hoặc Google OAuth2 Credential / ID Token.
+- **Luồng chính (Đăng ký qua Email OTP 2 bước)**:
+  1. Người dùng nhập thông tin đăng ký (Họ tên, Email, Mật khẩu đạt chuẩn) và bấm "Đăng ký".
+  2. Hệ thống kiểm tra định dạng email và độ phức tạp mật khẩu (tối thiểu 8 ký tự, chữ hoa, chữ thường, số, ký tự đặc biệt).
+  3. Hệ thống kiểm tra tính duy nhất của email trong cơ sở dữ liệu.
+  4. Hệ thống sinh mã OTP ngẫu nhiên 6 chữ số, lưu trữ mã băm SHA-256 vào bộ nhớ tạm phân tán Redis với thời gian sống TTL 300 giây (5 phút), giới hạn tối đa 3 lần nhập sai và thời gian chờ gửi lại (cooldown) 60 giây.
+  5. Hệ thống gửi email chứa mã OTP đến địa chỉ email đăng ký qua giao thức SMTP / Taskiq Background Task và chuyển giao diện sang màn hình nhập OTP 6 số (`/verify-otp`).
+  6. Người dùng nhập mã OTP 6 số và gửi yêu cầu xác thực.
+  7. Hệ thống đối soát mã OTP với Redis (cơ chế Anti-Replay: xóa mã ngay sau khi xác thực thành công), băm mật khẩu bằng Argon2id (tuân thủ `ADR-008`), tạo tài khoản User trạng thái hoạt động với vai trò `LEARNER`, gói `FREE`, cấp phát hạn ngạch AI Quota ban đầu (30 cuộc gọi/tháng) và thiết lập phiên HttpOnly Cookie an toàn.
+- **Luồng thay thế (Google OAuth2 SSO)**:
+  - Người dùng bấm nút "Tiếp tục với Google" trên giao diện. Hệ thống xác thực ID Token qua Google Auth API. Nếu người dùng chưa tồn tại, hệ thống tự động kích hoạt tài khoản `LEARNER` gói `FREE` và cấp hạn ngạch AI Quota mặc định.
 - **Luồng ngoại lệ**:
-  - *Email đã tồn tại*: Hệ thống từ chối tạo tài khoản, trả về thông báo lỗi: *"Email đã được sử dụng"*.
-  - *Mật khẩu không đạt chuẩn*: Hệ thống từ chối tạo tài khoản, hiển thị yêu cầu về độ mạnh mật khẩu.
-- **Hậu điều kiện**: Tài khoản User mới được lưu trữ bền vững; phiên xác thực được cấp cho client.
+  - *Email đã tồn tại*: Hệ thống từ chối tạo tài khoản, trả về mã lỗi 400 và thông báo: *"Email đã được sử dụng"*.
+  - *Mật khẩu không đạt chuẩn*: Hệ thống từ chối tạo tài khoản, hiển thị thông báo lỗi chi tiết các tiêu chí chưa đạt.
+  - *Mã OTP sai hoặc hết hạn*: Hệ thống từ chối xác thực, hiển thị thông báo lỗi và giảm số lần thử còn lại; nếu vượt quá 3 lần sai, phiên OTP bị hủy và người dùng phải yêu cầu mã mới.
+- **Hậu điều kiện**: Tài khoản User mới được lưu trữ bền vững; phiên xác thực được cấp qua HttpOnly Cookie.
 - **Tiêu chí chấp nhận**:
   - Không cho phép tạo 2 tài khoản trùng email.
-  - 100% mật khẩu được băm một chiều trước khi lưu trữ.
-- **Phương pháp kiểm chứng**: Kiểm thử tự động (Integration Test) kiểm tra tính duy nhất của email và kiểm tra dữ liệu lưu trữ không chứa mật khẩu thô.
-- **Truy vết**: BR-005, BUSR-01, UC-01, NFR-SEC-002.
+  - 100% mật khẩu được băm một chiều bằng Argon2id trước khi lưu trữ.
+  - Mã OTP chỉ dùng được 1 lần (Single-use Anti-Replay) và tự hủy sau 300s.
+- **Phương pháp kiểm chứng**: Kiểm thử E2E Playwright với container Mailpit bắt email SMTP và tự động nhập OTP.
+- **Truy vết**: BR-005, BUSR-01, UC-01, NFR-SEC-002, ADR-008.
 
-#### FR-AUTH-002: Đăng nhập & Quản lý Phiên Xác thực
-- **Tiêu đề**: Đăng nhập, làm mới phiên và đăng xuất.
-- **Mô tả**: Hệ thống phải xác thực thông tin đăng nhập của người dùng (`Learner` hoặc `Administrator`), cấp phát phiên xác thực theo cơ chế mã thông báo ngắn hạn kết hợp làm mới phiên an toàn, và cho phép đăng xuất thu hồi phiên.
+#### FR-AUTH-002: Đăng nhập, Quản lý Phiên Xác thực & Quên mật khẩu OTP
+- **Tiêu đề**: Đăng nhập, làm mới phiên (RTR), đăng xuất và đặt lại mật khẩu qua OTP.
+- **Mô tả**: Hệ thống phải xác thực thông tin đăng nhập của người dùng (`Learner` hoặc `Administrator`), cấp phát phiên xác thực an toàn qua HttpOnly Cookie kết hợp cơ chế xoay vòng Refresh Token (RTR 7 ngày), hỗ trợ luồng Đặt lại mật khẩu 3 bước qua Email OTP, và cho phép đăng xuất thu hồi phiên.
 - **Tiền điều kiện**: Tài khoản đã tồn tại trên hệ thống và không bị khóa (`is_locked == false`).
-- **Tác nhân kích hoạt**: Người dùng gửi biểu mẫu đăng nhập, yêu cầu làm mới phiên hoặc bấm đăng xuất (`UC-02`).
-- **Dữ liệu đầu vào**: Địa chỉ Email, Mật khẩu.
-- **Luồng chính**:
+- **Tác nhân kích hoạt**: Người dùng gửi biểu mẫu đăng nhập, yêu cầu làm mới phiên, bấm đăng xuất hoặc yêu cầu đặt lại mật khẩu (`UC-02`).
+- **Dữ liệu đầu vào**: Địa chỉ Email, Mật khẩu (hoặc Google SSO Token, hoặc OTP Code / Reset Token khi quên mật khẩu).
+- **Luồng chính (Đăng nhập)**:
   1. Người dùng nhập email, mật khẩu và bấm "Đăng nhập".
-  2. Hệ thống tìm kiếm tài khoản theo email, kiểm tra trạng thái tài khoản không bị khóa và đối soát mã băm mật khẩu.
-  3. Khi xác thực thành công, hệ thống cấp phát **Access Token ngắn hạn (thời hạn 15 phút)** kèm **Refresh Token xoay vòng (Rotation, thời hạn tối đa 7 ngày đối với `LEARNER`)**; riêng tài khoản `ADMIN` chịu thêm ràng buộc **Giới hạn Thời gian Phiên Tuyệt đối (Absolute Session Timeout) tối đa 8 giờ** kể từ lúc đăng nhập (tuân thủ `FR-ADM-001` và `ADR-008`).
-  4. Khi Access Token hết hạn, hệ thống hỗ trợ xoay vòng Refresh Token hợp lệ để cấp cặp token mới mà không làm gián đoạn trải nghiệm; khi người dùng bấm "Đăng xuất", hệ thống thu hồi ngay lập tức hiệu lực của phiên hiện hành.
+  2. Hệ thống tìm kiếm tài khoản theo email, kiểm tra trạng thái tài khoản không bị khóa (`is_locked == false`) và đối soát mã băm mật khẩu bằng Argon2id.
+  3. Khi xác thực thành công, hệ thống thiết lập cặp cookie bảo mật HttpOnly (`SameSite=Lax`, `Path=/`): **Access Token ngắn hạn (15 phút)** kèm **Refresh Token xoay vòng (RTR, tối đa 7 ngày đối với `LEARNER`)**; riêng tài khoản `ADMIN` chịu thêm ràng buộc **Giới hạn Thời gian Phiên Tuyệt đối (Absolute Session Timeout) tối đa 8 giờ** (tuân thủ `FR-ADM-001` và `ADR-008`).
+  4. Khi Access Token hết hạn, hệ thống hỗ trợ xoay vòng Refresh Token hợp lệ để cấp cặp token mới mà không làm gián đoạn trải nghiệm; khi người dùng bấm "Đăng xuất", hệ thống thu hồi ngay lập tức hiệu lực của phiên hiện hành và xóa sạch cookies.
+- **Luồng thay thế (Quên mật khẩu qua OTP 3 bước)**:
+  1. *Bước 1 (Request OTP)*: Người dùng nhập email tại `/forgot-password`, hệ thống sinh mã OTP 6 số lưu Redis (TTL 300s) và gửi email qua SMTP.
+  2. *Bước 2 (Verify OTP)*: Người dùng nhập OTP, hệ thống kiểm tra và cấp một mã `reset_token` ngắn hạn dùng một lần.
+  3. *Bước 3 (Confirm Password)*: Người dùng nhập mật khẩu mới và xác nhận mật khẩu kèm `reset_token`, hệ thống cập nhật mã băm mật khẩu mới bằng Argon2id vào PostgreSQL và hủy phiên `reset_token`.
 - **Luồng ngoại lệ**:
-  - *Sai email hoặc mật khẩu*: Hệ thống trả về thông báo lỗi chung: *"Thông tin đăng nhập không chính xác"*, phát sự kiện cảnh báo vào Luồng Nhật ký Kiểm toán Tập trung (Structured Audit Stream) và không tiết lộ trường cụ thể để phòng chống dò quét tài khoản.
-  - *Tài khoản đang bị khóa (`LOCKED`)*: Hệ thống từ chối cấp phiên, trả về mã lỗi `ACCOUNT_LOCKED` và thông báo liên hệ Quản trị viên.
-- **Hậu điều kiện**: Phiên xác thực hợp lệ được thiết lập (hoặc bị thu hồi hoàn toàn khi đăng xuất); mọi request nghiệp vụ tiếp theo đều mang định danh người dùng.
-- **Tiêu chí chấp nhận**: Access Token có hiệu lực đúng 15 phút; Refresh Token cũ bị vô hiệu hóa ngay sau khi xoay vòng hoặc đăng xuất; chặn 100% tài khoản bị khóa.
-- **Phương pháp kiểm chứng**: Unit Test và API Integration Test cho luồng đăng nhập, xoay vòng token và đăng xuất.
-- **Truy vết**: BR-005, BUSR-01, UC-02, NFR-SEC-001, NFR-SEC-002.
+  - *Sai email hoặc mật khẩu*: Hệ thống trả về thông báo lỗi: *"Thông tin đăng nhập không chính xác"*, phát sự kiện cảnh báo vào Luồng Nhật ký Kiểm toán Tập trung (Structured Audit Stream) và không tiết lộ trường cụ thể để phòng chống dò quét tài khoản.
+  - *Tài khoản đang bị khóa (`LOCKED`)*: Hệ thống từ chối cấp phiên, trả về mã lỗi 403 Forbidden và thông báo liên hệ Quản trị viên.
+  - *Phát hiện Refresh Token Reuse*: Nếu một Refresh Token đã bị tiêu hủy được sử dụng lại, hệ thống lập tức thu hồi toàn bộ phiên (Family Revocation) trong Redis và bắt buộc đăng nhập lại từ đầu để phòng chống chiếm đoạt phiên.
+- **Hậu điều kiện**: Phiên xác thực hợp lệ được thiết lập qua HttpOnly Cookie (hoặc bị thu hồi hoàn toàn khi đăng xuất); mọi request nghiệp vụ tiếp theo đều mang định danh người dùng.
+- **Tiêu chí chấp nhận**: Access Token có hiệu lực đúng 15 phút; Refresh Token cũ bị vô hiệu hóa ngay sau khi xoay vòng hoặc đăng xuất; 100% token được lưu trong HttpOnly Cookie (không lưu trong localStorage của trình duyệt); chặn 100% tài khoản bị khóa.
+- **Phương pháp kiểm chứng**: Unit Test, Integration Test và Playwright E2E Test với container Mailpit.
+- **Truy vết**: BR-005, BUSR-01, UC-02, NFR-SEC-001, NFR-SEC-002, ADR-008.
 
 #### FR-AUTH-003: Quản lý Hồ sơ Cá nhân & Cấu hình Múi giờ (Personal Profile & Timezone Configuration)
 - **Tiêu đề**: Cập nhật thông tin hồ sơ cơ bản và múi giờ cá nhân.
