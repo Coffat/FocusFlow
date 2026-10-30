@@ -12,8 +12,21 @@ export const API_ENDPOINTS = {
   },
   ROADMAPS: {
     BASE: '/api/v1/roadmaps',
+    DETAIL: (id: string) => `/api/v1/roadmaps/${id}`,
+    ARCHIVE: (id: string) => `/api/v1/roadmaps/${id}/archive`,
+    MILESTONES: (id: string) => `/api/v1/roadmaps/${id}/milestones`,
+    MILESTONES_GENERATE_JOBS: (id: string) => `/api/v1/roadmaps/${id}/milestones/generate-jobs`,
+    MILESTONES_APPROVE: (id: string) => `/api/v1/roadmaps/${id}/milestones/approve`,
+    PROPOSALS_GENERATE_JOBS: (id: string) => `/api/v1/roadmaps/${id}/proposals/generate-jobs`,
+    PROPOSALS_CURRENT: (id: string) => `/api/v1/roadmaps/${id}/proposals/current`,
+    PROPOSAL_UPDATE: (roadmapId: string, proposalId: string) =>
+      `/api/v1/roadmaps/${roadmapId}/proposals/${proposalId}`,
+    PROPOSALS_MANUAL: (id: string) => `/api/v1/roadmaps/${id}/proposals/manual`,
+    PROPOSAL_APPLY: (roadmapId: string, proposalId: string) =>
+      `/api/v1/roadmaps/${roadmapId}/proposals/${proposalId}/apply`,
+    JOB_STREAM: (jobId: string) => `/api/v1/roadmaps/jobs/${jobId}/stream`,
     GENERATE_JOB: '/api/v1/roadmaps/generate-jobs',
-    STREAM_JOB: (jobId: string) => `/api/v1/roadmaps/generate-jobs/${jobId}/stream`,
+    STREAM_JOB: (jobId: string) => `/api/v1/roadmaps/jobs/${jobId}/stream`,
     ACTIVE: '/api/v1/roadmaps/active',
     APPLY: (id: string) => `/api/v1/roadmaps/${id}/apply`,
     PAUSE: (id: string) => `/api/v1/roadmaps/${id}/pause`,
