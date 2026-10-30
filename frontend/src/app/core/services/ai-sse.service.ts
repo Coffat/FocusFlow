@@ -2,6 +2,7 @@ import { DestroyRef, Injectable, Signal, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { Observable } from 'rxjs';
+import { API_BASE_URL } from '../../constant/api.constant';
 import type { components } from '../api/schema';
 
 export type SseJobTicketResponse = components['schemas']['SseJobTicketResponse'];
@@ -54,7 +55,11 @@ export class AiSseService {
 
   observeJobStream<TPayload = unknown>(streamUrl: string): Observable<AiStreamChunkEvent<TPayload>> {
     return new Observable<AiStreamChunkEvent<TPayload>>(subscriber => {
-      const eventSource = new EventSource(streamUrl, { withCredentials: true });
+      let resolvedUrl = streamUrl;
+      if (streamUrl.startsWith('/api/v1')) {
+        resolvedUrl = `${API_BASE_URL}${streamUrl.slice('/api/v1'.length)}`;
+      }
+      const eventSource = new EventSource(resolvedUrl, { withCredentials: true });
 
       const handleEvent = (rawEvent: MessageEvent<string>, eventType: SseEventType) => {
         try {
