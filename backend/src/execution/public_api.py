@@ -24,6 +24,8 @@ __all__ = [
     "StudyExecutionStatsDTO",
     "StudySessionAbandonedEvent",
     "StudySessionCompletedEvent",
+    "create_execution_schedule_sync_port",
+    "register_execution_sync_factory",
 ]
 
 
@@ -374,3 +376,21 @@ class ExecutionScheduleSyncPort(Protocol):
         proposed_dependencies: Sequence[ProposedDependencySyncItemDTO],
         now: datetime,
     ) -> ScheduleSyncResultDTO: ...
+
+
+_execution_sync_factory: object = None
+
+
+def register_execution_sync_factory(factory: object) -> None:
+    global _execution_sync_factory
+    _execution_sync_factory = factory
+
+
+def create_execution_schedule_sync_port(session: object) -> ExecutionScheduleSyncPort:
+    if _execution_sync_factory is None:
+        import importlib
+
+        importlib.import_module("src.execution.infrastructure.adapters")
+    assert callable(_execution_sync_factory)
+    res: ExecutionScheduleSyncPort = _execution_sync_factory(session)
+    return res

@@ -12,6 +12,8 @@ __all__ = [
     "EvaluationMetricsQueryPort",
     "ScheduleChangeLogEntryDTO",
     "ScheduleChangeLogPort",
+    "create_schedule_change_log_port",
+    "register_schedule_change_log_factory",
 ]
 
 
@@ -93,3 +95,20 @@ class ScheduleChangeLogPort(Protocol):
         diff_payload: dict[str, Any] | None = None,
         now: datetime | None = None,
     ) -> ScheduleChangeLogEntryDTO: ...
+
+
+_schedule_change_log_factory: Any = None
+
+
+def register_schedule_change_log_factory(factory: Any) -> None:
+    global _schedule_change_log_factory
+    _schedule_change_log_factory = factory
+
+
+def create_schedule_change_log_port(session: Any) -> ScheduleChangeLogPort:
+    if _schedule_change_log_factory is None:
+        import importlib
+
+        importlib.import_module("src.evaluation.infrastructure.adapters")
+    res: ScheduleChangeLogPort = _schedule_change_log_factory(session)
+    return res

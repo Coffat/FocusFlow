@@ -23,6 +23,11 @@ __all__ = [
     "UserQueryPort",
     "UserSnapshotDTO",
     "UserUpgradedToPremiumEvent",
+    "create_availability_query_port",
+    "create_learner_profile_query_port",
+    "create_quota_facade",
+    "create_user_query_port",
+    "register_account_port_factories",
 ]
 
 
@@ -194,3 +199,58 @@ class UserQueryPort(Protocol):
     async def get_user_by_id(self, user_id: UUID) -> UserSnapshotDTO | None: ...
 
     async def get_user_by_email(self, email: str) -> UserSnapshotDTO | None: ...
+
+
+_quota_factory: Any = None
+_availability_factory: Any = None
+_learner_profile_factory: Any = None
+_user_query_factory: Any = None
+
+
+def register_account_port_factories(
+    *,
+    quota_factory: Any = None,
+    availability_factory: Any = None,
+    learner_profile_factory: Any = None,
+    user_query_factory: Any = None,
+) -> None:
+    global _quota_factory, _availability_factory, _learner_profile_factory, _user_query_factory
+    if quota_factory is not None:
+        _quota_factory = quota_factory
+    if availability_factory is not None:
+        _availability_factory = availability_factory
+    if learner_profile_factory is not None:
+        _learner_profile_factory = learner_profile_factory
+    if user_query_factory is not None:
+        _user_query_factory = user_query_factory
+
+
+def _ensure_account_factories_loaded() -> None:
+    if _quota_factory is None:
+        import importlib
+
+        importlib.import_module("src.account.infrastructure.adapters")
+
+
+def create_quota_facade(session: Any) -> QuotaFacadePort:
+    _ensure_account_factories_loaded()
+    res: QuotaFacadePort = _quota_factory(session)
+    return res
+
+
+def create_availability_query_port(session: Any) -> AvailabilityQueryPort:
+    _ensure_account_factories_loaded()
+    res: AvailabilityQueryPort = _availability_factory(session)
+    return res
+
+
+def create_learner_profile_query_port(session: Any) -> LearnerProfileQueryPort:
+    _ensure_account_factories_loaded()
+    res: LearnerProfileQueryPort = _learner_profile_factory(session)
+    return res
+
+
+def create_user_query_port(session: Any) -> UserQueryPort:
+    _ensure_account_factories_loaded()
+    res: UserQueryPort = _user_query_factory(session)
+    return res

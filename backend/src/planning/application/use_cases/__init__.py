@@ -13,15 +13,35 @@ from src.planning.application.use_cases.proposal_generation_use_cases import (
     build_availability_config_from_snapshot,
     normalize_proposal_task_ids_and_dependencies,
 )
+from src.planning.application.use_cases.proposal_management_use_cases import (
+    ApplyScheduleProposalUseCase,
+    GetCurrentScheduleProposalUseCase,
+    SaveManualRoadmapPlanUseCase,
+    UpdateScheduleProposalUseCase,
+)
+from src.planning.application.use_cases.roadmap_management_use_cases import (
+    ArchiveRoadmapUseCase,
+    GetRoadmapDetailUseCase,
+    ListRoadmapsUseCase,
+    UpdateRoadmapUseCase,
+)
 
 __all__ = [
+    "ApplyScheduleProposalUseCase",
     "ApproveMilestonesUseCase",
+    "ArchiveRoadmapUseCase",
     "CreateGoalAndRoadmapUseCase",
     "ExecuteMilestoneGenerationUseCase",
     "ExecuteScheduleProposalGenerationUseCase",
+    "GetCurrentScheduleProposalUseCase",
+    "GetRoadmapDetailUseCase",
     "InitiateMilestoneGenerationUseCase",
     "InitiateScheduleProposalGenerationUseCase",
+    "ListRoadmapsUseCase",
+    "SaveManualRoadmapPlanUseCase",
     "UpdateMilestonesUseCase",
+    "UpdateRoadmapUseCase",
+    "UpdateScheduleProposalUseCase",
     "build_availability_config_from_snapshot",
     "normalize_proposal_task_ids_and_dependencies",
 ]

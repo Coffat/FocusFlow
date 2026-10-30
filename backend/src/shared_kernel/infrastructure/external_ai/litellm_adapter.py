@@ -244,7 +244,10 @@ class LiteLLMAdapter(LLMProviderPort):
     ) -> tuple[dict[str, Any], int, int]:
         effective_user_prompt = user_prompt if user_prompt is not None else (prompt or "")
 
-        if self._settings.llm_provider.lower() == "mock":
+        if self._settings.llm_provider.lower() == "mock" or self._settings.llm_api_key in (
+            "",
+            "mock-key",
+        ):
             return await MockLLMAdapter().generate_structured(
                 prompt=effective_user_prompt,
                 system_prompt=system_prompt,
@@ -289,7 +292,10 @@ class LiteLLMAdapter(LLMProviderPort):
         user_prompt: str,
         temperature: float = 0.2,
     ) -> AsyncIterator[str]:
-        if self._settings.llm_provider.lower() == "mock":
+        if self._settings.llm_provider.lower() == "mock" or self._settings.llm_api_key in (
+            "",
+            "mock-key",
+        ):
             async for chunk in MockLLMAdapter().stream_structured(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
