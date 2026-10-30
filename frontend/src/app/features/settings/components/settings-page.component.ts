@@ -3,6 +3,7 @@ import { SettingsService } from '../services/settings.service';
 import { CardComponent, CardHeaderDirective, CardTitleDirective, CardDescriptionDirective } from '../../../shared/ui/card/card.component';
 import { ButtonDirective } from '../../../shared/ui/button/button.directive';
 import { BadgeDirective } from '../../../shared/ui/badge/badge.directive';
+import { AvailabilityConfigComponent } from './availability-config/availability-config.component';
 
 @Component({
   selector: 'app-settings-page',
@@ -12,14 +13,18 @@ import { BadgeDirective } from '../../../shared/ui/badge/badge.directive';
     CardHeaderDirective,
     CardTitleDirective,
     CardDescriptionDirective,
-    BadgeDirective
+    BadgeDirective,
+    AvailabilityConfigComponent
   ],
   template: `
-    <div class="max-w-4xl mx-auto w-full p-6 space-y-6">
+    <div class="max-w-4xl mx-auto w-full p-6 space-y-8">
       <div>
         <h1 class="text-2xl font-bold tracking-tight">Cài Đặt Hệ Thống</h1>
         <p class="text-sm text-[var(--muted-foreground)]">Quản lý tùy chọn cá nhân, hạn ngạch AI và phiên bảo mật</p>
       </div>
+
+      <!-- Availability Management Section (FR-AVAIL v2.0) -->
+      <app-availability-config />
 
       <!-- AI Quota Card -->
       <app-card>
