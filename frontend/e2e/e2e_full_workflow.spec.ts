@@ -193,4 +193,61 @@ test.describe('FocusFlow End-to-End Visual Evidence Suite', () => {
     expect(page.url()).toContain('/settings');
     await page.screenshot({ path: path.join(EVIDENCE_DIR, '15_settings_page_direct_nav.png'), fullPage: true });
   });
+
+  test('Onboarding Modal E2E: New learner without availability clicks "+ Tạo Mục tiêu & Lộ trình mới", sees Onboarding Modal, configures Preset, and opens create form', async ({
+    page,
+    request
+  }) => {
+    test.setTimeout(60_000);
+
+    const timestamp = Date.now();
+    const testEmail = `onboard.${timestamp}@gmail.com`;
+    const testPassword = 'Password123!';
+    const testFullName = 'Learner Onboard';
+
+    // Register user via API
+    const regRes = await request.post('http://localhost:8000/api/v1/auth/register', {
+      data: {
+        full_name: testFullName,
+        email: testEmail,
+        password: testPassword
+      }
+    });
+    expect(regRes.ok()).toBeTruthy();
+
+    // Login via UI
+    await page.goto('/sign-in');
+    await page.waitForLoadState('networkidle');
+    await page.fill('input[formControlName="email"]', testEmail);
+    await page.fill('input[formControlName="password"]', testPassword);
+    await page.click('button[type="submit"]');
+
+    await page.waitForURL('**/dashboard');
+    await page.waitForLoadState('networkidle');
+
+    // Go directly to /roadmaps WITHOUT configuring availability in /availability
+    await page.goto('/roadmaps');
+    await page.waitForURL('**/roadmaps');
+    await page.waitForLoadState('networkidle');
+
+    // Click "+ Tạo Mục tiêu & Lộ trình mới"
+    const toggleFormBtn = page.locator('[data-testid="toggle-create-roadmap-btn"]');
+    await toggleFormBtn.click();
+
+    // Verify Onboarding Modal is displayed!
+    const onboardingModal = page.locator('[data-testid="availability-onboarding-modal"]');
+    await expect(onboardingModal).toBeVisible({ timeout: 5000 });
+    await page.screenshot({ path: path.join(EVIDENCE_DIR, '16_onboarding_modal_opened.png'), fullPage: true });
+
+    // Click Busy Pro Preset chip
+    const busyProBtn = page.locator('[data-testid="onboard-preset-busy-pro"]');
+    await expect(busyProBtn).toBeVisible();
+    await busyProBtn.click();
+
+    // Verify modal is closed and form is opened
+    await expect(onboardingModal).toBeHidden({ timeout: 5000 });
+    const titleInput = page.locator('[data-testid="new-goal-title-input"]');
+    await expect(titleInput).toBeVisible({ timeout: 5000 });
+    await page.screenshot({ path: path.join(EVIDENCE_DIR, '17_onboarding_preset_applied_form_opened.png'), fullPage: true });
+  });
 });
