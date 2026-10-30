@@ -19,11 +19,7 @@ async def test_auth_workflow() -> None:
         # 2. Register
         reg_response = await client.post(
             "/api/v1/auth/register",
-            json={
-                "full_name": full_name,
-                "email": email,
-                "password": password
-            }
+            json={"full_name": full_name, "email": email, "password": password},
         )
         assert reg_response.status_code == 201, reg_response.text
         reg_data = reg_response.json()
@@ -36,33 +32,20 @@ async def test_auth_workflow() -> None:
         # 3. Duplicate registration should return 409 Conflict
         dup_response = await client.post(
             "/api/v1/auth/register",
-            json={
-                "full_name": full_name,
-                "email": email,
-                "password": password
-            }
+            json={"full_name": full_name, "email": email, "password": password},
         )
         assert dup_response.status_code == 409
 
         # 4. Login with invalid password -> 401
         bad_login = await client.post(
             "/api/v1/auth/login",
-            json={
-                "email": email,
-                "password": "WrongPassword!",
-                "remember_me": True
-            }
+            json={"email": email, "password": "WrongPassword!", "remember_me": True},
         )
         assert bad_login.status_code == 401
 
         # 5. Login with valid credentials -> 200 OK + JWT Token
         login_response = await client.post(
-            "/api/v1/auth/login",
-            json={
-                "email": email,
-                "password": password,
-                "remember_me": True
-            }
+            "/api/v1/auth/login", json={"email": email, "password": password, "remember_me": True}
         )
         assert login_response.status_code == 200
         login_data = login_response.json()
@@ -95,8 +78,7 @@ async def test_auth_workflow() -> None:
 
         # 7c. Replay old refresh token -> 401 (Consumed in rotation)
         replay_resp = await client.post(
-            "/api/v1/auth/refresh",
-            json={"refresh_token": refresh_cookie}
+            "/api/v1/auth/refresh", json={"refresh_token": refresh_cookie}
         )
         assert replay_resp.status_code == 401
 

@@ -56,6 +56,8 @@ export class AuthService {
 
   private setUser(user: UserProfile, accessToken?: string): void {
     if (accessToken) {
+      // Retain token in localStorage as optional fallback for dev inspection,
+      // but primary authentication relies on HttpOnly cookies (ADR-008)
       localStorage.setItem('access_token', accessToken);
     }
     this.currentUser.set(user);
@@ -78,25 +80,26 @@ export class AuthService {
   }
 
   initAuth(): void {
-    const token = localStorage.getItem('access_token') || '';
-    if (token.length > 0) {
-      this.http.get<BackendUserPayload>(AUTH_ENDPOINTS.ME).subscribe({
-        next: (user: BackendUserPayload) => {
-          const mappedUser: UserProfile = {
-            id: user.id,
-            email: user.email,
-            fullName: user.full_name,
-            role: user.role,
-            tier: user.tier,
-            createdAt: user.created_at
-          };
-          this.setUser(mappedUser);
-        },
-        error: (_err: Error) => {
+    // Attempt session restoration via HttpOnly cookie first (ADR-008)
+    this.http.get<BackendUserPayload>(AUTH_ENDPOINTS.ME, { withCredentials: true }).subscribe({
+      next: (user: BackendUserPayload) => {
+        const mappedUser: UserProfile = {
+          id: user.id,
+          email: user.email,
+          fullName: user.full_name,
+          role: user.role,
+          tier: user.tier,
+          createdAt: user.created_at
+        };
+        this.setUser(mappedUser);
+      },
+      error: (_err: Error) => {
+        const token = localStorage.getItem('access_token') || '';
+        if (!token) {
           this.clearSession();
         }
-      });
-    }
+      }
+    });
   }
 
   login(credentials: { email: string; password: string }): Observable<User> {
@@ -137,7 +140,7 @@ export class AuthService {
       remember_me: credentials.rememberMe
     };
 
-    return this.http.post<BackendAuthResponse>(AUTH_ENDPOINTS.LOGIN, payload).pipe(
+    return this.http.post<BackendAuthResponse>(AUTH_ENDPOINTS.LOGIN, payload, { withCredentials: true }).pipe(
       map((response: BackendAuthResponse): LoginResponse => {
         const mappedUser: UserProfile = {
           id: response.user.id,
@@ -175,7 +178,7 @@ export class AuthService {
       password: data.password
     };
 
-    return this.http.post<BackendAuthResponse>(AUTH_ENDPOINTS.REGISTER, payload).pipe(
+    return this.http.post<BackendAuthResponse>(AUTH_ENDPOINTS.REGISTER, payload, { withCredentials: true }).pipe(
       map((response: BackendAuthResponse): RegisterResponse => {
         const mappedUser: UserProfile = {
           id: response.user.id,
@@ -224,7 +227,7 @@ export class AuthService {
       otp_code: data.otpCode
     };
 
-    return this.http.post<BackendAuthResponse>(AUTH_ENDPOINTS.REGISTER_VERIFY_OTP, payload).pipe(
+    return this.http.post<BackendAuthResponse>(AUTH_ENDPOINTS.REGISTER_VERIFY_OTP, payload, { withCredentials: true }).pipe(
       map((response: BackendAuthResponse): LoginResponse => {
         const mappedUser: UserProfile = {
           id: response.user.id,
@@ -285,7 +288,7 @@ export class AuthService {
       payload['access_token'] = data.accessToken;
     }
 
-    return this.http.post<BackendAuthResponse>(AUTH_ENDPOINTS.GOOGLE, payload).pipe(
+    return this.http.post<BackendAuthResponse>(AUTH_ENDPOINTS.GOOGLE, payload, { withCredentials: true }).pipe(
       map((response: BackendAuthResponse): LoginResponse => {
         const mappedUser: UserProfile = {
           id: response.user.id,

@@ -4,13 +4,14 @@ from typing import Any
 
 import redis.asyncio as aioredis
 
-from src.infrastructure.config import settings
+from src.shared_kernel.config import get_settings
 
 _redis_clients: dict[int, aioredis.Redis] = {}
 
 
 def get_redis_client() -> aioredis.Redis:
     """Returns a Redis client tied to the current asyncio event loop (prevents closed-loop errors in tests)."""
+    settings = get_settings()
     try:
         loop = asyncio.get_running_loop()
         loop_id = id(loop)
@@ -19,10 +20,10 @@ def get_redis_client() -> aioredis.Redis:
 
     if loop_id not in _redis_clients:
         _redis_clients[loop_id] = aioredis.from_url(
-            settings.REDIS_URL,
+            settings.redis_url,
             decode_responses=True,
             socket_timeout=3.0,
-            socket_connect_timeout=3.0
+            socket_connect_timeout=3.0,
         )
     return _redis_clients[loop_id]
 
@@ -35,8 +36,12 @@ class RefreshTokenRepository:
         token_hash: str,
         user_id: str,
         family_id: str,
-        expires_days: int = settings.REFRESH_TOKEN_EXPIRE_DAYS
+        expires_days: int | None = None,
     ) -> None:
+        settings = get_settings()
+        if expires_days is None:
+            expires_days = settings.refresh_token_expire_days
+
         client = get_redis_client()
         key = f"refresh_token:{token_hash}"
         data = {

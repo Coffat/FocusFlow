@@ -43,7 +43,7 @@ export const API_ENDPOINTS = {
   },
   SETTINGS: {
     PROFILE: '/api/v1/users/profile',
-    AVAILABILITY: '/api/v1/availability',
+    AVAILABILITY: '/api/v1/availabilities/me',
     QUOTA: '/api/v1/users/quota',
   },
   ADMIN: {

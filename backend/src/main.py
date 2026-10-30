@@ -6,11 +6,16 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from uuid6 import uuid7
 
-from src.account.presentation.routers import router as account_router
+from src.account.presentation.auth_router import router as auth_router
+from src.account.presentation.routers import (
+    availabilities_router,
+)
+from src.account.presentation.routers import (
+    router as account_router,
+)
 from src.evaluation.presentation.routers import router as evaluation_router
 from src.execution.presentation.routers import router as execution_router
 from src.planning.presentation.routers import router as planning_router
-from src.presentation.api.v1.routers.auth import router as auth_router
 from src.shared_kernel.config import get_settings
 from src.shared_kernel.infrastructure.worker.broker import broker
 from src.shared_kernel.logging import configure_logging, correlation_id_ctx
@@ -43,7 +48,12 @@ def create_app() -> FastAPI:
     if settings.backend_cors_origins.startswith("["):
         origins = json.loads(settings.backend_cors_origins)
     else:
-        origins = ["http://localhost:3000", "http://127.0.0.1:3000"]
+        origins = [
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "http://localhost:4200",
+            "http://127.0.0.1:4200",
+        ]
 
     app.add_middleware(
         CORSMiddleware,
@@ -67,7 +77,8 @@ def create_app() -> FastAPI:
             correlation_id_ctx.reset(token)
 
     app.include_router(account_router)
-    app.include_router(auth_router, prefix="/api/v1")
+    app.include_router(availabilities_router)
+    app.include_router(auth_router)
     app.include_router(planning_router)
     app.include_router(execution_router)
     app.include_router(evaluation_router)

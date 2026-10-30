@@ -3,41 +3,43 @@ from email.message import EmailMessage
 
 import aiosmtplib
 
-from src.infrastructure.config import settings
+from src.shared_kernel.config import get_settings
 
 logger = logging.getLogger("focusflow.email")
 
 
 class EmailService:
-    """Asynchronous Email Delivery Service supporting Gmail SMTP and Console fallback."""
+    """Asynchronous Email Delivery Service supporting SMTP (Mailpit / Gmail) and Console fallback."""
 
     @staticmethod
     async def send_otp_email(to_email: str, otp_code: str, purpose: str) -> None:
         """Send verification OTP email via configured backend."""
+        settings = get_settings()
+
         subject_title = (
             "FocusFlow — Mã xác thực đăng ký tài khoản"
             if purpose == "register"
             else "FocusFlow — Mã xác thực đặt lại mật khẩu"
         )
         purpose_label = (
-            "đăng ký tài khoản học tập"
-            if purpose == "register"
-            else "đặt lại mật khẩu tài khoản"
+            "đăng ký tài khoản học tập" if purpose == "register" else "đặt lại mật khẩu tài khoản"
         )
 
         # 1. Console / Defense Demo Mode
-        if settings.EMAIL_BACKEND.lower() == "console":
+        if settings.email_backend.lower() == "console":
             print("\n" + "=" * 60)
             print(f" [MOCK EMAIL DISPATCH] To: {to_email}")
             print(f" Subject: {subject_title}")
             print(f" Purpose: {purpose_label}")
-            print(f" >>> OTP CODE: [ {otp_code} ] (Valid for {settings.OTP_TTL_SECONDS // 60} minutes) <<<")
+            print(
+                f" >>> OTP CODE: [ {otp_code} ] (Valid for {settings.otp_ttl_seconds // 60} minutes) <<<"
+            )
             print("=" * 60 + "\n")
             return
 
-        # 2. SMTP Real Email Dispatch
+        # 2. SMTP Real Email Dispatch (Supports Mailpit on localhost:1025 and production SMTP)
         msg = EmailMessage()
-        msg["From"] = settings.EMAIL_FROM
+        msg["From"] = settings.email_from
         msg["To"] = to_email
         msg["Subject"] = subject_title
 
@@ -47,7 +49,7 @@ Bạn vừa yêu cầu mã xác thực OTP để {purpose_label} trên nền t�
 
 Mã xác thực của bạn là: {otp_code}
 
-Mã này có hiệu lực trong vòng {settings.OTP_TTL_SECONDS // 60} phút và chỉ sử dụng được 1 lần duy nhất.
+Mã này có hiệu lực trong vòng {settings.otp_ttl_seconds // 60} phút và chỉ sử dụng được 1 lần duy nhất.
 Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email.
 
 Trân trọng,
@@ -80,7 +82,7 @@ Trân trọng,
     </p>
     <div class="otp-box">
       <div class="otp-code">{otp_code}</div>
-      <div class="expiry">Mã có hiệu lực trong {settings.OTP_TTL_SECONDS // 60} phút &bull; Tối đa {settings.OTP_MAX_ATTEMPTS} lần nhập sai</div>
+      <div class="expiry">Mã có hiệu lực trong {settings.otp_ttl_seconds // 60} phút &bull; Tối đa {settings.otp_max_attempts} lần nhập sai</div>
     </div>
     <p class="description" style="font-size: 13px;">
       Vì lý do an toàn, tuyệt đối không chia sẻ mã này với bất kỳ ai. Nếu bạn không gửi yêu cầu này, vui lòng bỏ qua email.
@@ -95,14 +97,22 @@ Trân trọng,
         msg.set_content(plain_text)
         msg.add_alternative(html_content, subtype="html")
 
+        # Determine start_tls based on port and credentials (Mailpit 1025 has no TLS)
+        is_mailpit = settings.email_port in (1025, 25) or settings.email_host in (
+            "localhost",
+            "127.0.0.1",
+            "mailpit",
+        )
+        use_start_tls = not is_mailpit and bool(settings.email_user)
+
         try:
             await aiosmtplib.send(
                 msg,
-                hostname=settings.EMAIL_HOST,
-                port=settings.EMAIL_PORT,
-                username=settings.EMAIL_USER,
-                password=settings.EMAIL_PASS,
-                start_tls=True,
+                hostname=settings.email_host,
+                port=settings.email_port,
+                username=settings.email_user or None,
+                password=settings.email_pass or None,
+                start_tls=use_start_tls,
                 timeout=12.0,
             )
             logger.info("OTP email successfully dispatched to %s", to_email)

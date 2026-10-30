@@ -1,4 +1,4 @@
-import { Component, OnInit, DestroyRef, inject } from '@angular/core';
+import { Component, OnInit, DestroyRef, inject, ChangeDetectorRef } from '@angular/core';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -26,6 +26,7 @@ export class SignInComponent implements OnInit {
   formBuilder: FormBuilder;
   router: Router;
   destroyRef: DestroyRef;
+  cdr: ChangeDetectorRef;
 
   signInForm: FormGroup;
   isPasswordVisible = false;
@@ -45,6 +46,7 @@ export class SignInComponent implements OnInit {
     this.formBuilder = formBuilder;
     this.router = router;
     this.destroyRef = inject(DestroyRef);
+    this.cdr = inject(ChangeDetectorRef);
 
     this.signInForm = this.formBuilder.group({
       email: ['', [Validators.required, strictEmailValidator]],
@@ -117,9 +119,11 @@ export class SignInComponent implements OnInit {
         error: (err: HttpErrorResponse) => {
           this.isLoading = false;
           this.errorMessage = parseHttpErrorMessage(err, this.translationService.get('auth.signIn.googleAuthFailed'));
+          this.cdr.markForCheck();
         },
         complete: () => {
           this.isLoading = false;
+          this.cdr.markForCheck();
         }
       });
   }
@@ -157,9 +161,11 @@ export class SignInComponent implements OnInit {
         error: (err: HttpErrorResponse) => {
           this.isLoading = false;
           this.errorMessage = parseHttpErrorMessage(err, 'Authentication failed. Please verify credentials.');
+          this.cdr.markForCheck();
         },
         complete: () => {
           this.isLoading = false;
+          this.cdr.markForCheck();
         }
       });
   }

@@ -7,8 +7,8 @@ from uuid import UUID
 import jwt
 from jwt.exceptions import ExpiredSignatureError, PyJWTError
 
-from src.domain.exceptions.auth_exceptions import InvalidTokenError, TokenExpiredError
-from src.infrastructure.config import settings
+from src.account.domain.exceptions.auth_exceptions import InvalidTokenError, TokenExpiredError
+from src.shared_kernel.config import get_settings
 
 
 class JwtTokenProvider:
@@ -16,18 +16,15 @@ class JwtTokenProvider:
 
     @staticmethod
     def create_access_token(
-        user_id: UUID,
-        email: str,
-        role: str,
-        tier: str,
-        expires_delta: timedelta | None = None
+        user_id: UUID, email: str, role: str, tier: str, expires_delta: timedelta | None = None
     ) -> str:
         """Create signed JWT Access Token with 15-minute standard expiration."""
+        settings = get_settings()
         now = datetime.now(UTC)
         if expires_delta:
             expire = now + expires_delta
         else:
-            expire = now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+            expire = now + timedelta(minutes=settings.access_token_expire_minutes)
 
         payload: dict[str, Any] = {
             "sub": str(user_id),
@@ -36,20 +33,17 @@ class JwtTokenProvider:
             "tier": tier,
             "iat": int(now.timestamp()),
             "exp": int(expire.timestamp()),
-            "type": "access"
+            "type": "access",
         }
 
-        return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+        return jwt.encode(payload, settings.secret_key, algorithm=settings.jwt_algorithm)
 
     @staticmethod
     def decode_access_token(token: str) -> dict[str, Any]:
         """Decode and validate a JWT Access Token signature and expiration."""
+        settings = get_settings()
         try:
-            payload = jwt.decode(
-                token,
-                settings.SECRET_KEY,
-                algorithms=[settings.JWT_ALGORITHM]
-            )
+            payload = jwt.decode(token, settings.secret_key, algorithms=[settings.jwt_algorithm])
             token_type = payload.get("type")
             if token_type != "access":
                 raise InvalidTokenError("Invalid token type.")

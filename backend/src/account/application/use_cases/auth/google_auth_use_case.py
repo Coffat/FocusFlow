@@ -1,23 +1,24 @@
 import secrets
 import uuid
-from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
 
-from src.application.use_cases.auth.login_use_case import AuthResultDTO, UserDTO
-from src.domain.exceptions.auth_exceptions import AccountLockedError, InvalidCredentialsError
-from src.domain.services.password_hasher import PasswordHasher
-from src.infrastructure.caching.redis_client import RefreshTokenRepository
-from src.infrastructure.database.models.user_orm import AIQuotaORM, UserORM
-from src.infrastructure.database.repositories.user_repository import SqlUserRepository
-from src.infrastructure.security.google_auth_service import GoogleAuthService, google_auth_service
-from src.infrastructure.security.jwt_token_provider import JwtTokenProvider
-
-
-@dataclass
-class GoogleAuthCommand:
-    """Command carrying Google ID Token or Access Token."""
-    id_token: str | None = None
-    access_token: str | None = None
+from src.account.application.dtos.auth import (
+    AuthResultDTO,
+    GoogleAuthCommand,
+    UserDTO,
+)
+from src.account.application.ports.auth_ports import (
+    GoogleAuthPort,
+    RefreshTokenRepositoryPort,
+    TokenProviderPort,
+)
+from src.account.application.ports.user_repository_port import UserRepositoryPort
+from src.account.domain.exceptions.auth_exceptions import (
+    AccountLockedError,
+    InvalidCredentialsError,
+)
+from src.account.domain.models.user import User
+from src.account.domain.services.password_hasher import PasswordHasher
+from src.shared_kernel.application.uow import AsyncUnitOfWork
 
 
 class GoogleAuthUseCase:
@@ -25,16 +26,24 @@ class GoogleAuthUseCase:
 
     def __init__(
         self,
-        user_repo: SqlUserRepository,
-        auth_service: GoogleAuthService | None = None
-    ):
+        user_repo: UserRepositoryPort,
+        auth_service: GoogleAuthPort,
+        token_provider: TokenProviderPort,
+        refresh_token_repo: RefreshTokenRepositoryPort,
+        uow: AsyncUnitOfWork,
+    ) -> None:
         self.user_repo = user_repo
-        self.auth_service = auth_service or google_auth_service
+        self.auth_service = auth_service
+        self.token_provider = token_provider
+        self.refresh_token_repo = refresh_token_repo
+        self.uow = uow
 
     async def execute(self, cmd: GoogleAuthCommand) -> AuthResultDTO:
         """Verifies Google credential, provisions new account if absent, and returns JWT tokens."""
         if not cmd.id_token and not cmd.access_token:
-            raise InvalidCredentialsError("Either Google id_token or access_token must be provided.")
+            raise InvalidCredentialsError(
+                "Either Google id_token or access_token must be provided."
+            )
 
         # Step 1: Validate Google token
         if cmd.id_token:
@@ -55,61 +64,55 @@ class GoogleAuthUseCase:
         # Step 2: Query user in database
         user_record = await self.user_repo.find_by_email(email)
 
-        now = datetime.now(UTC)
-
         if user_record is not None:
             # Check account status
-            if user_record.role == "LOCKED":
+            is_locked = getattr(user_record, "is_locked", False)
+            if user_record.role == "LOCKED" or is_locked is True:
                 raise AccountLockedError("Your account has been locked or suspended.")
         else:
             # Step 3: Auto-provision new learner entity and default AI quota allocation
             random_secret = secrets.token_urlsafe(32)
             password_hash = PasswordHasher.hash_password(random_secret)
 
-            new_user = UserORM(
+            new_user = User(
+                id=uuid.uuid4(),
                 email=email,
                 password_hash=password_hash,
                 full_name=name,
                 timezone="Asia/Ho_Chi_Minh",
                 role="LEARNER",
                 tier="FREE",
-                created_at=now,
-                updated_at=now
             )
 
-            quota = AIQuotaORM(
-                monthly_limit=30,
-                used_calls=0,
-                reserved_calls=0,
-                tokens_consumed=0,
-                cycle_start=now,
-                cycle_end=now + timedelta(days=30),
-                updated_at=now
-            )
-
-            user_record = await self.user_repo.create_user_with_quota(new_user, quota)
+            async with self.uow:
+                user_record = await self.user_repo.create_user_with_quota(new_user)
+                await self.uow.commit()
 
         # Step 4: Issue FocusFlow JWT Access Token (15m) & Refresh Token (7d)
-        access_token = JwtTokenProvider.create_access_token(
+        access_token = self.token_provider.create_access_token(
             user_id=user_record.id,
             email=user_record.email,
             role=user_record.role,
-            tier=user_record.tier
+            tier=user_record.tier,
         )
 
-        raw_refresh_token = JwtTokenProvider.create_refresh_token()
-        refresh_token_hash = JwtTokenProvider.hash_token(raw_refresh_token)
+        raw_refresh_token = self.token_provider.create_refresh_token()
+        refresh_token_hash = self.token_provider.hash_token(raw_refresh_token)
         family_id = str(uuid.uuid4())
 
         try:
-            await RefreshTokenRepository.save_refresh_token(
-                token_hash=refresh_token_hash,
-                user_id=str(user_record.id),
-                family_id=family_id
+            await self.refresh_token_repo.save_refresh_token(
+                token_hash=refresh_token_hash, user_id=str(user_record.id), family_id=family_id
             )
         except Exception:
             # Redis is non-blocking for local fallback if Redis server is temporarily unreachable
             pass
+
+        created_at_str = (
+            user_record.created_at.isoformat()
+            if hasattr(user_record.created_at, "isoformat")
+            else str(user_record.created_at)
+        )
 
         user_dto = UserDTO(
             id=str(user_record.id),
@@ -117,7 +120,7 @@ class GoogleAuthUseCase:
             full_name=user_record.full_name,
             role=user_record.role,
             tier=user_record.tier,
-            created_at=user_record.created_at.isoformat()
+            created_at=created_at_str,
         )
 
         return AuthResultDTO(
@@ -125,5 +128,5 @@ class GoogleAuthUseCase:
             refresh_token=raw_refresh_token,
             token_type="bearer",
             expires_in=15 * 60,
-            user=user_dto
+            user=user_dto,
         )

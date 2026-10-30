@@ -5,6 +5,8 @@ from uuid import UUID
 
 @dataclass
 class User:
+    """Domain model representing a registered user / learner in the Account context."""
+
     id: UUID
     email: str
     password_hash: str
@@ -12,12 +14,13 @@ class User:
     timezone: str = "Asia/Ho_Chi_Minh"
     role: str = "LEARNER"
     tier: str = "FREE"
-    created_at: datetime = datetime.now(timezone.utc)
-    updated_at: datetime = datetime.now(timezone.utc)
+    is_locked: bool = False
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
-    def is_locked(self) -> bool:
+    def is_account_locked(self) -> bool:
         """Domain rule: checks whether account has been suspended or locked."""
-        return self.role == "LOCKED"
+        return self.role == "LOCKED" or self.is_locked
 
     def is_admin(self) -> bool:
         return self.role == "ADMIN"

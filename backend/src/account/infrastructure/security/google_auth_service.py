@@ -5,8 +5,8 @@ import httpx
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 
-from src.domain.exceptions.auth_exceptions import InvalidCredentialsError
-from src.infrastructure.config import settings
+from src.account.domain.exceptions.auth_exceptions import InvalidCredentialsError
+from src.shared_kernel.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +15,8 @@ class GoogleAuthService:
     """Verifies Google OAuth tokens (ID tokens and Access tokens) for SSO."""
 
     def __init__(self, client_id: str | None = None):
-        self.client_id = client_id or settings.GOOGLE_CLIENT_ID
+        settings = get_settings()
+        self.client_id = client_id or settings.google_client_id
 
     def verify_id_token(self, token_str: str) -> dict[str, Any]:
         """Validates Google ID Token against Google's public JWKs.
@@ -31,9 +32,7 @@ class GoogleAuthService:
         """
         try:
             payload = id_token.verify_oauth2_token(
-                token_str,
-                google_requests.Request(),
-                self.client_id
+                token_str, google_requests.Request(), self.client_id
             )
             # Ensure issuer is trusted Google authority
             issuer = payload.get("iss", "")
@@ -75,7 +74,9 @@ class GoogleAuthService:
                 return data
         except httpx.HTTPError as exc:
             logger.error(f"HTTP error verifying Google access token: {exc}")
-            raise InvalidCredentialsError("Failed to communicate with Google authentication server.") from exc
+            raise InvalidCredentialsError(
+                "Failed to communicate with Google authentication server."
+            ) from exc
 
 
 google_auth_service = GoogleAuthService()
