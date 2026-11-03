@@ -34,16 +34,23 @@ Người tự học gặp phải chuỗi đứt gãy liên hoàn từ giai đo�
   - Có động lực học tập nhưng dễ bị chi phối bởi áp lực thời gian và thiếu tính kỷ luật nếu không có kế hoạch rõ ràng.
 
 ### 2.2. Vai trò trong hệ thống (System Actors)
-1. **Learner (Người học / End-User):**
+1. **Learner (Người học / End-User - Tác nhân chính):**
    - Đăng ký, đăng nhập tài khoản trước khi tạo kế hoạch để định danh và quản trị hạn ngạch.
-   - Thiết lập cấu hình thời gian rảnh theo mô hình lai (Hybrid Availability).
+   - Thiết lập cấu hình thời gian rảnh theo mô hình lai (Hybrid Availability) và hồ sơ học tập.
    - Tương tác với AI để làm rõ mục tiêu, xem xét đề xuất lịch trình (Schedule Proposal), chỉnh sửa và bấm "Apply" để lưu thành Lịch chính thức (Official Schedule).
    - Sử dụng bộ công cụ hỗ trợ (Study Tool Suite: Timer Pomodoro/Stopwatch, Scratchpad, Key Takeaways, Task Checklist) trong phiên học.
    - Nhận báo cáo thống kê định lượng và phản hồi/đánh giá định tính từ AI Review.
-   - Đăng ký nhận lịch qua URL WebCal bí mật (Secure Token Feed) hoặc xuất file `.ics`.
-2. **Administrator (Quản trị viên hệ thống - Service Role):**
-   - Quản trị hạn ngạch gọi dịch vụ AI (Token usage & Request Quota) theo phân tầng tài khoản (Free vs. Premium) tại tầng middleware dịch vụ.
-   - Giám sát trạng thái hoạt động và các chỉ số sức khỏe của hệ thống qua cấu hình nền tảng.
+   - Đồng bộ lịch học 2 chiều có kiểm soát với ứng dụng lịch ngoài, đăng ký nhận lịch qua URL WebCal bí mật (Secure Token Feed) hoặc xuất file `.ics`.
+   - Nâng cấp gói học tập (Premium) và thực hiện thanh toán trực tuyến qua cổng thanh toán.
+2. **Administrator (Quản trị viên hệ thống - Tác nhân chính nội bộ):**
+   - Quản lý người dùng, phân tầng gói cước (Free vs. Premium), hạn ngạch gọi dịch vụ AI (Token usage & Request Quota) và tra cứu lịch sử giao dịch thanh toán.
+   - Giám sát trạng thái hoạt động, các chỉ số vận hành hệ thống, mức tiêu thụ tài nguyên AI và thống kê doanh thu gói cước.
+3. **External LLM Service (Dịch vụ AI ngôn ngữ lớn - Tác nhân hệ thống ngoài):**
+   - Cung cấp năng lực phân tích ngữ cảnh mục tiêu, phân rã lộ trình 2 cấp (Milestones & Schedule Proposal), tái cấu trúc lịch khi trễ hạn và đánh giá định kỳ theo cấu trúc JSON Schema nghiêm ngặt.
+4. **External Calendar Application (Ứng dụng Lịch ngoại vi - Tác nhân hệ thống ngoài):**
+   - Tích hợp đồng bộ 2 chiều có kiểm soát với FocusFlow: cung cấp dữ liệu khoảng thời gian bận (Free/Busy intervals) chiều Inbound từ Google Calendar và tiếp nhận sự kiện Lịch học chính thức (Official Schedule) chiều Outbound qua kết nối API, luồng WebCal bảo mật hoặc tệp `.ics`.
+5. **Payment Gateway (Cổng thanh toán trực tuyến - Tác nhân hệ thống ngoài):**
+   - Cung cấp API khởi tạo giao dịch thanh toán trực tuyến (mã QR / Checkout URL qua PayOS / VNPay Sandbox) và gửi thông báo kết quả giao dịch tức thời về FocusFlow qua Webhook/IPN có chữ ký số bảo mật (HMAC-SHA256).
 
 ### 2.3. Các bên liên quan gián tiếp (External Stakeholders)
 - **Giảng viên hướng dẫn & Hội đồng chấm tốt nghiệp:** Đánh giá chất lượng kỹ thuật, tính làm chủ sản phẩm, và mức độ hoàn thiện đề tài theo bảng Rubric 100 điểm của Khoa CNTT.
@@ -53,21 +60,21 @@ Người tự học gặp phải chuỗi đứt gãy liên hoàn từ giai đo�
 ## 3. Current Situation & Benchmarking (Hiện trạng & Đối sánh giải pháp)
 
 Đáp ứng tiêu chí **TC1 (Mức 5: So sánh $\ge 3$ giải pháp hiện có, nêu rõ khoảng trống với phân tích thực tế khách quan)**:  
-> *Chi tiết phân tích sâu 8 giải pháp và số liệu thực chứng xem tại:* [Khảo sát Nhu cầu Tự học & Đối sánh Giải pháp](user-survey-and-benchmarking.md) và hồ sơ môn học [WBS 1.1 — Khảo sát & Benchmarking](../../docs_ute/WBS%201.1%20-%20Kh%E1%BA%A3o%20s%C3%A1t%20nhu%20c%E1%BA%A7u%20t%E1%BB%B1%20h%E1%BB%8Dc%20v%C3%A0%20nghi%C3%AAn%20c%E1%BB%A9u%20%C4%91%E1%BB%91i%20s%C3%A1nh%20gi%E1%BA%A3i%20ph%C3%A1p%20%28Benchmarking%29.md).
+> *Chi tiết phân tích sâu 8 giải pháp và số liệu thực chứng xem tại:* [Khảo sát Nhu cầu Tự học & Đối sánh Giải pháp](user-survey-and-benchmarking.md) và hồ sơ môn học [WBS 1.1 — Khảo sát & Benchmarking](../../docs_ute/04_wbs_deliverables/WBS%201.1%20-%20Kh%E1%BA%A3o%20s%C3%A1t%20nhu%20c%E1%BA%A7u%20t%E1%BB%B1%20h%E1%BB%8Dc%20v%C3%A0%20nghi%C3%AAn%20c%E1%BB%A9u%20%C4%91%E1%BB%91i%20s%C3%A1nh%20gi%E1%BA%A3i%20ph%C3%A1p%20%28Benchmarking%29.md).
 
 | Tiêu chí so sánh | Google Calendar | Notion | Todoist | Reclaim.ai / Motion | Chatbots độc lập (ChatGPT/Claude) | **FocusFlow (Hệ thống đề xuất)** |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|
 | **Bản chất công cụ** | Quản lý lịch tĩnh | Workspace tự do | Quản lý task phẳng (GTD) | AI tự động xếp lịch công sở | Mô hình hội thoại văn bản | **Nền tảng quản lý lộ trình học tập thích ứng khép kín** |
 | **Phân rã mục tiêu tự động** | ❌ Không hỗ trợ | ❌ Không hỗ trợ | ❌ Không hỗ trợ | ⚠️ Task công việc văn phòng | ⚠️ Văn bản tự do, không cấu trúc | ✅ **Làm rõ ngữ cảnh $\rightarrow$ Phân rã 2 cấp (JSON Schema Gate)** |
 | **Tính liên kết ngữ cảnh học tập** | ⚠️ Chỉ có mốc giờ | ⚠️ Phải dựng template | ❌ Ghi chú rất ngắn | ❌ Định hướng lịch họp | ❌ Trôi theo lịch sử chat | ✅ **Khép kín: Lộ trình $\leftrightarrow$ Task $\leftrightarrow$ Timer $\leftrightarrow$ Scratchpad $\leftrightarrow$ Review** |
-| **Cơ chế thích ứng khi trễ hạn** | ❌ Thụ động, kéo thả tay | ❌ Lọc sửa thủ công | ❌ Kéo thả tay | ⚠️ AI hộp đen xáo trộn | ❌ Không nắm được tiến độ | ✅ **Celery Beat tự động dời việc tất định $\rightarrow$ Domino Shift khi tạm dừng** |
+| **Cơ chế thích ứng khi trễ hạn** | ❌ Thụ động, kéo thả tay | ❌ Lọc sửa thủ công | ❌ Kéo thả tay | ⚠️ AI hộp đen xáo trộn | ❌ Không nắm được tiến độ | ✅ **Phát hiện quá hạn tất định + Email báo nhắc $\rightarrow$ AI dời lịch 1 lộ trình & Domino Shift khi tạm dừng** |
 | **Không gian thực thi phiên học** | ❌ Không có | ⚠️ Widget bên ngoài | ❌ Không có | ❌ Không có | ❌ Không có | ✅ **Study Tool Suite tích hợp (Pomodoro/Stopwatch, Checklist, Takeaways)** |
 | **Tổng kết & Đánh giá định kỳ** | ❌ Không có | ⚠️ Formula phức tạp | ⚠️ Karma điểm | ⚠️ Thống kê thời gian họp | ❌ Hỏi đáp rời rạc | ✅ **Thống kê định lượng toán học + AI Nhận xét định tính dựa trên Takeaways** |
 | **Chi phí với Sinh viên** | Miễn phí | Miễn phí / $8+ | Miễn phí / $5 | Đắt ($10–$34/tháng) | Miễn phí / $20 | ✅ **Miễn phí cho tính năng cốt lõi / Open-source** |
 
 ### 3 Khoảng trống chiến lược (The 3 Strategic Gaps)
 1. **Khoảng trống Quy trình khép kín (Workflow Gap):** Thị trường chỉ giải quyết từng mẩu rời rạc (ChatGPT gợi ý ý tưởng, Calendar giữ giờ, Pomodoro bấm giờ, Notion lưu trữ). Thiếu một nền tảng kết nối khép kín toàn bộ chu trình học tập 3 pha theo Thuyết SRL (Zimmerman).
-2. **Khoảng trống Thích ứng tất định (Deterministic Adaptation Gap):** Lịch truyền thống quá tĩnh (không tự dời), trong khi AI xếp lịch thương mại lại quá phụ thuộc vào mô hình hộp đen đắt đỏ và tiềm ẩn ảo giác. FocusFlow áp dụng giải pháp thích ứng lai: Dùng AI gợi ý tri thức ban đầu, toàn bộ giải thuật dời ngày quá hạn và tạm dừng do Backend tất định xử lý với độ chính xác 100%.
+2. **Khoảng trống Thích ứng tất định & Dời lịch cô lập phạm vi (Deterministic & Scoped Adaptation Gap):** Lịch truyền thống quá tĩnh (không tự dời), trong khi AI xếp lịch thương mại lại tự ý xáo trộn toàn bộ lịch bằng mô hình hộp đen đắt đỏ. FocusFlow áp dụng giải pháp thích ứng lai có kiểm soát: Dùng logic Backend tất định để phát hiện quá hạn kèm thông báo Email và thực thi thuật toán Domino Shift khi tạm dừng; khi người học chủ động bấm "Dời lịch hợp lý bằng AI (AI Reschedule)", AI chỉ dời lịch các task chưa hoàn thành của riêng lộ trình đó mà tuyệt đối không làm xáo trộn lịch của các lộ trình khác hay sự kiện cá nhân.
 3. **Khoảng trống Kiểm duyệt có kiểm soát (Human-in-the-Loop Approval Gap):** Người học mất niềm tin nếu AI tự ý ghi đè lịch trình. FocusFlow thiết lập cơ chế kiểm duyệt minh bạch: Kế hoạch AI sinh ra ở trạng thái Đề xuất (Schedule Proposal); người học có quyền tùy biến trước khi bấm "Apply" để kích hoạt thành Lịch chính thức.
 
 ---
@@ -106,9 +113,9 @@ Hệ thống FocusFlow quản lý vòng đời học tập qua 4 giai đoạn lo
                                         ▼
 ┌───────────────────────────────────────────────────────────────────────────────┐
 │ Giai đoạn 3: THÍCH ỨNG & QUẢN TRỊ LỊCH (Adaptive Shift & Calendar Management) │
-│ - Quét Overdue bằng thuật toán tất định ──> Đưa vào ưu tiên / AI sắp xếp lại  │
+│ - Quét Overdue tất định + Email ──> Dời lịch hợp lý bằng AI (1 lộ trình)       │
 │ - Tạm dừng lộ trình (Pause Roadmap) ──> Domino Shift tự động đẩy lùi lịch     │
-│ - Xuất lịch ngoại vi: Tải .ics + Cung cấp Secure Token WebCal Feed            │
+│ - Đồng bộ lịch 2 chiều có kiểm soát (Free/Busy Inbound + Official Outbound)   │
 └───────────────────────────────────────┬───────────────────────────────────────┘
                                         │
                                         ▼
@@ -140,15 +147,15 @@ Hệ thống hỗ trợ 2 chế độ cấu hình thời gian học:
 - **Hành vi xử lý khi hủy / dừng sớm (Quyết định Interruption):** Hệ thống lưu chính xác số phút thực học đã trôi qua và đánh dấu hoàn thành cho các task đã tick. Phiên học chuyển trạng thái `CANCELLED` hoặc `PARTIAL_COMPLETED`. Các task chưa hoàn thành tự động quay về hàng đợi Backlog an toàn, không phạt người dùng.
 
 ### 5.4. Cơ chế thích ứng khi trễ hạn & Tạm dừng lộ trình (Adaptive Recovery & Pause)
-- **Phát hiện quá hạn cốt lõi (Deterministic Overdue - Quyết định M1):** Sử dụng câu lệnh logic backend thuần túy: `task.status != COMPLETED AND task.scheduled_date < TODAY`. Tự động đưa các task này vào danh sách ưu tiên giải quyết. Hoàn toàn không phụ thuộc vào LLM.
-- **Tùy chọn AI sắp xếp lại (Optional AI Reprioritization):** Chỉ khi người dùng chủ động yêu cầu, AI mới được cấp danh sách task tồn đọng để gợi ý thứ tự ưu tiên mới.
+- **Phát hiện quá hạn tất định & Thông báo Email (Deterministic Overdue Detection & Email Notification - Quyết định M1):** Định kỳ lúc `00:05 UTC+7` hàng ngày, tác vụ nền Backend quét phát hiện các task quá hạn theo công thức tất định: `task.status != 'COMPLETED' AND task.scheduled_date < CURRENT_DATE`. Hệ thống **không tự động ghi đè ngầm `scheduled_date`**, mà đánh dấu trạng thái dẫn xuất `OVERDUE` và **gửi Email thông báo nhắc nhở** tới địa chỉ email đăng ký của người học (qua cổng nội bộ `EmailNotificationPort` / SMTP Adapter). Khi người học đăng nhập lại vào ứng dụng Web, hệ thống hiển thị các task quá hạn trong khu vực **"Task Cần Chú Ý (`OVERDUE`)"** kèm nút **"Dời lịch hợp lý bằng AI (AI Reschedule)"** và tùy chọn tự dời lịch thủ công.
+- **Dời lịch hợp lý bằng AI trong phạm vi 1 lộ trình (Single-Roadmap AI Reschedule):** Khi người học chủ động bấm nút **"Dời lịch hợp lý bằng AI"**, AI quét danh sách các task chưa hoàn thành còn lại của **riêng lộ trình đó (Single Roadmap)** cùng lịch trình tương lai của người học (tính toán dựa trên cấu hình thời gian rảnh Mode A/B và trừ đi các khoảng thời gian đã bị chiếm dụng bởi các lộ trình khác hoặc sự kiện lịch ngoài) để sắp xếp lại hợp lý **chỉ các task thuộc lộ trình đó**, tuyệt đối **không thay đổi hay xê dịch lịch của các lộ trình khác hoặc lịch cá nhân của người dùng**. Vì đây là thao tác dời lịch trên lộ trình đã tồn tại (không phải khởi tạo lộ trình mới từ đầu), luồng xử lý **không chạy qua Cổng kiểm định 3 tầng (3-Tier Hybrid Validation Gate)** (bỏ qua Tầng 3 Kiểm định Sư phạm; chỉ thực hiện kiểm tra cú pháp JSON Schema và kiểm tra dung lượng/chống trùng lịch cơ bản để không đè lên các cam kết khác của người dùng), sau đó cập nhật lịch học của lộ trình đó (`reschedule_count = reschedule_count + 1` đối với các task quá hạn được dời; nếu `reschedule_count >= 3`, đánh dấu `/isStalled = true` và gợi ý người học chia nhỏ task, chọn ngày cam kết cố định hoặc đưa về Backlog).
 - **Tạm dừng lộ trình (Pause Roadmap - Quyết định 4A):** Cho phép người học tạm dừng lộ trình từ ngày A đến ngày B (ví dụ: bận thi cử). Hệ thống áp dụng **thuật toán tịnh tiến dây chuyền (Domino Shift)**: toàn bộ các ngày học từ mốc bắt đầu tạm dừng sẽ tự động lùi về sau đúng số ngày rảnh tương ứng, giữ nguyên thứ tự task. Khoảng thời gian tạm dừng không bị tính cảnh báo quá hạn.
 
-### 5.5. Tích hợp Lịch ngoại vi an toàn (Calendar Integration - Quyết định 2A)
-- Cung cấp tính năng tải về file tĩnh `.ics`.
-- Cung cấp tính năng đăng ký theo dõi lịch (1-Way WebCal Subscription Feed) cho Google Calendar và Apple Calendar qua đường dẫn chứa mã bảo mật ngẫu nhiên: `https://focusflow.app/api/v1/feeds/{user_secure_token}.ics`.
-- Người dùng có quyền bấm nút "Tạo lại liên kết mới (Reset Token)" trên giao diện để thu hồi URL cũ khi cần bảo mật.
-- WebCal Feed tuyệt đối chỉ xuất các task thuộc Official Schedule đã được Apply.
+### 5.5. Đồng bộ Lịch ngoại vi 2 chiều có kiểm soát (Controlled Two-Way Calendar Sync - Quyết định 2A)
+- **Chiều Inbound (Lịch ngoài $\rightarrow$ FocusFlow):** Đọc các khoảng thời gian bận (Free/Busy intervals) từ Google Calendar của người học để tự động trừ dung lượng thời gian rảnh khả dụng khi lập lịch hoặc tái cấu trúc lộ trình, đảm bảo lịch học đề xuất không đè lên lịch cá nhân/công việc sẵn có.
+- **Chiều Outbound (FocusFlow $\rightarrow$ Lịch ngoài):** Đồng bộ các nhiệm vụ thuộc Lịch học chính thức (Official Schedule) ra ứng dụng lịch ngoài (Google Calendar / Apple Calendar qua kết nối API hoặc luồng đăng ký WebCal Subscription Feed chứa mã bảo mật ngẫu nhiên: `https://focusflow.app/api/v1/feeds/{user_secure_token}.ics`) và hỗ trợ tải về tệp tĩnh `.ics`.
+- Người dùng có quyền bấm nút "Tạo lại liên kết mới (Reset Token)" hoặc ngắt kết nối lịch trên giao diện để thu hồi quyền truy cập ngay lập tức khi cần bảo mật.
+- Luồng đồng bộ Outbound và WebCal Feed tuyệt đối chỉ xuất các task thuộc Official Schedule đã được Apply.
 
 ### 5.6. Báo cáo định lượng và AI Review chu kỳ
 - Thống kê định lượng: Tổng thời gian tập trung thực tế, tỷ lệ hoàn thành task theo tuần/tháng bằng các hàm toán học chính xác.
@@ -161,18 +168,18 @@ Hệ thống hỗ trợ 2 chế độ cấu hình thời gian học:
 Nhằm bảo đảm tính khả thi, hoàn thành 100% khối lượng cam kết (TC2.2) và tránh các quy tắc chặn điểm (G1, G9):
 
 ### 6.1. Trong phạm vi (In-Scope — Core MVP)
-- **Module Quản lý tài khoản & Hồ sơ:** Đăng ký, đăng nhập, bảo vệ phiên, cấu hình thời gian rảnh lai (Mode A / Mode B).
-- **Module Quản trị viên Tối giản (Minimal Web Admin Portal):** Cung cấp 3 màn hình cốt lõi với kiểm soát truy cập theo vai trò (RBAC `role='ADMIN'`): (1) Giám sát danh sách người dùng và trạng thái tài khoản; (2) Khóa/mở khóa tài khoản khi phát hiện dấu hiệu bất thường; (3) Giám sát tổng quan tiêu thụ hạn ngạch AI toàn hệ thống.
+- **Module Quản lý tài khoản & Hồ sơ:** Đăng ký, đăng nhập, bảo vệ phiên, cấu hình thời gian rảnh lai (Mode A / Mode B) và hồ sơ thói quen học tập.
+- **Module Quản trị viên Tối giản (Minimal Web Admin Portal):** Cung cấp các màn hình cốt lõi với kiểm soát truy cập theo vai trò (RBAC `role='ADMIN'`): (1) Quản lý danh sách người dùng, trạng thái tài khoản, gói cước và tra cứu giao dịch thanh toán; (2) Khóa/mở khóa tài khoản và điều chỉnh hạn ngạch khi cần thiết; (3) Giám sát tổng quan chỉ số vận hành, mức tiêu thụ hạn ngạch AI và doanh thu gói cước toàn hệ thống.
 - **Module Lập kế hoạch AI:** Luồng tương tác hỏi-đáp, sinh Milestone, sinh Schedule Proposal, giao diện review/edit, nút Apply kèm Backend Validation Gate.
 - **Module Không gian phiên học:** Bảng task, Study Tool Suite (Pomodoro timer/Stopwatch), Scratchpad note, Key Takeaways, xử lý phiên bị gián đoạn.
-- **Module Thích ứng & Lịch trình:** Thuật toán phát hiện quá hạn tất định, tính năng Tạm dừng lộ trình (Domino Shift), xuất file `.ics` và cung cấp URL WebCal Feed bảo mật.
+- **Module Thích ứng & Lịch trình:** Thuật toán phát hiện quá hạn tất định, tính năng Tạm dừng lộ trình (Domino Shift), và **Đồng bộ lịch ngoại vi 2 chiều có kiểm soát (Controlled Two-Way Calendar Sync: đọc lịch bận Free/Busy + xuất lịch chính thức qua kết nối API / URL WebCal Feed bảo mật / tệp `.ics`)**.
 - **Module Báo cáo & AI Review:** Thống kê định lượng chính xác và trợ lý AI Review định kỳ.
-- **Module Quản trị Hạn ngạch (Quota Service & Mock Sandbox - Quyết định M3):** Middleware kiểm soát số lượt gọi AI theo phân tầng Free/Premium; giao diện người dùng có trang hiển thị hạn ngạch và nút bấm mô phỏng nâng cấp (Mock Upgrade Sandbox).
+- **Module Quản trị Hạn ngạch & Thanh toán (Quota Service & Online Payment Gateway - Quyết định M3):** Middleware kiểm soát số lượt gọi AI theo phân tầng Free/Premium; **Tích hợp Cổng thanh toán trực tuyến (Payment Gateway — PayOS / VNPay Sandbox)** để nâng cấp gói tài khoản lên Premium qua mã QR/liên kết thanh toán và xác thực kết quả giao dịch tự động qua Webhook/IPN có chữ ký số bảo mật.
 
 ### 6.2. Ngoài phạm vi (Out-of-Scope — Tuyệt đối không làm trong đồ án này)
-- **Đồng bộ 2 chiều phức tạp với Google Calendar:** Không làm cơ chế giải quyết xung đột lịch 2 chiều từ Google Calendar ngược lại FocusFlow (đưa vào Future Work).
-- **Cổng thanh toán thực tế (Production Payment Gateway):** Không kết nối cổng thanh toán thật (VNPay, Momo, Stripe) nhằm tránh rủi ro pháp lý và phụ thuộc hạ tầng bên ngoài.
-- **Hệ thống Quản trị Doanh nghiệp Mở rộng (Enterprise Admin / Multi-tenant CMS):** Không triển khai các tính năng quản trị quy mô doanh nghiệp phức tạp như CMS biên tập khóa học, quản lý tổ chức đa cấp độ, xuất hóa đơn VAT hay phân quyền động tùy biến (chỉ tập trung Minimal Web Admin Portal 3 màn hình phục vụ đồ án).
+- **Sửa đổi/xóa trực tiếp cấu trúc lộ trình học tập từ ứng dụng lịch bên ngoài:** Không cho phép thao tác kéo thả hoặc xóa sự kiện trên Google/Apple Calendar làm thay đổi ngược lại cấu trúc Milestone/Roadmap gốc hoặc tự động ghi đè Official Schedule mà không qua cổng kiểm tra tính hợp lệ (Validation Gate) của FocusFlow.
+- **Hoàn tiền tự động đa tiền tệ phức tạp (Complex Multi-currency Automated Refunds & Chargebacks):** Không triển khai hệ thống kế toán hoàn tiền tự động đa tiền tệ quốc tế, xử lý tranh chấp thẻ tín dụng (chargeback) hay chia sẻ doanh thu phức tạp.
+- **Hệ thống Quản trị Doanh nghiệp Mở rộng (Enterprise Admin / Multi-tenant CMS):** Không triển khai các tính năng quản trị quy mô doanh nghiệp phức tạp như CMS biên tập khóa học, quản lý tổ chức đa cấp độ, xuất hóa đơn VAT hay phân quyền động tùy biến (chỉ tập trung Minimal Web Admin Portal phục vụ đồ án).
 - **Ứng dụng Native Mobile (iOS/Android):** Không viết app native, chỉ tập trung hoàn thiện Web Application responsive đa thiết bị.
 - **Tính năng mạng xã hội / Nhóm học tập:** Không làm tính năng kết bạn, chat, chia sẻ lộ trình giữa các người dùng.
 
@@ -216,5 +223,5 @@ Tuân thủ tiêu chí **TC2.1 (Mức 5: Có $\ge 5$ yêu cầu phi chức năng
 |---|---|---|---|
 | **P1: Khó phân rã mục tiêu lớn** | KPI 1 (Tạo kế hoạch $\le 5$m) | Onboarding $\rightarrow$ Clarify $\rightarrow$ Milestones $\rightarrow$ Tasks Proposal $\rightarrow$ Apply | BR-Approval, Mode A/B Availability, NFR 1 ($\le 60$s) |
 | **P2: Phân mảnh công cụ** | KPI 2 (Hiệu quả buổi học $\ge 80\%$), SUS $\ge 80$ | Study Tool Suite (Pomodoro, Checklist, Scratchpad, Key Takeaway) | NFR 2 (UI $\le 500$ms), Session Interruption Rule |
-| **P3: Đứt gãy lịch khi trễ hạn** | KPI 3 (Bám sát lộ trình $\ge 70\%$) | Deterministic Overdue Shift, Pause Roadmap (Domino Shift), WebCal Feed | BR-Deterministic Overdue, Quyết định 2A (WebCal Token), Quyết định 4A (Domino Shift) |
-| **Quản trị chi phí & Vận hành** | Giữ chi phí API $\le$ Ngân sách đồ án | Quota Middleware (Free vs Premium) & Mock Sandbox | Quyết định M3 (Service-level Quota), NFR 3 (Bảo mật API secret) |
+| **P3: Đứt gãy lịch khi trễ hạn** | KPI 3 (Bám sát lộ trình $\ge 70\%$) | Deterministic Overdue Detection + Email Notification, Single-Roadmap AI Reschedule, Pause Roadmap (Domino Shift), Controlled 2-Way Calendar Sync & WebCal Feed | BR-Deterministic Overdue, Quyết định 2A (2-Way Sync & WebCal Token), Quyết định 4A (Domino Shift) |
+| **Quản trị chi phí & Vận hành** | Giữ chi phí API $\le$ Ngân sách đồ án | Quota Middleware (Free vs Premium) & Online Payment Gateway (PayOS/VNPay) | Quyết định M3 (Service-level Quota & Payment Webhook), NFR 3 (Bảo mật API secret) |

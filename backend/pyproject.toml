@@ -1,7 +1,7 @@
 [project]
 name = "focusflow-backend"
-version = "0.1.0"
-description = "FocusFlow Backend — Adaptive Self-Directed Learning Operating System"
+version = "2.0.0"
+description = "FocusFlow Backend — Adaptive Self-Directed Learning Operating System (Context-First Modular Monolith + Hexagonal Architecture)"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -13,14 +13,22 @@ dependencies = [
     "asyncpg>=0.30.0",
     "alembic>=1.14.0",
     "redis>=5.2.0",
-    "celery>=5.4.0",
+    "taskiq>=0.11.0",
+    "taskiq-fastapi>=0.3.0",
+    "taskiq-redis>=1.0.0",
     "uuid6>=2024.7.10",
-    "python-jose[cryptography]>=3.3.0",
-    "passlib[argon2]>=1.7.4",
-    "google-genai>=0.1.1",
+    "pyjwt[crypto]>=2.9.0",
+    "pwdlib[argon2]>=0.2.1",
+    "cryptography>=43.0.0",
+    "litellm>=1.50.0",
+    "google-genai>=0.3.0",
+    "structlog>=24.4.0",
     "icalendar>=6.1.0",
     "python-multipart>=0.0.18",
     "httpx>=0.28.0",
+    "email-validator>=2.3.0",
+    "aiosmtplib>=5.1.3",
+    "google-auth>=2.61.0",
 ]
 
 [project.optional-dependencies]
@@ -28,6 +36,8 @@ dev = [
     "pytest>=8.3.0",
     "pytest-asyncio>=0.24.0",
     "pytest-cov>=6.0.0",
+    "httpx>=0.27.0",
+    "import-linter>=2.1",
     "ruff>=0.8.0",
     "mypy>=1.13.0",
 ]
@@ -51,3 +61,88 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
 ignore = ["E501"]
+
+[tool.importlinter]
+root_packages = ["src"]
+
+[[tool.importlinter.contracts]]
+name = "Account Context Isolation"
+id = "context_isolation_account"
+type = "forbidden"
+source_modules = [
+    "src.planning",
+    "src.execution",
+    "src.evaluation",
+]
+forbidden_modules = [
+    "src.account.domain",
+    "src.account.application",
+    "src.account.infrastructure",
+    "src.account.presentation",
+]
+
+[[tool.importlinter.contracts]]
+name = "Planning Context Isolation"
+id = "context_isolation_planning"
+type = "forbidden"
+source_modules = [
+    "src.account",
+    "src.execution",
+    "src.evaluation",
+]
+forbidden_modules = [
+    "src.planning.domain",
+    "src.planning.application",
+    "src.planning.infrastructure",
+    "src.planning.presentation",
+]
+
+[[tool.importlinter.contracts]]
+name = "Execution Context Isolation"
+id = "context_isolation_execution"
+type = "forbidden"
+source_modules = [
+    "src.account",
+    "src.planning",
+    "src.evaluation",
+]
+forbidden_modules = [
+    "src.execution.domain",
+    "src.execution.application",
+    "src.execution.infrastructure",
+    "src.execution.presentation",
+]
+
+[[tool.importlinter.contracts]]
+name = "Evaluation Context Isolation"
+id = "context_isolation_evaluation"
+type = "forbidden"
+source_modules = [
+    "src.account",
+    "src.planning",
+    "src.execution",
+]
+forbidden_modules = [
+    "src.evaluation.domain",
+    "src.evaluation.application",
+    "src.evaluation.infrastructure",
+    "src.evaluation.presentation",
+]
+
+[[tool.importlinter.contracts]]
+name = "Hexagonal Layer Purity across Bounded Contexts"
+id = "hexagonal_layers"
+type = "layers"
+layers = [
+    "presentation",
+    "infrastructure",
+    "application",
+    "domain",
+]
+containers = [
+    "src.shared_kernel",
+    "src.account",
+    "src.planning",
+    "src.execution",
+    "src.evaluation",
+]

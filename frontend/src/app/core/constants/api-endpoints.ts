@@ -1,0 +1,70 @@
+export const API_ENDPOINTS = {
+  AUTH: {
+    LOGIN: '/api/v1/auth/login',
+    REGISTER: '/api/v1/auth/register',
+    REFRESH: '/api/v1/auth/refresh',
+    LOGOUT: '/api/v1/auth/logout',
+    ME: '/api/v1/auth/me',
+  },
+  BILLING: {
+    CHECKOUT: '/api/v1/billing/checkout',
+    WEBHOOK: '/api/v1/billing/webhook',
+  },
+  ROADMAPS: {
+    BASE: '/api/v1/roadmaps',
+    DETAIL: (id: string) => `/api/v1/roadmaps/${id}`,
+    ARCHIVE: (id: string) => `/api/v1/roadmaps/${id}/archive`,
+    MILESTONES: (id: string) => `/api/v1/roadmaps/${id}/milestones`,
+    MILESTONES_GENERATE_JOBS: (id: string) => `/api/v1/roadmaps/${id}/milestones/generate-jobs`,
+    MILESTONES_APPROVE: (id: string) => `/api/v1/roadmaps/${id}/milestones/approve`,
+    PROPOSALS_GENERATE_JOBS: (id: string) => `/api/v1/roadmaps/${id}/proposals/generate-jobs`,
+    PROPOSALS_CURRENT: (id: string) => `/api/v1/roadmaps/${id}/proposals/current`,
+    PROPOSAL_UPDATE: (roadmapId: string, proposalId: string) =>
+      `/api/v1/roadmaps/${roadmapId}/proposals/${proposalId}`,
+    PROPOSALS_MANUAL: (id: string) => `/api/v1/roadmaps/${id}/proposals/manual`,
+    PROPOSAL_APPLY: (roadmapId: string, proposalId: string) =>
+      `/api/v1/roadmaps/${roadmapId}/proposals/${proposalId}/apply`,
+    JOB_STREAM: (jobId: string) => `/api/v1/roadmaps/jobs/${jobId}/stream`,
+    GENERATE_JOB: '/api/v1/roadmaps/generate-jobs',
+    STREAM_JOB: (jobId: string) => `/api/v1/roadmaps/jobs/${jobId}/stream`,
+    ACTIVE: '/api/v1/roadmaps/active',
+    APPLY: (id: string) => `/api/v1/roadmaps/${id}/apply`,
+    PAUSE: (id: string) => `/api/v1/roadmaps/${id}/pause`,
+    RESUME: (id: string) => `/api/v1/roadmaps/${id}/resume`,
+    OVERDUE_REVISE: (id: string) => `/api/v1/roadmaps/${id}/overdue-revise-jobs`,
+    CLARIFY_QUESTIONS: (goalId: string) => `/api/v1/roadmaps/goals/${goalId}/clarify-questions`,
+    CLARIFY_ANSWERS: (goalId: string) => `/api/v1/roadmaps/goals/${goalId}/clarify-answers`,
+    CLARIFY_SKIP: (goalId: string) => `/api/v1/roadmaps/goals/${goalId}/clarify-skip`,
+  },
+  TASKS: {
+    BASE: '/api/v1/tasks',
+    BACKLOG: '/api/v1/tasks/backlog',
+    SCHEDULE_WEEK: '/api/v1/tasks/schedule/week',
+  },
+  SESSIONS: {
+    BASE: '/api/v1/sessions',
+    START: '/api/v1/sessions/start',
+    HEARTBEAT: (id: string) => `/api/v1/sessions/${id}/heartbeat`,
+    FINALIZE: (id: string) => `/api/v1/sessions/${id}/finalize`,
+  },
+  CALENDAR: {
+    FEED: (token: string) => `/api/v1/calendar/webcal/${token}.ics`,
+    GENERATE_TOKEN: '/api/v1/calendar/tokens',
+    RESET_TOKEN: '/api/v1/calendar/tokens/reset',
+    OAUTH_GOOGLE: '/api/v1/calendar/oauth/google',
+  },
+  ANALYTICS: {
+    SUMMARY: '/api/v1/analytics/summary',
+    WEEKLY: '/api/v1/analytics/weekly',
+  },
+  SETTINGS: {
+    PROFILE: '/api/v1/users/profile',
+    AVAILABILITY: '/api/v1/availabilities/me',
+    QUOTA: '/api/v1/users/quota',
+  },
+  ADMIN: {
+    USERS: '/api/v1/admin/users',
+    USER_QUOTA: (userId: string) => `/api/v1/admin/users/${userId}/quota`,
+    AI_MONITORING: '/api/v1/admin/monitoring/ai-telemetry',
+  },
+} as const;

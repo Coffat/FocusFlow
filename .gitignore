@@ -63,7 +63,8 @@ out/
 *.sqlite3
 
 # Agent customizations, workflows and local configuration
-.agents/
+.agents/mcp_config.json
+.agents/**/.DS_Store
 
 # Scratch directory (temporary scripts and experimental files)
 scratch/

@@ -1,0 +1,106 @@
+.dashboard-viewport {
+  min-height: 100vh;
+  background-color: var(--surface, #fbf9f8);
+  color: var(--on-surface, #1b1c1c);
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-sans, sans-serif);
+}
+
+.dashboard-nav {
+  height: 64px;
+  background-color: var(--surface-container-lowest, #ffffff);
+  border-bottom: 1px solid var(--outline-variant, #bfc9c0);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32px;
+
+  .nav-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+
+    .brand-logo {
+      width: 28px;
+      height: 28px;
+    }
+
+    .brand-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+      color: var(--primary, #005234);
+    }
+  }
+
+  .nav-right {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+
+    .user-chip {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+
+      .user-avatar-icon {
+        font-size: 32px;
+        color: var(--primary, #005234);
+      }
+
+      .user-meta {
+        display: flex;
+        flex-direction: column;
+
+        .user-name {
+          font-size: 0.9rem;
+          font-weight: 600;
+          color: var(--on-surface, #1b1c1c);
+        }
+
+        .user-role-badge {
+          font-size: 0.72rem;
+          color: var(--outline, #707972);
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+      }
+    }
+
+    .sign-out-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: transparent;
+      border: 1px solid var(--outline-variant, #bfc9c0);
+      border-radius: 8px;
+      padding: 6px 14px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--on-surface-variant, #404942);
+      cursor: pointer;
+      transition: all 0.2s ease;
+
+      span.material-symbols-outlined {
+        font-size: 18px;
+      }
+
+      &:hover {
+        background-color: #fee2e2;
+        border-color: #fca5a5;
+        color: #b91c1c;
+      }
+    }
+  }
+}
+
+.dashboard-empty-canvas {
+  flex: 1;
+}
+
+@media (max-width: 800px) {
+  .dashboard-nav {
+    padding: 0 16px;
+  }
+}

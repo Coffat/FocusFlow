@@ -1,0 +1,61 @@
+<mxfile host="app.diagrams.net" modified="2026-10-27T03:50:00.000Z" agent="FocusFlow-UML" version="24.0.0">
+  <diagram name="Module-3-Study-Execution-Calendar" id="FF-UC-Mod-3">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="800" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Primary Actor (Left) -->
+        <mxCell id="actor-learner" value="Người học&#xa;(Learner)" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;fillColor=#EBF8FF;strokeColor=#2B6CB0;fontStyle=1;fontColor=#1A202C;" vertex="1" parent="1">
+          <mxGeometry x="80" y="270" width="50" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- System Boundary -->
+        <mxCell id="mod-boundary" value="Hệ thống FocusFlow — Module 3: Thực thi Học tập &amp; Đồng bộ Lịch" style="shape=rect;html=1;verticalAlign=top;fontStyle=1;whiteSpace=wrap;align=center;fillColor=#F7FAFC;strokeColor=#2B6CB0;fontSize=14;fontColor=#1A202C;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="220" y="80" width="670" height="540" as="geometry" />
+        </mxCell>
+
+        <!-- Use Cases -->
+        <mxCell id="uc-10" value="UC-10&#xa;Quản lý lịch học, nhiệm vụ và Backlog&#xa;(Theo dõi lịch, dời lịch, DAG, Backlog &amp; Quick Complete)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="270" y="130" width="320" height="75" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-11" value="UC-11&#xa;Thực hiện phiên học tập trung&#xa;(Pomodoro / Stopwatch, Scratchpad, Takeaways)&#xa;&amp;lt;&amp;lt;extension points&amp;gt;&amp;gt;&#xa;Session Interrupted" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="270" y="250" width="310" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-12" value="UC-12&#xa;Xử lý gián đoạn và phục hồi phiên học&#xa;(Dừng sớm / Khôi phục phiên / Chốt OS-01)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="640" y="260" width="230" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-13" value="UC-13&#xa;Đồng bộ lịch học 2 chiều và xuất lịch ngoại vi&#xa;(Đọc Free/Busy, Đồng bộ sự kiện, WebCal &amp; .ics)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="270" y="390" width="320" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Secondary Supporting Actor (Right) -->
+        <mxCell id="sys-cal" value="&amp;lt;&amp;lt;system&amp;gt;&amp;gt;&#xa;Ứng dụng Lịch ngoài&#xa;(Google / Apple Calendar)" style="shape=rect;html=1;whiteSpace=wrap;fillColor=#EDF2F7;strokeColor=#4A5568;fontStyle=1;fontColor=#1A202C;align=center;rounded=1;" vertex="1" parent="1">
+          <mxGeometry x="960" y="400" width="180" height="60" as="geometry" />
+        </mxCell>
+
+        <!-- Associations -->
+        <mxCell id="edge-learner-uc10" edge="1" parent="1" source="actor-learner" target="uc-10" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-learner-uc11" edge="1" parent="1" source="actor-learner" target="uc-11" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-learner-uc13" edge="1" parent="1" source="actor-learner" target="uc-13" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Extend UC12 -> UC11 -->
+        <mxCell id="edge-extend-uc12-uc11" value="&amp;lt;&amp;lt;extend&amp;gt;&amp;gt;&#xa;[Phiên bị gián đoạn / Dừng sớm]" edge="1" parent="1" source="uc-12" target="uc-11" style="endArrow=open;dashed=1;html=1;strokeColor=#4A5568;strokeWidth=1.5;endFill=0;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- Supporting Actor Link -->
+        <mxCell id="edge-uc13-cal" edge="1" parent="1" source="uc-13" target="sys-cal" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

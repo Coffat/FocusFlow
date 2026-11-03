@@ -1,0 +1,79 @@
+import { signal, WritableSignal } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
+import { Router, ActivatedRouteSnapshot, RouterStateSnapshot } from '@angular/router';
+import { authGuard } from './auth.guard';
+import { AuthService } from '../core/services/auth.service';
+
+let mockStore: Record<string, string> = {};
+
+const storageMock = {
+  getItem: (key: string) => mockStore[key] ?? null,
+  setItem: (key: string, value: string) => { mockStore[key] = value; },
+  removeItem: (key: string) => { delete mockStore[key]; },
+  clear: () => { mockStore = {}; },
+  key: (index: number) => Object.keys(mockStore)[index] ?? null,
+  length: 0
+};
+
+describe('authGuard', () => {
+  beforeAll(() => {
+    Object.defineProperty(globalThis, 'localStorage', {
+      value: storageMock,
+      writable: true
+    });
+  });
+  let mockAuthService: { isAuthenticated: WritableSignal<boolean> };
+  let mockRouter: { navigate: ReturnType<typeof vi.fn> };
+
+  const dummyRoute = {} as ActivatedRouteSnapshot;
+  const dummyState = {} as RouterStateSnapshot;
+
+  beforeEach(() => {
+    localStorage.clear();
+    mockAuthService = {
+      isAuthenticated: signal(false)
+    };
+    mockRouter = {
+      navigate: vi.fn()
+    };
+
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: AuthService, useValue: mockAuthService },
+        { provide: Router, useValue: mockRouter }
+      ]
+    });
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  it('should allow activation when user is authenticated via authService', () => {
+    mockAuthService.isAuthenticated.set(true);
+
+    const result = TestBed.runInInjectionContext(() => authGuard(dummyRoute, dummyState));
+
+    expect(result).toBe(true);
+    expect(mockRouter.navigate).not.toHaveBeenCalled();
+  });
+
+  it('should allow activation when token exists in localStorage', () => {
+    localStorage.setItem('access_token', 'valid-mock-jwt-token');
+
+    const result = TestBed.runInInjectionContext(() => authGuard(dummyRoute, dummyState));
+
+    expect(result).toBe(true);
+    expect(mockRouter.navigate).not.toHaveBeenCalled();
+  });
+
+  it('should redirect to /sign-in and block activation when unauthenticated and no token', () => {
+    mockAuthService.isAuthenticated.set(false);
+    localStorage.removeItem('access_token');
+
+    const result = TestBed.runInInjectionContext(() => authGuard(dummyRoute, dummyState));
+
+    expect(result).toBe(false);
+    expect(mockRouter.navigate).toHaveBeenCalledWith(['/sign-in']);
+  });
+});

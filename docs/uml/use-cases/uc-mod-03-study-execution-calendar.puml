@@ -1,0 +1,72 @@
+@startuml uc-mod-03-study-execution-calendar
+title FocusFlow — Phân hệ 3: Thực thi Học tập & Tích hợp Lịch ngoại vi (UC-13..UC-17)
+
+left to right direction
+skinparam packageStyle rectangle
+skinparam roundcorner 8
+skinparam monochrome false
+skinparam shadowing false
+skinparam defaultFontName "Helvetica", "Arial", sans-serif
+skinparam nodesep 40
+skinparam ranksep 75
+
+skinparam actor {
+    BackgroundColor #EBF8FF
+    BorderColor #2B6CB0
+    FontColor #1A202C
+    FontStyle bold
+}
+
+skinparam usecase {
+    BackgroundColor #FFFFFF
+    BorderColor #2B6CB0
+    ArrowColor #4A5568
+    FontColor #1A202C
+}
+
+skinparam package {
+    BackgroundColor #F7FAFC
+    BorderColor #CBD5E0
+    FontColor #2D3748
+    FontStyle bold
+}
+
+skinparam rectangle<<system>> {
+    BackgroundColor #EDF2F7
+    BorderColor #4A5568
+    FontColor #1A202C
+}
+
+' 1. TÁC NHÂN CHÍNH (PRIMARY ACTORS - BÊN TRÁI)
+actor "ACT-01: Người học\n(Learner)" as Learner #EBF8FF
+actor "ACT-03: Bộ lập lịch hệ thống\n(System Scheduler)" as Scheduler <<system>> #E6FFFA
+
+' 2. RANH GIỚI HỆ THỐNG (SYSTEM BOUNDARY)
+rectangle "Hệ thống FocusFlow — Phân hệ 3: Thực thi Học tập & Tích hợp Lịch ngoại vi" as Mod3Boundary {
+    usecase "UC-13\nXem lịch học và Dời lịch\ncông việc thủ công" as UC13
+    usecase "UC-14\nThực hiện phiên học tập trung\nvà Ghi chú" as UC14
+    usecase "UC-15\nTự động chốt phiên học\nbị gián đoạn" as UC15
+    usecase "UC-16\nKết nối và Đồng bộ khoảng bận\ntừ lịch ngoại vi" as UC16
+    usecase "UC-17\nXuất lịch học .ics và\nQuản lý liên kết WebCal" as UC17
+    usecase "UC-12\nKiểm định tính hợp lệ\ncủa lịch học" as UC12 <<subfunction>> #F7FAFC
+}
+
+' 3. TÁC NHÂN HỆ THỐNG PHỤ TRỢ (SUPPORTING SYSTEM ACTORS - BÊN PHẢI)
+rectangle "ACT-04: Nhà cung cấp dịch vụ LLM\n(External LLM Provider)" as LLM <<system>>
+rectangle "ACT-05: Dịch vụ Lịch ngoại vi\n(External Calendar Service)" as CalService <<system>>
+
+' 4. QUAN HỆ (ASSOCIATIONS & INCLUDE)
+Learner -- UC13
+Learner -- UC14
+Learner -- UC16
+Learner -- UC17
+
+Scheduler -- UC15
+
+UC13 ..> UC12 : <<include>>
+
+UC14 -- LLM
+UC16 -- CalService
+UC17 -- CalService
+
+@enduml

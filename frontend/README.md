@@ -1,15 +1,34 @@
 # FocusFlow Frontend
 
-Ứng dụng Frontend Next.js 15 App Router cho FocusFlow, xây dựng với React 19, TypeScript, Tailwind v4, TanStack Query và Zustand.
+Ứng dụng Frontend cho FocusFlow, xây dựng với **Angular 21** (Standalone Components, Signals, Zoneless, Control Flow `@if`/`@for`), **PrimeNG**, **Tailwind CSS**, **SCSS**, quản lý gói bằng **`pnpm`**.
 
-## Khởi chạy với `pnpm`
+## Hướng dẫn cài đặt & Chạy ứng dụng
+
 ```bash
-# Cài đặt dependencies
+# 1. Cài đặt dependencies
 pnpm install
 
-# Chạy server phát triển (Development server)
+# 2. Chạy server phát triển (Development server)
+pnpm start
+# hoặc
 pnpm dev
 
-# Build production
+# 3. Build ứng dụng sản xuất (Production bundle)
 pnpm build
+
+# 4. Chạy kiểm thử đơn vị (Unit Tests với Vitest)
+pnpm test
+```
+
+## Các lệnh kiểm tra chất lượng
+
+```bash
+# Lint code
+pnpm lint
+
+# Unit tests
+pnpm test
+
+# Generate API TypeScript types từ OpenAPI
+pnpm api:gen
 ```

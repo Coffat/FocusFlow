@@ -1,62 +1,83 @@
-# ADR-005: Lựa chọn Giao thức Tương tác AI: Quy trình SSE Hai Chặng Đồng nhất kết hợp Cổng Duyệt Con người 2 Cấp độ (Human-in-the-Loop)
+# ADR-005: Kiến trúc LLM Đa nhà cung cấp (`LLMProviderPort`), Giao thức SSE 2 Chặng Đồng nhất & Giữ chỗ Quota ACID 2 Pha
 
-* **Trạng thái:** Được chấp thuận (Approved — Đã chuẩn hóa theo SRS v1.1)
-* **Ngày quyết định:** 29/09/2026 (Cập nhật chuẩn hóa: 30/09/2026)
-* **Người quyết định:** Vũ Toàn Thắng (Lead BA / System Architect), Phan Đình Duẩn (Senior BA / Quality Lead)
+* **Trạng thái:** Được chấp thuận (Approved — Cập nhật Kiến trúc v2.0)
+* **Ngày quyết định:** 29/09/2026 (Cập nhật v2.0: 25/10/2026)
+* **Người quyết định:** Vũ Toàn Thắng, Phan Đình Duẩn
 * **Căn cứ đánh giá:** Khung Rubric Đồ án Tốt nghiệp CNTT — Tiêu chí TC2.1 & TC2.3 (Mức 5)
-* **Yêu cầu liên quan:** FR-PLAN-001, FR-PLAN-002, FR-PLAN-003, FR-QUOTA-001, NFR-PERF-001, NFR-AI-001, BUSR-02, BUSR-10
+* **Yêu cầu liên quan:** `ASR-02`, `ASR-03`, `ASR-06`, `FR-PLAN-001`, `FR-PLAN-002`, `FR-PLAN-003`, `FR-QUOTA-001`, `NFR-PERF-001`, `NFR-AI-001`, `BUSR-02`, `BUSR-10`
 
 ---
 
 ## 1. Ngữ cảnh & Đặt vấn đề (Context)
-Theo đặc tả nghiệp vụ SRS v1.1, quá trình phân rã mục tiêu tự học bằng mô hình ngôn ngữ lớn (Google Gemini API, cấu hình qua `GEMINI_MODEL`, mặc định `gemini-1.5-flash`) bắt buộc phải tuân thủ nguyên tắc **Cổng Kiểm duyệt Con người (Human-in-the-Loop Gate - BUSR-02)** qua 2 cấp độ độc lập:
-1. **Cấp 1 — Cột mốc Tổng quan (Milestones - FR-PLAN-001):** AI sinh danh sách 3–7 cột mốc kiến thức; Learner có toàn quyền xem xét, chỉnh sửa tên/thứ tự, thêm/xóa milestone và bấm **"Duyệt Milestones (Approve Milestones)"**.
-2. **Cấp 2 — Đề xuất Nhiệm vụ Chi tiết (Tasks & Schedule Proposal - FR-PLAN-002):** Dựa trên danh sách Milestones đã duyệt và quỹ thời gian rảnh (Availability), AI phân rã thành các tasks chi tiết (30–120 phút) và xếp vào khung giờ trống thành bản nháp `Schedule Proposal` (trạng thái `DRAFT`) trước khi Learner bấm **"Apply"** (`FR-PLAN-003`).
-
-Đồng thời, hệ thống đòi hỏi:
-* **Chống rớt mạng & Chống trừ Quota 2 lần:** Tổng thời gian suy luận có thể kéo dài 15–35s. Nếu client mất kết nối và tự động gửi lại lệnh POST, tuyệt đối không được tạo job trùng lặp hay trừ thêm hạn ngạch của người dùng (`BUSR-10`).
-* **Trải nghiệm giao diện đồng nhất:** Người dùng cần theo dõi tiến trình trực quan theo thời gian thực thay vì chờ đợi màn hình trắng (blank screen).
+Trong FocusFlow, trí tuệ nhân tạo (LLM) tham gia vào các luồng nghiệp vụ trọng yếu: phân rã mục tiêu thành cột mốc (`UC-06`), lập lịch chi tiết (`UC-07`), thẩm định sư phạm (`Tier 3 Judge`), chia nhỏ task bị đình trệ (`UC-17`) và sinh báo cáo phản tư định kỳ (`UC-15`). Hệ thống phải giải quyết đồng thời 3 bài toán kiến trúc lớn:
+1. **Độc lập Nhà cung cấp AI & Khả năng Bảo vệ Offline (`ASR-06`):** Nếu mã nguồn gọi cứng SDK của một nhà cung cấp duy nhất (ví dụ chỉ gắn chặt vào Google Gemini), hệ thống sẽ bị tê liệt khi nhà cung cấp đó đổi chính sách quota, gặp sự cố mạng hoặc khi nhóm cần chạy đánh giá đối chứng nhiều mô hình (Gemini, OpenAI, Claude, Local Ollama) và demo offline tại phòng bảo vệ khóa luận.
+2. **Phản hồi Thời gian thực kết hợp Cổng Duyệt Con người 2 Cấp độ (`ASR-03`, `BUSR-02`):** Quá trình suy luận của LLM kéo dài 8–20 giây. Người học cần thấy token đầu tiên xuất hiện trong $\le 2.5\text{s}$ (TTFT P95) và phải được quyền kiểm duyệt/chỉnh sửa ở cả cấp độ vĩ mô (Milestones) lẫn vi mô (Schedule Proposal `DRAFT`) trước khi áp dụng.
+3. **Toàn vẹn Hạn ngạch AI & Chống Trừ Kép khi Mất kết nối (`ASR-02`, `BUSR-10`):** Khi nhiều request đồng thời được gửi lên hoặc khi luồng SSE bị ngắt giữa chừng, hệ thống phải đảm bảo **0% race condition** vượt trần hạn ngạch và tự động hoàn trả lượt gọi nếu LLM gặp lỗi.
 
 ---
 
-## 2. Các phương án xem xét (Alternatives)
+## 2. Các phương án xem xét (Alternatives Considered)
 
-### Phương án A: Gộp Toàn bộ 1 Mạch trong 1 SSE Stream Duy nhất
-* Client gửi 1 request, AI tự động chạy liên tục từ Mục tiêu -> Milestones -> Tasks trong 1 kết nối SSE duy nhất.
-* *Ưu điểm:* 1 kết nối duy nhất, hoàn thành nhanh về mặt kỹ thuật.
-* *Nhược điểm:* **Vi phạm nghiêm trọng nguyên tắc Human-in-the-Loop (`BUSR-02`) và `FR-PLAN-001` trong SRS v1.1**. Người học bị tước mất quyền kiểm soát cấu trúc vĩ mô (Milestones); nếu AI hiểu sai mục tiêu, toàn bộ 40 tasks sinh ra đều vô nghĩa, gây quá tải nhận thức (Cognitive Overload) khi phải sửa một danh sách task khổng lồ.
+### Phương án A: Gọi trực tiếp SDK của 1 nhà cung cấp + HTTP POST đồng bộ + Đếm Quota trên Redis
+* *Ưu điểm:* Dễ cài đặt ban đầu.
+* *Nhược điểm:* Bị khóa chặt vào một nhà cung cấp (Vendor Lock-in); gọi HTTP đồng bộ mất 15–30s gây đơ giao diện và dễ bị Gateway Timeout; quản lý quota rời rạc trên Redis dễ bị lệch trạng thái với CSDL PostgreSQL khi xảy ra sự cố.
 
-### Phương án B: Tách 2 Bước bằng HTTP REST API Đồng bộ (Standard JSON POST)
-* Bước 1 gọi POST nhận Milestones; Bước 2 gọi POST nhận Tasks.
-* *Ưu điểm:* Dễ cài đặt.
-* *Nhược điểm:* Bước sinh Tasks chi tiết mất từ 15–30s rất dễ bị gateway timeout (ở giây thứ 55 `NFR-PERF-001`); không hiển thị được thanh phần trăm tiến trình thời gian thực.
+### Phương án B: Gộp toàn bộ phân rã vào 1 luồng WebSocket duy nhất
+* *Ưu điểm:* Kênh truyền 2 chiều.
+* *Nhược điểm:* Vi phạm nguyên tắc **Human-in-the-Loop 2 cấp độ (`BUSR-02`)** khi sinh một mạch từ Goal ra hàng chục Tasks mà không dừng lại cho người học duyệt Milestones; WebSocket phức tạp hóa việc cân bằng tải và tự động kết nối lại so với SSE chuẩn HTTP.
 
-### Phương án C: Quy trình SSE Hai Chặng Đồng nhất (Uniform 2-Stage SSE) kết hợp Cổng Duyệt 2 Cấp độ (Được chọn)
-* Áp dụng thống nhất mô hình **2 bước chuẩn RESTful (POST khởi tạo job -> GET SSE stream tiến trình)** cho cả 2 cấp độ phân rã:
-  * **Giai đoạn 1 — Phân rã & Duyệt Milestones (FR-PLAN-001):**
-    1. Client gửi `POST /api/v1/roadmaps/milestones/generate` kèm `Idempotency-Key`. Hệ thống tạm giữ (Reserve) 1 AI Credit (`FR-QUOTA-001`) và trả về `job_id`.
-    2. Client mở `GET /api/v1/roadmaps/milestones/jobs/{job_id}/stream` qua `EventSource` để nhận phản hồi stream tiến trình; LLM sinh và thẩm định cấu trúc qua `MilestoneListSchema` (Pydantic v2).
-    3. Giao diện dừng lại hiển thị danh sách Milestones; Learner chỉnh sửa và bấm **"Duyệt Milestones"**.
-  * **Giai đoạn 2 — Phân rã Tasks Chi tiết & Xếp Lịch (FR-PLAN-002):**
-    1. Learner bấm "Tạo Đề xuất Lịch trình" -> Client gửi `POST /api/v1/roadmaps/proposals` truyền ID của Milestones đã duyệt.
-    2. Client mở `GET /api/v1/roadmaps/proposals/{proposal_id}/stream` qua `EventSource`; Backend phân bổ thời gian rảnh, gọi LLM sinh tasks, thẩm định bằng `ProposalPlanSchema`.
-    3. Hoàn tất thành công: Hệ thống chính thức trừ (Commit) 1 AI Credit vào CSDL, lưu bản nháp Proposal `DRAFT`, và gửi sự kiện `completed` kết thúc stream.
-    4. Learner xem bảng lịch, tinh chỉnh và bấm "Apply" (`FR-PLAN-003`).
+### Phương án C: Kiến trúc LLM Đa nhà cung cấp (`LLMProviderPort`) + Giao thức SSE 2 Chặng Đồng nhất + Giữ chỗ Quota ACID 2 Pha trên PostgreSQL (Được chọn)
+* Thiết kế cổng xuất Hexagonal **`LLMProviderPort`** theo mẫu Strategy/Factory kết hợp **`LiteLLM` / OpenAI-Compatible Async SDK** và **`MockLLMAdapter`**, cấu hình hoàn toàn qua biến môi trường `.env`.
+* Áp dụng giao thức **Uniform 2-Stage SSE Protocol** (`POST` khởi tạo & giữ chỗ Quota trả về `202 Accepted` / `job_id` $\to$ `GET` `EventSource` SSE stream gắn với Angular 21 Signals qua `toSignal()`).
+* Chuẩn hóa cơ chế **2-Phase ACID Quota Reservation** ngay trong PostgreSQL 16 trên 3 bảng `ai_quotas`, `ai_quota_reservations` và `ai_usage_logs` với khóa hàng `SELECT ... FOR UPDATE`.
 
 ---
 
 ## 3. Quyết định (Decision)
-**Chấp thuận Phương án C: Áp dụng Quy trình SSE Hai Chặng Đồng nhất (POST tạo job & Reserve Quota -> GET SSE stream) gắn liền với Cổng Phê duyệt Con người 2 cấp độ chuẩn mực theo SRS v1.1.**
+**Chấp thuận Phương án C với 3 trụ cột kiến trúc chi tiết sau:**
+
+### 3.1. Kiến trúc LLM Đa Nhà Cung Cấp (`LLMProviderPort` — Provider-Agnostic Architecture)
+* Tại `shared_kernel/application/`, định nghĩa giao diện trừu tượng **`LLMProviderPort`** cung cấp 2 phương thức cốt lõi:
+  1. `stream_structured_output(prompt, response_schema, ...) -> AsyncIterator[StreamChunk]`: Phục vụ luồng SSE 2 chặng có kiểm định Pydantic v2.
+  2. `generate_structured_output(prompt, response_schema, ...) -> T`: Phục vụ các tác vụ chạy nền trên Taskiq Worker (như AI Review, Pedagogical Judge).
+* Tại `shared_kernel/infrastructure/external_ai/`, triển khai **Strategy / Factory Pattern**:
+  * **`LiteLLMAdapter` / `OpenAICompatibleAdapter`:** Cho phép kết nối thống nhất tới **Google Gemini, OpenAI (GPT-4o/mini), Anthropic Claude, Groq, hoặc Local Ollama / vLLM** mà không cần sửa bất kỳ dòng code nào ở tầng Application hay Domain.
+  * **`MockLLMAdapter`:** Trả về luồng dữ liệu kịch bản chuẩn xác ngay lập tức phục vụ kiểm thử tự động (`pytest`), chạy CI/CD và chế độ **Bảo vệ Khóa luận Offline (Offline Defense Mode)**.
+* Chuyển đổi nhà cung cấp hoàn toàn thông qua 4 biến môi trường trong `.env`:
+  * `LLM_PROVIDER` (`gemini` | `openai` | `anthropic` | `ollama` | `mock`)
+  * `LLM_MODEL` (ví dụ: `gemini/gemini-2.5-flash`, `gpt-4o-mini`, `ollama/qwen2.5:7b`)
+  * `LLM_API_KEY`
+  * `LLM_BASE_URL` (tùy chọn cho Ollama hoặc OpenAI-compatible proxy)
+
+### 3.2. Giao thức SSE Hai Chặng Đồng nhất (Uniform 2-Stage SSE Protocol) & Cổng Duyệt 2 Cấp độ
+Mỗi cấp độ trong quy trình lập kế hoạch Human-in-the-Loop (`UC-06` Sinh & Duyệt Milestones $\to$ `UC-07` Sinh & Duyệt Schedule Proposal) đều tuân theo mẫu **2 Chặng Đồng nhất**:
+1. **Chặng 1 — Khởi tạo Lệnh & Giữ chỗ Hạn ngạch (`POST` Command):**
+   * Client gửi request `POST` (kèm `Idempotency-Key`).
+   * Backend thực hiện kiểm tra và tạm giữ 1 lượt gọi AI trong giao dịch ACID (xem Mục 3.3), khởi tạo phiên xử lý và trả về ngay mã **`202 Accepted`** kèm `{ "job_id": "..." }` trong $< 150\text{ms}$.
+2. **Chặng 2 — Nhận Luồng Tiến trình Thời gian thực (`GET` SSE Stream):**
+   * Frontend Angular 21+ mở kết nối `EventSource` tới endpoint `GET .../jobs/{job_id}/stream` (`withCredentials: true`).
+   * Luồng sự kiện SSE (`stage`, `chunk`, `validation_retry`, `completed`, `failed`) được bọc trong RxJS `Observable` và chuyển đổi sang **Angular 21 Signal** qua **`toSignal()`**, giúp giao diện cập nhật mượt mà với $\text{TTFT} \le 2.5\text{s}$ (`ASR-03`).
+   * Sau khi kết thúc Cấp độ 1 (Milestones), hệ thống dừng lại để người học xem xét, chỉnh sửa và bấm **"Approve Milestones"** trước khi kích hoạt Cấp độ 2 (Tasks & Schedule Proposal `DRAFT`).
+
+### 3.3. Cơ chế Giữ chỗ Hạn ngạch ACID 2 Pha trên PostgreSQL (2-Phase ACID Quota Reservation)
+Thay vì đếm quota tạm bợ trên Redis dễ mất đồng bộ, FocusFlow chuẩn hóa quản trị hạn ngạch bằng giao dịch ACID trên PostgreSQL 16 với 3 bảng thuộc Bounded Context `account`:
+1. **Pha 1 — `RESERVE` (Trước khi gọi LLM):**
+   * Thực thi `SELECT ... FROM ai_quotas WHERE user_id = :uid FOR UPDATE` để khóa hàng hạn ngạch của người học, chặn đứng 100% race condition khi người dùng bấm đúp hoặc mở nhiều tab.
+   * Kiểm tra điều kiện: `used_calls + reserved_calls < max_calls`. Nếu hợp lệ, tăng `reserved_calls = reserved_calls + 1` và tạo bản ghi mới trong bảng **`ai_quota_reservations`** với `status = 'RESERVED'` và TTL **`120 seconds (2 minutes)`** (`expires_at = NOW() + INTERVAL '120 seconds'`).
+2. **Pha 2a — `COMMIT` (Khi LLM sinh kết quả và vượt qua cổng kiểm duyệt thành công):**
+   * Trong cùng giao dịch lưu kết quả: giảm `reserved_calls = reserved_calls - 1`, tăng `used_calls = used_calls + 1`, cộng dồn `tokens_consumed`, cập nhật bản ghi `ai_quota_reservations.status = 'COMMITTED'`, và ghi nhật ký chi tiết vào bảng **`ai_usage_logs`** (model, prompt/completion tokens, latency, status).
+3. **Pha 2b — `RELEASE` / `EXPIRE` (Khi LLM lỗi, vi phạm cổng kiểm duyệt sau khi hết số lần retry, hoặc quá hạn TTL 120 giây / 2 phút):**
+   * Giảm `reserved_calls = reserved_calls - 1` (không tăng `used_calls`), chuyển trạng thái `ai_quota_reservations` sang `'RELEASED'` (hoặc `'EXPIRED'` thông qua `QuotaSweeperTask` của Taskiq chạy mỗi 60s), đồng thời ghi nhận lỗi vào `ai_usage_logs`. Người học không bao giờ bị mất oan lượt gọi AI.
 
 ---
 
 ## 4. Lý do & Đánh đổi (Rationale & Trade-Offs)
-* **Khớp 100% với Mô hình Tâm lý Tự điều chỉnh Học tập (Zimmerman SRL & SRS v1.1):** Tách bạch rõ giữa giai đoạn hoạch định chiến lược vĩ mô (Milestones) và kế hoạch hành động vi mô (Tasks), giảm tải nhận thức cho sinh viên.
-* **Chính sách Hạn ngạch Nhân văn & Bảo mật (Rubric TC2.3 Mức 5):** Gói trọn toàn bộ quy trình tạo lộ trình hoàn chỉnh (Cả Milestones lẫn Tasks) chỉ tính là **1 lượt gọi AI (1 AI Credit)**. Cơ chế Quota 2 Pha (Reserve tại Giai đoạn 1 -> Commit khi kết thúc Giai đoạn 2; tự động Refund nếu người dùng hủy hoặc gặp lỗi timeout 55s) bảo vệ quyền lợi tối đa cho người học.
-* **Tính Bất biến Tuyệt đối (Idempotency):** Kênh truyền GET SSE native cho phép trình duyệt tự động kết nối lại (`Last-Event-ID`) khi mạng chập chờn mà không bao giờ kích hoạt gọi lại LLM hoặc trừ trùng quota.
+* **Độc lập Nhà cung cấp Tuyệt đối (`ASR-06`):** Nhờ `LLMProviderPort`, dự án có thể chạy thực nghiệm so sánh nhiều mô hình cho khóa luận (Gemini vs GPT-4o-mini vs Ollama) và chuyển sang `MockLLMAdapter` chỉ bằng 1 dòng cấu hình `.env`.
+* **Độ tin cậy Tài chính & Hạn ngạch (`ASR-02`):** Kết hợp `SELECT ... FOR UPDATE` trên `ai_quotas` và sổ cái `ai_quota_reservations` đảm bảo tính toàn vẹn toán học tuyệt đối (`used_calls + reserved_calls <= max_calls`).
+* **Trải nghiệm Người dùng Tối ưu (`ASR-03`, `BUSR-02`):** Tách `POST` (Command) và `GET` (SSE Stream) giúp trình duyệt tự động kết nối lại (`EventSource`) nếu mạng chập chờn mà không bao giờ kích hoạt trừ quota lần hai.
 
 ---
 
-## 5. Hệ quả (Consequences)
-* **Tích cực:** Đáp ứng xuất sắc toàn bộ ca sử dụng `UC-PLAN-01`, `UC-PLAN-02`, `UC-PLAN-03`; bảo vệ nghiêm ngặt các quy tắc `BUSR-02`, `BUSR-10`, `NFR-AI-001` và `NFR-PERF-001`.
-* **Kỹ thuật:** Frontend (Next.js) triển khai 2 màn hình/modal tương tác kế tiếp nhau, mỗi màn hình sử dụng một hook `useSSE` tái sử dụng được; Backend tổ chức 2 Router endpoints tương ứng trong `roadmap_router.py`.
+## 5. Hệ quả & Kiểm chứng (Consequences & Verification)
+* **Tích cực:** Đáp ứng trọn vẹn `ASR-02`, `ASR-03`, `ASR-06` và các quy tắc `BUSR-02`, `BUSR-10`; cung cấp đầy đủ dữ liệu telemetry trong `ai_usage_logs` cho cổng Admin Monitoring (`UC-19`).
+* **Kiểm chứng Tự động:** Kiểm thử đồng thời (Concurrency Test) gửi 10 requests song song khi người dùng chỉ còn 1 lượt quota phải chứng minh đúng 1 request thành công và 9 requests nhận mã `429 Too Many Requests / Quota Exhausted`.
