@@ -299,21 +299,37 @@ Sử dụng **`import-linter`** trong `backend/pyproject.toml` làm cổng chặ
 
 ## 6. Động lực học & Luồng Thực thi (Runtime View)
 
-### 6.1 Luồng Phân rã Mục tiêu AI qua Uniform 2-Stage SSE, ACID Quota 2 Pha & 3-Tier Validation Gate (`UC-06..UC-09`)
-- **Tác nhân:** Learner $\to$ `Angular 21+ SPA` $\to$ `RoadmapRouter` (`planning`) $\to$ `QuotaFacadePort` (`account`) $\to$ `GenerateProposalUseCase` $\to$ `LLMProviderPort` (`LiteLLM`) $\to$ `3-Tier Validation Gate` $\to$ PostgreSQL 16.
-- **Cơ chế vận hành:**
-  1. **Giai đoạn 1 — Khởi tạo & Giữ chỗ ACID (`POST /api/v1/roadmaps/{id}/proposals/init`):**
-     - `QuotaFacadePort` khóa dòng `SELECT ... FOR UPDATE` trên bảng `ai_quotas`, tăng `reserved_tokens`/`reserved_calls` và tạo bản ghi trạng thái **`'RESERVED'`** trong bảng **`ai_quota_reservations`** (với TTL **`120 seconds (2 minutes)`**, `expires_at = NOW() + INTERVAL '120 seconds'`). Trả về `reservation_id` và `stream_url`.
-  2. **Giai đoạn 2 — Stream SSE & Kiểm duyệt 3 Tầng (`GET /api/v1/roadmaps/{id}/proposals/stream?reservation_id=...`):**
-     - `AiSseStreamingService` trên Angular 21+ mở kết nối `EventSource`.
-     - Backend gọi `LLMProviderPort` (sau khi qua `PromptSanitizer`) để stream quá trình sinh Milestones/Tasks.
-     - Kết quả sinh ra đi qua **3-Tier Hybrid Validation Gate**:
-       - *Tier 1 (Syntactic):* Pydantic v2 Structured Output validation.
-       - *Tier 2 (Deterministic Domain Rules):* `DagCycleValidator` kiểm tra không có chu trình phụ thuộc; `HybridAvailabilityRuleEngine` kiểm tra trần giờ Mode A (Hard Ceiling) hoặc khớp khung giờ Mode B (Soft Overflow $\le 30\text{m}$). Nếu vi phạm **Tier 1 hoặc Tier 2 (Hard Blocking Gates)**, hệ thống tự động đính kèm lỗi vào prompt phản hồi (tối đa 2 vòng self-correction).
-       - *Tier 3 (Pedagogical LLM Judge — Soft Advisory Gate):* `PedagogicalJudgeAdapter` đánh giá độ dốc nhận thức với timeout $\le 5\text{s}$ và cơ chế **Fail-Open**; chỉ đính kèm cảnh báo `pedagogical_warnings` vào bản nháp mà không chặn luồng hay kích hoạt vòng lặp gọi lại LLM.
-  3. **Giai đoạn 3 — Chốt hoặc Hoàn trả Quota:**
-     - Thành công: Chuyển `ai_quota_reservations.status = 'COMMITTED'`, cộng lượt vào `ai_quotas`, ghi nhận chi tiết token/độ trễ vào **`ai_usage_logs`** và lưu `schedule_proposals` (`DRAFT`).
-     - Lỗi hoặc Timeout 55s: Chuyển `ai_quota_reservations.status = 'RELEASED'`, hoàn trả `reserved_calls` ngay lập tức cho người học.
+### 6.1 Quy trình Lập kế hoạch Lộ trình Tự học Thích ứng 4 Bước (4-Step Adaptive Roadmap Planning Architecture — UC-07, UC-08, UC-12)
+- **Tác nhân:** Learner $\to$ `Angular 21+ SPA` $\to$ `RoadmapRouter` (`planning`) $\to$ `QuotaFacadePort` (`account`) $\to$ `GenerateProposalUseCase` $\to$ `LLMProviderPort` (`LiteLLM` / `Gemini 3.8 Flash`) $\leftrightarrow$ `KnowledgeToolDispatcher` $\to$ `3-Tier Validation Gate` $\to$ PostgreSQL 16.
+- **Mô hình Tự điều hòa Học tập (SRL Zimmerman — Forethought Phase):**
+  Quy trình được chuẩn hóa thành **4 bước độc lập, minh bạch và có cổng kiểm soát (Gate)** nhằm đảm bảo an toàn AI (Human-in-the-Loop) và tối ưu hóa trải nghiệm tự học:
+
+  1. **Bước 1 — Mục tiêu & Khảo sát Chẩn đoán Thích ứng (`FR-GOAL-002`):**
+     - Người học nhập tiêu đề mục tiêu, mô tả, ngày bắt đầu, ngày đích và lựa chọn trình độ đầu vào (`prior_knowledge_level`: `BEGINNER` | `INTERMEDIATE` | `ADVANCED`).
+     - AI phân tích bối cảnh và sinh 2–3 câu hỏi chẩn đoán kết hợp:
+       * **Trắc nghiệm chọn nhanh (`question_type: "single_choice"`):** Bắt buộc có mảng `options` chứa 3–4 phương án lựa chọn thực tế để người học bấm chọn ngay bằng 1 click.
+       * **Tự luận ngắn (`question_type: "text"`):** Cho phép người học tự do nhập mong muốn cụ thể hoặc sản phẩm đầu ra cá nhân.
+     - Hỗ trợ tính năng **Bỏ qua (`Skip`)**: Người học có thể bỏ qua khảo sát để chuyển thẳng sang Bước 2 với ngữ cảnh giả định mặc định.
+
+  2. **Bước 2 — Cột mốc Lộ trình Cấp 1 & Cổng Phê duyệt (`UC-07` / `FR-PLAN-001`):**
+     - AI sinh tự động **3 đến 7 Cột mốc kiến thức (`Milestones`)** tăng tiến theo nguyên tắc sư phạm qua luồng Uniform 2-Stage SSE.
+     - Người học có thể xem, thêm, sửa tiêu đề, mô tả, thay đổi thứ tự hoặc xóa cột mốc.
+     - **Cổng Phê duyệt Bắt buộc (Approval Gate):** Người học bấm *"Phê duyệt Cột mốc"* chuyển trạng thái thành `MilestoneStatus.APPROVED`. Chỉ khi được duyệt, hệ thống mới mở khóa điều hướng sang Bước 3 (`go-to-step-3-btn`).
+
+  3. **Bước 3 — Phân rã Nhiệm vụ theo Cột mốc & Công cụ Nguồn học tập (`FR-PLAN-002`):**
+     - Tách biệt hoàn toàn phần xem/sửa cấu trúc nhiệm vụ và tài liệu học tập khỏi khâu xếp lịch vào slot giờ.
+     - Kích hoạt **Knowledge Base Tool** `get_learning_resources_and_guidance` ở giai đoạn `TASK_DECOMPOSITION`, tự động tra cứu và đính kèm danh sách tài liệu học tập chuẩn hóa (DOCS, TUTORIAL, VIDEO, BOOK, PRACTICE kèm URL thật từ Knowledge Base).
+     - Mỗi nhiệm vụ nguyên tử (30–120 phút) hiển thị đầy đủ: `task_type` (`THEORY`, `PRACTICE`, `REVIEW`, `PROJECT`), `learning_objective` (mục tiêu đầu ra), `completion_criteria` (tiêu chuẩn nghiệm thu) và danh sách liên kết tài liệu tham khảo ngoài.
+     - Người học rà soát, chỉnh sửa và bấm *"Chốt danh sách nhiệm vụ & Sang Bước 4: Xếp Thời khóa biểu"* (`confirm-tasks-to-step-4-btn`).
+
+  4. **Bước 4 — Thời khóa biểu SpatioTemporal & Kích hoạt Lịch Chính thức (`UC-08` / `UC-12`):**
+     - **SpatioTemporal Allocation Engine:** Phân bổ các nhiệm vụ vào quỹ giờ Mode A (Daily Quota) hoặc các khung giờ cố định Mode B (Fixed Slots) khả dụng.
+     - **Cổng Kiểm duyệt 3 Tầng (3-Tier Hybrid Validation Gate — ADR-009):**
+       * *Tier 1 (Syntactic & Bounds):* Kiểm tra độ dài nhiệm vụ [30, 120] phút, số lượng cột mốc, schema JSON.
+       * *Tier 2 (Deterministic SpatioTemporal & DAG Rules):* `DagCycleValidator` kiểm tra không chu trình; `HybridAvailabilityRuleEngine` kiểm tra không vượt trần ngày và phát hiện Tràn mềm (`Soft Overflow` $\le 30$ phút cho bài cuối ngày).
+       * *Tier 3 (Pedagogical LLM Judge):* Đánh giá độ dốc nhận thức, cân bằng Cognitive Load, chấm điểm sư phạm (ngưỡng đạt $\ge 70/100$, Fail-Open $\le 5$s).
+     - **Cơ chế Soft Overflow Confirmation:** Khóa nút Apply nếu có tràn mềm cho đến khi người học tích xác nhận (`confirm-soft-overflow-checkbox`).
+     - **Kích hoạt Lịch Chính thức (`OfficialSchedule`):** Người học bấm *"Gắn Lịch vào Hệ thống (Apply)"* (`apply-proposal-btn`). Hệ thống thực hiện Merge/Future Shift bảo toàn 100% nhiệm vụ quá khứ theo `OS-03`, chuyển `OfficialSchedule` sang `ACTIVE`, chuyển `Roadmap` sang `ACTIVE`, và hiển thị nút dẫn trực tiếp vào Không gian Học tập `/workspace`.
 
 ### 6.2 Luồng Sự kiện Liên Module qua Transactional Outbox & Taskiq Redis Streams
 - **Tác nhân:** `StudySessionUseCase` (`execution`) $\to$ `SqlAlchemyUoW` (`outbox_events`) $\to$ `OutboxRelayTask` (Taskiq) $\to$ `RedisStreamBroker` $\to$ `Taskiq Worker` $\to$ `account` & `evaluation`.
