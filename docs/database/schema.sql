@@ -258,6 +258,8 @@ CREATE TABLE goals (
     raw_description TEXT NOT NULL,
     target_date DATE,
     status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    prior_knowledge_level VARCHAR(50) NOT NULL DEFAULT 'BEGINNER',
+    clarification_context TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT fk_goals_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -339,6 +341,40 @@ CREATE TABLE schedule_proposals (
     CONSTRAINT fk_schedule_proposals_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     CONSTRAINT chk_schedule_proposals_status CHECK (status IN ('DRAFT', 'APPLIED', 'DISCARDED')),
     CONSTRAINT chk_schedule_proposals_data CHECK (jsonb_typeof(proposal_data) = 'object')
+);
+
+-- -----------------------------------------------------------------------------
+-- 14b. BẢNG LEARNING_CONCEPTS & CONCEPT_PREREQUISITES (Cơ sở Tri thức Học thuật Đã Xác thực)
+-- Phục vụ tra cứu chỉ đọc (Read-only Tool Calling) cho AI Milestone Planner & Task Decomposer
+-- -----------------------------------------------------------------------------
+CREATE TABLE learning_concepts (
+    concept_id VARCHAR(120) PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    summary TEXT NOT NULL,
+    domain VARCHAR(100) NOT NULL,
+    difficulty_level VARCHAR(50) NOT NULL DEFAULT 'BEGINNER',
+    estimated_effort_minutes INTEGER NOT NULL DEFAULT 60,
+    keywords JSONB NOT NULL DEFAULT '[]'::jsonb,
+    learning_outcomes JSONB NOT NULL DEFAULT '[]'::jsonb,
+    verification_status VARCHAR(30) NOT NULL DEFAULT 'VERIFIED',
+    version VARCHAR(20) NOT NULL DEFAULT '1.0.0',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT chk_learning_concepts_verification_status CHECK (verification_status IN ('VERIFIED', 'UNVERIFIED', 'DEPRECATED')),
+    CONSTRAINT chk_learning_concepts_effort_positive CHECK (estimated_effort_minutes > 0)
+);
+
+CREATE TABLE concept_prerequisites (
+    source_concept_id VARCHAR(120) NOT NULL,
+    prerequisite_concept_id VARCHAR(120) NOT NULL,
+    relation_type VARCHAR(30) NOT NULL DEFAULT 'REQUIRES',
+    rationale TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (source_concept_id, prerequisite_concept_id),
+    CONSTRAINT fk_concept_prerequisites_source FOREIGN KEY (source_concept_id) REFERENCES learning_concepts(concept_id) ON DELETE CASCADE,
+    CONSTRAINT fk_concept_prerequisites_prereq FOREIGN KEY (prerequisite_concept_id) REFERENCES learning_concepts(concept_id) ON DELETE CASCADE,
+    CONSTRAINT chk_concept_prerequisites_relation_type CHECK (relation_type IN ('REQUIRES', 'RECOMMENDED_BEFORE')),
+    CONSTRAINT chk_concept_prerequisites_no_self_loop CHECK (source_concept_id <> prerequisite_concept_id)
 );
 
 -- =============================================================================
@@ -723,3 +759,8 @@ CREATE INDEX idx_sched_change_logs_trigger ON schedule_change_logs(trigger_type,
 -- 2.22 Quét nhanh sự kiện Outbox đang chờ phát (Taskiq OutboxRelayTask)
 CREATE INDEX idx_outbox_events_pending ON outbox_events(created_at ASC) WHERE status = 'PENDING';
 CREATE INDEX idx_outbox_events_aggregate ON outbox_events(aggregate_type, aggregate_id);
+
+-- 2.23 Chỉ mục Cơ sở Tri thức Học thuật (Knowledge Base)
+CREATE INDEX idx_learning_concepts_domain_level ON learning_concepts(domain, difficulty_level, verification_status);
+CREATE INDEX idx_concept_prerequisites_source ON concept_prerequisites(source_concept_id);
+CREATE INDEX idx_concept_prerequisites_prereq ON concept_prerequisites(prerequisite_concept_id);
