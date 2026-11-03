@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { AnalyticsService } from '../services/analytics.service';
 import { CardComponent, CardHeaderDirective, CardTitleDirective, CardDescriptionDirective } from '../../../shared/ui/card/card.component';
 import { BadgeDirective } from '../../../shared/ui/badge/badge.directive';
@@ -6,6 +6,7 @@ import { BadgeDirective } from '../../../shared/ui/badge/badge.directive';
 @Component({
   selector: 'app-analytics-page',
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     CardComponent,
     CardHeaderDirective,

@@ -1,6 +1,6 @@
 <header class="app-header-bar">
-  <div class="header-container" [class.with-brand]="showBrand">
-    @if (showBrand) {
+  <div class="header-container" [class.with-brand]="showBrand()">
+    @if (showBrand()) {
       <div class="brand-cluster">
         <a routerLink="/" class="brand-link">
           <img

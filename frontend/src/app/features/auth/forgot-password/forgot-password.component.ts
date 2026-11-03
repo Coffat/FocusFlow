@@ -1,5 +1,5 @@
-import { Component, OnInit, DestroyRef, inject, ChangeDetectorRef } from '@angular/core';
-import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
+import { Component, OnInit, DestroyRef, inject, ChangeDetectionStrategy, signal } from '@angular/core';
+import { FormBuilder, Validators, ReactiveFormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ButtonModule } from 'primeng/button';
@@ -24,84 +24,66 @@ import { strictEmailValidator } from '../../../shared/validators/email.validator
 
 @Component({
   selector: 'app-forgot-password',
+  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [ReactiveFormsModule, RouterLink, ButtonModule, TranslatePipe],
   templateUrl: './forgot-password.component.html',
   styleUrl: './forgot-password.component.scss'
 })
 export class ForgotPasswordComponent implements OnInit {
-  authService: AuthService;
-  translationService: TranslationService;
-  formBuilder: FormBuilder;
-  router: Router;
-  destroyRef: DestroyRef;
-  cdr: ChangeDetectorRef;
+  readonly authService = inject(AuthService);
+  readonly translationService = inject(TranslationService);
+  readonly formBuilder = inject(FormBuilder);
+  readonly router = inject(Router);
+  readonly destroyRef = inject(DestroyRef);
 
-  forgotForm: FormGroup;
-  otpForm: FormGroup;
-  passwordForm: FormGroup;
+  readonly forgotForm = this.formBuilder.group({
+    email: ['', [Validators.required, strictEmailValidator]]
+  });
 
-  step: 'email' | 'otp' | 'new_password' = 'email';
+  readonly otpForm = this.formBuilder.group({
+    otpCode: ['', [Validators.required, Validators.pattern('^[0-9]{6}$')]]
+  });
+
+  readonly passwordForm = this.formBuilder.group({
+    newPassword: ['', [Validators.required, passwordComplexityValidator]],
+    confirmPassword: ['', [Validators.required]]
+  });
+
+  readonly step = signal<'email' | 'otp' | 'new_password'>('email');
   resetToken = '';
 
-  isLoading = false;
-  errorMessage = '';
-  isSuccess = false;
-  successMessage = '';
-  cooldownSeconds = 0;
-  isPasswordVisible = false;
-  isConfirmPasswordVisible = false;
+  readonly isLoading = signal<boolean>(false);
+  readonly errorMessage = signal<string>('');
+  readonly isSuccess = signal<boolean>(false);
+  readonly successMessage = signal<string>('');
+  readonly cooldownSeconds = signal<number>(0);
+  readonly isPasswordVisible = signal<boolean>(false);
+  readonly isConfirmPasswordVisible = signal<boolean>(false);
   private timerIntervalId: number = 0;
 
-  constructor(
-    authService: AuthService,
-    translationService: TranslationService,
-    formBuilder: FormBuilder,
-    router: Router
-  ) {
-    this.authService = authService;
-    this.translationService = translationService;
-    this.formBuilder = formBuilder;
-    this.router = router;
-    this.destroyRef = inject(DestroyRef);
-    this.cdr = inject(ChangeDetectorRef);
-
-    this.forgotForm = this.formBuilder.group({
-      email: ['', [Validators.required, strictEmailValidator]]
-    });
-
-    this.otpForm = this.formBuilder.group({
-      otpCode: ['', [Validators.required, Validators.pattern('^[0-9]{6}$')]]
-    });
-
-    this.passwordForm = this.formBuilder.group({
-      newPassword: ['', [Validators.required, passwordComplexityValidator]],
-      confirmPassword: ['', [Validators.required]]
-    });
+  ngOnInit() {
+    this.errorMessage.set('');
+    this.successMessage.set('');
+    this.isSuccess.set(false);
 
     this.destroyRef.onDestroy(() => {
       this.clearCooldownTimer();
     });
   }
 
-  ngOnInit() {
-    this.errorMessage = '';
-    this.successMessage = '';
-    this.isSuccess = false;
-  }
-
   get isPasswordMismatch(): boolean {
     return checkPasswordMismatch(
-      this.passwordForm.get('newPassword')?.value,
-      this.passwordForm.get('confirmPassword')?.value
+      this.passwordForm.get('newPassword')?.value || '',
+      this.passwordForm.get('confirmPassword')?.value || ''
     );
   }
 
   togglePasswordVisibility() {
-    this.isPasswordVisible = !this.isPasswordVisible;
+    this.isPasswordVisible.update(v => !v);
   }
 
   toggleConfirmPasswordVisibility() {
-    this.isConfirmPasswordVisible = !this.isConfirmPasswordVisible;
+    this.isConfirmPasswordVisible.update(v => !v);
   }
 
   switchLanguage(lang: LanguageCode) {
@@ -117,18 +99,18 @@ export class ForgotPasswordComponent implements OnInit {
 
   startCooldown(seconds: number = 60) {
     this.clearCooldownTimer();
-    this.cooldownSeconds = seconds;
-    this.cdr.markForCheck();
+    this.cooldownSeconds.set(seconds);
 
     this.timerIntervalId = window.setInterval(() => {
-      this.cooldownSeconds--;
-      if (this.cooldownSeconds <= 0) {
+      const current = this.cooldownSeconds();
+      if (current <= 1) {
+        this.cooldownSeconds.set(0);
         this.clearCooldownTimer();
+      } else {
+        this.cooldownSeconds.set(current - 1);
       }
-      this.cdr.markForCheck();
     }, 1000);
   }
-
 
   // --- Step 1: Request OTP via Email ---
   requestReset() {
@@ -137,9 +119,9 @@ export class ForgotPasswordComponent implements OnInit {
       return;
     }
 
-    this.isLoading = true;
-    this.errorMessage = '';
-    this.successMessage = '';
+    this.isLoading.set(true);
+    this.errorMessage.set('');
+    this.successMessage.set('');
 
     const emailValue = String(this.forgotForm.get('email')?.value || '').trim().toLowerCase();
     const payload: RequestPasswordResetOtpRequest = {
@@ -150,21 +132,18 @@ export class ForgotPasswordComponent implements OnInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (response: MessageResponse) => {
-          this.isLoading = false;
-          this.step = 'otp';
+          this.isLoading.set(false);
+          this.step.set('otp');
           this.otpForm.reset();
-          this.successMessage = response.message;
+          this.successMessage.set(response.message);
           this.startCooldown(60);
-          this.cdr.markForCheck();
         },
         error: (err: HttpErrorResponse) => {
-          this.isLoading = false;
-          this.errorMessage = parseHttpErrorMessage(err, 'Unable to dispatch code. Please try again.');
-          this.cdr.markForCheck();
+          this.isLoading.set(false);
+          this.errorMessage.set(parseHttpErrorMessage(err, 'Unable to dispatch code. Please try again.'));
         },
         complete: () => {
-          this.isLoading = false;
-          this.cdr.markForCheck();
+          this.isLoading.set(false);
         }
       });
   }
@@ -176,9 +155,9 @@ export class ForgotPasswordComponent implements OnInit {
       return;
     }
 
-    this.isLoading = true;
-    this.errorMessage = '';
-    this.successMessage = '';
+    this.isLoading.set(true);
+    this.errorMessage.set('');
+    this.successMessage.set('');
 
     const emailValue = String(this.forgotForm.get('email')?.value || '').trim().toLowerCase();
     const otpValue = String(this.otpForm.get('otpCode')?.value || '').trim();
@@ -192,21 +171,18 @@ export class ForgotPasswordComponent implements OnInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (response: VerifyPasswordResetOtpResponse) => {
-          this.isLoading = false;
+          this.isLoading.set(false);
           this.resetToken = response.reset_token;
-          this.step = 'new_password';
+          this.step.set('new_password');
           this.passwordForm.reset();
-          this.successMessage = response.message;
-          this.cdr.markForCheck();
+          this.successMessage.set(response.message);
         },
         error: (err: HttpErrorResponse) => {
-          this.isLoading = false;
-          this.errorMessage = parseHttpErrorMessage(err, 'Invalid OTP verification code. Please try again.');
-          this.cdr.markForCheck();
+          this.isLoading.set(false);
+          this.errorMessage.set(parseHttpErrorMessage(err, 'Invalid OTP verification code. Please try again.'));
         },
         complete: () => {
-          this.isLoading = false;
-          this.cdr.markForCheck();
+          this.isLoading.set(false);
         }
       });
   }
@@ -222,13 +198,13 @@ export class ForgotPasswordComponent implements OnInit {
     const confirmPass = String(this.passwordForm.get('confirmPassword')?.value || '');
 
     if (newPass !== confirmPass) {
-      this.errorMessage = this.translationService.get('auth.forgotPassword.passwordMismatchError');
+      this.errorMessage.set(this.translationService.get('auth.forgotPassword.passwordMismatchError'));
       return;
     }
 
-    this.isLoading = true;
-    this.errorMessage = '';
-    this.successMessage = '';
+    this.isLoading.set(true);
+    this.errorMessage.set('');
+    this.successMessage.set('');
 
     const emailValue = String(this.forgotForm.get('email')?.value || '').trim().toLowerCase();
 
@@ -242,39 +218,34 @@ export class ForgotPasswordComponent implements OnInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (response: MessageResponse) => {
-          this.isLoading = false;
-          this.isSuccess = true;
-          this.successMessage = response.message;
-          this.cdr.markForCheck();
+          this.isLoading.set(false);
+          this.isSuccess.set(true);
+          this.successMessage.set(response.message);
         },
         error: (err: HttpErrorResponse) => {
-          this.isLoading = false;
-          this.errorMessage = parseHttpErrorMessage(err, 'Password update failed. Please try again.');
-          this.cdr.markForCheck();
+          this.isLoading.set(false);
+          this.errorMessage.set(parseHttpErrorMessage(err, 'Password update failed. Please try again.'));
         },
         complete: () => {
-          this.isLoading = false;
-          this.cdr.markForCheck();
+          this.isLoading.set(false);
         }
       });
   }
 
   resendOtp() {
-    if (this.cooldownSeconds > 0 || this.isLoading) return;
+    if (this.cooldownSeconds() > 0 || this.isLoading()) return;
     this.requestReset();
   }
 
   backToEmail() {
-    this.step = 'email';
-    this.errorMessage = '';
-    this.successMessage = '';
-    this.cdr.markForCheck();
+    this.step.set('email');
+    this.errorMessage.set('');
+    this.successMessage.set('');
   }
 
   backToOtp() {
-    this.step = 'otp';
-    this.errorMessage = '';
-    this.successMessage = '';
-    this.cdr.markForCheck();
+    this.step.set('otp');
+    this.errorMessage.set('');
+    this.successMessage.set('');
   }
 }

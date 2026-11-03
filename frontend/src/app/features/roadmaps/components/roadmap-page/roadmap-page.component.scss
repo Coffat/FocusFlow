@@ -187,7 +187,11 @@
   border-radius: 0.25rem;
   padding: 0.375rem;
   @media (min-width: 768px) {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.375rem;
+  }
+  @media (min-width: 1024px) {
+    grid-template-columns: repeat(4, 1fr);
     gap: 0.375rem;
   }
 }
@@ -252,7 +256,7 @@
   padding: 0.125rem 0.5rem;
   border-radius: 9999px;
   text-transform: uppercase;
-  &.approved, &.active {
+  &.approved, &.active, &.diagnosed {
     background-color: rgba(0, 82, 52, 0.1);
     color: var(--primary);
     border: 1px solid var(--primary);
@@ -896,5 +900,304 @@
     font-size: 0.6875rem;
     color: var(--secondary);
     line-height: 1.4;
+  }
+}
+
+// =============================================================================
+// AI Diagnostic Clarification & Prior Knowledge Level (FR-GOAL-002)
+// =============================================================================
+
+.level-selector-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+  margin-top: 0.375rem;
+  @media (min-width: 640px) {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.level-card-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  padding: 0.875rem 1rem;
+  background-color: var(--surface-container-lowest);
+  border: 1px solid var(--outline-variant);
+  border-radius: 0.25rem;
+  cursor: pointer;
+  transition: all 150ms ease;
+
+  &:hover {
+    border-color: var(--on-surface);
+    background-color: var(--surface-container-low);
+  }
+
+  &.selected {
+    border-color: var(--primary);
+    border-width: 2px;
+    background-color: rgba(0, 82, 52, 0.04);
+    box-shadow: 0 1px 4px rgba(0, 82, 52, 0.1);
+
+    .level-card-title {
+      color: var(--primary);
+      font-weight: 700;
+    }
+    .level-icon {
+      color: var(--primary);
+    }
+  }
+
+  .level-card-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .level-icon {
+    font-size: 1.125rem;
+    color: var(--secondary);
+  }
+
+  .level-card-title {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--on-surface);
+  }
+
+  .level-card-desc {
+    font-size: 0.6875rem;
+    line-height: 1.4;
+    color: var(--secondary);
+    margin: 0;
+  }
+}
+
+.question-item-card {
+  padding: 1rem 1.25rem;
+  background-color: var(--surface-container-low);
+  border: 1px solid var(--outline-variant);
+  border-radius: 0.25rem;
+}
+
+.options-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.option-chip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--on-surface);
+  background-color: var(--surface-container-lowest);
+  border: 1px solid var(--outline-variant);
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 120ms ease;
+
+  &:hover {
+    border-color: var(--primary);
+    background-color: var(--surface-container-high);
+  }
+
+  &.selected {
+    border-color: var(--primary);
+    background-color: rgba(0, 82, 52, 0.1);
+    color: var(--primary);
+    font-weight: 600;
+  }
+}
+
+.answer-custom-input {
+  margin-top: 0.5rem;
+}
+
+.diagnosed-context-box {
+  padding: 1rem 1.25rem;
+  background-color: var(--surface-container-lowest);
+  border-left: 3px solid var(--primary);
+  border-radius: 0.25rem;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--on-surface);
+}
+
+// Milestone Task Groups (Step 3)
+.milestone-task-group {
+  background-color: var(--surface-container-lowest);
+  border: 1px solid var(--outline-variant);
+  border-radius: 0.5rem;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: border-color 150ms ease;
+
+  &:hover {
+    border-color: var(--outline);
+  }
+
+  .group-header-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--outline-variant);
+    margin-bottom: 1rem;
+  }
+
+  .group-info-left {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .group-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--on-surface);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .group-subtitle {
+    font-size: 0.75rem;
+    color: var(--secondary);
+    margin: 0;
+  }
+}
+
+// Learning Resources Box inside Task Cards
+.learning-resources-box {
+  margin-top: 0.75rem;
+  padding: 0.75rem 1rem;
+  background-color: var(--surface-container-low);
+  border: 1px solid var(--outline-variant);
+  border-radius: 0.375rem;
+
+  .resources-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+  }
+
+  .resources-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+  }
+
+  .resources-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .resource-item-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background-color: var(--surface-container-lowest);
+    border: 1px solid var(--outline-variant);
+    border-radius: 0.25rem;
+  }
+
+  .resource-left {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .resource-type-tag {
+    font-size: 0.625rem;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    padding: 0.125rem 0.375rem;
+    border-radius: 0.25rem;
+    text-transform: uppercase;
+    background-color: var(--surface-container-high);
+    color: var(--on-surface);
+  }
+
+  .resource-title-link {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--primary);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    word-break: break-word;
+
+    &:hover {
+      text-decoration: underline;
+    }
+
+    .material-symbols-outlined {
+      font-size: 13px;
+    }
+  }
+
+  .resource-desc {
+    font-size: 0.6875rem;
+    color: var(--secondary);
+    margin: 0.125rem 0 0;
+  }
+}
+
+// SpatioTemporal Schedule Table (Step 4)
+.spatiotemporal-timetable {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin-top: 1rem;
+  border: 1px solid var(--outline-variant);
+  border-radius: 0.375rem;
+  overflow: hidden;
+
+  th {
+    background-color: var(--surface-container-low);
+    color: var(--secondary);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.625rem 0.875rem;
+    text-align: left;
+    border-bottom: 1px solid var(--outline-variant);
+  }
+
+  td {
+    padding: 0.75rem 0.875rem;
+    font-size: 0.75rem;
+    color: var(--on-surface);
+    border-bottom: 1px solid var(--outline-variant);
+    background-color: var(--surface-container-lowest);
+    vertical-align: middle;
+  }
+
+  tr:last-child td {
+    border-bottom: none;
+  }
+
+  tr:hover td {
+    background-color: var(--surface-container-low);
   }
 }

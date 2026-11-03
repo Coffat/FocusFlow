@@ -32,6 +32,8 @@ describe('RoadmapPageComponent (WBS 6.3 3-Step AI Planning & Approval Workspace)
       raw_description: 'Tuần 9 WBS 6.1 - 6.3',
       target_date: '2026-12-30',
       status: 'ACTIVE',
+      prior_knowledge_level: 'BEGINNER',
+      clarification_context: null,
       created_at: '2026-10-30T08:00:00Z',
       updated_at: '2026-10-30T08:00:00Z',
     },
@@ -92,27 +94,46 @@ describe('RoadmapPageComponent (WBS 6.3 3-Step AI Planning & Approval Workspace)
     httpTesting.verify();
   });
 
-  it('hiển thị đầy đủ 3 tab bước lập kế hoạch với thuộc tính A11y chuẩn', () => {
+  it('hiển thị đầy đủ 4 tab bước lập kế hoạch với thuộc tính A11y chuẩn', () => {
+    service.setActiveStep(1);
+    fixture.detectChanges();
+
     const compiled = fixture.nativeElement as HTMLElement;
     const tablist = compiled.querySelector('[role="tablist"]');
     expect(tablist).toBeTruthy();
 
     const step1Tab = compiled.querySelector('[data-testid="step-tab-1"]');
     expect(step1Tab?.getAttribute('aria-selected')).toBe('true');
+    expect(compiled.querySelector('[data-testid="step-tab-2"]')).toBeTruthy();
+    expect(compiled.querySelector('[data-testid="step-tab-3"]')).toBeTruthy();
+    expect(compiled.querySelector('[data-testid="step-tab-4"]')).toBeTruthy();
 
     const step1Panel = compiled.querySelector('[data-testid="step-1-panel"]');
     expect(step1Panel).toBeTruthy();
   });
 
-  it('cho phép tạo mới Goal & Roadmap trực tiếp từ form ở Bước 1', () => {
+  it('cho phép chọn prior_knowledge_level và tạo mới Goal & Roadmap trực tiếp từ form ở Bước 1', () => {
+    service.setActiveStep(1);
+    fixture.detectChanges();
+
     const createSpy = vi.spyOn(service, 'createRoadmap');
     component.toggleCreateForm();
+    fixture.detectChanges();
+
     component.newGoalTitle.set('Chinh phục AI Evaluation Harness');
     component.newGoalDescription.set('Kiểm thử 5 Golden Datasets');
     component.newTargetDate.set('2026-12-15');
-    fixture.detectChanges();
 
     const compiled = fixture.nativeElement as HTMLElement;
+    const intermediateBtn = compiled.querySelector(
+      '[data-testid="knowledge-level-INTERMEDIATE"]'
+    ) as HTMLButtonElement;
+    expect(intermediateBtn).toBeTruthy();
+    intermediateBtn.click();
+    fixture.detectChanges();
+
+    expect(component.newPriorKnowledgeLevel()).toBe('INTERMEDIATE');
+
     const submitBtn = compiled.querySelector(
       '[data-testid="submit-create-roadmap-btn"]'
     ) as HTMLButtonElement;
@@ -123,6 +144,7 @@ describe('RoadmapPageComponent (WBS 6.3 3-Step AI Planning & Approval Workspace)
       description: 'Kiểm thử 5 Golden Datasets',
       goal_title: 'Chinh phục AI Evaluation Harness',
       goal_description: 'Kiểm thử 5 Golden Datasets',
+      prior_knowledge_level: 'INTERMEDIATE',
       start_date: '2026-11-02',
       target_date: '2026-12-15',
     });
@@ -131,11 +153,125 @@ describe('RoadmapPageComponent (WBS 6.3 3-Step AI Planning & Approval Workspace)
     postReq.flush({
       ...mockDetail,
       id: 'rm-new-2',
+      goal_id: 'g-new-2',
       title: 'Chinh phục AI Evaluation Harness',
     });
+
+    const clarifyReq = httpTesting.expectOne(
+      API_ENDPOINTS.ROADMAPS.CLARIFY_QUESTIONS('g-new-2')
+    );
+    clarifyReq.flush({
+      questions: [
+        {
+          question_id: 'q1',
+          text: 'Mức độ nắm vững Pydantic v2 của bạn?',
+          question_type: 'single_choice',
+          options: ['Chưa rõ', 'Cơ bản', 'Chuyên sâu'],
+        },
+      ],
+    });
+    fixture.detectChanges();
+
+    expect(compiled.querySelector('[data-testid="clarification-questionnaire-card"]')).toBeTruthy();
   });
 
-  it('cho phép thêm/sửa cột mốc và bấm Phê duyệt Cột mốc ở Bước 1', () => {
+  it('cho phép trả lời phỏng vấn chẩn đoán và chuyển sang Bước 2', () => {
+    service.setActiveStep(1);
+    service.clarificationQuestions.set([
+      {
+        question_id: 'q-test-1',
+        id: 'q-test-1',
+        text: 'Bạn đã quen thuộc với Hexagonal Architecture chưa?',
+        question: 'Bạn đã quen thuộc với Hexagonal Architecture chưa?',
+        placeholder: 'Chọn một đáp án',
+        question_type: 'single_choice',
+        options: ['Chưa từng', 'Đã biết khái niệm', 'Đã triển khai thực tế'],
+        question_purpose: 'Đánh giá kinh nghiệm kiến trúc',
+        expected_answer_format: 'text',
+        diagnostic_dimension: 'EXPERIENCE',
+      },
+    ]);
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    const optBtn = compiled.querySelector(
+      '[data-testid="question-0-opt-1"]'
+    ) as HTMLButtonElement;
+    expect(optBtn).toBeTruthy();
+    optBtn.click();
+    fixture.detectChanges();
+
+    expect(component.userAnswers()['q-test-1']).toBe('Đã biết khái niệm');
+
+    const submitClarifyBtn = compiled.querySelector(
+      '[data-testid="submit-clarification-btn"]'
+    ) as HTMLButtonElement;
+    expect(submitClarifyBtn).toBeTruthy();
+    submitClarifyBtn.click();
+
+    const ansReq = httpTesting.expectOne(
+      API_ENDPOINTS.ROADMAPS.CLARIFY_ANSWERS(mockDetail.goal_id)
+    );
+    expect(ansReq.request.method).toBe('POST');
+    expect(ansReq.request.body.answers[0].answer).toBe('Đã biết khái niệm');
+    ansReq.flush({
+      goal_id: mockDetail.goal_id,
+      clarification_context: 'Học viên đã biết khái niệm Hexagonal Architecture.',
+      message: 'Updated',
+    });
+    fixture.detectChanges();
+
+    expect(service.activeStep()).toBe(2);
+  });
+
+  it('cho phép bấm Bỏ qua phỏng vấn (Skip) để lưu trạng thái SKIPPED qua API và chuyển thẳng sang Bước 2', () => {
+    service.setActiveStep(1);
+    service.clarificationQuestions.set([
+      {
+        question_id: 'q-skip-1',
+        id: 'q-skip-1',
+        text: 'Câu hỏi tùy chọn?',
+        question: 'Câu hỏi tùy chọn?',
+        placeholder: 'Chọn đáp án',
+        question_type: 'single_choice',
+        options: ['A', 'B'],
+        question_purpose: 'Thăm dò sở thích',
+        expected_answer_format: 'text',
+        diagnostic_dimension: 'PREFERENCE',
+      },
+    ]);
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    const skipBtn = compiled.querySelector(
+      '[data-testid="skip-clarification-btn"]'
+    ) as HTMLButtonElement;
+    expect(skipBtn).toBeTruthy();
+    skipBtn.click();
+
+    const skipReq = httpTesting.expectOne(
+      API_ENDPOINTS.ROADMAPS.CLARIFY_SKIP(mockDetail.goal_id)
+    );
+    expect(skipReq.request.method).toBe('POST');
+    expect(skipReq.request.body).toEqual({
+      skipped_question_ids: ['q-skip-1'],
+    });
+    skipReq.flush({
+      goal_id: mockDetail.goal_id,
+      status: 'SKIPPED',
+      clarification_context: '{"status":"SKIPPED"}',
+      unresolved_assumptions: ['Giả định trình độ BEGINNER'],
+      message: 'Clarification survey skipped and assumptions recorded',
+    });
+    fixture.detectChanges();
+
+    expect(service.activeStep()).toBe(2);
+  });
+
+  it('cho phép thêm/sửa cột mốc và bấm Phê duyệt Cột mốc ở Bước 2', () => {
+    service.setActiveStep(2);
+    fixture.detectChanges();
+
     const approveSpy = vi.spyOn(service, 'approveMilestones');
     const compiled = fixture.nativeElement as HTMLElement;
 
@@ -163,10 +299,59 @@ describe('RoadmapPageComponent (WBS 6.3 3-Step AI Planning & Approval Workspace)
     });
     fixture.detectChanges();
 
-    expect(service.activeStep()).toBe(2);
+    expect(service.activeStep()).toBe(3);
   });
 
-  it('hiển thị cảnh báo Soft Overflow ở Bước 2 và khóa nút Apply cho đến khi người học tích xác nhận', () => {
+  it('hiển thị danh sách nhiệm vụ theo Cột mốc và tài liệu học ở Bước 3, chuyển sang Bước 4 khi bấm xác nhận', () => {
+    service.milestones.set([
+      {
+        ...mockDetail.milestones![0],
+        status: 'APPROVED',
+      },
+    ]);
+    service.editableTasks.set([
+      {
+        task_id: 'task-step3-1',
+        milestone_id: mockDetail.milestones![0].id,
+        milestone_sequence_order: 1,
+        title: 'Nhiệm vụ Bước 3',
+        description: 'Chi tiết nhiệm vụ',
+        task_type: 'PRACTICE',
+        learning_objective: 'Nắm vững kiến thức thực hành',
+        completion_criteria: 'Viết unit test pass 100%',
+        learning_resources: [
+          {
+            title: 'Tài liệu kiến trúc Clean Architecture',
+            url: 'https://example.com/clean-arch',
+            type: 'ARTICLE',
+            description: 'Đọc chương 1-3',
+          },
+        ],
+        estimated_minutes: 60,
+        scheduled_date: '2026-11-02',
+        scheduled_start: '19:00',
+        scheduled_end: '20:00',
+        prerequisite_ids: [],
+      },
+    ]);
+    service.setActiveStep(3);
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.querySelector('[data-testid="milestone-task-group-0"]')).toBeTruthy();
+    expect(compiled.querySelector('[data-testid="task-learning-resources"]')).toBeTruthy();
+
+    const confirmBtn = compiled.querySelector(
+      '[data-testid="confirm-tasks-to-step-4-btn"]'
+    ) as HTMLButtonElement;
+    expect(confirmBtn).toBeTruthy();
+    confirmBtn.click();
+    fixture.detectChanges();
+
+    expect(service.activeStep()).toBe(4);
+  });
+
+  it('hiển thị cảnh báo Soft Overflow ở Bước 4 và khóa nút Apply cho đến khi người học tích xác nhận', () => {
     const draftProposal: ScheduleProposalResponse = {
       id: 'prop-soft-1',
       roadmap_id: mockDetail.id,
@@ -183,6 +368,10 @@ describe('RoadmapPageComponent (WBS 6.3 3-Step AI Planning & Approval Workspace)
           scheduled_date: '2026-11-02',
           scheduled_start: '20:20',
           scheduled_end: '21:50',
+          task_type: 'PRACTICE',
+          learning_objective: 'Ôn tập',
+          completion_criteria: 'Hoàn thành bài ôn',
+          learning_resources: [],
         },
       ],
       dependencies: [],
@@ -222,6 +411,10 @@ describe('RoadmapPageComponent (WBS 6.3 3-Step AI Planning & Approval Workspace)
         milestone_sequence_order: 1,
         title: 'Ôn tập chuyên sâu Mode B',
         description: null,
+        task_type: 'PRACTICE',
+        learning_objective: 'Ôn tập chuyên sâu',
+        completion_criteria: 'Xong bài kiểm tra',
+        learning_resources: [],
         estimated_minutes: 90,
         scheduled_date: '2026-11-02',
         scheduled_start: '20:20',
@@ -229,7 +422,7 @@ describe('RoadmapPageComponent (WBS 6.3 3-Step AI Planning & Approval Workspace)
         prerequisite_ids: [],
       },
     ]);
-    service.setActiveStep(2);
+    service.setActiveStep(4);
     fixture.detectChanges();
 
     const compiled = fixture.nativeElement as HTMLElement;
@@ -251,7 +444,7 @@ describe('RoadmapPageComponent (WBS 6.3 3-Step AI Planning & Approval Workspace)
     expect(applyBtn.disabled).toBe(false);
   });
 
-  it('hiển thị Lịch học Chính thức (OfficialSchedule) theo từng Cột mốc ở Bước 3 và đóng SSE khi destroy', () => {
+  it('hiển thị Lịch học Chính thức (OfficialSchedule) theo từng Cột mốc ở Bước 4 và đóng SSE khi destroy', () => {
     const closeSpy = vi.spyOn(service, 'closeActiveStream');
 
     service.selectedRoadmapDetail.set({
@@ -281,7 +474,7 @@ describe('RoadmapPageComponent (WBS 6.3 3-Step AI Planning & Approval Workspace)
         },
       ],
     });
-    service.setActiveStep(3);
+    service.setActiveStep(4);
     fixture.detectChanges();
 
     const compiled = fixture.nativeElement as HTMLElement;

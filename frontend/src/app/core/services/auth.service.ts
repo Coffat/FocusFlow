@@ -1,7 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { BehaviorSubject, Observable, catchError, map, of, tap } from 'rxjs';
+import { Observable, catchError, map, of, tap } from 'rxjs';
 import {
   LoginRequest,
   LoginResponse,
@@ -31,24 +31,12 @@ export class AuthService {
   private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
 
-  // Angular Signals state
-  readonly currentUser = signal<User | null>(null);
-  readonly isAuthenticated = computed(() => this.currentUser() !== null || this.isAuthenticatedSubject.value);
-  readonly isLoading = signal<boolean>(false);
-
-  // BehaviorSubjects for RxJS compatibility
-  readonly currentUserSubject = new BehaviorSubject<UserProfile>({
-    id: '',
-    email: '',
-    fullName: '',
-    role: '',
-    tier: '',
-    createdAt: ''
-  });
-  readonly currentUser$ = this.currentUserSubject.asObservable();
-
-  readonly isAuthenticatedSubject = new BehaviorSubject<boolean>(false);
-  readonly isAuthenticated$ = this.isAuthenticatedSubject.asObservable();
+  // Angular Signals state with strict encapsulation
+  private readonly _currentUser = signal<User | null>(null);
+  readonly currentUser = this._currentUser.asReadonly();
+  readonly isAuthenticated = computed(() => this._currentUser() !== null);
+  private readonly _isLoading = signal<boolean>(false);
+  readonly isLoading = this._isLoading.asReadonly();
 
   private sessionCheck$: Observable<boolean> | null = null;
 
@@ -56,33 +44,26 @@ export class AuthService {
     this.initAuth();
   }
 
-  private setUser(user: UserProfile, accessToken?: string): void {
+  setUser(user: UserProfile, accessToken?: string): void {
     if (accessToken) {
       // Retain token in localStorage as optional fallback for dev inspection,
       // but primary authentication relies on HttpOnly cookies (ADR-008)
       localStorage.setItem('access_token', accessToken);
     }
-    this.currentUser.set(user);
-    this.currentUserSubject.next(user);
-    this.isAuthenticatedSubject.next(true);
+    this._currentUser.set(user);
+  }
+
+  clearUser(): void {
+    this.clearSession();
   }
 
   private clearSession(): void {
     localStorage.removeItem('access_token');
-    this.currentUser.set(null);
-    this.currentUserSubject.next({
-      id: '',
-      email: '',
-      fullName: '',
-      role: '',
-      tier: '',
-      createdAt: ''
-    });
-    this.isAuthenticatedSubject.next(false);
+    this._currentUser.set(null);
   }
 
   checkSession(): Observable<boolean> {
-    if (this.currentUser() !== null || this.isAuthenticatedSubject.value) {
+    if (this._currentUser() !== null) {
       return of(true);
     }
     if (this.sessionCheck$) {
@@ -118,7 +99,7 @@ export class AuthService {
   }
 
   login(credentials: { email: string; password: string }): Observable<User> {
-    this.isLoading.set(true);
+    this._isLoading.set(true);
     const payload = {
       email: credentials.email,
       password: credentials.password
@@ -138,17 +119,17 @@ export class AuthService {
       tap({
         next: (user: User) => {
           this.setUser(user);
-          this.isLoading.set(false);
+          this._isLoading.set(false);
         },
         error: () => {
-          this.isLoading.set(false);
+          this._isLoading.set(false);
         }
       })
     );
   }
 
   signIn(credentials: LoginRequest): Observable<LoginResponse> {
-    this.isLoading.set(true);
+    this._isLoading.set(true);
     const payload = {
       email: credentials.email,
       password: credentials.password,
@@ -175,18 +156,17 @@ export class AuthService {
       tap({
         next: (response: LoginResponse) => {
           this.setUser(response.user, response.accessToken);
-          this.isLoading.set(false);
+          this._isLoading.set(false);
         },
         error: (_err: Error) => {
-          this.isAuthenticatedSubject.next(false);
-          this.isLoading.set(false);
+          this._isLoading.set(false);
         }
       })
     );
   }
 
   signUp(data: RegisterRequest): Observable<RegisterResponse> {
-    this.isLoading.set(true);
+    this._isLoading.set(true);
     const payload = {
       full_name: data.fullName,
       email: data.email,
@@ -212,10 +192,10 @@ export class AuthService {
       tap({
         next: (response: RegisterResponse) => {
           this.setUser(response.user, response.accessToken);
-          this.isLoading.set(false);
+          this._isLoading.set(false);
         },
         error: () => {
-          this.isLoading.set(false);
+          this._isLoading.set(false);
         }
       })
     );
@@ -323,9 +303,6 @@ export class AuthService {
       tap({
         next: (response: LoginResponse) => {
           this.setUser(response.user, response.accessToken);
-        },
-        error: (_err: Error) => {
-          this.isAuthenticatedSubject.next(false);
         }
       })
     );

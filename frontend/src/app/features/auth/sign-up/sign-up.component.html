@@ -15,24 +15,24 @@
   </div>
 
   <!-- Success Banner -->
-  @if (successMessage) {
+  @if (successMessage()) {
     <div class="success-banner">
       <span class="material-symbols-outlined">check_circle</span>
-      <span>{{ successMessage }}</span>
+      <span>{{ successMessage() }}</span>
     </div>
   }
 
   <!-- Error Banner -->
-  @if (errorMessage) {
+  @if (errorMessage()) {
     <div class="error-banner">
       <span class="material-symbols-outlined">error</span>
-      <span>{{ errorMessage }}</span>
+      <span>{{ errorMessage() }}</span>
     </div>
   }
 
   <!-- Social Registration Cluster -->
   <div class="social-cluster">
-      <button pButton class="social-button" type="button" (click)="signInWithGoogle()" [disabled]="isLoading">
+      <button pButton class="social-button" type="button" (click)="signInWithGoogle()" [disabled]="isLoading()">
         <svg aria-hidden="true" class="social-icon" viewBox="0 0 24 24">
           <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"></path>
           <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"></path>
@@ -120,7 +120,7 @@
           <span class="input-icon material-symbols-outlined">lock_open</span>
           <input
             id="password-input"
-            [type]="isPasswordVisible ? 'text' : 'password'"
+            [type]="isPasswordVisible() ? 'text' : 'password'"
             formControlName="password"
             class="form-input password-input"
             [placeholder]="'auth.signUp.passwordPlaceholder' | translate"
@@ -134,7 +134,7 @@
             [attr.aria-label]="'auth.signUp.togglePasswordVisibility' | translate"
           >
             <span class="material-symbols-outlined">
-              {{ isPasswordVisible ? 'visibility_off' : 'visibility' }}
+              {{ isPasswordVisible() ? 'visibility_off' : 'visibility' }}
             </span>
           </button>
         </div>
@@ -151,14 +151,14 @@
         <!-- Password Strength Meter -->
         <div class="strength-meter-container">
           <div class="strength-bars">
-            <div class="strength-bar" [class.active-bar]="passwordStrength >= 1"></div>
-            <div class="strength-bar" [class.active-bar]="passwordStrength >= 2"></div>
-            <div class="strength-bar" [class.active-bar]="passwordStrength >= 3"></div>
-            <div class="strength-bar" [class.active-bar]="passwordStrength >= 4"></div>
+            <div class="strength-bar" [class.active-bar]="passwordStrength() >= 1"></div>
+            <div class="strength-bar" [class.active-bar]="passwordStrength() >= 2"></div>
+            <div class="strength-bar" [class.active-bar]="passwordStrength() >= 3"></div>
+            <div class="strength-bar" [class.active-bar]="passwordStrength() >= 4"></div>
           </div>
           <div class="strength-meta">
             <span>{{ 'auth.signUp.securityLevel' | translate }}</span>
-            <span class="strength-tag">{{ strengthLabelKey | translate }}</span>
+            <span class="strength-tag">{{ strengthLabelKey() | translate }}</span>
           </div>
         </div>
 
@@ -202,7 +202,7 @@
           <span class="input-icon material-symbols-outlined">lock</span>
           <input
             id="confirm-password-input"
-            [type]="isConfirmPasswordVisible ? 'text' : 'password'"
+            [type]="isConfirmPasswordVisible() ? 'text' : 'password'"
             formControlName="confirmPassword"
             class="form-input password-input"
             [placeholder]="'auth.signUp.confirmPasswordPlaceholder' | translate"
@@ -216,7 +216,7 @@
             [attr.aria-label]="'auth.signUp.toggleConfirmPasswordVisibility' | translate"
           >
             <span class="material-symbols-outlined">
-              {{ isConfirmPasswordVisible ? 'visibility_off' : 'visibility' }}
+              {{ isConfirmPasswordVisible() ? 'visibility_off' : 'visibility' }}
             </span>
           </button>
         </div>
@@ -254,9 +254,9 @@
         pButton
         type="submit"
         class="submit-button"
-        [disabled]="signUpForm.invalid || isPasswordMismatch || isLoading"
+        [disabled]="signUpForm.invalid || isPasswordMismatch || isLoading()"
       >
-        @if (isLoading) {
+        @if (isLoading()) {
           <span class="material-symbols-outlined spin-icon">progress_activity</span>
         } @else {
           <span class="submit-text">{{ 'auth.signUp.createFreeAccount' | translate }}</span>

@@ -26,7 +26,12 @@ export class WorkspaceSessionService {
   readonly durationMinutes = signal<number>(25);
   readonly remainingSeconds = signal<number>(25 * 60);
   readonly isRunning = signal<boolean>(false);
-  readonly scratchpadNote = signal<string>('');
+  private readonly _scratchpadNote = signal<string>('');
+  readonly scratchpadNote = this._scratchpadNote.asReadonly();
+
+  setScratchpadNote(note: string): void {
+    this._scratchpadNote.set(note);
+  }
 
   private startedAt: number | null = null;
   private pausedMs = 0;

@@ -1,58 +1,26 @@
-import { Component, OnInit, DestroyRef, inject } from '@angular/core';
+import { Component, OnInit, inject, ChangeDetectionStrategy } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ButtonModule } from 'primeng/button';
 import { AuthService } from '../../core/services/auth.service';
 import { TranslationService } from '../../core/services/translation.service';
 import { TranslatePipe } from '../../shared/pipes/translate.pipe';
-import { UserProfile } from '../../models/auth.interface';
 
 @Component({
   selector: 'app-dashboard',
+  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [ButtonModule, TranslatePipe, RouterLink],
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.scss'
 })
 export class DashboardComponent implements OnInit {
-  authService: AuthService;
-  translationService: TranslationService;
-  router: Router;
-  destroyRef: DestroyRef;
+  readonly authService = inject(AuthService);
+  readonly translationService = inject(TranslationService);
+  readonly router = inject(Router);
 
-  currentUser: UserProfile = {
-    id: '',
-    email: '',
-    fullName: '',
-    role: '',
-    tier: '',
-    createdAt: ''
-  };
-
-  constructor(
-    authService: AuthService,
-    translationService: TranslationService,
-    router: Router
-  ) {
-    this.authService = authService;
-    this.translationService = translationService;
-    this.router = router;
-    this.destroyRef = inject(DestroyRef);
-  }
+  readonly currentUser = this.authService.currentUser;
 
   ngOnInit() {
-    this.authService.currentUser$
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (user: UserProfile) => {
-          if (user && user.email) {
-            this.currentUser = user;
-          }
-        },
-        error: (_err: Error) => {},
-        complete: () => {}
-      });
-
-    if (!this.currentUser.email) {
+    if (!this.currentUser()?.email) {
       this.authService.initAuth();
     }
   }

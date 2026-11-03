@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { DashboardService } from '../services/dashboard.service';
 import { ButtonDirective } from '../../../shared/ui/button/button.directive';
@@ -8,6 +8,7 @@ import { CardComponent, CardHeaderDirective, CardTitleDirective, CardDescription
 @Component({
   selector: 'app-dashboard-page',
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     RouterLink,
     ButtonDirective,

@@ -37,6 +37,8 @@ describe('RoadmapService (WBS 6.3 AI Planning & Approval Store)', () => {
       raw_description: 'Xây dựng hệ thống Modular Monolith',
       target_date: '2026-12-30',
       status: 'ACTIVE',
+      prior_knowledge_level: 'BEGINNER',
+      clarification_context: null,
       created_at: '2026-10-30T08:00:00Z',
       updated_at: '2026-10-30T08:00:00Z',
     },
@@ -62,12 +64,13 @@ describe('RoadmapService (WBS 6.3 AI Planning & Approval Store)', () => {
     httpTesting.verify();
   });
 
-  it('tạo mới Goal & Roadmap (UC-07) và chuyển về Bước 1', () => {
+  it('tạo mới Goal & Roadmap (UC-07) và kích hoạt phỏng vấn chẩn đoán AI (FR-GOAL-002)', () => {
     service.createRoadmap({
       title: 'Lộ trình FastAPI & Angular 21',
       description: 'Xây dựng hệ thống Modular Monolith',
       goal_title: 'Lộ trình FastAPI & Angular 21',
       goal_description: 'Xây dựng hệ thống Modular Monolith',
+      prior_knowledge_level: 'BEGINNER',
       start_date: '2026-11-02',
       target_date: '2026-12-30',
     });
@@ -75,12 +78,56 @@ describe('RoadmapService (WBS 6.3 AI Planning & Approval Store)', () => {
     const req = httpTesting.expectOne(API_ENDPOINTS.ROADMAPS.BASE);
     expect(req.request.method).toBe('POST');
     expect(req.request.withCredentials).toBe(true);
+    expect(req.request.body.prior_knowledge_level).toBe('BEGINNER');
     req.flush(mockRoadmap);
+
+    const clarifyReq = httpTesting.expectOne(
+      API_ENDPOINTS.ROADMAPS.CLARIFY_QUESTIONS(mockRoadmap.goal_id)
+    );
+    expect(clarifyReq.request.method).toBe('POST');
+    clarifyReq.flush({
+      questions: [
+        {
+          question_id: 'q1',
+          text: 'Bạn đã từng học lập trình Python trước đây chưa?',
+          question_type: 'single_choice',
+          options: ['Chưa từng', 'Đã học cơ bản', 'Thành thạo'],
+        },
+      ],
+    });
 
     expect(service.roadmaps().length).toBe(1);
     expect(service.selectedRoadmapDetail()?.id).toBe(mockRoadmap.id);
     expect(service.activeStep()).toBe(1);
+    expect(service.clarificationQuestions().length).toBe(1);
     expect(service.successMessage()).toContain('Đã khởi tạo');
+  });
+
+  it('hỗ trợ trả lời phỏng vấn chẩn đoán hoặc bỏ qua (FR-GOAL-002)', () => {
+    service.submitClarificationAnswers(mockRoadmap.goal_id, [
+      { question_id: 'q1', question_text: 'Python?', answer: 'Đã học cơ bản' },
+    ]);
+    expect(service.isSubmittingAnswers()).toBe(true);
+
+    const ansReq = httpTesting.expectOne(
+      API_ENDPOINTS.ROADMAPS.CLARIFY_ANSWERS(mockRoadmap.goal_id)
+    );
+    expect(ansReq.request.method).toBe('POST');
+    expect(ansReq.request.body.answers[0].answer).toBe('Đã học cơ bản');
+    ansReq.flush({
+      goal_id: mockRoadmap.goal_id,
+      clarification_context: 'Học viên đã có nền tảng Python cơ bản.',
+      message: 'Updated',
+    });
+
+    expect(service.isSubmittingAnswers()).toBe(false);
+    expect(service.clarificationContext()).toBe('Học viên đã có nền tảng Python cơ bản.');
+    expect(service.activeStep()).toBe(2);
+
+    // Test skip clarification
+    service.setActiveStep(1);
+    service.skipClarification();
+    expect(service.activeStep()).toBe(2);
   });
 
   it('sinh Cột mốc bằng AI qua 2-Stage SSE, theo dõi retry và phê duyệt Cột mốc (FR-PLAN-001)', () => {
@@ -210,7 +257,7 @@ describe('RoadmapService (WBS 6.3 AI Planning & Approval Store)', () => {
     approveReq.flush(approvedList);
 
     expect(service.areMilestonesApproved()).toBe(true);
-    expect(service.activeStep()).toBe(2);
+    expect(service.activeStep()).toBe(3);
   });
 
   it('sinh Đề xuất Lịch học AI (UC-08) qua 2-Stage SSE và chỉnh sửa nhiệm vụ với updateProposal (UC-12)', () => {
@@ -438,7 +485,7 @@ describe('RoadmapService (WBS 6.3 AI Planning & Approval Store)', () => {
       { ...mockRoadmap, status: 'ACTIVE' },
     ]);
 
-    expect(service.activeStep()).toBe(3);
+    expect(service.activeStep()).toBe(4);
     expect(service.lastApplyResult()?.roadmap_status).toBe('ACTIVE');
   });
 
@@ -454,7 +501,7 @@ describe('RoadmapService (WBS 6.3 AI Planning & Approval Store)', () => {
     service.addEditableMilestone('Chặng thủ công 1', 'Tự học');
     service.enableManualPlanningMode();
     expect(service.manualPlanningMode()).toBe(true);
-    expect(service.activeStep()).toBe(2);
+    expect(service.activeStep()).toBe(3);
     expect(service.editableTasks().length).toBe(1);
 
     service.updateEditableTask(0, {

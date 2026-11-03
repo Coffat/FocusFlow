@@ -337,6 +337,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/roadmaps/goals/{goal_id}/clarify-questions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Generate 2-3 diagnostic clarification questions for a goal (FR-GOAL-002) */
+        post: operations["generate_clarification_questions_api_v1_roadmaps_goals__goal_id__clarify_questions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/roadmaps/goals/{goal_id}/clarify-answers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit answers to clarification questions and update goal context (FR-GOAL-002) */
+        post: operations["submit_clarification_answers_api_v1_roadmaps_goals__goal_id__clarify_answers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/roadmaps/goals/{goal_id}/clarify-skip": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Explicitly skip goal clarification survey and record unresolved assumptions (FR-GOAL-002) */
+        post: operations["skip_clarification_questions_api_v1_roadmaps_goals__goal_id__clarify_skip_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/roadmaps/{roadmap_id}": {
         parameters: {
             query?: never;
@@ -647,6 +698,75 @@ export interface components {
             /** Updated At */
             updated_at: string;
         };
+        /** ClarificationAnswerItem */
+        ClarificationAnswerItem: {
+            /** Question Id */
+            question_id: string;
+            /** Question Text */
+            question_text?: string | null;
+            /** Answer */
+            answer: string;
+        };
+        /** ClarificationQuestion */
+        ClarificationQuestion: {
+            /**
+             * Question Id
+             * @default q1
+             */
+            question_id: string;
+            /**
+             * Id
+             * @default q1
+             */
+            id: string;
+            /**
+             * Text
+             * @default
+             */
+            text: string;
+            /**
+             * Question
+             * @default
+             */
+            question: string;
+            /**
+             * Placeholder
+             * @default Nhập câu trả lời của bạn...
+             */
+            placeholder: string;
+            /**
+             * Question Type
+             * @default single_choice
+             */
+            question_type: string;
+            /** Options */
+            options?: string[];
+            /**
+             * Question Purpose
+             * @default Làm rõ bối cảnh và nhu cầu cá nhân hóa lộ trình học tập.
+             */
+            question_purpose: string;
+            /**
+             * Expected Answer Format
+             * @default short_text
+             */
+            expected_answer_format: string;
+            /**
+             * Diagnostic Dimension
+             * @default KNOWLEDGE_BASELINE
+             */
+            diagnostic_dimension: string;
+        };
+        /** ClarificationQuestionsResponse */
+        ClarificationQuestionsResponse: {
+            /** Questions */
+            questions?: components["schemas"]["ClarificationQuestion"][];
+            /**
+             * Questions Version
+             * @default v1.0
+             */
+            questions_version: string;
+        };
         /** ConfirmPasswordResetSchema */
         ConfirmPasswordResetSchema: {
             /**
@@ -695,6 +815,11 @@ export interface components {
             goal_title?: string | null;
             /** Goal Description */
             goal_description?: string | null;
+            /**
+             * Prior Knowledge Level
+             * @default BEGINNER
+             */
+            prior_knowledge_level: string;
             /** Start Date */
             start_date?: string | null;
             /** Target Date */
@@ -741,6 +866,13 @@ export interface components {
             /** Status */
             status: string;
             /**
+             * Prior Knowledge Level
+             * @default BEGINNER
+             */
+            prior_knowledge_level: string;
+            /** Clarification Context */
+            clarification_context?: string | null;
+            /**
              * Created At
              * Format: date-time
              */
@@ -764,6 +896,20 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** LearningResourceSchema */
+        LearningResourceSchema: {
+            /** Title */
+            title: string;
+            /** Url */
+            url: string;
+            /**
+             * Type
+             * @default DOCS
+             */
+            type: string;
+            /** Description */
+            description?: string | null;
         };
         /** LoginRequestSchema */
         LoginRequestSchema: {
@@ -914,6 +1060,19 @@ export interface components {
             title: string;
             /** Description */
             description?: string | null;
+            /**
+             * Task Type
+             * @default PRACTICE
+             */
+            task_type: string | null;
+            /** Learning Objective */
+            learning_objective?: string | null;
+            /** Completion Criteria */
+            completion_criteria?: string | null;
+            /** Learning Resources */
+            learning_resources?: components["schemas"]["LearningResourceSchema"][];
+            /** Concept Ids */
+            concept_ids?: string[];
             /**
              * Estimated Minutes
              * @default 45
@@ -1141,6 +1300,11 @@ export interface components {
             /** Roadmap Target Date */
             roadmap_target_date?: string | null;
         };
+        /** SkipClarificationRequest */
+        SkipClarificationRequest: {
+            /** Skipped Question Ids */
+            skipped_question_ids?: string[];
+        };
         /** SoftOverflowWarningSchema */
         SoftOverflowWarningSchema: {
             /** Task Index */
@@ -1183,6 +1347,42 @@ export interface components {
             reservationId: string;
             /** Streamurl */
             streamUrl: string;
+        };
+        /** SubmitClarificationAnswersRequest */
+        SubmitClarificationAnswersRequest: {
+            /** Answers */
+            answers?: components["schemas"]["ClarificationAnswerItem"][];
+            /**
+             * Skipped
+             * @default false
+             */
+            skipped: boolean;
+            /** Skipped Question Ids */
+            skipped_question_ids?: string[];
+            /** Total Questions Count */
+            total_questions_count?: number | null;
+        };
+        /** SubmitClarificationAnswersResponse */
+        SubmitClarificationAnswersResponse: {
+            /**
+             * Goal Id
+             * Format: uuid
+             */
+            goal_id: string;
+            /**
+             * Status
+             * @default ANSWERED
+             */
+            status: string;
+            /** Clarification Context */
+            clarification_context: string;
+            /** Unresolved Assumptions */
+            unresolved_assumptions?: string[];
+            /**
+             * Message
+             * @default Clarification context updated successfully
+             */
+            message: string;
         };
         /** TimeSlotDTO */
         TimeSlotDTO: {
@@ -1874,6 +2074,107 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RoadmapResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_clarification_questions_api_v1_roadmaps_goals__goal_id__clarify_questions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClarificationQuestionsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_clarification_answers_api_v1_roadmaps_goals__goal_id__clarify_answers_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitClarificationAnswersRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubmitClarificationAnswersResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    skip_clarification_questions_api_v1_roadmaps_goals__goal_id__clarify_skip_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SkipClarificationRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubmitClarificationAnswersResponse"];
                 };
             };
             /** @description Validation Error */

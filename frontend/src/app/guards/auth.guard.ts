@@ -9,9 +9,7 @@ export const authGuard: CanActivateFn = (_route, _state): boolean | UrlTree | Ob
   const token = localStorage.getItem('access_token') || '';
 
   if (
-    authService.isAuthenticatedSubject?.value ||
-    (typeof authService.isAuthenticated === 'function' && authService.isAuthenticated()) ||
-    (typeof authService.currentUser === 'function' && authService.currentUser() !== null) ||
+    authService.isAuthenticated() ||
     token.length > 0
   ) {
     return true;

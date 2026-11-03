@@ -1,4 +1,4 @@
-import { Directive, Input, computed, signal } from '@angular/core';
+import { Directive, computed, input } from '@angular/core';
 import { cn } from '../../utils/cn';
 
 export type ButtonVariant = 'default' | 'secondary' | 'outline' | 'ghost' | 'destructive' | 'link';
@@ -12,24 +12,9 @@ export type ButtonSize = 'default' | 'sm' | 'lg' | 'icon';
   }
 })
 export class ButtonDirective {
-  private readonly _variant = signal<ButtonVariant>('default');
-  private readonly _size = signal<ButtonSize>('default');
-  private readonly _userClass = signal<string>('');
-
-  @Input()
-  set variant(v: ButtonVariant) {
-    this._variant.set(v);
-  }
-
-  @Input()
-  set size(s: ButtonSize) {
-    this._size.set(s);
-  }
-
-  @Input('class')
-  set userClass(c: string) {
-    this._userClass.set(c);
-  }
+  readonly variant = input<ButtonVariant>('default');
+  readonly size = input<ButtonSize>('default');
+  readonly userClass = input<string>('', { alias: 'class' });
 
   readonly classes = computed(() => {
     const base = 'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)] disabled:pointer-events-none disabled:opacity-50 cursor-pointer select-none';
@@ -50,6 +35,6 @@ export class ButtonDirective {
       icon: 'h-9 w-9'
     };
 
-    return cn(base, variants[this._variant()], sizes[this._size()], this._userClass());
+    return cn(base, variants[this.variant()], sizes[this.size()], this.userClass());
   });
 }

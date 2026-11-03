@@ -22,8 +22,26 @@ export type ApplyScheduleProposalRequest = components['schemas']['ApplyScheduleP
 export type ApplyScheduleProposalResponse = components['schemas']['ApplyScheduleProposalResponse'];
 export type OfficialScheduleResponse = components['schemas']['OfficialScheduleResponse'];
 export type ScheduledTaskResponse = components['schemas']['ScheduledTaskResponse'];
+export type LearningResourceSchema = components['schemas']['LearningResourceSchema'];
 
-export type PlanningStep = 1 | 2 | 3;
+export interface LearningResourceItem {
+  title: string;
+  url: string;
+  type: string;
+  description?: string | null;
+}
+
+export type ProposalTask = ProposedTaskItemSchema;
+
+export type PriorKnowledgeLevel = 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED';
+
+export type ClarificationQuestion = components['schemas']['ClarificationQuestion'];
+export type ClarificationQuestionsResponse = components['schemas']['ClarificationQuestionsResponse'];
+export type ClarificationAnswerItem = components['schemas']['ClarificationAnswerItem'];
+export type SubmitClarificationAnswersRequest = components['schemas']['SubmitClarificationAnswersRequest'];
+export type SubmitClarificationAnswersResponse = components['schemas']['SubmitClarificationAnswersResponse'];
+
+export type PlanningStep = 1 | 2 | 3 | 4;
 
 export interface SseProgressState {
   stage: 'IDLE' | 'RESERVED' | 'STREAMING' | 'VALIDATING_TIER_1_2_3' | 'COMPLETED' | 'FAILED';

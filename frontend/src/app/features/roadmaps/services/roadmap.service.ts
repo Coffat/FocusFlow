@@ -6,6 +6,9 @@ import { AiSseService, AiStreamChunkEvent } from '../../../core/services/ai-sse.
 import {
   ApplyScheduleProposalRequest,
   ApplyScheduleProposalResponse,
+  ClarificationAnswerItem,
+  ClarificationQuestion,
+  ClarificationQuestionsResponse,
   ConstraintViolationSchema,
   CreateManualRoadmapPlanRequest,
   CreateRoadmapRequest,
@@ -13,6 +16,7 @@ import {
   MilestoneResponse,
   MilestoneUpsertItemSchema,
   PlanningStep,
+  PriorKnowledgeLevel,
   ProposedDependencyItemSchema,
   ProposedTaskItemSchema,
   Roadmap,
@@ -21,6 +25,8 @@ import {
   ScheduleProposalResponse,
   SoftOverflowWarningSchema,
   SseProgressState,
+  SubmitClarificationAnswersRequest,
+  SubmitClarificationAnswersResponse,
   UpdateMilestonesRequest,
   UpdateScheduleProposalRequest,
 } from '../models/roadmap.model';
@@ -79,6 +85,15 @@ export function mapRawTasksToProposedItems(
     const prereqs = Array.isArray(t['prerequisite_ids'])
       ? t['prerequisite_ids'].map(p => String(p))
       : [];
+    const rawResources = Array.isArray(t['learning_resources']) ? t['learning_resources'] : [];
+    const learningResources = rawResources
+      .filter((r): r is Record<string, unknown> => typeof r === 'object' && r !== null)
+      .map(r => ({
+        title: typeof r['title'] === 'string' && r['title'] ? r['title'] : 'Tài liệu hướng dẫn học tập',
+        url: typeof r['url'] === 'string' && r['url'] ? r['url'] : 'https://docs.python.org/3/',
+        type: typeof r['type'] === 'string' && r['type'] ? r['type'] : 'DOCS',
+        description: typeof r['description'] === 'string' ? r['description'] : null,
+      }));
 
     return {
       task_id: typeof t['task_id'] === 'string' ? t['task_id'] : `task-${index + 1}`,
@@ -90,6 +105,13 @@ export function mapRawTasksToProposedItems(
         typeof t['milestone_sequence_order'] === 'number' ? t['milestone_sequence_order'] : index + 1,
       title: typeof t['title'] === 'string' && t['title'] ? t['title'] : `Nhiệm vụ học tập #${index + 1}`,
       description: typeof t['description'] === 'string' ? t['description'] : null,
+      task_type: typeof t['task_type'] === 'string' ? t['task_type'] : 'PRACTICE',
+      learning_objective:
+        typeof t['learning_objective'] === 'string' ? t['learning_objective'] : null,
+      completion_criteria:
+        typeof t['completion_criteria'] === 'string' ? t['completion_criteria'] : null,
+      concept_ids: Array.isArray(t['concept_ids']) ? t['concept_ids'].map(String) : [],
+      learning_resources: learningResources,
       estimated_minutes:
         typeof t['estimated_minutes'] === 'number' && !Number.isNaN(t['estimated_minutes'])
           ? t['estimated_minutes']
@@ -144,6 +166,12 @@ export class RoadmapService {
   readonly manualPlanningMode = signal<boolean>(false);
   readonly confirmSoftOverflow = signal<boolean>(false);
   readonly lastApplyResult = signal<ApplyScheduleProposalResponse | null>(null);
+
+  // AI Diagnostic Clarification Signals (FR-GOAL-002)
+  readonly clarificationQuestions = signal<ClarificationQuestion[]>([]);
+  readonly isGeneratingQuestions = signal<boolean>(false);
+  readonly isSubmittingAnswers = signal<boolean>(false);
+  readonly clarificationContext = signal<string | null>(null);
 
   readonly sseProgress = signal<SseProgressState>({
     stage: 'IDLE',
@@ -281,6 +309,70 @@ export class RoadmapService {
     }));
   });
 
+  readonly tasksByMilestone = computed<
+    Array<{
+      milestone: MilestoneResponse | MilestoneUpsertItemSchema;
+      milestoneIndex: number;
+      tasks: ProposedTaskItemSchema[];
+    }>
+  >(() => {
+    const msList = this.milestones();
+    const editableMs = this.editableMilestones();
+    const tasks = this.editableTasks();
+
+    const sourceMilestones = msList.length > 0 ? msList : editableMs;
+    if (sourceMilestones.length === 0) {
+      if (tasks.length === 0) return [];
+      return [
+        {
+          milestone: {
+            id: null,
+            milestone_id: null,
+            sequence_order: 1,
+            title: 'Chặng kiến thức chung',
+            description: '',
+          },
+          milestoneIndex: 0,
+          tasks,
+        },
+      ];
+    }
+
+    const assignedTasks = new Set<ProposedTaskItemSchema>();
+    const groups = sourceMilestones.map((m, idx) => {
+      const mid =
+        'id' in m && m.id
+          ? String(m.id)
+          : 'milestone_id' in m && m.milestone_id
+            ? String(m.milestone_id)
+            : null;
+      const groupTasks = tasks.filter(t => {
+        if (mid && t.milestone_id && String(t.milestone_id) === mid) {
+          assignedTasks.add(t);
+          return true;
+        }
+        const mSeq = 'sequence_order' in m ? m.sequence_order : idx + 1;
+        if (!t.milestone_id && t.milestone_sequence_order === mSeq) {
+          assignedTasks.add(t);
+          return true;
+        }
+        return false;
+      });
+      return {
+        milestone: m,
+        milestoneIndex: idx,
+        tasks: groupTasks,
+      };
+    });
+
+    const unassigned = tasks.filter(t => !assignedTasks.has(t));
+    if (unassigned.length > 0 && groups.length > 0) {
+      groups[0].tasks = [...groups[0].tasks, ...unassigned];
+    }
+
+    return groups;
+  });
+
   // ===========================================================================
   // State Helpers & Interactive Mutators
   // ===========================================================================
@@ -292,7 +384,7 @@ export class RoadmapService {
 
   enableManualPlanningMode(): void {
     this.manualPlanningMode.set(true);
-    this.activeStep.set(2);
+    this.activeStep.set(3);
     if (this.editableTasks().length === 0) {
       const firstMilestoneId = this.milestones()[0]?.id ?? null;
       this.editableTasks.set([
@@ -302,6 +394,11 @@ export class RoadmapService {
           milestone_sequence_order: 1,
           title: 'Phiên tự học #1',
           description: 'Nghiên cứu lý thuyết và ghi chú trọng tâm',
+          task_type: 'PRACTICE',
+          learning_objective: 'Nắm vững kiến thức nền tảng',
+          completion_criteria: 'Hoàn thành ghi chú và bài tập mẫu',
+          concept_ids: [],
+          learning_resources: [],
           estimated_minutes: 60,
           scheduled_date: this.selectedRoadmapDetail()?.start_date ?? '2026-11-02',
           scheduled_start: '19:30',
@@ -382,7 +479,7 @@ export class RoadmapService {
     });
   }
 
-  // Interactive Task Edits (Step 2)
+  // Interactive Task Edits (Step 3)
   addEditableTask(partial?: Partial<ProposedTaskItemSchema>): void {
     const defaultMid = this.milestones()[0]?.id ?? null;
     const defaultDate = this.selectedRoadmapDetail()?.start_date ?? '2026-11-02';
@@ -394,6 +491,18 @@ export class RoadmapService {
         milestone_sequence_order: partial?.milestone_sequence_order ?? 1,
         title: partial?.title ?? `Nhiệm vụ học tập #${list.length + 1}`,
         description: partial?.description ?? null,
+        task_type: partial?.task_type ?? 'PRACTICE',
+        learning_objective: partial?.learning_objective ?? null,
+        completion_criteria: partial?.completion_criteria ?? null,
+        concept_ids: partial?.concept_ids ?? [],
+        learning_resources: partial?.learning_resources ?? [
+          {
+            title: 'Tài liệu hướng dẫn học tập',
+            url: 'https://docs.python.org/3/',
+            type: 'DOCS',
+            description: 'Tài liệu học tập chính thức từ hệ thống.',
+          },
+        ],
         estimated_minutes: partial?.estimated_minutes ?? 60,
         scheduled_date: partial?.scheduled_date ?? defaultDate,
         scheduled_start: partial?.scheduled_start ?? '19:30',
@@ -411,6 +520,40 @@ export class RoadmapService {
 
   removeEditableTask(index: number): void {
     this.editableTasks.update(list => list.filter((_, idx) => idx !== index));
+  }
+
+  addResourceToTask(taskIndex: number, resource: { title: string; url: string; type: string; description?: string | null }): void {
+    this.editableTasks.update(list =>
+      list.map((task, idx) => {
+        if (idx !== taskIndex) return task;
+        const currentResources = task.learning_resources ?? [];
+        return {
+          ...task,
+          learning_resources: [
+            ...currentResources,
+            {
+              title: resource.title.trim(),
+              url: resource.url.trim(),
+              type: resource.type || 'DOCS',
+              description: resource.description ?? null,
+            },
+          ],
+        };
+      })
+    );
+  }
+
+  removeResourceFromTask(taskIndex: number, resourceIndex: number): void {
+    this.editableTasks.update(list =>
+      list.map((task, idx) => {
+        if (idx !== taskIndex) return task;
+        const currentResources = task.learning_resources ?? [];
+        return {
+          ...task,
+          learning_resources: currentResources.filter((_, rIdx) => rIdx !== resourceIndex),
+        };
+      })
+    );
   }
 
   private syncMilestonesState(msList: MilestoneResponse[]): void {
@@ -505,13 +648,19 @@ export class RoadmapService {
           this.syncMilestonesState(detail.milestones ?? []);
           this.syncProposalState(detail.current_draft_proposal ?? null);
 
+          if (detail.goal?.clarification_context) {
+            this.clarificationContext.set(detail.goal.clarification_context);
+          }
+
           if (detail.official_schedule && !detail.current_draft_proposal) {
-            this.activeStep.set(3);
+            this.activeStep.set(4);
           } else if (
             detail.current_draft_proposal ||
             ((detail.milestones?.length ?? 0) > 0 &&
               detail.milestones?.every(m => m.status === 'APPROVED'))
           ) {
+            this.activeStep.set(3);
+          } else if ((detail.milestones?.length ?? 0) > 0) {
             this.activeStep.set(2);
           } else {
             this.activeStep.set(1);
@@ -534,6 +683,8 @@ export class RoadmapService {
     this.saving.set(true);
     this.errorMessage.set(null);
     this.successMessage.set(null);
+    this.clarificationQuestions.set([]);
+    this.clarificationContext.set(null);
 
     this.http
       .post<RoadmapResponse>(API_ENDPOINTS.ROADMAPS.BASE, payload, { withCredentials: true })
@@ -552,6 +703,10 @@ export class RoadmapService {
           this.syncProposalState(null);
           this.activeStep.set(1);
           this.successMessage.set('Đã khởi tạo mục tiêu và lộ trình học tập mới!');
+
+          if (created.goal_id) {
+            this.generateClarificationQuestions(created.goal_id);
+          }
         }),
         catchError((err: HttpErrorResponse) => {
           this.errorMessage.set(
@@ -561,6 +716,102 @@ export class RoadmapService {
         }),
         finalize(() => {
           this.saving.set(false);
+        })
+      )
+      .subscribe();
+  }
+
+  generateClarificationQuestions(goalId: string): void {
+    this.isGeneratingQuestions.set(true);
+    this.errorMessage.set(null);
+
+    this.http
+      .post<ClarificationQuestionsResponse>(
+        API_ENDPOINTS.ROADMAPS.CLARIFY_QUESTIONS(goalId),
+        {},
+        { withCredentials: true }
+      )
+      .pipe(
+        tap(res => {
+          this.clarificationQuestions.set(res.questions ?? []);
+        }),
+        catchError((err: HttpErrorResponse) => {
+          this.errorMessage.set(
+            this.extractErrorMessage(err, 'Không thể tạo bộ câu hỏi phỏng vấn chẩn đoán.')
+          );
+          return of(null);
+        }),
+        finalize(() => {
+          this.isGeneratingQuestions.set(false);
+        })
+      )
+      .subscribe();
+  }
+
+  submitClarificationAnswers(goalId: string, answers: ClarificationAnswerItem[]): void {
+    this.isSubmittingAnswers.set(true);
+    this.errorMessage.set(null);
+    this.successMessage.set(null);
+
+    const body: SubmitClarificationAnswersRequest = {
+      answers,
+      skipped: false,
+    };
+
+    this.http
+      .post<SubmitClarificationAnswersResponse>(
+        API_ENDPOINTS.ROADMAPS.CLARIFY_ANSWERS(goalId),
+        body,
+        { withCredentials: true }
+      )
+      .pipe(
+        tap(res => {
+          this.clarificationContext.set(res.clarification_context);
+          this.clarificationQuestions.set([]);
+          this.successMessage.set('Đã lưu chẩn đoán mục tiêu thành công!');
+          this.activeStep.set(2);
+        }),
+        catchError((err: HttpErrorResponse) => {
+          this.errorMessage.set(
+            this.extractErrorMessage(err, 'Không thể lưu câu trả lời phỏng vấn chẩn đoán.')
+          );
+          return of(null);
+        }),
+        finalize(() => {
+          this.isSubmittingAnswers.set(false);
+        })
+      )
+      .subscribe();
+  }
+
+  skipClarification(goalId?: string): void {
+    const targetGoalId = goalId ?? this.selectedRoadmapDetail()?.goal_id;
+    const skippedIds = this.clarificationQuestions().map(q => q.question_id);
+
+    if (!targetGoalId) {
+      this.activeStep.set(2);
+      return;
+    }
+
+    this.isSubmittingAnswers.set(true);
+    this.http
+      .post<SubmitClarificationAnswersResponse>(
+        API_ENDPOINTS.ROADMAPS.CLARIFY_SKIP(targetGoalId),
+        { skipped_question_ids: skippedIds },
+        { withCredentials: true }
+      )
+      .pipe(
+        tap(res => {
+          this.clarificationContext.set(res.clarification_context);
+          this.clarificationQuestions.set([]);
+          this.activeStep.set(2);
+        }),
+        catchError(() => {
+          this.activeStep.set(2);
+          return of(null);
+        }),
+        finalize(() => {
+          this.isSubmittingAnswers.set(false);
         })
       )
       .subscribe();
@@ -689,7 +940,7 @@ export class RoadmapService {
           this.selectedRoadmapDetail.update(detail =>
             detail ? { ...detail, milestones: res.milestones } : detail
           );
-          this.activeStep.set(2);
+          this.activeStep.set(3);
           this.successMessage.set(
             'Đã phê duyệt Cột mốc Cấp 1! Bạn có thể sinh Đề xuất Lịch học Chi tiết (Cấp 2).'
           );
@@ -884,7 +1135,7 @@ export class RoadmapService {
           this.manualPlanningMode.set(false);
           this.syncProposalState(proposal);
           this.loadRoadmapDetail(roadmapId);
-          this.activeStep.set(2);
+          this.activeStep.set(3);
           this.successMessage.set(
             'Đã lưu kế hoạch học tập thủ công (UC-09) không tốn hạn ngạch AI!'
           );
@@ -925,7 +1176,7 @@ export class RoadmapService {
         tap(res => {
           this.lastApplyResult.set(res);
           this.confirmSoftOverflow.set(false);
-          this.activeStep.set(3);
+          this.activeStep.set(4);
           this.successMessage.set(
             `Đã áp dụng lịch học chính thức thành công (${res.total_sessions} phiên, ${res.total_planned_minutes} phút)!`
           );
@@ -1041,7 +1292,7 @@ export class RoadmapService {
         this.successMessage.set(
           'AI đã sinh xong Bản nháp Đề xuất Lịch học (DRAFT) qua cổng kiểm định 3 tầng!'
         );
-        this.activeStep.set(2);
+        this.activeStep.set(3);
         this.loadCurrentProposal(roadmapId);
         this.loadRoadmapDetail(roadmapId);
       }

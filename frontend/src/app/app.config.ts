@@ -8,7 +8,7 @@ import Aura from '@primeng/themes/aura';
 import { routes } from './app.routes';
 import { ColorService } from './core/services/color.service';
 import { TranslationService } from './core/services/translation.service';
-import { authInterceptor } from './interceptors/auth.interceptor';
+import { authInterceptor } from './core/interceptors/auth.interceptor';
 
 export const appConfig: ApplicationConfig = {
   providers: [

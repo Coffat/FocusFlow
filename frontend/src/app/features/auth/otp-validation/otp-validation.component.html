@@ -12,7 +12,7 @@
     </h1>
     <p class="headline-subtitle">
       <span>{{ 'auth.otp.dispatchedSubtitle' | translate }} </span>
-      <strong class="email-highlight">{{ email }}</strong>. 
+      <strong class="email-highlight">{{ email() }}</strong>. 
       <span>{{ 'auth.otp.enterBelowToVerify' | translate }}</span>
       <a routerLink="/sign-up" class="change-email-link">
         {{ 'auth.otp.changeEmail' | translate }}
@@ -21,17 +21,17 @@
   </div>
 
   <!-- Status Banners -->
-  @if (errorMessage) {
+  @if (errorMessage()) {
     <div class="error-banner">
       <span class="material-symbols-outlined">error</span>
-      <span>{{ errorMessage }}</span>
+      <span>{{ errorMessage() }}</span>
     </div>
   }
 
-  @if (successMessage) {
+  @if (successMessage()) {
     <div class="success-banner">
       <span class="material-symbols-outlined">check_circle</span>
-      <span>{{ successMessage }}</span>
+      <span>{{ successMessage() }}</span>
     </div>
   }
 
@@ -40,14 +40,14 @@
     <div class="otp-section">
       <div class="otp-header-row">
         <label class="otp-meta-label">{{ 'auth.otp.temporalCodeLabel' | translate }}</label>
-        @if (isAutoFilled) {
+        @if (isAutoFilled()) {
           <span class="otp-autofill-tag">{{ 'auth.otp.autoFillDetected' | translate }}</span>
         }
       </div>
 
       <!-- 6-digit Grid -->
       <div class="otp-grid" id="otp-container">
-        @for (digit of otpDigits; track $index; let i = $index) {
+        @for (digit of otpDigits(); track $index; let i = $index) {
           <input
             #digitInput
             type="text"
@@ -82,7 +82,7 @@
             type="button"
             class="resend-button"
             (click)="resendOtp()"
-            [disabled]="isLoading"
+            [disabled]="isLoading()"
           >
             {{ 'auth.otp.resendCodeNow' | translate }}
           </button>
@@ -96,9 +96,9 @@
       type="button"
       (click)="verifyOtp()"
       class="submit-button"
-      [disabled]="fullOtp.length !== 6 || isLoading"
+      [disabled]="fullOtp().length !== 6 || isLoading()"
     >
-      @if (isLoading) {
+      @if (isLoading()) {
         <span class="material-symbols-outlined spin-icon">progress_activity</span>
       } @else {
         <span class="submit-text">{{ 'auth.otp.verifyAndProceed' | translate }}</span>

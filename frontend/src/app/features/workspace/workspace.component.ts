@@ -1,10 +1,11 @@
-import { Component, inject } from '@angular/core';
+import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { WorkspaceSessionService } from '../../core/services/workspace-session.service';
 import { FormsModule } from '@angular/forms';
 
 @Component({
   selector: 'app-workspace',
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [FormsModule],
   template: `
     <div class="max-w-4xl mx-auto w-full p-8 flex flex-col items-center gap-8">
@@ -59,7 +60,7 @@ import { FormsModule } from '@angular/forms';
         </div>
         <textarea
           [ngModel]="sessionService.scratchpadNote()"
-          (ngModelChange)="sessionService.scratchpadNote.set($event)"
+          (ngModelChange)="sessionService.setScratchpadNote($event)"
           placeholder="Ghi nhanh suy nghĩ, thắc mắc hoặc việc đột xuất nảy sinh trong lúc học..."
           rows="3"
           class="w-full bg-[var(--background)] border border-[var(--border)] rounded-lg p-3 text-sm focus:outline-none focus:ring-1 focus:ring-[var(--ring)] resize-none"

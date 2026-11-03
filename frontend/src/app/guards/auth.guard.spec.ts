@@ -1,6 +1,6 @@
+import { signal, WritableSignal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Router, ActivatedRouteSnapshot, RouterStateSnapshot } from '@angular/router';
-import { BehaviorSubject } from 'rxjs';
 import { authGuard } from './auth.guard';
 import { AuthService } from '../core/services/auth.service';
 
@@ -22,7 +22,7 @@ describe('authGuard', () => {
       writable: true
     });
   });
-  let mockAuthService: { isAuthenticatedSubject: BehaviorSubject<boolean> };
+  let mockAuthService: { isAuthenticated: WritableSignal<boolean> };
   let mockRouter: { navigate: ReturnType<typeof vi.fn> };
 
   const dummyRoute = {} as ActivatedRouteSnapshot;
@@ -31,7 +31,7 @@ describe('authGuard', () => {
   beforeEach(() => {
     localStorage.clear();
     mockAuthService = {
-      isAuthenticatedSubject: new BehaviorSubject<boolean>(false)
+      isAuthenticated: signal(false)
     };
     mockRouter = {
       navigate: vi.fn()
@@ -50,7 +50,7 @@ describe('authGuard', () => {
   });
 
   it('should allow activation when user is authenticated via authService', () => {
-    mockAuthService.isAuthenticatedSubject.next(true);
+    mockAuthService.isAuthenticated.set(true);
 
     const result = TestBed.runInInjectionContext(() => authGuard(dummyRoute, dummyState));
 
@@ -68,7 +68,7 @@ describe('authGuard', () => {
   });
 
   it('should redirect to /sign-in and block activation when unauthenticated and no token', () => {
-    mockAuthService.isAuthenticatedSubject.next(false);
+    mockAuthService.isAuthenticated.set(false);
     localStorage.removeItem('access_token');
 
     const result = TestBed.runInInjectionContext(() => authGuard(dummyRoute, dummyState));

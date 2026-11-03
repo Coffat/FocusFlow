@@ -1,9 +1,10 @@
-import { Component, Input, Directive, computed, signal } from '@angular/core';
+import { Component, ChangeDetectionStrategy, Directive, computed, input } from '@angular/core';
 import { cn } from '../../utils/cn';
 
 @Component({
   selector: 'app-card',
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div [class]="classes()">
       <ng-content />
@@ -11,17 +12,12 @@ import { cn } from '../../utils/cn';
   `
 })
 export class CardComponent {
-  private readonly _userClass = signal<string>('');
-
-  @Input('class')
-  set userClass(c: string) {
-    this._userClass.set(c);
-  }
+  readonly userClass = input<string>('', { alias: 'class' });
 
   readonly classes = computed(() => {
     return cn(
       'rounded-xl border border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)] shadow-xs p-6 space-y-4',
-      this._userClass()
+      this.userClass()
     );
   });
 }

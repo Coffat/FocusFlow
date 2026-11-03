@@ -41,12 +41,12 @@
     </div>
 
     <div class="nav-right">
-      @if (currentUser.email) {
+      @if (currentUser()?.email) {
         <div class="user-chip">
           <span class="material-symbols-outlined user-avatar-icon">account_circle</span>
           <div class="user-meta">
-            <span class="user-name">{{ currentUser.fullName || currentUser.email }}</span>
-            <span class="user-role-badge">{{ currentUser.tier || 'FREE' }} &bull; {{ currentUser.role || 'LEARNER' }}</span>
+            <span class="user-name">{{ currentUser()?.fullName || currentUser()?.email }}</span>
+            <span class="user-role-badge">{{ currentUser()?.tier || 'FREE' }} &bull; {{ currentUser()?.role || 'LEARNER' }}</span>
           </div>
         </div>
       }
@@ -61,7 +61,7 @@
   <!-- Main Content Area with Quick Access Cards -->
   <main class="max-w-6xl mx-auto w-full p-6 md:p-8 space-y-8 flex-1">
     <div>
-      <h1 class="text-2xl font-bold tracking-tight">Xin chào, {{ currentUser.fullName || currentUser.email || 'Học viên' }}!</h1>
+      <h1 class="text-2xl font-bold tracking-tight">Xin chào, {{ currentUser()?.fullName || currentUser()?.email || 'Học viên' }}!</h1>
       <p class="text-sm text-[var(--muted-foreground)] mt-1">Chọn tính năng bạn muốn thao tác để bắt đầu lộ trình học tập thích ứng.</p>
     </div>
 
