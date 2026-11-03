@@ -1,3 +1,7 @@
+from src.planning.application.use_cases.clarification_use_cases import (
+    GenerateClarificationQuestionsUseCase,
+    SubmitClarificationAnswersUseCase,
+)
 from src.planning.application.use_cases.create_goal_and_roadmap import (
     CreateGoalAndRoadmapUseCase,
 )
@@ -33,12 +37,14 @@ __all__ = [
     "CreateGoalAndRoadmapUseCase",
     "ExecuteMilestoneGenerationUseCase",
     "ExecuteScheduleProposalGenerationUseCase",
+    "GenerateClarificationQuestionsUseCase",
     "GetCurrentScheduleProposalUseCase",
     "GetRoadmapDetailUseCase",
     "InitiateMilestoneGenerationUseCase",
     "InitiateScheduleProposalGenerationUseCase",
     "ListRoadmapsUseCase",
     "SaveManualRoadmapPlanUseCase",
+    "SubmitClarificationAnswersUseCase",
     "UpdateMilestonesUseCase",
     "UpdateRoadmapUseCase",
     "UpdateScheduleProposalUseCase",

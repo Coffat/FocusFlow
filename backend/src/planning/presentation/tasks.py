@@ -4,6 +4,7 @@ from src.planning.presentation.deps import (
     get_execute_milestone_generation_use_case,
     get_execute_schedule_proposal_generation_use_case,
     get_goal_repository,
+    get_knowledge_base_repository,
     get_llm_provider,
     get_milestone_repository,
     get_planning_availability_query_port,
@@ -39,6 +40,7 @@ async def execute_ai_roadmap_generation(
         quota_facade = get_planning_quota_facade(session)
         llm_provider = get_llm_provider()
         sse_store = get_sse_job_store()
+        knowledge_base = get_knowledge_base_repository(session)
 
         if job_type.upper() == "MILESTONE_GEN":
             ms_uc = get_execute_milestone_generation_use_case(
@@ -49,6 +51,7 @@ async def execute_ai_roadmap_generation(
                 llm_provider=llm_provider,
                 sse_job_store=sse_store,
                 uow=uow,
+                knowledge_base=knowledge_base,
             )
             await ms_uc.execute(
                 job_id=UUID(job_id),
@@ -73,6 +76,7 @@ async def execute_ai_roadmap_generation(
                 llm_provider=llm_provider,
                 sse_job_store=sse_store,
                 uow=uow,
+                knowledge_base=knowledge_base,
             )
             await prop_uc.execute(
                 job_id=UUID(job_id),

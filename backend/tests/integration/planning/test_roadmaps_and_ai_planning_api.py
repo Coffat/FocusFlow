@@ -569,3 +569,82 @@ async def test_manual_planning_uc09_zero_ai_quota_and_idor_404_protection(
 
         r_archive = await client.post(f"/api/v1/roadmaps/{roadmap_id}/archive")
         assert r_archive.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_ai_clarification_flow_and_idor(
+    planning_users: tuple[UUID, UUID],
+) -> None:
+    """Test AI Clarification questions generation and answers submission (FR-GOAL-002)."""
+    owner_id, other_id = planning_users
+    app.dependency_overrides[get_current_learner_id] = lambda: owner_id
+    app.dependency_overrides[get_llm_provider] = lambda: MockLLMAdapter()
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 1. Create Roadmap with prior_knowledge_level
+        create_res = await client.post(
+            "/api/v1/roadmaps",
+            json={
+                "title": "Chinh phục LangChain & RAG",
+                "description": "Xây dựng AI Agent sản xuất",
+                "prior_knowledge_level": "INTERMEDIATE",
+                "start_date": "2026-11-02",
+                "target_date": "2026-12-15",
+            },
+        )
+        assert create_res.status_code == 201
+        res_data = create_res.json()
+        goal_data = res_data["goal"]
+        assert goal_data["prior_knowledge_level"] == "INTERMEDIATE"
+        assert goal_data["clarification_context"] is None
+        goal_id = UUID(goal_data["id"])
+
+        # 2. Request clarification questions
+        q_res = await client.post(f"/api/v1/roadmaps/goals/{goal_id}/clarify-questions")
+        assert q_res.status_code == 200
+        questions_data = q_res.json()
+        assert "questions" in questions_data
+        assert len(questions_data["questions"]) >= 2
+        q1 = questions_data["questions"][0]
+        assert "question_id" in q1
+        assert "text" in q1
+
+        # 3. Submit answers to clarification questions
+        ans_res = await client.post(
+            f"/api/v1/roadmaps/goals/{goal_id}/clarify-answers",
+            json={
+                "answers": [
+                    {
+                        "question_id": q1["question_id"],
+                        "question_text": q1["text"],
+                        "answer": "Đã có kinh nghiệm viết Python và gọi OpenAI API",
+                    },
+                    {
+                        "question_id": "q2",
+                        "question_text": "Thời gian cam kết",
+                        "answer": "1.5 giờ mỗi ngày vào buổi tối",
+                    },
+                ]
+            },
+        )
+        assert ans_res.status_code == 200
+        ans_data = ans_res.json()
+        assert ans_data["goal_id"] == str(goal_id)
+        assert "Đã có kinh nghiệm viết Python" in ans_data["clarification_context"]
+
+        # 4. Verify IDOR protection: other user cannot access or answer owner's goal
+        app.dependency_overrides[get_current_learner_id] = lambda: other_id
+
+        idor_q = await client.post(f"/api/v1/roadmaps/goals/{goal_id}/clarify-questions")
+        assert idor_q.status_code == 404
+
+        idor_ans = await client.post(
+            f"/api/v1/roadmaps/goals/{goal_id}/clarify-answers",
+            json={
+                "answers": [
+                    {"question_id": "q1", "answer": "Hacked"},
+                ]
+            },
+        )
+        assert idor_ans.status_code == 404

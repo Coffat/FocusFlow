@@ -42,11 +42,12 @@ services:
       dockerfile: Dockerfile
     container_name: focusflow-backend
     restart: unless-stopped
-    command: sh -c "alembic upgrade head && uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload"
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     volumes:
       - ./backend:/app
+      - ./backend/supervisord.conf:/etc/supervisor/conf.d/supervisord.conf
+      - ./backend/entrypoint.sh:/usr/local/bin/entrypoint.sh
     environment:
       - ENVIRONMENT=development
       - DEBUG=True
@@ -63,69 +64,14 @@ services:
       - SECRET_KEY=${SECRET_KEY:-change_this_to_a_super_secret_64_character_hex_key_for_jwt_signing}
       - FERNET_KEY=${FERNET_KEY:-}
       - LLM_PROVIDER=${LLM_PROVIDER:-gemini}
-      - LLM_MODEL=${LLM_MODEL:-gemini-2.5-flash}
-      - LLM_API_KEY=${LLM_API_KEY:-mock-key}
+      - LLM_MODEL=${LLM_MODEL:-gemini-3.8-flash}
+      - LLM_API_KEY=${LLM_API_KEY:-${GEMINI_API_KEY:-mock-key}}
       - LLM_BASE_URL=${LLM_BASE_URL:-}
       - PAYMENT_PROVIDER=${PAYMENT_PROVIDER:-mock}
       - CALENDAR_PROVIDER=${CALENDAR_PROVIDER:-mock}
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - focusflow-network
-
-  worker:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: focusflow-worker
-    restart: unless-stopped
-    command: taskiq worker src.shared_kernel.infrastructure.worker.broker:broker src.shared_kernel.infrastructure.outbox.relay src.account.presentation.tasks src.planning.presentation.tasks src.execution.presentation.tasks src.evaluation.presentation.tasks --workers 2
-    volumes:
-      - ./backend:/app
-    environment:
-      - ENVIRONMENT=development
-      - POSTGRES_SERVER=postgres
-      - POSTGRES_PORT=5432
-      - POSTGRES_USER=${POSTGRES_USER:-focusflow_user}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-focusflow_secure_password}
-      - POSTGRES_DB=${POSTGRES_DB:-focusflow_db}
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-focusflow_user}:${POSTGRES_PASSWORD:-focusflow_secure_password}@postgres:5432/${POSTGRES_DB:-focusflow_db}
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_URL=redis://redis:6379/0
-      - LLM_PROVIDER=${LLM_PROVIDER:-gemini}
-      - LLM_MODEL=${LLM_MODEL:-gemini-2.5-flash}
-      - LLM_API_KEY=${LLM_API_KEY:-mock-key}
-      - PAYMENT_PROVIDER=${PAYMENT_PROVIDER:-mock}
-      - CALENDAR_PROVIDER=${CALENDAR_PROVIDER:-mock}
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - focusflow-network
-
-  scheduler:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: focusflow-scheduler
-    restart: unless-stopped
-    command: taskiq scheduler src.shared_kernel.infrastructure.worker.broker:scheduler src.shared_kernel.infrastructure.outbox.relay src.account.presentation.tasks src.planning.presentation.tasks src.execution.presentation.tasks src.evaluation.presentation.tasks
-    deploy:
-      replicas: 1
-    volumes:
-      - ./backend:/app
-    environment:
-      - ENVIRONMENT=development
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_URL=redis://redis:6379/0
-    depends_on:
       redis:
         condition: service_healthy
     networks:

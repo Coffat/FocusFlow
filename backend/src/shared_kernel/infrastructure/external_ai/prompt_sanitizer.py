@@ -24,6 +24,12 @@ _USER_INPUT_TAG_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Script tags and prompt-injection override directives
+_SCRIPT_TAG_RE = re.compile(r"<\s*script[^>]*>.*?<\s*/\s*script\s*>", re.IGNORECASE | re.DOTALL)
+_PROMPT_INJECTION_RE = re.compile(
+    r"(?i)(ignore\s+all\s+previous\s+instructions|bỏ\s+qua\s+mọi\s+chỉ\s+thị\s+trước)"
+)
+
 _SENSITIVE_DICT_KEYS: frozenset[str] = frozenset(
     {
         "email",
@@ -71,7 +77,9 @@ class PromptSanitizer:
         """Escape any `<user_input>` or `</user_input>` tags in user text to prevent boundary breakout."""
         if not text:
             return ""
-        return _USER_INPUT_TAG_RE.sub(r"&lt;\1user_input&gt;", text)
+        cleaned = _SCRIPT_TAG_RE.sub("", text)
+        cleaned = _PROMPT_INJECTION_RE.sub("[FILTERED_INJECTION]", cleaned)
+        return _USER_INPUT_TAG_RE.sub(r"&lt;\1user_input&gt;", cleaned)
 
     @classmethod
     def sanitize(cls, text: str, *, wrap_xml: bool = True) -> str:
@@ -83,9 +91,22 @@ class PromptSanitizer:
         return escaped
 
     @classmethod
-    def sanitize_text(cls, text: str, *, wrap_xml: bool = True) -> str:
-        """Alias for sanitize()."""
+    def sanitize_text(cls, text: str, *, wrap_xml: bool = False) -> str:
+        """Sanitize inline text without outer XML wrapper by default."""
         return cls.sanitize(text, wrap_xml=wrap_xml)
+
+    @classmethod
+    def sanitize_and_wrap(cls, tag_name: str, text: str) -> str:
+        """Sanitize PII & prompt-injection sequences and wrap in `<tag_name>...</tag_name>`."""
+        safe_tag = re.sub(r"[^a-zA-Z0-9_-]", "_", tag_name.strip()) or "user_input"
+        inner = cls.sanitize(text, wrap_xml=False)
+        inner = re.sub(
+            rf"<\s*(/?)\s*{re.escape(safe_tag)}(?:\s+[^>]*)?\s*>",
+            rf"&lt;\1{safe_tag}&gt;",
+            inner,
+            flags=re.IGNORECASE,
+        )
+        return f"<{safe_tag}>{inner}</{safe_tag}>"
 
     @classmethod
     def sanitize_dict(cls, payload: dict[str, Any]) -> dict[str, Any]:

@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import date
@@ -11,6 +12,10 @@ from src.execution.public_api import (
     DagCycleValidator,
     DagDependencyEdge,
     DagTaskNode,
+)
+from src.planning.application.services.roadmap_skills import (
+    PEDAGOGICAL_JUDGE_SKILL,
+    build_pedagogical_judge_prompt,
 )
 from src.planning.domain.exceptions.planning_exceptions import (
     ProposalValidationGateError,
@@ -41,6 +46,45 @@ logger = structlog.get_logger(__name__)
 
 TIER3_JUDGE_TIMEOUT_SECONDS: float = 5.0
 DEFAULT_MAX_RETRIES: int = 2
+
+PEDAGOGICAL_JUDGE_RESPONSE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "overall_status": {
+            "type": "string",
+            "enum": ["PASS", "WARN", "FAIL"],
+        },
+        "pedagogical_score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+        },
+        "score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+        },
+        "issues": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "category": {"type": "string"},
+                    "severity": {"type": "string"},
+                    "message": {"type": "string"},
+                },
+            },
+        },
+        "warnings": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "advisory_warnings": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+    },
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,12 +132,12 @@ class ProposalValidationGateOrchestrator:
         self,
         llm_provider: LLMProviderPort | None = None,
         *,
-        enable_tier3_judge: bool = False,
+        enable_tier3_judge: bool = True,
         tier3_timeout_seconds: float = TIER3_JUDGE_TIMEOUT_SECONDS,
     ) -> None:
         self._llm = llm_provider
         self._enable_tier3_judge = enable_tier3_judge
-        self._tier3_timeout_seconds = min(tier3_timeout_seconds, TIER3_JUDGE_TIMEOUT_SECONDS)
+        self._tier3_timeout_seconds = tier3_timeout_seconds
 
     @staticmethod
     def validate_ai_milestones_tier1(
@@ -444,26 +488,17 @@ class ProposalValidationGateOrchestrator:
         if not self._enable_tier3_judge or self._llm is None:
             return False, None, []
 
-        judge_system_prompt = (
-            "Bạn là chuyên gia đánh giá sư phạm theo mô hình Zimmerman SRL. "
-            "Hãy đánh giá ngắn gọn tính hợp lý sư phạm của lịch học đề xuất (JSON: "
-            '{"score": 0.0..1.0, "advisory_warnings": ["..."]}).'
-        )
-        judge_user_prompt = (
-            f"Mục tiêu: {goal_title}\nSố nhiệm vụ: {len(proposal_data.get('tasks', []))}"
+        judge_system_prompt = PEDAGOGICAL_JUDGE_SKILL.system_instruction
+        judge_user_prompt = build_pedagogical_judge_prompt(
+            proposal_data,
+            context_block=f"Mục tiêu: {goal_title}\nSố nhiệm vụ: {len(proposal_data.get('tasks', []))}",
         )
 
         try:
             coro = self._llm.generate_structured(
                 prompt=judge_user_prompt,
                 system_prompt=judge_system_prompt,
-                response_schema={
-                    "type": "object",
-                    "properties": {
-                        "score": {"type": "number"},
-                        "advisory_warnings": {"type": "array", "items": {"type": "string"}},
-                    },
-                },
+                response_schema=PEDAGOGICAL_JUDGE_RESPONSE_SCHEMA,
                 temperature=0.1,
             )
             judge_dict, _, _ = await asyncio.wait_for(
@@ -471,12 +506,28 @@ class ProposalValidationGateOrchestrator:
                 timeout=self._tier3_timeout_seconds,
             )
             score_raw = judge_dict.get("score")
+            if not isinstance(score_raw, (int, float)):
+                score_raw = judge_dict.get("pedagogical_score")
             score = float(score_raw) if isinstance(score_raw, (int, float)) else 0.85
-            adv_raw = judge_dict.get("advisory_warnings", [])
-            advisories = (
-                [str(w) for w in adv_raw if str(w).strip()] if isinstance(adv_raw, list) else []
-            )
-            return False, score, advisories
+
+            collected_warnings: list[str] = []
+            for key in ("advisory_warnings", "warnings"):
+                raw_list = judge_dict.get(key, [])
+                if isinstance(raw_list, list):
+                    for w in raw_list:
+                        w_str = str(w).strip()
+                        if w_str and w_str not in collected_warnings:
+                            collected_warnings.append(w_str)
+
+            raw_issues = judge_dict.get("issues", [])
+            if isinstance(raw_issues, list):
+                for issue in raw_issues:
+                    if isinstance(issue, dict) and issue.get("message"):
+                        msg_str = str(issue["message"]).strip()
+                        if msg_str and msg_str not in collected_warnings:
+                            collected_warnings.append(msg_str)
+
+            return False, score, collected_warnings
         except TimeoutError:
             logger.warning(
                 "tier3_pedagogical_judge_timeout_fail_open",
@@ -599,6 +650,12 @@ class ProposalValidationGateOrchestrator:
         goal_title: str = "",
         max_retries: int = DEFAULT_MAX_RETRIES,
         on_retry_callback: Callable[[int, Sequence[ConstraintViolationDTO]], Any] | None = None,
+        start_date: date | None = None,
+        milestone_order_map: dict[str, int] | None = None,
+        tools: list[Any] | None = None,
+        tool_executor: Any | None = None,
+        max_tool_calls: int = 4,
+        thinking_level: str | None = None,
     ) -> ValidationGateResultDTO:
         """Invoke LLMProviderPort and run the 3-Tier Validation Gate with up to `max_retries` (2) self-correction loops."""
         if self._llm is None:
@@ -614,16 +671,52 @@ class ProposalValidationGateOrchestrator:
 
         max_attempts = max(1, int(max_retries) + 1)
 
+        sig_params = inspect.signature(self._llm.generate_structured).parameters
+        supports_tools = "tools" in sig_params or any(
+            p.kind == inspect.Parameter.VAR_KEYWORD for p in sig_params.values()
+        )
+
         for attempt in range(1, max_attempts + 1):
+            extra_kwargs: dict[str, Any] = {}
+            if supports_tools and tools is not None and attempt == 1:
+                extra_kwargs = {
+                    "tools": tools,
+                    "tool_executor": tool_executor,
+                    "max_tool_calls": max_tool_calls,
+                    "thinking_level": thinking_level,
+                }
+
             raw_proposal, p_tokens, c_tokens = await self._llm.generate_structured(
                 prompt=current_prompt,
                 system_prompt=system_prompt,
                 response_schema=response_schema,
                 user_prompt=current_prompt,
                 temperature=0.2,
+                **extra_kwargs,
             )
             total_prompt_tokens += int(p_tokens or 0)
             total_completion_tokens += int(c_tokens or 0)
+
+            raw_tasks = raw_proposal.get("tasks") if isinstance(raw_proposal, dict) else None
+            if isinstance(raw_tasks, list) and any(
+                isinstance(t, dict) and parse_iso_date(t.get("scheduled_date")) is None
+                for t in raw_tasks
+            ):
+                raw_deps = (
+                    raw_proposal.get("dependencies")
+                    if isinstance(raw_proposal.get("dependencies"), list)
+                    else []
+                )
+                allocated_tasks = SpatioTemporalRuleEngine.allocate_tasks_to_availability(
+                    raw_tasks,
+                    availability,
+                    start_date=start_date or date(2026, 11, 2),
+                    target_date=current_roadmap_target_date,
+                    dependencies=raw_deps,
+                    existing_tasks=existing_tasks,
+                    milestone_order_map=milestone_order_map,
+                )
+                raw_proposal = {**raw_proposal, "tasks": allocated_tasks}
 
             gate_result = await self.validate_proposal(
                 raw_proposal,

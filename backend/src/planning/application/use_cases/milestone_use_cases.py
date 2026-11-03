@@ -1,3 +1,4 @@
+import inspect
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
@@ -8,12 +9,24 @@ from src.planning.application.dtos.planning_dtos import (
     MilestoneInputItemDTO,
     SseJobTicketDTO,
 )
+from src.planning.application.ports.knowledge_base_port import KnowledgeBasePort
 from src.planning.application.ports.planning_repository_ports import (
     GoalRepositoryPort,
     MilestoneRepositoryPort,
     RoadmapRepositoryPort,
 )
 from src.planning.application.ports.sse_job_port import SseJobPort
+from src.planning.application.services.knowledge_tool_dispatcher import (
+    KnowledgeToolDispatcher,
+    RoadmapPipelineStage,
+)
+from src.planning.application.services.roadmap_context_builder import (
+    RoadmapContextBuilder,
+)
+from src.planning.application.services.roadmap_skills import (
+    MILESTONE_PLANNER_SKILL,
+    build_milestone_planner_prompt,
+)
 from src.planning.application.services.validation_gate import (
     DEFAULT_MAX_RETRIES,
     ProposalValidationGateOrchestrator,
@@ -50,6 +63,24 @@ MILESTONE_RESPONSE_SCHEMA: dict[str, Any] = {
                     "sequence_order": {"type": "integer", "minimum": 1},
                     "title": {"type": "string", "minLength": 1},
                     "description": {"type": "string"},
+                    "learning_outcomes": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                    "completion_criteria": {"type": "string"},
+                    "estimated_effort_minutes": {"type": "integer", "minimum": 15},
+                    "required_concepts": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                    "unverified_concepts": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                    "dependencies": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                    },
                 },
                 "required": ["sequence_order", "title"],
             },
@@ -72,6 +103,7 @@ class ExecuteMilestoneGenerationUseCase:
         llm_provider: LLMProviderPort,
         sse_job_store: SseJobPort,
         uow: AsyncUnitOfWork,
+        knowledge_base: KnowledgeBasePort | None = None,
     ) -> None:
         self._goal_repo = goal_repo
         self._roadmap_repo = roadmap_repo
@@ -80,6 +112,7 @@ class ExecuteMilestoneGenerationUseCase:
         self._llm = llm_provider
         self._sse = sse_job_store
         self._uow = uow
+        self._kb = knowledge_base
 
     async def execute(
         self,
@@ -103,9 +136,16 @@ class ExecuteMilestoneGenerationUseCase:
             raw_desc = (
                 (goal.raw_description or "") if goal is not None else (roadmap.description or "")
             )
+            prior_knowledge = goal.prior_knowledge_level if goal is not None else "BEGINNER"
+            clarification_ctx = (goal.clarification_context or "") if goal is not None else ""
 
             sanitized_title = PromptSanitizer.sanitize(raw_title, wrap_xml=True)
             sanitized_desc = PromptSanitizer.sanitize(raw_desc, wrap_xml=True)
+            sanitized_clarification = (
+                PromptSanitizer.sanitize(clarification_ctx, wrap_xml=True)
+                if clarification_ctx
+                else ""
+            )
 
             await self._sse.append_event(
                 job_id=job_id,
@@ -119,17 +159,46 @@ class ExecuteMilestoneGenerationUseCase:
                 },
             )
 
-            system_prompt = (
-                "Bạn là kiến trúc sư lộ trình học tập tự điều chỉnh theo mô hình Zimmerman SRL. "
-                "Hãy phân rã mục tiêu học tập trong thẻ <user_input> thành từ 3 đến 7 cột mốc "
-                "(Milestones) tuần tự có sequence_order liên tục từ 1..N."
+            system_prompt = MILESTONE_PLANNER_SKILL.system_instruction
+            if goal is not None:
+                context_block = RoadmapContextBuilder.build_milestone_planning_context(
+                    goal=goal,
+                    roadmap=roadmap,
+                )
+            else:
+                prompt_lines = [
+                    f"Tiêu đề mục tiêu: {sanitized_title}",
+                    f"Mô tả chi tiết: {sanitized_desc}",
+                    f"Trình độ đầu vào: {prior_knowledge}",
+                ]
+                if sanitized_clarification:
+                    prompt_lines.append(
+                        f"Kết quả phỏng vấn chẩn đoán / Làm rõ nhu cầu:\n{sanitized_clarification}"
+                    )
+                prompt_lines.extend(
+                    [
+                        f"Ngày bắt đầu: {roadmap.start_date.isoformat() if roadmap.start_date else 'N/A'}",
+                        f"Ngày đích: {roadmap.target_date.isoformat() if roadmap.target_date else 'N/A'}",
+                    ]
+                )
+                context_block = "\n".join(prompt_lines)
+
+            base_user_prompt = build_milestone_planner_prompt(
+                context_block,
+                goal_title=raw_title,
+                raw_description=raw_desc,
+                prior_knowledge_level=prior_knowledge,
+                clarification_summary=sanitized_clarification,
             )
-            base_user_prompt = (
-                f"Tiêu đề mục tiêu: {sanitized_title}\n"
-                f"Mô tả chi tiết: {sanitized_desc}\n"
-                f"Ngày bắt đầu: {roadmap.start_date.isoformat() if roadmap.start_date else 'N/A'}\n"
-                f"Ngày đích: {roadmap.target_date.isoformat() if roadmap.target_date else 'N/A'}"
-            )
+
+            dispatcher: KnowledgeToolDispatcher | None = None
+            if self._kb is not None:
+                dispatcher = KnowledgeToolDispatcher(
+                    self._kb,
+                    stage=RoadmapPipelineStage.MILESTONE_PLANNING,
+                    max_tool_calls=MILESTONE_PLANNER_SKILL.max_tool_calls,
+                    timeout_seconds=5.0,
+                )
 
             current_prompt = base_user_prompt
             total_prompt_tokens = 0
@@ -138,13 +207,28 @@ class ExecuteMilestoneGenerationUseCase:
             validated_items: list[dict[str, Any]] = []
             last_violations = []
 
+            sig_params = inspect.signature(self._llm.generate_structured).parameters
+            supports_tools = "tools" in sig_params or any(
+                p.kind == inspect.Parameter.VAR_KEYWORD for p in sig_params.values()
+            )
+
             for attempt in range(1, max_attempts + 1):
+                extra_kwargs: dict[str, Any] = {}
+                if supports_tools and dispatcher is not None and attempt == 1:
+                    extra_kwargs = {
+                        "tools": dispatcher.get_allowed_tool_declarations(),
+                        "tool_executor": dispatcher.dispatch,
+                        "max_tool_calls": MILESTONE_PLANNER_SKILL.max_tool_calls,
+                        "thinking_level": MILESTONE_PLANNER_SKILL.thinking_level,
+                    }
+
                 raw_result, p_tok, c_tok = await self._llm.generate_structured(
                     prompt=current_prompt,
                     system_prompt=system_prompt,
                     response_schema=MILESTONE_RESPONSE_SCHEMA,
                     user_prompt=current_prompt,
                     temperature=0.2,
+                    **extra_kwargs,
                 )
                 total_prompt_tokens += int(p_tok or 0)
                 total_completion_tokens += int(c_tok or 0)

@@ -11,6 +11,7 @@ from src.account.public_api import (
 )
 from src.execution.public_api import ExecutionScheduleSyncPort
 from src.planning.application.dtos.planning_dtos import SseJobTicketDTO
+from src.planning.application.ports.knowledge_base_port import KnowledgeBasePort
 from src.planning.application.ports.planning_repository_ports import (
     GoalRepositoryPort,
     MilestoneRepositoryPort,
@@ -18,6 +19,17 @@ from src.planning.application.ports.planning_repository_ports import (
     ScheduleProposalRepositoryPort,
 )
 from src.planning.application.ports.sse_job_port import SseJobPort
+from src.planning.application.services.knowledge_tool_dispatcher import (
+    KnowledgeToolDispatcher,
+    RoadmapPipelineStage,
+)
+from src.planning.application.services.roadmap_context_builder import (
+    RoadmapContextBuilder,
+)
+from src.planning.application.services.roadmap_skills import (
+    TASK_DECOMPOSER_SKILL,
+    build_task_decomposer_prompt,
+)
 from src.planning.application.services.validation_gate import (
     DEFAULT_MAX_RETRIES,
     ProposalValidationGateOrchestrator,
@@ -58,6 +70,32 @@ SCHEDULE_PROPOSAL_RESPONSE_SCHEMA: dict[str, Any] = {
                     "milestone_id": {"type": "string"},
                     "title": {"type": "string", "minLength": 1},
                     "description": {"type": "string"},
+                    "task_type": {
+                        "type": "string",
+                        "enum": ["THEORY", "PRACTICE", "REVIEW", "PROJECT"],
+                    },
+                    "learning_objective": {"type": "string"},
+                    "completion_criteria": {"type": "string"},
+                    "learning_resources": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "title": {"type": "string"},
+                                "url": {"type": "string"},
+                                "type": {
+                                    "type": "string",
+                                    "enum": ["DOCS", "TUTORIAL", "VIDEO", "BOOK", "PRACTICE"],
+                                },
+                                "description": {"type": "string"},
+                            },
+                            "required": ["title", "url"],
+                        },
+                    },
+                    "concept_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
                     "estimated_minutes": {
                         "type": "integer",
                         "minimum": AI_BLOCK_MIN_MINUTES,
@@ -225,7 +263,8 @@ class ExecuteScheduleProposalGenerationUseCase:
         llm_provider: LLMProviderPort,
         sse_job_store: SseJobPort,
         uow: AsyncUnitOfWork,
-        enable_tier3_judge: bool = False,
+        enable_tier3_judge: bool = True,
+        knowledge_base: KnowledgeBasePort | None = None,
     ) -> None:
         self._goal_repo = goal_repo
         self._roadmap_repo = roadmap_repo
@@ -239,6 +278,7 @@ class ExecuteScheduleProposalGenerationUseCase:
         self._sse = sse_job_store
         self._uow = uow
         self._enable_tier3_judge = enable_tier3_judge
+        self._kb = knowledge_base
 
     async def execute(
         self,
@@ -265,6 +305,9 @@ class ExecuteScheduleProposalGenerationUseCase:
             avail_snapshot = await self._availability_port.get_active_availability(user_id)
             avail_config = build_availability_config_from_snapshot(avail_snapshot)
             learner_profile = await self._learner_profile_port.get_learner_profile(user_id)
+            goal = await self._goal_repo.get_by_id(roadmap.goal_id)
+            prior_knowledge = goal.prior_knowledge_level if goal is not None else "BEGINNER"
+            clarification_ctx = (goal.clarification_context or "") if goal is not None else ""
 
             active_roadmaps = await self._roadmap_repo.list_by_user_id(user_id, status="ACTIVE")
             other_roadmaps = [r for r in active_roadmaps if r.id != roadmap_id]
@@ -302,16 +345,18 @@ class ExecuteScheduleProposalGenerationUseCase:
                 roadmap.start_date.isoformat() if roadmap.start_date is not None else "2026-11-02"
             )
 
-            system_prompt = (
-                "Bạn là hệ thống lập kế hoạch học tập thích ứng FocusFlow (Zimmerman SRL). "
-                "Hãy sinh đề xuất lịch học chi tiết (tasks & dependencies) bám sát các cột mốc "
-                "đã duyệt, thời lượng mỗi nhiệm vụ từ 30 đến 120 phút, tuyệt đối tuân thủ lịch rảnh."
-            )
-            user_prompt = (
+            system_prompt = TASK_DECOMPOSER_SKILL.system_instruction
+            legacy_block = (
                 f"GENERATE_PROPOSAL_TASKS\n"
                 f"Roadmap: {sanitized_title}\n"
                 f"Description: {sanitized_desc}\n"
-                f"Start Date: {start_date_str}\n"
+                f"Prior Knowledge Level: {prior_knowledge}\n"
+                + (
+                    f"Clarification Context:\n{PromptSanitizer.sanitize(clarification_ctx, wrap_xml=True)}\n"
+                    if clarification_ctx
+                    else ""
+                )
+                + f"Start Date: {start_date_str}\n"
                 f"Target Date: {roadmap.target_date.isoformat() if roadmap.target_date else 'N/A'}\n"
                 f"Availability Mode: {avail_config.mode}\n"
                 f"Learner Optimal Session Minutes: {learner_profile.opt_session_minutes} (beta={learner_profile.estimation_bias_beta})\n"
@@ -319,6 +364,27 @@ class ExecuteScheduleProposalGenerationUseCase:
                 "AVAILABILITY_SLOTS:\n"
                 + ("\n".join(slot_lines) if slot_lines else "monday: 19:30-21:30")
             )
+            if goal is not None:
+                structured_ctx = RoadmapContextBuilder.build_task_decomposition_context(
+                    goal=goal,
+                    roadmap=roadmap,
+                    milestones=milestones,
+                    availability=avail_config,
+                    learner_profile=learner_profile,
+                    existing_tasks=existing_tasks,
+                )
+                user_prompt = build_task_decomposer_prompt(f"{legacy_block}\n\n{structured_ctx}")
+            else:
+                user_prompt = build_task_decomposer_prompt(legacy_block)
+
+            dispatcher: KnowledgeToolDispatcher | None = None
+            if self._kb is not None:
+                dispatcher = KnowledgeToolDispatcher(
+                    self._kb,
+                    stage=RoadmapPipelineStage.TASK_DECOMPOSITION,
+                    max_tool_calls=TASK_DECOMPOSER_SKILL.max_tool_calls,
+                    timeout_seconds=5.0,
+                )
 
             await self._sse.append_event(
                 job_id=job_id,
@@ -361,6 +427,7 @@ class ExecuteScheduleProposalGenerationUseCase:
                 enable_tier3_judge=self._enable_tier3_judge,
             )
             valid_mids: set[UUID | str] = {m.id for m in milestones}
+            milestone_order_map = {str(m.id): m.sequence_order for m in milestones}
             gate_result = await orchestrator.generate_and_validate_proposal_with_retry(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
@@ -372,6 +439,14 @@ class ExecuteScheduleProposalGenerationUseCase:
                 goal_title=goal.title if goal is not None else roadmap.title,
                 max_retries=max_retries,
                 on_retry_callback=_on_retry,
+                start_date=roadmap.start_date,
+                milestone_order_map=milestone_order_map,
+                tools=(
+                    dispatcher.get_allowed_tool_declarations() if dispatcher is not None else None
+                ),
+                tool_executor=dispatcher.dispatch if dispatcher is not None else None,
+                max_tool_calls=TASK_DECOMPOSER_SKILL.max_tool_calls,
+                thinking_level=TASK_DECOMPOSER_SKILL.thinking_level,
             )
 
             normalized_data = normalize_proposal_task_ids_and_dependencies(

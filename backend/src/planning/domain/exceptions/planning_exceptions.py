@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from src.shared_kernel.domain.exceptions import DomainError
 
 
@@ -94,15 +96,85 @@ class SoftOverflowConfirmationRequiredError(PlanningDomainError):
         self.overflow_minutes = overflow_minutes
 
 
+class GoalNotFoundError(PlanningDomainError):
+    """Raised when a goal is not found or does not belong to the current user (IDOR protection)."""
+
+    def __init__(self, message: str | UUID = "Không tìm thấy mục tiêu học tập.") -> None:
+        msg = (
+            f"Không tìm thấy mục tiêu học tập ({message})."
+            if isinstance(message, UUID)
+            else message
+        )
+        super().__init__(message=msg, code="GOAL_NOT_FOUND")
+
+
 class RoadmapNotFoundError(PlanningDomainError):
     """Raised when a roadmap is not found or does not belong to the current user (IDOR protection)."""
 
-    def __init__(self, message: str = "Không tìm thấy lộ trình học tập.") -> None:
-        super().__init__(message=message, code="ROADMAP_NOT_FOUND")
+    def __init__(self, message: str | UUID = "Không tìm thấy lộ trình học tập.") -> None:
+        msg = (
+            f"Không tìm thấy lộ trình học tập ({message})."
+            if isinstance(message, UUID)
+            else message
+        )
+        super().__init__(message=msg, code="ROADMAP_NOT_FOUND")
 
 
 class ScheduleProposalNotFoundError(PlanningDomainError):
     """Raised when a schedule proposal is not found or does not belong to the current user."""
 
-    def __init__(self, message: str = "Không tìm thấy bản đề xuất lịch học.") -> None:
-        super().__init__(message=message, code="SCHEDULE_PROPOSAL_NOT_FOUND")
+    def __init__(self, message: str | UUID = "Không tìm thấy bản đề xuất lịch học.") -> None:
+        msg = (
+            f"Không tìm thấy bản đề xuất lịch học ({message})."
+            if isinstance(message, UUID)
+            else message
+        )
+        super().__init__(message=msg, code="SCHEDULE_PROPOSAL_NOT_FOUND")
+
+
+class UnauthorizedToolCallError(PlanningDomainError):
+    """Raised when an AI stage attempts to invoke a tool not permitted for that stage."""
+
+    def __init__(
+        self,
+        tool_name: str,
+        stage: str,
+        message: str | None = None,
+    ) -> None:
+        msg = message or (f"Tool '{tool_name}' không được cấp quyền thực thi tại stage '{stage}'.")
+        super().__init__(message=msg, code="UNAUTHORIZED_TOOL_CALL")
+        self.tool_name = tool_name
+        self.stage = stage
+
+
+class ToolInputValidationError(PlanningDomainError):
+    """Raised when tool arguments fail deterministic validation."""
+
+    def __init__(
+        self,
+        tool_name: str,
+        message: str | None = None,
+        *,
+        reason: str | None = None,
+    ) -> None:
+        msg = reason or message or "Tham số đầu vào của tool không hợp lệ."
+        super().__init__(message=msg, code="TOOL_INPUT_VALIDATION_ERROR")
+        self.tool_name = tool_name
+        self.reason = msg
+
+
+class ToolCallLimitExceededError(PlanningDomainError):
+    """Raised when tool invocations exceed max_tool_calls in a single stage."""
+
+    def __init__(
+        self,
+        stage: str = "",
+        max_calls: int = 4,
+        message: str | None = None,
+    ) -> None:
+        msg = message or (
+            f"Đã vượt quá giới hạn số lần gọi tool tối đa ({max_calls}) tại stage '{stage}'."
+        )
+        super().__init__(message=msg, code="TOOL_CALL_LIMIT_EXCEEDED")
+        self.stage = stage
+        self.max_calls = max_calls

@@ -37,6 +37,7 @@ class CreateGoalAndRoadmapUseCase:
         description: str | None = None,
         goal_title: str | None = None,
         goal_description: str | None = None,
+        prior_knowledge_level: str = "BEGINNER",
         start_date: date | None = None,
         target_date: date | None = None,
         tier: str | None = None,
@@ -70,6 +71,7 @@ class CreateGoalAndRoadmapUseCase:
             raw_description=effective_goal_desc,
             target_date=target_date,
             status=GoalStatus.ACTIVE,
+            prior_knowledge_level=prior_knowledge_level or "BEGINNER",
             created_at=effective_now,
             updated_at=effective_now,
         )

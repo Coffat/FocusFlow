@@ -76,6 +76,17 @@ class QuotaFacadeAdapter(QuotaFacadePort):
             await self._session.flush()
         return quota
 
+    async def check_quota_available(
+        self,
+        user_id: UUID,
+        min_credits: int = 1,
+    ) -> bool:
+        quota = await self._get_or_init_quota_for_update(user_id)
+        total_available = int(quota.free_credits_remaining or 0) + int(
+            quota.paid_credits_remaining or 0
+        )
+        return total_available >= min_credits
+
     async def reserve_quota(
         self,
         user_id: UUID,

@@ -43,6 +43,10 @@ class GoalORM(Base):
     raw_description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     target_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="ACTIVE")
+    prior_knowledge_level: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="BEGINNER"
+    )
+    clarification_context: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
@@ -219,4 +223,88 @@ class ScheduleProposalORM(Base):
         nullable=False,
         default=lambda: datetime.now(UTC),
         onupdate=lambda: datetime.now(UTC),
+    )
+
+
+class LearningConceptORM(Base):
+    """Curated Knowledge Base concepts table (`learning_concepts`)."""
+
+    __tablename__ = "learning_concepts"
+    __table_args__ = (
+        CheckConstraint(
+            "verification_status IN ('VERIFIED', 'UNVERIFIED', 'DEPRECATED')",
+            name="chk_learning_concepts_verification_status",
+        ),
+        CheckConstraint(
+            "estimated_effort_minutes > 0",
+            name="chk_learning_concepts_effort_positive",
+        ),
+        Index(
+            "idx_learning_concepts_domain_level",
+            "domain",
+            "difficulty_level",
+            "verification_status",
+        ),
+    )
+
+    concept_id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    domain: Mapped[str] = mapped_column(String(100), nullable=False)
+    difficulty_level: Mapped[str] = mapped_column(String(50), nullable=False, default="BEGINNER")
+    estimated_effort_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=60)
+    keywords: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    learning_outcomes: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    verification_status: Mapped[str] = mapped_column(String(30), nullable=False, default="VERIFIED")
+    version: Mapped[str] = mapped_column(String(20), nullable=False, default="1.0.0")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
+
+
+class ConceptPrerequisiteORM(Base):
+    """Directed prerequisite edges between curated concepts (`concept_prerequisites`)."""
+
+    __tablename__ = "concept_prerequisites"
+    __table_args__ = (
+        CheckConstraint(
+            "relation_type IN ('REQUIRES', 'RECOMMENDED_BEFORE')",
+            name="chk_concept_prerequisites_relation_type",
+        ),
+        CheckConstraint(
+            "source_concept_id <> prerequisite_concept_id",
+            name="chk_concept_prerequisites_no_self_loop",
+        ),
+        Index("idx_concept_prerequisites_source", "source_concept_id"),
+        Index("idx_concept_prerequisites_prereq", "prerequisite_concept_id"),
+    )
+
+    source_concept_id: Mapped[str] = mapped_column(
+        String(120),
+        ForeignKey(
+            "learning_concepts.concept_id",
+            ondelete="CASCADE",
+            name="fk_concept_prerequisites_source",
+        ),
+        primary_key=True,
+    )
+    prerequisite_concept_id: Mapped[str] = mapped_column(
+        String(120),
+        ForeignKey(
+            "learning_concepts.concept_id",
+            ondelete="CASCADE",
+            name="fk_concept_prerequisites_prereq",
+        ),
+        primary_key=True,
+    )
+    relation_type: Mapped[str] = mapped_column(String(30), nullable=False, default="REQUIRES")
+    rationale: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )

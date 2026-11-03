@@ -1,4 +1,11 @@
 from src.planning.domain.models.goal import Goal, GoalStatus
+from src.planning.domain.models.knowledge_concept import (
+    ConceptPrerequisiteEdge,
+    ConceptPrerequisiteGraph,
+    ConceptVerificationStatus,
+    LearningConcept,
+    PrerequisiteRelationType,
+)
 from src.planning.domain.models.milestone import (
     AI_MILESTONE_MAX_COUNT,
     AI_MILESTONE_MIN_COUNT,
@@ -22,13 +29,18 @@ from src.planning.domain.models.schedule import (
 __all__ = [
     "AI_MILESTONE_MAX_COUNT",
     "AI_MILESTONE_MIN_COUNT",
+    "ConceptPrerequisiteEdge",
+    "ConceptPrerequisiteGraph",
+    "ConceptVerificationStatus",
     "FREE_MAX_ACTIVE_ROADMAPS",
     "Goal",
     "GoalStatus",
+    "LearningConcept",
     "Milestone",
     "MilestoneStatus",
     "OfficialSchedule",
     "PREMIUM_MAX_ACTIVE_ROADMAPS",
+    "PrerequisiteRelationType",
     "Roadmap",
     "RoadmapStatus",
     "ScheduleProposal",

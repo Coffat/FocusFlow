@@ -1,8 +1,10 @@
 from collections.abc import Sequence
 from datetime import date, datetime, time, timedelta
+from typing import Any
 from uuid import UUID
 
 from src.planning.domain.services.validation_types import (
+    MAX_DAILY_PLANNED_MINUTES,
     SOFT_OVERFLOW_MAX_MINUTES,
     AvailabilityConfigurationDTO,
     AvailabilitySlotDTO,
@@ -507,3 +509,298 @@ class SpatioTemporalRuleEngine:
                     )
 
         return violations, warnings
+
+    @classmethod
+    def allocate_tasks_to_availability(
+        cls,
+        tasks: Sequence[dict[str, Any]],
+        availability: AvailabilityConfigurationDTO,
+        *,
+        start_date: date,
+        target_date: date | None = None,
+        dependencies: Sequence[dict[str, Any]] | None = None,
+        existing_tasks: Sequence[Any] | None = None,
+        milestone_order_map: dict[str, int] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Deterministically allocate unscheduled atomic tasks into learner availability slots.
+
+        - Preserves any task that already has a valid `scheduled_date`.
+        - Topologically sorts unscheduled tasks by `dependencies` (`predecessor_id -> successor_id`),
+          `milestone_order_map`, and `task_order` / original list index.
+        - Respects `disabled_weekdays`, `existing_tasks` (EDF), Mode A (`QUOTA`) and Mode B (`FIXED_SLOTS`),
+          and ensures `predecessor.end <= successor.start`.
+        """
+        _ = target_date
+        if not tasks:
+            return []
+
+        cloned_tasks: list[dict[str, Any]] = [dict(t) for t in tasks]
+        unscheduled_indices = [
+            idx
+            for idx, t in enumerate(cloned_tasks)
+            if parse_iso_date(t.get("scheduled_date")) is None
+        ]
+        if not unscheduled_indices:
+            return cloned_tasks
+
+        weekday_names = (
+            "monday",
+            "tuesday",
+            "wednesday",
+            "thursday",
+            "friday",
+            "saturday",
+            "sunday",
+        )
+        disabled_days: set[str] = set()
+        for raw_d in availability.disabled_weekdays:
+            norm_d = normalize_weekday_name(raw_d)
+            if norm_d:
+                disabled_days.add(norm_d)
+
+        quota_by_day: dict[str, int] = {}
+        for k, v in availability.daily_quota_minutes.items():
+            norm_k = normalize_weekday_name(k)
+            if norm_k:
+                quota_by_day[norm_k] = int(v)
+
+        slots_by_day: dict[str, list[tuple[int, int]]] = {}
+        for raw_slot in availability.availability_slots:
+            if isinstance(raw_slot, AvailabilitySlotDTO):
+                s_day = normalize_weekday_name(raw_slot.day_of_week)
+                s_start = parse_hhmm_or_time(raw_slot.start_time)
+                s_end = parse_hhmm_or_time(raw_slot.end_time)
+            elif isinstance(raw_slot, dict):
+                s_day = normalize_weekday_name(raw_slot.get("day_of_week"))
+                s_start = parse_hhmm_or_time(raw_slot.get("start_time"))
+                s_end = parse_hhmm_or_time(raw_slot.get("end_time"))
+            else:
+                continue
+            if not s_day or s_start is None or s_end is None:
+                continue
+            start_min = s_start.hour * 60 + s_start.minute
+            end_min = s_end.hour * 60 + s_end.minute
+            if end_min <= start_min:
+                end_min += 1440
+            slots_by_day.setdefault(s_day, []).append((start_min, end_min))
+
+        for d_key, raw_intervals in list(slots_by_day.items()):
+            sorted_iv = sorted(raw_intervals, key=lambda x: (x[0], x[1]))
+            merged: list[tuple[int, int]] = []
+            for iv_s, iv_e in sorted_iv:
+                if merged and iv_s <= merged[-1][1]:
+                    merged[-1] = (merged[-1][0], max(merged[-1][1], iv_e))
+                else:
+                    merged.append((iv_s, iv_e))
+            slots_by_day[d_key] = merged
+
+        daily_used_minutes: dict[date, int] = {}
+        daily_intervals: dict[date, list[tuple[int, int]]] = {}
+        task_end_anchor: dict[str, tuple[date, int]] = {}
+
+        # 1. Seed existing committed tasks
+        for ex in existing_tasks or ():
+            if isinstance(ex, dict):
+                ex_date = parse_iso_date(ex.get("scheduled_date"))
+                ex_mins = _to_int(ex.get("estimated_minutes"), 0)
+                ex_start = parse_iso_datetime(
+                    ex.get("planned_start_at") or ex.get("scheduled_start")
+                )
+                ex_end = parse_iso_datetime(ex.get("planned_end_at") or ex.get("scheduled_end"))
+            else:
+                ex_date = parse_iso_date(getattr(ex, "scheduled_date", None))
+                ex_mins = _to_int(getattr(ex, "estimated_minutes", 0), 0)
+                ex_start = parse_iso_datetime(getattr(ex, "planned_start_at", None))
+                ex_end = parse_iso_datetime(getattr(ex, "planned_end_at", None))
+
+            if ex_date is not None and ex_mins > 0:
+                daily_used_minutes[ex_date] = daily_used_minutes.get(ex_date, 0) + ex_mins
+                if ex_start is not None and ex_end is not None:
+                    s_m = ex_start.hour * 60 + ex_start.minute
+                    e_m = s_m + max(ex_mins, int((ex_end - ex_start).total_seconds() // 60))
+                    daily_intervals.setdefault(ex_date, []).append((s_m, e_m))
+
+        # 2. Seed already-scheduled tasks in cloned_tasks
+        id_to_idx: dict[str, int] = {}
+        for idx, t in enumerate(cloned_tasks):
+            tid = str(t.get("task_id") or t.get("id") or f"idx-{idx}")
+            id_to_idx[tid] = idx
+            s_date = parse_iso_date(t.get("scheduled_date"))
+            if s_date is not None:
+                dur = max(1, _to_int(t.get("estimated_minutes"), 60))
+                daily_used_minutes[s_date] = daily_used_minutes.get(s_date, 0) + dur
+                st_dt = parse_iso_datetime(t.get("scheduled_start"))
+                en_dt = parse_iso_datetime(t.get("scheduled_end"))
+                if st_dt is not None and en_dt is not None:
+                    s_m = st_dt.hour * 60 + st_dt.minute
+                    e_m = s_m + max(dur, int((en_dt - st_dt).total_seconds() // 60))
+                else:
+                    s_m = 19 * 60
+                    e_m = s_m + dur
+                daily_intervals.setdefault(s_date, []).append((s_m, e_m))
+                task_end_anchor[tid] = (s_date, e_m)
+
+        # 3. Build topological order for unscheduled tasks
+        ms_order: dict[str, int] = dict(milestone_order_map or {})
+        for idx, t in enumerate(cloned_tasks):
+            mid = str(t.get("milestone_id") or "")
+            if mid and mid not in ms_order:
+                ms_order[mid] = len(ms_order) + 1
+
+        preds_by_idx: dict[int, list[int]] = {i: [] for i in range(len(cloned_tasks))}
+        succs_by_idx: dict[int, list[int]] = {i: [] for i in range(len(cloned_tasks))}
+        in_degree: dict[int, int] = {i: 0 for i in unscheduled_indices}
+
+        for dep in dependencies or ():
+            if not isinstance(dep, dict):
+                continue
+            p_id = str(dep.get("predecessor_id") or "")
+            s_id = str(dep.get("successor_id") or "")
+            p_idx = id_to_idx.get(p_id)
+            s_idx = id_to_idx.get(s_id)
+            if p_idx is not None and s_idx is not None and p_idx != s_idx:
+                preds_by_idx[s_idx].append(p_idx)
+                succs_by_idx[p_idx].append(s_idx)
+                if p_idx in in_degree and s_idx in in_degree:
+                    in_degree[s_idx] += 1
+
+        def _sort_key(i: int) -> tuple[int, int, int]:
+            t_item = cloned_tasks[i]
+            mid = str(t_item.get("milestone_id") or "")
+            m_seq = ms_order.get(mid, 999)
+            t_ord = _to_int(t_item.get("task_order"), i)
+            return (m_seq, t_ord, i)
+
+        ready = sorted([i for i, deg in in_degree.items() if deg == 0], key=_sort_key)
+        ordered_unscheduled: list[int] = []
+        while ready:
+            curr = ready.pop(0)
+            ordered_unscheduled.append(curr)
+            for nxt in succs_by_idx.get(curr, []):
+                if nxt in in_degree:
+                    in_degree[nxt] -= 1
+                    if in_degree[nxt] == 0:
+                        ready.append(nxt)
+                        ready.sort(key=_sort_key)
+
+        if len(ordered_unscheduled) < len(unscheduled_indices):
+            remaining = [i for i in unscheduled_indices if i not in ordered_unscheduled]
+            remaining.sort(key=_sort_key)
+            ordered_unscheduled.extend(remaining)
+
+        mode_upper = (availability.mode or "QUOTA").upper()
+
+        # 4. Allocate each unscheduled task
+        for idx in ordered_unscheduled:
+            t_item = cloned_tasks[idx]
+            tid = str(t_item.get("task_id") or t_item.get("id") or f"idx-{idx}")
+            duration = max(30, min(120, _to_int(t_item.get("estimated_minutes"), 60)))
+            t_item["estimated_minutes"] = duration
+
+            min_date = start_date
+            min_minute_on_min_date = 0
+            for p_idx in preds_by_idx.get(idx, []):
+                p_tid = str(
+                    cloned_tasks[p_idx].get("task_id")
+                    or cloned_tasks[p_idx].get("id")
+                    or f"idx-{p_idx}"
+                )
+                anchor = task_end_anchor.get(p_tid)
+                if anchor is not None:
+                    p_date, p_end_min = anchor
+                    if p_date > min_date:
+                        min_date = p_date
+                        min_minute_on_min_date = p_end_min
+                    elif p_date == min_date:
+                        min_minute_on_min_date = max(min_minute_on_min_date, p_end_min)
+
+            allocated = False
+            for day_step in range(366):
+                cand_date = min_date + timedelta(days=day_step)
+                wname = weekday_names[cand_date.weekday()]
+                if wname in disabled_days:
+                    continue
+
+                used_today = daily_used_minutes.get(cand_date, 0)
+                earliest_min = min_minute_on_min_date if day_step == 0 else 0
+
+                if mode_upper == "FIXED_SLOTS":
+                    day_slots = slots_by_day.get(wname, [])
+                    if not day_slots:
+                        continue
+                    slot_capacity = min(
+                        MAX_DAILY_PLANNED_MINUTES,
+                        sum(max(0, e - s) for s, e in day_slots),
+                    )
+                    if used_today + duration > slot_capacity:
+                        continue
+
+                    occupied = sorted(
+                        daily_intervals.get(cand_date, []), key=lambda x: (x[0], x[1])
+                    )
+                    chosen_window: tuple[int, int] | None = None
+                    for sl_s, sl_e in day_slots:
+                        cand_s = max(sl_s, earliest_min)
+                        for occ_s, occ_e in occupied:
+                            if cand_s + duration <= occ_s:
+                                break
+                            if cand_s < occ_e:
+                                cand_s = max(cand_s, occ_e)
+                        if cand_s + duration <= sl_e:
+                            chosen_window = (cand_s, cand_s + duration)
+                            break
+
+                    if chosen_window is None:
+                        continue
+
+                    win_s, win_e = chosen_window
+                else:
+                    day_quota = min(
+                        MAX_DAILY_PLANNED_MINUTES,
+                        quota_by_day.get(wname, availability.default_daily_quota_minutes),
+                    )
+                    if day_quota <= 0 or used_today + duration > day_quota:
+                        continue
+
+                    occupied = sorted(
+                        daily_intervals.get(cand_date, []), key=lambda x: (x[0], x[1])
+                    )
+                    default_start = 9 * 60 if occupied else 19 * 60
+                    cand_s = max(default_start, earliest_min)
+                    for occ_s, occ_e in occupied:
+                        if cand_s + duration <= occ_s:
+                            break
+                        if cand_s < occ_e:
+                            cand_s = max(cand_s, occ_e)
+                    if cand_s + duration > 1440:
+                        continue
+                    win_s, win_e = cand_s, cand_s + duration
+
+                sh, sm = (win_s // 60) % 24, win_s % 60
+                end_day_offset = win_e // 1440
+                end_date = cand_date + timedelta(days=end_day_offset)
+                eh, em = (win_e % 1440) // 60, win_e % 60
+
+                t_item["scheduled_date"] = cand_date.isoformat()
+                t_item["scheduled_start"] = f"{cand_date.isoformat()}T{sh:02d}:{sm:02d}:00+00:00"
+                t_item["scheduled_end"] = f"{end_date.isoformat()}T{eh:02d}:{em:02d}:00+00:00"
+
+                daily_used_minutes[cand_date] = used_today + duration
+                daily_intervals.setdefault(cand_date, []).append((win_s, win_e))
+                task_end_anchor[tid] = (
+                    end_date,
+                    win_e % 1440 if end_day_offset > 0 else win_e,
+                )
+                allocated = True
+                break
+
+            if not allocated:
+                fallback_date = min_date
+                t_item["scheduled_date"] = fallback_date.isoformat()
+                t_item["scheduled_start"] = f"{fallback_date.isoformat()}T19:00:00+00:00"
+                end_m = 19 * 60 + duration
+                t_item["scheduled_end"] = (
+                    f"{fallback_date.isoformat()}T{(end_m // 60) % 24:02d}:{end_m % 60:02d}:00+00:00"
+                )
+
+        return cloned_tasks

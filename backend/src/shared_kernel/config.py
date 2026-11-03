@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -50,9 +51,16 @@ class Settings(BaseSettings):
 
     # Provider-Agnostic LLM (ADR-006: gemini | openai | anthropic | ollama | mock)
     llm_provider: str = "gemini"
-    llm_model: str = "gemini-2.5-flash"
-    llm_api_key: str = "mock-key"
+    llm_model: str = "gemini-3.8-flash"
+    llm_api_key: str = Field(
+        default="mock-key",
+        validation_alias=AliasChoices("llm_api_key", "gemini_api_key", "llm_key"),
+    )
     llm_base_url: str = ""
+    llm_thinking_level: str = "MEDIUM"
+    llm_max_tool_calls: int = 4
+    llm_tool_timeout_seconds: float = 5.0
+    enable_tier3_judge: bool = True
 
     # External Providers (Sandbox / Mock fallback for offline thesis defense)
     payment_provider: str = "mock"

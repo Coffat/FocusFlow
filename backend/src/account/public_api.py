@@ -130,6 +130,12 @@ class AvailabilityQueryPort(Protocol):
 class QuotaFacadePort(Protocol):
     """Cross-context port for 2-Phase ACID AI Quota Reservation (ADR-005 / BUSR-10)."""
 
+    async def check_quota_available(
+        self,
+        user_id: UUID,
+        min_credits: int = 1,
+    ) -> bool: ...
+
     async def reserve_quota(
         self,
         user_id: UUID,

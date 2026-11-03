@@ -27,6 +27,7 @@ from src.execution.public_api import (
     ExecutionScheduleSyncPort,
     create_execution_schedule_sync_port,
 )
+from src.planning.application.ports.knowledge_base_port import KnowledgeBasePort
 from src.planning.application.ports.planning_repository_ports import (
     GoalRepositoryPort,
     MilestoneRepositoryPort,
@@ -42,12 +43,14 @@ from src.planning.application.use_cases import (
     CreateGoalAndRoadmapUseCase,
     ExecuteMilestoneGenerationUseCase,
     ExecuteScheduleProposalGenerationUseCase,
+    GenerateClarificationQuestionsUseCase,
     GetCurrentScheduleProposalUseCase,
     GetRoadmapDetailUseCase,
     InitiateMilestoneGenerationUseCase,
     InitiateScheduleProposalGenerationUseCase,
     ListRoadmapsUseCase,
     SaveManualRoadmapPlanUseCase,
+    SubmitClarificationAnswersUseCase,
     UpdateMilestonesUseCase,
     UpdateRoadmapUseCase,
     UpdateScheduleProposalUseCase,
@@ -58,6 +61,9 @@ from src.planning.infrastructure.repositories.planning_repositories import (
     SqlAlchemyOfficialScheduleRepository,
     SqlAlchemyRoadmapRepository,
     SqlAlchemyScheduleProposalRepository,
+)
+from src.planning.infrastructure.repositories.sqlalchemy_knowledge_base_repository import (
+    SqlAlchemyKnowledgeBaseRepository,
 )
 from src.planning.infrastructure.sse import default_in_memory_sse_job_store
 from src.shared_kernel.application.llm_port import LLMProviderPort
@@ -116,6 +122,12 @@ def get_official_schedule_repository(
     session: AsyncSession = Depends(get_planning_db_session),
 ) -> OfficialScheduleRepositoryPort:
     return SqlAlchemyOfficialScheduleRepository(session)
+
+
+def get_knowledge_base_repository(
+    session: AsyncSession = Depends(get_planning_db_session),
+) -> KnowledgeBasePort:
+    return SqlAlchemyKnowledgeBaseRepository(session)
 
 
 # --- Cross-Context & Shared Kernel Port Dependencies ---
@@ -258,6 +270,28 @@ def get_create_goal_and_roadmap_use_case(
     )
 
 
+def get_generate_clarification_questions_use_case(
+    goal_repo: GoalRepositoryPort = Depends(get_goal_repository),
+    quota_facade: QuotaFacadePort = Depends(get_planning_quota_facade),
+    llm_provider: LLMProviderPort = Depends(get_llm_provider),
+) -> GenerateClarificationQuestionsUseCase:
+    return GenerateClarificationQuestionsUseCase(
+        goal_repo=goal_repo,
+        quota_facade=quota_facade,
+        llm_provider=llm_provider,
+    )
+
+
+def get_submit_clarification_answers_use_case(
+    goal_repo: GoalRepositoryPort = Depends(get_goal_repository),
+    uow: AsyncUnitOfWork = Depends(get_planning_uow),
+) -> SubmitClarificationAnswersUseCase:
+    return SubmitClarificationAnswersUseCase(
+        goal_repo=goal_repo,
+        uow=uow,
+    )
+
+
 def get_execute_milestone_generation_use_case(
     goal_repo: GoalRepositoryPort = Depends(get_goal_repository),
     roadmap_repo: RoadmapRepositoryPort = Depends(get_roadmap_repository),
@@ -266,7 +300,9 @@ def get_execute_milestone_generation_use_case(
     llm_provider: LLMProviderPort = Depends(get_llm_provider),
     sse_job_store: SseJobPort = Depends(get_sse_job_store),
     uow: AsyncUnitOfWork = Depends(get_planning_uow),
+    knowledge_base: KnowledgeBasePort | None = Depends(get_knowledge_base_repository),
 ) -> ExecuteMilestoneGenerationUseCase:
+    effective_kb = knowledge_base if isinstance(knowledge_base, KnowledgeBasePort) else None
     return ExecuteMilestoneGenerationUseCase(
         goal_repo=goal_repo,
         roadmap_repo=roadmap_repo,
@@ -275,6 +311,7 @@ def get_execute_milestone_generation_use_case(
         llm_provider=llm_provider,
         sse_job_store=sse_job_store,
         uow=uow,
+        knowledge_base=effective_kb,
     )
 
 
@@ -332,7 +369,9 @@ def get_execute_schedule_proposal_generation_use_case(
     llm_provider: LLMProviderPort = Depends(get_llm_provider),
     sse_job_store: SseJobPort = Depends(get_sse_job_store),
     uow: AsyncUnitOfWork = Depends(get_planning_uow),
+    knowledge_base: KnowledgeBasePort | None = Depends(get_knowledge_base_repository),
 ) -> ExecuteScheduleProposalGenerationUseCase:
+    effective_kb = knowledge_base if isinstance(knowledge_base, KnowledgeBasePort) else None
     return ExecuteScheduleProposalGenerationUseCase(
         goal_repo=goal_repo,
         roadmap_repo=roadmap_repo,
@@ -345,6 +384,8 @@ def get_execute_schedule_proposal_generation_use_case(
         llm_provider=llm_provider,
         sse_job_store=sse_job_store,
         uow=uow,
+        enable_tier3_judge=get_settings().enable_tier3_judge,
+        knowledge_base=effective_kb,
     )
 
 
@@ -533,3 +574,11 @@ GetRoadmapDetailUseCaseDep = Annotated[
 ]
 UpdateRoadmapUseCaseDep = Annotated[UpdateRoadmapUseCase, Depends(get_update_roadmap_use_case)]
 ArchiveRoadmapUseCaseDep = Annotated[ArchiveRoadmapUseCase, Depends(get_archive_roadmap_use_case)]
+GenerateClarificationQuestionsUseCaseDep = Annotated[
+    GenerateClarificationQuestionsUseCase,
+    Depends(get_generate_clarification_questions_use_case),
+]
+SubmitClarificationAnswersUseCaseDep = Annotated[
+    SubmitClarificationAnswersUseCase,
+    Depends(get_submit_clarification_answers_use_case),
+]

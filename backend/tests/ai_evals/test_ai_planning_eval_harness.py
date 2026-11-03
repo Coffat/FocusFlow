@@ -250,6 +250,14 @@ class _FakeQuotaFacade:
         self.committed: list[tuple[UUID, int, int]] = []
         self.released: list[tuple[UUID, str]] = []
 
+    async def check_quota_available(
+        self,
+        user_id: UUID,
+        min_credits: int = 1,
+    ) -> bool:
+        _ = (user_id, min_credits)
+        return True
+
     async def reserve_quota(
         self,
         user_id: UUID,

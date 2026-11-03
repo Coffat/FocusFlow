@@ -52,6 +52,8 @@ class SqlAlchemyGoalRepository(GoalRepositoryPort):
             raw_description=row.raw_description,
             target_date=row.target_date,
             status=GoalStatus(row.status),
+            prior_knowledge_level=getattr(row, "prior_knowledge_level", "BEGINNER") or "BEGINNER",
+            clarification_context=getattr(row, "clarification_context", None),
             created_at=row.created_at,
             updated_at=row.updated_at,
         )
@@ -70,6 +72,8 @@ class SqlAlchemyGoalRepository(GoalRepositoryPort):
                 raw_description=raw_desc,
                 target_date=goal.target_date,
                 status=goal.status.value,
+                prior_knowledge_level=goal.prior_knowledge_level,
+                clarification_context=goal.clarification_context,
                 created_at=created,
                 updated_at=now,
             )
@@ -79,6 +83,8 @@ class SqlAlchemyGoalRepository(GoalRepositoryPort):
             row.raw_description = raw_desc
             row.target_date = goal.target_date
             row.status = goal.status.value
+            row.prior_knowledge_level = goal.prior_knowledge_level
+            row.clarification_context = goal.clarification_context
             row.updated_at = now
 
         await self._session.flush()
@@ -86,6 +92,13 @@ class SqlAlchemyGoalRepository(GoalRepositoryPort):
 
     async def get_by_id(self, goal_id: UUID) -> Goal | None:
         row = await self._session.get(GoalORM, goal_id)
+        if row is None:
+            return None
+        return self._to_domain(row)
+
+    async def get_by_id_for_user(self, goal_id: UUID, user_id: UUID) -> Goal | None:
+        stmt = select(GoalORM).where(GoalORM.id == goal_id, GoalORM.user_id == user_id)
+        row = (await self._session.execute(stmt)).scalar_one_or_none()
         if row is None:
             return None
         return self._to_domain(row)

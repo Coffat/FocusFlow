@@ -4,6 +4,18 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.planning.application.dtos.planning_dtos import (
+    ClarificationAnswerItem,
+    ClarificationQuestion,
+    ClarificationQuestionsResponse,
+)
+
+__all__ = [
+    "ClarificationAnswerItem",
+    "ClarificationQuestion",
+    "ClarificationQuestionsResponse",
+]
+
 
 class GoalResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -14,8 +26,29 @@ class GoalResponse(BaseModel):
     raw_description: str | None = None
     target_date: date | None = None
     status: str
+    prior_knowledge_level: str = "BEGINNER"
+    clarification_context: str | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class SubmitClarificationAnswersRequest(BaseModel):
+    answers: list[ClarificationAnswerItem] = Field(default_factory=list)
+    skipped: bool = Field(default=False)
+    skipped_question_ids: list[str] = Field(default_factory=list)
+    total_questions_count: int | None = Field(default=None)
+
+
+class SkipClarificationRequest(BaseModel):
+    skipped_question_ids: list[str] = Field(default_factory=list)
+
+
+class SubmitClarificationAnswersResponse(BaseModel):
+    goal_id: UUID
+    status: str = "ANSWERED"
+    clarification_context: str
+    unresolved_assumptions: list[str] = Field(default_factory=list)
+    message: str = "Clarification context updated successfully"
 
 
 class MilestoneUpsertItemSchema(BaseModel):
@@ -53,6 +86,7 @@ class CreateRoadmapRequest(BaseModel):
     description: str | None = None
     goal_title: str | None = None
     goal_description: str | None = None
+    prior_knowledge_level: str = "BEGINNER"
     start_date: date | None = None
     target_date: date | None = None
 
@@ -93,17 +127,34 @@ class SseJobTicketResponse(BaseModel):
     streamUrl: str  # noqa: N815
 
 
+class LearningResourceSchema(BaseModel):
+    title: str = Field(..., min_length=1, max_length=255)
+    url: str = Field(..., min_length=1)
+    type: str = Field(default="DOCS")
+    description: str | None = None
+
+
 class ProposedTaskItemSchema(BaseModel):
     task_id: UUID | str | None = None
     milestone_id: UUID | str | None = None
     milestone_sequence_order: int | None = None
     title: str = Field(..., min_length=1, max_length=255)
     description: str | None = None
+    task_type: str | None = Field(default="PRACTICE")
+    learning_objective: str | None = None
+    completion_criteria: str | None = None
+    learning_resources: list[LearningResourceSchema] = Field(default_factory=list)
+    concept_ids: list[str] = Field(default_factory=list)
     estimated_minutes: int = Field(default=45)
     scheduled_date: date | str | None = None
     scheduled_start: datetime | str | None = None
     scheduled_end: datetime | str | None = None
     prerequisite_ids: list[UUID | str] = Field(default_factory=list)
+
+
+# Aliases for cross-module typing and test compatibility
+ProposalTaskInputSchema = ProposedTaskItemSchema
+ProposalTaskItemResponse = ProposedTaskItemSchema
 
 
 class ProposedDependencyItemSchema(BaseModel):

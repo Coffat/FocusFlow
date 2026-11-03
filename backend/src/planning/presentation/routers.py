@@ -10,9 +10,11 @@ from src.planning.application.dtos.planning_dtos import (
     MilestoneInputItemDTO,
     ScheduleProposalViewDTO,
     SseJobTicketDTO,
+    parse_clarification_context,
 )
 from src.planning.application.ports.sse_job_port import SseJobNotFoundError
 from src.planning.domain.exceptions.planning_exceptions import (
+    GoalNotFoundError,
     PlanningDomainError,
     ProposalValidationGateError,
     RoadmapNotFoundError,
@@ -30,6 +32,7 @@ from src.planning.presentation.deps import (
     ArchiveRoadmapUseCaseDep,
     CreateGoalAndRoadmapUseCaseDep,
     CurrentLearnerIdDep,
+    GenerateClarificationQuestionsUseCaseDep,
     GetCurrentProposalUseCaseDep,
     GetRoadmapDetailUseCaseDep,
     InitiateMilestoneGenUseCaseDep,
@@ -37,6 +40,7 @@ from src.planning.presentation.deps import (
     ListRoadmapsUseCaseDep,
     SaveManualPlanUseCaseDep,
     SseJobStoreDep,
+    SubmitClarificationAnswersUseCaseDep,
     UpdateMilestonesUseCaseDep,
     UpdateProposalUseCaseDep,
     UpdateRoadmapUseCaseDep,
@@ -44,6 +48,7 @@ from src.planning.presentation.deps import (
 from src.planning.presentation.schemas.planning_schemas import (
     ApplyScheduleProposalRequest,
     ApplyScheduleProposalResponse,
+    ClarificationQuestionsResponse,
     ConstraintViolationSchema,
     CreateManualRoadmapPlanRequest,
     CreateRoadmapRequest,
@@ -55,8 +60,11 @@ from src.planning.presentation.schemas.planning_schemas import (
     RoadmapResponse,
     ScheduledTaskResponse,
     ScheduleProposalResponse,
+    SkipClarificationRequest,
     SoftOverflowWarningSchema,
     SseJobTicketResponse,
+    SubmitClarificationAnswersRequest,
+    SubmitClarificationAnswersResponse,
     UpdateMilestonesRequest,
     UpdateRoadmapRequest,
     UpdateScheduleProposalRequest,
@@ -70,7 +78,12 @@ roadmaps_router = APIRouter(prefix="/api/v1/roadmaps", tags=["Roadmaps & AI Plan
 def _handle_planning_error(exc: DomainError) -> JSONResponse:
     if isinstance(
         exc,
-        (RoadmapNotFoundError, ScheduleProposalNotFoundError, SseJobNotFoundError),
+        (
+            GoalNotFoundError,
+            RoadmapNotFoundError,
+            ScheduleProposalNotFoundError,
+            SseJobNotFoundError,
+        ),
     ):
         return JSONResponse(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -121,6 +134,8 @@ def _to_goal_response(goal: Goal) -> GoalResponse:
         raw_description=goal.raw_description,
         target_date=goal.target_date,
         status=goal.status.value,
+        prior_knowledge_level=goal.prior_knowledge_level,
+        clarification_context=goal.clarification_context,
         created_at=goal.created_at,
         updated_at=goal.updated_at,
     )
@@ -301,10 +316,95 @@ async def create_roadmap(
             description=request.description,
             goal_title=request.goal_title,
             goal_description=request.goal_description,
+            prior_knowledge_level=request.prior_knowledge_level,
             start_date=request.start_date,
             target_date=request.target_date,
         )
         return _to_roadmap_response(res.roadmap, res.goal)
+    except DomainError as exc:
+        return _handle_planning_error(exc)
+
+
+@roadmaps_router.post(
+    "/goals/{goal_id}/clarify-questions",
+    response_model=ClarificationQuestionsResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Generate 2-3 diagnostic clarification questions for a goal (FR-GOAL-002)",
+)
+async def generate_clarification_questions(
+    goal_id: UUID,
+    user_id: CurrentLearnerIdDep,
+    use_case: GenerateClarificationQuestionsUseCaseDep,
+) -> ClarificationQuestionsResponse | JSONResponse:
+    try:
+        return await use_case.execute(
+            goal_id=goal_id,
+            user_id=user_id,
+        )
+    except DomainError as exc:
+        return _handle_planning_error(exc)
+
+
+@roadmaps_router.post(
+    "/goals/{goal_id}/clarify-answers",
+    response_model=SubmitClarificationAnswersResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Submit answers to clarification questions and update goal context (FR-GOAL-002)",
+)
+async def submit_clarification_answers(
+    goal_id: UUID,
+    request: SubmitClarificationAnswersRequest,
+    user_id: CurrentLearnerIdDep,
+    use_case: SubmitClarificationAnswersUseCaseDep,
+) -> SubmitClarificationAnswersResponse | JSONResponse:
+    try:
+        goal = await use_case.execute(
+            goal_id=goal_id,
+            user_id=user_id,
+            answers=request.answers,
+            skipped=request.skipped,
+            skipped_question_ids=request.skipped_question_ids,
+            total_questions_count=request.total_questions_count,
+        )
+        parsed = parse_clarification_context(goal.clarification_context)
+        return SubmitClarificationAnswersResponse(
+            goal_id=goal.id,
+            status=parsed.status if parsed else "ANSWERED",
+            clarification_context=goal.clarification_context or "",
+            unresolved_assumptions=list(parsed.unresolved_assumptions) if parsed else [],
+            message="Clarification context updated successfully",
+        )
+    except DomainError as exc:
+        return _handle_planning_error(exc)
+
+
+@roadmaps_router.post(
+    "/goals/{goal_id}/clarify-skip",
+    response_model=SubmitClarificationAnswersResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Explicitly skip goal clarification survey and record unresolved assumptions (FR-GOAL-002)",
+)
+async def skip_clarification_questions(
+    goal_id: UUID,
+    user_id: CurrentLearnerIdDep,
+    use_case: SubmitClarificationAnswersUseCaseDep,
+    request: SkipClarificationRequest | None = None,
+) -> SubmitClarificationAnswersResponse | JSONResponse:
+    try:
+        skipped_ids = request.skipped_question_ids if request else None
+        goal = await use_case.skip(
+            user_id=user_id,
+            goal_id=goal_id,
+            skipped_question_ids=skipped_ids,
+        )
+        parsed = parse_clarification_context(goal.clarification_context)
+        return SubmitClarificationAnswersResponse(
+            goal_id=goal.id,
+            status=parsed.status if parsed else "SKIPPED",
+            clarification_context=goal.clarification_context or "",
+            unresolved_assumptions=list(parsed.unresolved_assumptions) if parsed else [],
+            message="Clarification survey skipped and assumptions recorded",
+        )
     except DomainError as exc:
         return _handle_planning_error(exc)
 

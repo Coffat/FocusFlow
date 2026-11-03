@@ -1,5 +1,6 @@
 from src.planning.domain.exceptions.planning_exceptions import (
     ActiveRoadmapLimitExceededError,
+    GoalNotFoundError,
     InvalidMilestoneSequenceError,
     InvalidRoadmapStateTransitionError,
     PlanningDomainError,
@@ -7,11 +8,15 @@ from src.planning.domain.exceptions.planning_exceptions import (
     RoadmapNotFoundError,
     ScheduleProposalNotFoundError,
     SoftOverflowConfirmationRequiredError,
+    ToolCallLimitExceededError,
+    ToolInputValidationError,
     UnapprovedMilestonesError,
+    UnauthorizedToolCallError,
 )
 
 __all__ = [
     "ActiveRoadmapLimitExceededError",
+    "GoalNotFoundError",
     "InvalidMilestoneSequenceError",
     "InvalidRoadmapStateTransitionError",
     "PlanningDomainError",
@@ -19,5 +24,8 @@ __all__ = [
     "RoadmapNotFoundError",
     "ScheduleProposalNotFoundError",
     "SoftOverflowConfirmationRequiredError",
+    "ToolCallLimitExceededError",
+    "ToolInputValidationError",
+    "UnauthorizedToolCallError",
     "UnapprovedMilestonesError",
 ]

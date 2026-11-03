@@ -1,3 +1,4 @@
+from src.planning.application.ports.knowledge_base_port import KnowledgeBasePort
 from src.planning.application.ports.planning_repository_ports import (
     GoalRepositoryPort,
     MilestoneRepositoryPort,
@@ -14,6 +15,7 @@ from src.planning.application.ports.sse_job_port import (
 
 __all__ = [
     "GoalRepositoryPort",
+    "KnowledgeBasePort",
     "MilestoneRepositoryPort",
     "OfficialScheduleRepositoryPort",
     "RoadmapRepositoryPort",
