@@ -507,7 +507,7 @@ Theo hướng dẫn phân rã mô hình tại [`diagram-guide.md`](../../.agents
 |---|---|
 | **ID** | UC-07 |
 | **Tên** | Khởi tạo mục tiêu và Tạo khung lộ trình bằng AI |
-| **Mô tả ngắn** | Người học nhập mục tiêu học tập, ngày đích và trình độ hiện tại, trả lời câu hỏi làm rõ ngữ cảnh với AI, sau đó xem xét, chỉnh sửa và phê duyệt danh sách Cột mốc kiến thức Cấp 1 (`Milestones`) cho lộ trình. |
+| **Mô tả ngắn** | Người học khởi tạo mục tiêu học tập, chọn trình độ đầu vào (`prior_knowledge_level`), trả lời các câu hỏi chẩn đoán với AI (kết hợp trắc nghiệm có phương án lựa chọn và tự luận ngắn — Bước 1), sau đó AI sinh 3–7 Cột mốc kiến thức Cấp 1 (`Milestones`) để Người học xem xét, chỉnh sửa và phê duyệt (`MilestoneStatus.APPROVED` — Bước 2) trước khi mở khóa bước phân rã nhiệm vụ chi tiết. |
 | **Actor chính** | Người học (`Learner` — `ACT-01`) |
 | **Actor phụ** | Nhà cung cấp dịch vụ LLM (`External LLM Provider` — `ACT-04`) |
 | **Mức độ** | Mục tiêu người dùng (User-goal level) |
@@ -521,15 +521,15 @@ Theo hướng dẫn phân rã mô hình tại [`diagram-guide.md`](../../.agents
 | **Truy vết SRS & Thiết kế** | • **SRS**: `FR-GOAL-001`, `FR-GOAL-002`, `FR-PLAN-001`, `FR-AI-001`, `FR-AI-002`, `FR-QUOTA-001`, `BUSR-01`, `BUSR-02`, `BUSR-10`, `OS-02`, `OS-08`<br>• **Lớp miền**: `Goal`, `Roadmap`, `Milestone`, `AIQuota`, `AIQuotaReservation`, `AIUsageLog`<br>• **Bảng CSDL**: `goals`, `roadmaps`, `milestones`, `ai_quotas`, `ai_quota_reservations`, `ai_usage_logs` |
 
 **Luồng chính (Basic Flow)**
-1. Người học nhập tiêu đề mục tiêu học tập (`title`), mô tả chi tiết (`rawDescription`), trình độ nền tảng (`priorKnowledgeLevel`) và ngày hoàn thành mục tiêu (`targetDate`).
+1. **[Bước 1 — Mục tiêu & Chẩn đoán thích ứng]:** Người học nhập tiêu đề mục tiêu học tập (`title`), mô tả chi tiết (`rawDescription`), lựa chọn trình độ nền tảng (`priorKnowledgeLevel`: `BEGINNER` | `INTERMEDIATE` | `ADVANCED`), ngày bắt đầu và ngày đích (`targetDate`).
 2. Hệ thống kiểm tra tính hợp lệ của thông tin mục tiêu (`BR-GOAL-01`), kiểm tra giới hạn số lộ trình `ACTIVE` theo gói dịch vụ (`BR-QUOTA-02`) và tạo bản ghi giữ chỗ hạn ngạch `AIQuotaReservation` ở trạng thái `RESERVED` (`BR-AI-01`).
 3. Hệ thống ẩn danh thông tin cá nhân, lọc văn bản đầu vào chống tiêm nhiễm chỉ thị (`BR-AI-02`) và gửi yêu cầu sinh câu hỏi làm rõ ngữ cảnh tới Nhà cung cấp dịch vụ LLM (`External LLM Provider`).
-4. Nhà cung cấp dịch vụ LLM trả về 2–3 câu hỏi làm rõ phạm vi học tập; Người học trả lời các câu hỏi (hoặc xác nhận ngữ cảnh) và yêu cầu sinh khung Cột mốc kiến thức (`Milestones`).
-5. Hệ thống lưu ngữ cảnh hỏi đáp (`clarificationQa`) vào `Goal`, kết hợp với thông tin nhịp độ học tập trong `LearnerProfile` và gửi yêu cầu phân rã Cột mốc tới `External LLM Provider`.
+4. Nhà cung cấp dịch vụ LLM trả về 2–3 câu hỏi chẩn đoán kết hợp giữa trắc nghiệm (`question_type: "single_choice"` có 3–4 phương án lựa chọn nhanh) và tự luận ngắn (`question_type: "text"`). Người học bấm chọn phương án hoặc nhập câu trả lời (hoặc bấm Bỏ qua - Skip).
+5. **[Bước 2 — Cột mốc Lộ trình & Cổng Phê duyệt]:** Hệ thống lưu ngữ cảnh chẩn đoán (`clarificationQa`) vào `Goal`, kết hợp với thông tin nhịp độ học tập trong `LearnerProfile` và gửi yêu cầu phân rã Cột mốc tới `External LLM Provider` qua luồng Uniform 2-Stage SSE.
 6. Nhà cung cấp dịch vụ LLM trả về danh sách từ 3 đến 7 Cột mốc tuần tự kèm mô tả, số giờ ước lượng và tiêu chí hoàn thành; hệ thống kiểm định cấu trúc đầu ra (`BR-AI-03`).
-7. Hệ thống chốt khấu trừ hạn ngạch (`COMMITTED`), ghi nhận nhật ký sử dụng `AIUsageLog` và hiển thị danh sách Cột mốc dự thảo cho Người học xem xét.
-8. Người học rà soát (có thể chỉnh sửa tên, mô tả, thứ tự cột mốc) và bấm xác nhận phê duyệt khung lộ trình.
-9. Hệ thống lưu bền vững thực thể `Goal`, `Roadmap` (`status = INITIALIZED`) và danh sách `Milestone` ở trạng thái đã duyệt (`APPROVED`) để sẵn sàng cho bước lập lịch chi tiết (`UC-08`). Use case kết thúc thành công.
+7. Hệ thống chốt khấu trừ hạn ngạch (`COMMITTED`), ghi nhận nhật ký sử dụng `AIUsageLog` và hiển thị danh sách Cột mốc dự thảo trên giao diện chỉnh sửa tương tác.
+8. Người học rà soát (thêm, sửa tên, mô tả, thay đổi thứ tự hoặc xóa cột mốc) và bấm xác nhận **"Phê duyệt Cột mốc"** (`Approve Milestones`).
+9. Hệ thống lưu bền vững thực thể `Goal`, `Roadmap` (`status = INITIALIZED`) và chuyển danh sách `Milestone` sang trạng thái đã duyệt (`APPROVED`), đồng thời mở khóa nút điều hướng: *"Sang Bước 3: Sinh Nhiệm vụ chi tiết & Nguồn học"* (`UC-08`). Use case kết thúc thành công.
 
 **Luồng thay thế (Alternative Flows)**
 - **4a. Người học chọn bỏ qua bước trả lời câu hỏi làm rõ ngữ cảnh**
@@ -578,7 +578,7 @@ Theo hướng dẫn phân rã mô hình tại [`diagram-guide.md`](../../.agents
 |---|---|
 | **ID** | UC-08 |
 | **Tên** | Sinh lịch học đề xuất bằng AI và Phê duyệt |
-| **Mô tả ngắn** | Dựa trên các Cột mốc đã duyệt (`UC-07`) và quỹ thời gian rảnh khả dụng, Người học yêu cầu AI phân rã thành danh sách bài học cụ thể trong Bản đề xuất lịch học (`ScheduleProposal`), hệ thống thực hiện `UC-12` để kiểm định tính hợp lệ, hiển thị bản xem trước để Người học tùy chỉnh và bấm **Áp dụng** nhằm lưu thành Lịch học chính thức (`OfficialSchedule`). |
+| **Mô tả ngắn** | Dựa trên các Cột mốc đã duyệt (`UC-07`), Người học chuyển sang Bước 3 để phân rã nhiệm vụ chi tiết theo từng Cột mốc, AI tự động tra cứu và đính kèm tài liệu học tập chính thống qua Knowledge Base Tool (`get_learning_resources_and_guidance`); sau đó chuyển sang Bước 4 để SpatioTemporal Engine phân bổ vào thời khóa biểu (Mode A/B), chạy cổng kiểm định 3 tầng qua `UC-12` (kèm Tier 3 Pedagogical Quality Judge) và Người học bấm **Áp dụng** (`Apply`) nhằm lưu thành Lịch học chính thức (`OfficialSchedule`). |
 | **Actor chính** | Người học (`Learner` — `ACT-01`) |
 | **Actor phụ** | Nhà cung cấp dịch vụ LLM (`External LLM Provider` — `ACT-04`) |
 | **Mức độ** | Mục tiêu người dùng (User-goal level) |
@@ -592,15 +592,16 @@ Theo hướng dẫn phân rã mô hình tại [`diagram-guide.md`](../../.agents
 | **Truy vết SRS & Thiết kế** | • **SRS**: `FR-PLAN-002`, `FR-PLAN-003`, `FR-PLAN-005`, `FR-AVAIL-003`, `FR-TASK-003`, `BUSR-02`, `BUSR-03`, `BUSR-04`, `BUSR-05`, `OS-03`, `OS-04`, `EVAL-01`, `EVAL-06`<br>• **Lớp miền**: `ScheduleProposal`, `ProposedTask`, `OfficialSchedule`, `Task`, `TaskDependency`, `Roadmap`, `AIQuotaReservation`, `AIUsageLog`<br>• **Bảng CSDL**: `schedule_proposals`, `official_schedules`, `tasks`, `task_dependencies`, `roadmaps`, `ai_quotas`, `ai_quota_reservations`, `ai_usage_logs` |
 
 **Luồng chính (Basic Flow)**
-1. Người học yêu cầu hệ thống sinh Bản đề xuất lịch học chi tiết (`ScheduleProposal`) cho các Cột mốc đã duyệt của lộ trình.
-2. Hệ thống giữ chỗ 01 lượt hạn ngạch `AIQuotaReservation` (`RESERVED` — `BR-AI-01`) và tính toán quỹ thời gian rảnh khả dụng thực tế của Người học sau khi trừ lịch của các lộ trình `ACTIVE` khác và khoảng bận ngoại vi (`BR-AVAIL-03`).
-3. Hệ thống ẩn danh dữ liệu cá nhân (`BR-AI-02`) và gửi danh sách Cột mốc, quỹ thời gian rảnh khả dụng cùng thông tin nhịp độ học tập `LearnerProfile` tới Nhà cung cấp dịch vụ LLM (`External LLM Provider`).
-4. Nhà cung cấp dịch vụ LLM phân rã từng Cột mốc thành danh sách các công việc đề xuất (`ProposedTask` có thời lượng 30–120 phút/bài, kèm quan hệ tiên quyết) và phân bổ vào các ngày rảnh khả dụng.
-5. Hệ thống thực hiện `UC-12` (Kiểm định tính hợp lệ của lịch học) (`<<include>>`) để kiểm định các công việc đề xuất về cấu trúc, đồ thị tiên quyết không chu trình (DAG), khung giờ Mode B và trần giờ học ngày/tuần (kèm bước đánh giá sư phạm tham vấn $\le 5$ giây — `BR-PLAN-01`).
-6. Khi đạt chuẩn kiểm định, hệ thống chốt khấu trừ hạn ngạch (`COMMITTED`), ghi nhận `AIUsageLog`, lưu `ScheduleProposal` ở trạng thái dự thảo (`DRAFT`) và hiển thị bản xem trước cho Người học.
-7. Người học xem xét, tùy chỉnh các công việc trên bản dự thảo (nếu cần) và chủ động bấm **"Áp dụng lịch học"** (`BR-PLAN-02`).
-8. Hệ thống thực hiện lại `UC-12` (Kiểm định tính hợp lệ của lịch học) (`<<include>>`) trên bản đề xuất sau chỉnh sửa của Người học để đảm bảo tuân thủ 100% trần thời gian rảnh (`BR-PLAN-03`).
-9. Hệ thống lưu nguyên tử Lịch học chính thức (`OfficialSchedule` theo chính sách bảo toàn quá khứ `BR-PLAN-05`), khởi tạo danh sách `Task` và `TaskDependency`, chuyển `ScheduleProposal` sang `APPLIED`, chuyển `Roadmap` sang `ACTIVE` và hiển thị lịch học chính thức. Use case kết thúc thành công.
+1. **[Bước 3 — Phân rã Nhiệm vụ theo Cột mốc & Tra cứu Nguồn học]:** Sau khi Cột mốc ở Bước 2 được phê duyệt (`APPROVED`), Người học yêu cầu AI phân rã các nhiệm vụ học tập chi tiết theo từng Cột mốc.
+2. Hệ thống giữ chỗ 01 lượt hạn ngạch `AIQuotaReservation` (`RESERVED` — `BR-AI-01`) và tính toán quỹ thời gian rảnh khả dụng thực tế của Người học (`BR-AVAIL-03`).
+3. Hệ thống kích hoạt **Knowledge Base Tool** `get_learning_resources_and_guidance` cho `RoadmapPipelineStage.TASK_DECOMPOSITION`, kết hợp thông tin nhịp độ học tập `LearnerProfile` và gửi tới Nhà cung cấp dịch vụ LLM (`External LLM Provider`).
+4. Nhà cung cấp dịch vụ LLM phân rã từng Cột mốc thành danh sách các công việc đề xuất (`ProposedTask` có thời lượng 30–120 phút/bài, phân loại `THEORY`, `PRACTICE`, `REVIEW`, `PROJECT`, mục tiêu `learning_objective`, tiêu chí `completion_criteria`, kèm mảng `learning_resources` chứa tài liệu chính thức có link ngoài).
+5. Giao diện hiển thị danh sách nhiệm vụ nhóm trực quan theo từng Cột mốc (`milestone-task-group`); Người học xem xét, chỉnh sửa nhiệm vụ, thêm/bớt tài liệu học tập và bấm **"Chốt danh sách nhiệm vụ & Sang Bước 4: Xếp Thời khóa biểu"**.
+6. **[Bước 4 — Thời khóa biểu SpatioTemporal & Kích hoạt Lịch]:** SpatioTemporal Rule Engine phân bổ các nhiệm vụ đã chốt vào quỹ giờ Mode A hoặc các khung giờ cố định Mode B khả dụng.
+7. Hệ thống thực hiện `UC-12` (Kiểm định tính hợp lệ của lịch học) (`<<include>>`) để kiểm định 3 tầng: Tier 1 (Bounds & JSON Schema), Tier 2 (SpatioTemporal & DAG không chu trình), và Tier 3 (Pedagogical Quality Judge $\le 5$s Fail-Open — `BR-PLAN-01`).
+8. Khi đạt chuẩn kiểm định, hệ thống chốt khấu trừ hạn ngạch (`COMMITTED`), ghi nhận `AIUsageLog`, lưu `ScheduleProposal` ở trạng thái dự thảo (`DRAFT`) và hiển thị bảng Thời khóa biểu chi tiết (kèm cảnh báo Tràn mềm `Soft Overflow` $\le 30$ phút nếu có).
+9. Người học xem xét thời khóa biểu, tích xác nhận Tràn mềm (nếu có) và chủ động bấm **"Gắn Lịch vào Hệ thống (Apply)"** (`BR-PLAN-02`).
+10. Hệ thống lưu nguyên tử Lịch học chính thức (`OfficialSchedule` theo chính sách bảo toàn quá khứ `BR-PLAN-05` / `OS-03`), khởi tạo danh sách `Task` và `TaskDependency`, chuyển `ScheduleProposal` sang `APPLIED`, chuyển `Roadmap` sang `ACTIVE`, đồng thời hiển thị nút điều hướng trực tiếp vào Không gian Phiên học `/workspace`. Use case kết thúc thành công.
 
 **Luồng thay thế (Alternative Flows)**
 - **5a. Bản đề xuất từ AI vi phạm ràng buộc tại `UC-12` trong 2 lượt đầu**
