@@ -21,7 +21,7 @@ export default defineConfig({
     }
   ],
   webServer: {
-    command: 'pnpm exec ng serve --port 4200',
+    command: 'pnpm exec ng serve --port 4200 --proxy-config proxy.conf.json',
     url: baseURL,
     reuseExistingServer: !process.env['CI'],
     timeout: 120_000

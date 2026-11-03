@@ -11,7 +11,7 @@ FocusFlow là hệ thống lập kế hoạch và thực thi lộ trình tự h�
 | Backend | Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2.0 async (asyncpg), Alembic, Taskiq + Redis Streams, PostgreSQL 16 |
 | Frontend | Angular 21+ (standalone, zoneless, OnPush, Signals), Tailwind CSS v4, PrimeNG v21, Lucide, openapi-typescript |
 | Kiến trúc | Context-First Modular Monolith + Hexagonal. 4 Bounded Context: `account`, `planning`, `execution`, `evaluation`, cùng `shared_kernel`. 24 bảng |
-| Hạ tầng | Docker Compose 6 container: postgres, redis, backend, worker, scheduler (replicas: 1), frontend |
+| Hạ tầng | Docker Compose 4 container: postgres, redis, backend (gộp Uvicorn API, Taskiq worker, Taskiq scheduler qua Supervisord), frontend |
 | Test | pytest + pytest-asyncio, Vitest, Playwright |
 
 Cấu trúc repo (khớp theo thực tế nếu khác):

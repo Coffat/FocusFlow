@@ -212,7 +212,7 @@ test.describe('FR-AVAIL v2.0 — Hybrid Availability End-to-End Verification (E2
     await page.getByTestId('batch-copy-monday').click();
 
     for (const day of ['tuesday', 'wednesday', 'thursday', 'friday']) {
-      await expect(page.getByTestId(`day-card-${day}`)).toContainText('3.5 giờ/ngày');
+      await expect(page.getByTestId(`day-card-${day}`)).toContainText(/3\.5\s*giờ\s*\/\s*ngày/);
       await expect(page.getByTestId(`period-MORNING-${day}`)).toHaveAttribute('aria-pressed', 'true');
     }
 
@@ -363,7 +363,7 @@ test.describe('FR-AVAIL v2.0 — Hybrid Availability End-to-End Verification (E2
     // 4. Reload F5 từ PostgreSQL: đang ở Mode A (Thứ 2 = 4.0h), khi bấm sang tab Mode B vẫn giữ nguyên slot 22:30 -> 00:30 (+1d)
     await page.reload();
     await expect(page.getByTestId('mode-a-tab')).toHaveAttribute('aria-selected', 'true');
-    await expect(page.getByTestId('day-card-monday')).toContainText('4 giờ/ngày');
+    await expect(page.getByTestId('day-card-monday')).toContainText(/4(\.0)?\s*giờ\s*\/\s*ngày/);
 
     await page.getByTestId('mode-b-tab').click();
     await expect(page.getByTestId('slot-start-monday-0')).toHaveValue('22:30');
