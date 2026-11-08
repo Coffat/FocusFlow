@@ -1,0 +1,31 @@
+@startuml FocusFlow_Behavioral_Design_Evaluation
+title FocusFlow — Behavioral Design Class Diagram: Evaluation
+
+hide empty members
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+
+class MilestoneProof <<AggregateRoot>> {
+  +recordRecallAnswer(answer : String, confidence : Integer) : void
+  +recordVerdict(verdict : ProofVerdict, evidenceScore : Decimal) : void
+  +assignCorrectiveTask(task : Task) : void
+}
+class MistakeTaxonomy <<ValueObject>> {
+  +validate() : void
+}
+class AIReview <<AggregateRoot>> {
+  +addReflection(reflection : String) : void
+  +finalize() : void
+}
+class PauseRecord <<AggregateRoot>> {
+  +activate() : void
+  +end() : void
+}
+class ScheduleChangeLog <<Entity>> {
+  +record(trigger : ChangeTriggerType, category : DisruptionCategory, countsTowardBudget : Boolean) : void
+}
+note bottom
+  Prove evaluation, AI review generation, and Domino Shift are use-case orchestration;
+  these operations preserve the state changes owned by each domain concept.
+end note
+@enduml

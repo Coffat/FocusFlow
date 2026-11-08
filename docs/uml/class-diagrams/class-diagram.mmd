@@ -1,0 +1,356 @@
+
+classDiagram
+    direction TB
+
+    class User {
+        +String email
+        +UserRole role
+        +SubscriptionTier tier
+        +String timezone
+        +UserStatus status
+        +void changePassword(String newPasswordHash)
+        +void lock()
+        +void unlock()
+        +void deactivate()
+    }
+
+    class LearnerProfile {
+        +Integer optimalFocusDurationMinutes
+        +List~TimeSlot~ peakProductivitySlots
+        +Decimal estimationBiasFactor
+        +Decimal weeklyCompletionRate
+        +void updateHabitMetrics(HabitMetrics metrics)
+    }
+
+    class LearnerMemoryItem {
+        +MemoryCategory category
+        +EpistemicType epistemicType
+        +String claim
+        +Decimal confidenceScore
+        +Integer sampleSize
+        +ConfirmationStatus confirmationStatus
+        +void confirm()
+        +void supersede()
+    }
+
+    class AvailabilityProfile {
+        +AvailabilityMode mode
+        +String preferredPeriod
+        +Integer minSessionMinutes
+        +void setDailyQuota(DailyHoursQuota quota)
+        +void replaceSlots(List~AvailabilitySlot~ slots)
+        +void validateConfiguration()
+    }
+
+    class DailyHoursQuota {
+        +DayOfWeek dayOfWeek
+        +Decimal hours
+        +void validateRange()
+    }
+
+    class AvailabilitySlot {
+        +DayOfWeek dayOfWeek
+        +Time startTime
+        +Time endTime
+        +Integer endDayOffset
+        +EnergyLevel energyLevel
+        +void validateMinimumDuration()
+        +Boolean overlaps(AvailabilitySlot other)
+    }
+
+    class CalendarConnection {
+        +CalendarProvider provider
+        +ConnectionStatus syncStatus
+        +void markConnected()
+        +void recordSyncSucceeded()
+        +void recordSyncFailed()
+        +void revoke()
+    }
+
+    class WebCalLink {
+        +Boolean active
+        +void activate()
+        +void deactivate()
+        +void rotateToken()
+    }
+
+    class AIQuota {
+        +Integer monthlyLimit
+        +Integer usedCalls
+        +QuotaReservation reserve(Timestamp expiresAt)
+        +void commit(QuotaReservation reservation)
+        +void release(QuotaReservation reservation)
+        +void renew(Integer monthlyLimit)
+    }
+
+    class QuotaReservation {
+        +ReservationStatus status
+        +Timestamp expiresAt
+        +void commit()
+        +void release()
+        +void expire()
+    }
+
+    class PaymentTransaction {
+        +String orderCode
+        +Decimal amount
+        +PaymentStatus status
+        +Timestamp expiresAt
+        +void markPaid()
+        +void expire()
+        +void reconcile(String bankTransactionCode, String reason)
+    }
+
+    class PasswordResetToken {
+        +Timestamp expiresAt
+        +Boolean used
+        +Boolean isUsableAt(Timestamp now)
+        +void consume()
+    }
+
+    class ConceptMastery {
+        +MasteryLevel masteryLevel
+        +Decimal masteryScore
+        +Timestamp nextReviewAt
+        +void recordEvidence(Decimal score)
+        +void scheduleNextReview(Timestamp at)
+    }
+
+    class Goal {
+        +String description
+        +SkillLevel currentLevel
+        +Date targetDate
+        +void revise(String description, Date targetDate)
+    }
+
+    class KnowledgeSource {
+        +SourceType sourceType
+        +IngestionStatus ingestionStatus
+        +void startIngestion()
+        +void completeIngestion()
+        +void failIngestion()
+    }
+
+    class KnowledgeChunk {
+        +String content
+        +String provenance
+    }
+
+    class LearningConcept {
+        +String name
+        +String learningOutcomes
+        +void addPrerequisite(LearningConcept concept)
+        +void removePrerequisite(LearningConcept concept)
+    }
+
+    class Roadmap {
+        +String title
+        +RoadmapStatus status
+        +Date targetDate
+        +Integer weeklyRescheduleBudget
+        +Integer weeklyRescheduleUsed
+        +Timestamp lastStudyActivityAt
+        +Integer resetRitualCount
+        +Boolean isDormant
+        +void activate()
+        +void pause(Timestamp at)
+        +void resume(Timestamp at)
+        +void archive(Timestamp at)
+        +void recordStudyActivity(Timestamp at)
+        +void consumeRescheduleBudget()
+        +void resetWeeklyBudget(Week week)
+    }
+
+    class Milestone {
+        +String name
+        +Integer sequenceOrder
+        +ProofStatus proofStatus
+        +void rename(String name)
+        +void changeSequence(Integer order)
+        +void recordProofVerdict(ProofVerdict verdict)
+    }
+
+    class ScheduleProposal {
+        +ProposalPurpose purpose
+        +ProposalStatus status
+        +Feasibility feasibility
+        +void markValidated(Feasibility feasibility)
+        +void markApplied()
+        +void discard()
+    }
+
+    class OfficialSchedule {
+        +Integer bufferMinutesPerWeek
+        +Integer recoveryWindowDays
+        +Integer dailyWorkloadCapMinutes
+        +Decimal stabilityWeight
+        +void replaceFutureBlocks(List~ScheduleBlock~ blocks)
+        +void removeFutureBlocks()
+    }
+
+    class ScheduleBlock {
+        +BlockType blockType
+        +Date blockDate
+        +Time startTime
+        +Integer scheduledDurationMinutes
+        +Boolean isProtected
+        +BlockStatus status
+        +void reschedule(Date date, Time startTime)
+        +void markCompleted()
+        +void markMissed()
+        +void protect()
+    }
+
+    class Task {
+        +String title
+        +Integer estimatedMinutes
+        +TaskOrigin origin
+        +TaskStatus status
+        +Date scheduledDate
+        +Integer rescheduleCount
+        +void start()
+        +void complete()
+        +void cancel()
+        +void reschedule(Date date, String reason)
+        +void addSubtask(Task task)
+        +void addPrerequisite(Task task)
+    }
+
+    class StudySession {
+        +SessionMode mode
+        +TimerMode timerMode
+        +SessionStatus status
+        +Timestamp startedAt
+        +Timestamp endedAt
+        +Integer actualDurationMinutes
+        +Boolean pendingTakeaway
+        +void complete(Timestamp endedAt)
+        +void autoClose(Timestamp endedAt)
+        +void recordCheckin(DailyCheckin checkin)
+        +void addNote(StudyNote note)
+    }
+
+    class SessionTask {
+        <<AssociationClass>>
+        +Integer allocatedMinutes
+        +Integer actualMinutes
+        +SessionTaskStatus statusAfterSession
+        +String notes
+        +void recordActualMinutes(Integer minutes)
+        +void recordStatus(SessionTaskStatus status)
+    }
+
+    class DailyCheckin {
+        +TimeSufficiency timeSufficiency
+        +Integer perceivedDifficulty
+        +Integer focusLevel
+        +void validate()
+    }
+
+    class StudyNote {
+        +String content
+        +void revise(String content)
+    }
+
+    class KeyTakeaway {
+        +Integer selfConfidence
+        +TakeawayVerification verificationStatus
+        +AlignmentFlag alignmentFlag
+        +Decimal aiEvidenceScore
+        +void setSelfConfidence(Integer score)
+        +void recordVerification(TakeawayVerification status, Decimal evidenceScore)
+    }
+
+    class MilestoneProof {
+        +Integer attemptNo
+        +ProofVerdict verdict
+        +Decimal avgSelfConfidence
+        +Decimal aiEvidenceScore
+        +Decimal calibrationGap
+        +void recordRecallAnswer(String answer, Integer confidence)
+        +void recordVerdict(ProofVerdict verdict, Decimal evidenceScore)
+        +void assignCorrectiveTask(Task task)
+    }
+
+    class MistakeTaxonomy {
+        +MistakeCause cause
+        +void validate()
+    }
+
+    class AIReview {
+        +ReviewCycle cycle
+        +String strengthsFeedback
+        +String bottlenecksFeedback
+        +String actionRecommendations
+        +String userReflection
+        +void addReflection(String reflection)
+        +void finalize()
+    }
+
+    class PauseRecord {
+        +Date startDate
+        +Date endDate
+        +PauseStatus status
+        +Integer shiftedDays
+        +void activate()
+        +void end()
+    }
+
+    class ScheduleChangeLog {
+        +ChangeTriggerType trigger
+        +DisruptionCategory disruptionCategory
+        +Boolean countsTowardBudget
+        +void record(ChangeTriggerType trigger, DisruptionCategory category, Boolean countsTowardBudget)
+    }
+
+    AIQuota "1" *-- "0..*" QuotaReservation : giữ chỗ
+    PaymentTransaction "0..*" --> "1" User : giao dịch
+    PasswordResetToken "0..*" --> "1" User : đặt lại MK
+    AIQuota "1" --> "1" User : cấp quota
+    User "1" --> "0..*" CalendarConnection : kết nối lịch
+    User "1" --> "0..1" WebCalLink : luồng WebCal
+    User "1" --> "0..1" LearnerProfile : có hồ sơ
+    User "1" --> "0..*" LearnerMemoryItem : có bộ nhớ
+    User "1" --> "0..1" AvailabilityProfile : cấu hình rảnh
+    AvailabilityProfile "1" *-- "0..*" DailyHoursQuota : Mode A
+    AvailabilityProfile "1" *-- "0..*" AvailabilitySlot : Mode B
+
+    Goal "0..*" --> "1" User : references chủ sở hữu
+    Goal "1" --> "0..*" KnowledgeSource : có tài liệu
+    KnowledgeSource "1" *-- "0..*" KnowledgeChunk : phân đoạn
+    Goal "1" --> "1" Roadmap : phân rã thành
+
+    User "1" --> "0..*" ConceptMastery : đạt mức
+    ConceptMastery "0..*" --> "1" LearningConcept : references đo lường
+    LearningConcept "0..*" --> "0..*" LearningConcept : prerequisites acyclic
+
+    Roadmap "1" --> "0..*" ScheduleProposal : đề xuất
+    Roadmap "1" --> "0..1" OfficialSchedule : có lịch chính thức
+    ScheduleProposal "0..*" ..> "0..1" OfficialSchedule : materializes on Apply
+    OfficialSchedule "1" *-- "0..*" ScheduleBlock : sở hữu khối
+    Roadmap "1" *-- "0..*" Milestone : gồm các cột mốc
+
+    AIReview "0..*" --> "1" Roadmap : references đánh giá định kỳ
+    PauseRecord "0..*" --> "1" Roadmap : references tạm dừng
+    ScheduleChangeLog "0..*" --> "1" Roadmap : references biến động
+
+    Task "0..*" --> "1" Milestone : references thuộc cột mốc
+    Task "0..*" --> "1" Roadmap : references thuộc lộ trình
+    ScheduleBlock "0..*" --> "0..1" Task : references thực thi bài học
+    Task ..> KnowledgeChunk : citationSnapshot
+    Task "0..*" --> "0..1" LearningConcept : references dạy khái niệm
+    Task "0..1" --> "0..*" Task : subTasks
+    Task "predecessors" --> "successors" Task : DAG acyclic
+
+    StudySession "1..*" -- "0..*" Task : học trong phiên
+    StudySession "1" -- "0..*" SessionTask : liên kết phiên
+    Task "1" -- "0..*" SessionTask : kết quả task
+    StudySession "1" *-- "0..1" DailyCheckin : kết thúc bằng
+    StudySession "1" *-- "0..*" StudyNote : ghi chép
+    StudyNote <|-- KeyTakeaway : đúc kết trọng tâm
+    StudyNote "0..*" --> "0..1" Task : references về nhiệm vụ
+
+    MilestoneProof "0..*" --> "1" Milestone : references kiểm chứng cột mốc
+    MilestoneProof "1" *-- "0..*" MistakeTaxonomy : phân loại sai
+    MilestoneProof ..> KeyTakeaway : evidenceSnapshot
+    MilestoneProof "0..*" --> "0..1" Task : references bài ôn bù

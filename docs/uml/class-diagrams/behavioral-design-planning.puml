@@ -1,0 +1,56 @@
+@startuml FocusFlow_Behavioral_Design_Planning
+title FocusFlow — Behavioral Design Class Diagram: Planning
+
+hide empty members
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+
+class Goal <<AggregateRoot>> {
+  +revise(description : String, targetDate : Date) : void
+}
+class KnowledgeSource <<AggregateRoot>> {
+  +startIngestion() : void
+  +completeIngestion() : void
+  +failIngestion() : void
+}
+class KnowledgeChunk <<ValueObject>> {
+}
+class LearningConcept <<AggregateRoot>> {
+  +addPrerequisite(concept : LearningConcept) : void
+  +removePrerequisite(concept : LearningConcept) : void
+}
+class Roadmap <<AggregateRoot>> {
+  +activate() : void
+  +pause(at : Timestamp) : void
+  +resume(at : Timestamp) : void
+  +archive(at : Timestamp) : void
+  +recordStudyActivity(at : Timestamp) : void
+  +consumeRescheduleBudget() : void
+  +resetWeeklyBudget(week : Week) : void
+}
+class Milestone <<Entity>> {
+  +rename(name : String) : void
+  +changeSequence(order : Integer) : void
+  +recordProofVerdict(verdict : ProofVerdict) : void
+}
+class ScheduleProposal <<AggregateRoot>> {
+  +markValidated(feasibility : Feasibility) : void
+  +markApplied() : void
+  +discard() : void
+}
+class OfficialSchedule <<AggregateRoot>> {
+  +replaceFutureBlocks(blocks : ScheduleBlock [0..*]) : void
+  +removeFutureBlocks() : void
+}
+class ScheduleBlock <<Entity>> {
+  +reschedule(date : Date, startTime : Time) : void
+  +markCompleted() : void
+  +markMissed() : void
+  +protect() : void
+}
+note bottom
+  AI proposal generation, deterministic optimization, schedule validation, and
+  materializing an applied proposal coordinate multiple aggregates; they stay in
+  application/domain services. Only state-changing responsibilities are shown here.
+end note
+@enduml
