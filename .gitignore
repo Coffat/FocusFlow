@@ -68,6 +68,7 @@ out/
 
 # Scratch directory (temporary scripts and experimental files)
 scratch/
+outputs/
 
 # Testing & Coverage
 .pytest_cache/
