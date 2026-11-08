@@ -43,7 +43,7 @@ Toàn bộ hệ thống FocusFlow v2.0 được đóng gói gọn nhẹ, tườn
 
 | STT | Tên Dịch vụ (`docker-compose.yml`) | Công nghệ & Image Nền tảng | Trách nhiệm & Cấu hình Trọng yếu |
 | :---: | :--- | :--- | :--- |
-| **1** | **`postgres`** | `postgres:16-alpine` | Cơ sở dữ liệu quan hệ chính chứa **24 bảng 3NF/BCNF**, gắn volume bền vững `pg_data` và `healthcheck` (`pg_isready`). |
+| **1** | **`postgres`** | `postgres:16-alpine` | Cơ sở dữ liệu quan hệ chính chứa **28 bảng 3NF/BCNF**, gắn volume bền vững `pg_data` và `healthcheck` (`pg_isready`). |
 | **2** | **`redis`** | `redis:7-alpine` | Message Broker cho **Redis Streams (`Taskiq`)**, lưu trữ xoay vòng Refresh Token, Rate Limit và SSE Pub/Sub. Bắt buộc khởi chạy với **`--appendonly yes` (AOF Enabled)** để bảo toàn dữ liệu hàng đợi khi container khởi động lại. |
 | **3** | **`backend`** | Python 3.12-slim (`FastAPI` + `Uvicorn`) | Phục vụ REST API, luồng 2-Stage SSE, Webhook và thực thi Alembic migrations khi khởi động. |
 | **4** | **`worker`** | Python 3.12-slim (`taskiq worker`) | Thực thi bất đồng bộ các tác vụ từ Redis Streams (`XREADGROUP`/`XACK`): Outbox Relay, AI Aggregation, Calendar Sync, Sweeper tasks. Có thể mở rộng `replicas: N`. |
@@ -53,8 +53,8 @@ Toàn bộ hệ thống FocusFlow v2.0 được đóng gói gọn nhẹ, tườn
 ### 3.2. Chế độ Bảo vệ Khóa luận Offline / Local (Offline Defense Mode — `ASR-06`)
 Nhờ kiến trúc Hexagonal (`ADR-001`, `ADR-005`), mọi dịch vụ bên ngoài đều đứng sau các Output Ports. Khi bảo vệ khóa luận tại phòng thi không có Internet (hoặc khi chạy kiểm thử E2E Playwright tự động), nhóm chỉ cần chuyển cấu hình trong `.env` sang chế độ Local/Offline mà **không cần sửa bất kỳ dòng code nào**:
 1. **`LLM_PROVIDER=mock` (hoặc `ollama`):** Composition Root tự động tiêm **`MockLLMAdapter`** (mô phỏng luồng stream SSE từng chunk với độ trễ chân thực 1–2s và trả về JSON chuẩn Pydantic v2) hoặc kết nối tới mô hình Local Ollama chạy ngay trên máy cá nhân.
-2. **`PAYMENT_PROVIDER=local_mock`:** Tự động tiêm **`LocalMockPaymentAdapter`** sinh mã QR nội bộ và cung cấp nút giả lập callback thanh toán thành công (ký đúng chữ ký `HMAC-SHA256`) để demo luồng nâng cấp gói Premium (`UC-05`) ngay tại chỗ.
-3. **`CALENDAR_PROVIDER=local_mock`:** Tự động tiêm **`LocalCalendarAdapter`** mô phỏng phản hồi OAuth2 Free/Busy và kết hợp luồng xuất file `.ics` cục bộ (`UC-13`).
+2. **`PAYMENT_PROVIDER=local_mock`:** Tự động tiêm **`LocalMockPaymentAdapter`** sinh mã QR nội bộ và cung cấp nút giả lập callback thanh toán thành công (ký đúng chữ ký `HMAC-SHA256`) để demo luồng nâng cấp gói Premium (`UC-04`, `UC-05`) ngay tại chỗ.
+3. **`CALENDAR_PROVIDER=local_mock`:** Tự động tiêm **`LocalCalendarAdapter`** mô phỏng phản hồi OAuth2 Free/Busy và kết hợp luồng xuất file `.ics` cục bộ (`UC-17`, `UC-18`).
 
 ### 3.3. Triển khai Cloud PaaS cho Đánh giá Thực nghiệm UAT (`TC2.7`)
 Trong giai đoạn thử nghiệm người dùng thật (7–14 ngày):

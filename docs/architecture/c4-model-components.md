@@ -1,14 +1,15 @@
 # FocusFlow — Mô hình Kiến trúc C4 & Biểu đồ Thành phần (C4 Model & Component Diagrams)
-## Phiên bản: v2.0 — Chuẩn Mô hình Hóa C4 Toàn diện (System Context, Container, Component Level)
-**Dự án:** FocusFlow — Hệ thống Lập kế hoạch & Quản lý Học tập Cá nhân hóa Ứng dụng AI (AI-Powered Personalized Study Planning & Execution System)  
+## Phiên bản: v3.2 — Chuẩn Mô hình Hóa C4 Toàn diện (FocusFlow Learning Intelligence Harness & 35 Bảng 3NF/BCNF)
+**Dự án:** FocusFlow Learning Intelligence Harness — Hệ thống Lập kế hoạch & Quản lý Học tập Thích ứng Tích hợp AI (*An adaptive AI-powered learning management system*)  
 **Tiêu chuẩn thiết kế:** Simon Brown C4 Model Specification, ISO/IEC/IEEE 42010, UML 2.5.1, Domain-Driven Design (DDD)  
 **Căn cứ đánh giá học thuật:** Khung Rubric Đồ án Tốt nghiệp CNTT — Tiêu chí TC2.1 & TC2.3 (Mức 5)  
 **Tài liệu liên kết nguồn:**
-- Đặc tả SRS v1.2: [`docs/srs/srs-v1.0.md`](file:///Users/vuthang/Documents/FocusFlow/docs/srs/srs-v1.0.md)
-- Kiến trúc tổng thể arc42 v2.0: [`docs/architecture/system-architecture.md`](file:///Users/vuthang/Documents/FocusFlow/docs/architecture/system-architecture.md)
+- Đặc tả SRS v1.3 (28 Use Cases): [`docs/srs/srs-v1.3.md`](file:///Users/vuthang/Documents/FocusFlow/docs/srs/srs-v1.3.md)
+- Kiến trúc chuyên sâu AI Harness: [`docs/architecture/ai-learning-intelligence-harness.md`](file:///Users/vuthang/Documents/FocusFlow/docs/architecture/ai-learning-intelligence-harness.md)
+- Kiến trúc tổng thể arc42 v3.2: [`docs/architecture/system-architecture.md`](file:///Users/vuthang/Documents/FocusFlow/docs/architecture/system-architecture.md)
 - Sơ đồ ca sử dụng: [`docs/uml/use-cases/UC_Master.drawio`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/use-cases/UC_Master.drawio), [`docs/uml/use-case-specifications.md`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/use-case-specifications.md)
-- Biểu đồ lớp (Domain Model & DCD v5.0): [`docs/uml/class-diagrams/class_diagram.drawio`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/class-diagrams/class_diagram.drawio), [`docs/uml/class-diagrams.md`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/class-diagrams.md)
-- Thiết kế CSDL vật lý (24 bảng 3NF/BCNF, dbdiagram.io DBML): [`docs/database/schema.dbml`](file:///Users/vuthang/Documents/FocusFlow/docs/database/schema.dbml), [`docs/database/database-schema-design.md`](file:///Users/vuthang/Documents/FocusFlow/docs/database/database-schema-design.md), [`docs/database/schema.sql`](file:///Users/vuthang/Documents/FocusFlow/docs/database/schema.sql)
+- Biểu đồ lớp (Domain Model & DCD): [`docs/uml/class-diagrams.md`](file:///Users/vuthang/Documents/FocusFlow/docs/uml/class-diagrams.md)
+- Thiết kế CSDL vật lý (35 bảng 3NF/BCNF + `pgvector`): [`docs/database/schema.dbml`](file:///Users/vuthang/Documents/FocusFlow/docs/database/schema.dbml), [`docs/database/database-schema-design.md`](file:///Users/vuthang/Documents/FocusFlow/docs/database/database-schema-design.md), [`docs/database/schema.sql`](file:///Users/vuthang/Documents/FocusFlow/docs/database/schema.sql), [`docs/database/data-dictionary.md`](file:///Users/vuthang/Documents/FocusFlow/docs/database/data-dictionary.md)
 - Các quyết định kiến trúc: [`docs/decisions/`](file:///Users/vuthang/Documents/FocusFlow/docs/decisions) (`ADR-001` đến `ADR-010`)
 
 ---
@@ -30,46 +31,48 @@
 Để tránh rò rỉ mức trừu tượng (Abstraction Leaks) và bảo vệ tiêu chuẩn học thuật của đồ án, mô hình C4 v2.0 của FocusFlow tuân thủ nghiêm ngặt các quy tắc sau:
 
 1. **Không trộn lẫn Abstraction Level:**
-   - **Level 1 (System Context):** Chỉ chứa 2 Actor con người (`Learner`, `Administrator`), Hệ thống FocusFlow tổng thể và 3 Hệ thống ngoại vi (`External LLM Provider`, `Payment Gateway`, `External Calendar Application`).
-   - **Level 2 (Container):** Phân rã thành **6 Containers** thực thi độc lập (`Angular 21+ SPA`, `FastAPI Backend`, `Taskiq Worker`, `Taskiq Scheduler (replicas: 1)`, `PostgreSQL 16 (24 tables)`, `Redis 7 (AOF + Streams)`).
-   - **Level 3 (Component):** Đi sâu vào bên trong từng Container cốt lõi (`FastAPI Backend`, `Angular 21+ SPA`, `Taskiq Worker & Scheduler`) để mô hình hóa các Bounded Contexts và Components.
+   - **Level 1 (System Context):** Chứa 2 Actor con người (`Learner`, `Administrator`), Hệ thống `FocusFlow Learning Intelligence Harness` tổng thể và các Hệ thống ngoại vi (`External LLM Provider`, `Payment Gateway`, `External Calendar Application`, `Email Notification Service`).
+   - **Level 2 (Container):** Phân rã thành **6 Containers** thực thi độc lập (`Angular 21+ SPA`, `FastAPI Backend`, `Taskiq Worker`, `Taskiq Scheduler (replicas: 1)`, `PostgreSQL 16 + pgvector (35 tables)`, `Redis 7 (AOF + Streams)`).
+   - **Level 3 (Component):** Đi sâu vào bên trong từng Container cốt lõi (`FastAPI Backend`, `Angular 21+ SPA`, `Taskiq Worker & Scheduler`) để mô hình hóa các Bounded Contexts, `Shared AI Harness Runtime` và Components.
 2. **Tuân thủ Context-First Modular Monolith + Hexagonal Architecture (`ADR-001`):**
-   - Backend chia cấp 1 thành **4 Bounded Contexts** (`account`, `planning`, `execution`, `evaluation`) và **`shared_kernel`**.
+   - Backend chia cấp 1 thành **4 Bounded Contexts** (`account`, `planning`, `execution`, `evaluation`) và **`shared_kernel`** (nơi đặt **1 AI Harness Runtime dùng chung** và **Durable Workflow Engine**).
    - Các Bounded Context **không được import trực tiếp** vào bên trong (`domain`, `application`, `infrastructure`, `presentation`) của nhau; mọi truy vấn đồng bộ liên Context bắt buộc đi qua **`public_api.py`** và mọi phản ứng bất đồng bộ đi qua **Transactional Outbox (`outbox_events`)**.
    - Trong mỗi Bounded Context, chiều phụ thuộc tuân thủ tuyệt đối: `presentation` $\to$ `infrastructure` $\to$ `application` $\to$ `domain`. Toàn bộ quy tắc này được kiểm chứng tự động bằng **`import-linter`**.
-3. **Đồng bộ 1:1 với 24 Bảng 3NF/BCNF & 19 Use Cases:**
-   - Mọi thành phần đều truy vết chính xác tới 19 Use Cases (`UC-01` đến `UC-19`), biểu đồ lớp `Class Diagram v5.0` và 24 bảng vật lý trong `docs/database/schema.sql`.
+3. **Đồng bộ 1:1 với 35 Bảng 3NF/BCNF + `pgvector` & 28 Use Cases (`SRS v1.3`):**
+   - Mọi thành phần đều truy vết chính xác tới 28 Use Cases (`UC-01` đến `UC-28`), tách biệt rạch ròi 3 thực thể cốt lõi (`Roadmap` $\neq$ `Schedule` $\neq$ `Learner Model`) và 35 bảng vật lý trong `docs/database/schema.sql`.
 
 ---
 
 ## 2. C4 Level 1: Biểu đồ Bối cảnh Hệ thống (System Context Diagram)
 
-Biểu đồ bối cảnh hệ thống mô tả cách FocusFlow kết nối với **5 Tác nhân & Hệ thống Ngoại vi** theo đúng đặc tả `SRS v1.2`:
+Biểu đồ bối cảnh hệ thống mô tả cách FocusFlow kết nối với **8 Tác nhân & Hệ thống Ngoại vi (`ACT-00`..`ACT-07`)** theo đúng đặc tả `SRS v1.4` (trong đó `Guest (ACT-00)`, `Learner (ACT-02)` và `Administrator (ACT-03)` đại diện cho các vai trò con người thuộc phân cấp `Registered User (ACT-01)`):
 
 ```mermaid
 flowchart TD
-    subgraph Users["Tác nhân Con người (Primary Actors)"]
-        Learner["👤 Learner / Người học<br/>[Person]<br/>Sinh viên, người tự ôn thi, người chuyển ngành cần lộ trình học thích ứng Zimmerman SRL (UC-01..UC-17)"]
-        Admin["🛡️ Administrator / Quản trị viên<br/>[Person]<br/>Quản trị tài khoản, cấu hình hạn ngạch AI và giám sát chi phí/độ trễ hệ thống (UC-18, UC-19)"]
+    subgraph Users["Tác nhân Con người (Primary Actors: ACT-00..ACT-03)"]
+        Learner["👤 Learner / Người học (ACT-02, kế thừa ACT-01) & Guest (ACT-00)<br/>[Person]<br/>Sinh viên, người tự ôn thi, người chuyển ngành cần lộ trình học thích ứng Zimmerman SRL (UC-01..UC-25)"]
+        Admin["🛡️ Administrator / Quản trị viên (ACT-03, kế thừa ACT-01)<br/>[Person]<br/>Quản trị tài khoản, đối soát thanh toán, cấu hình hạn ngạch AI và giám sát hệ thống (UC-02, UC-06, UC-26..UC-28)"]
     end
 
     subgraph Boundary["Ranh giới Nền tảng FocusFlow"]
-        FocusFlowSystem["🎯 Hệ thống FocusFlow<br/>[Software System]<br/>Hệ thống Lập kế hoạch & Quản lý Học tập Cá nhân hóa Ứng dụng AI:<br/>Phân rã mục tiêu, kiểm duyệt 3 tầng, không gian Pomodoro và thích ứng Domino Shift"]
+        FocusFlowSystem["🎯 FocusFlow Learning Intelligence Harness<br/>[Software System]<br/>Hệ thống Lập kế hoạch & Quản lý Học tập Thích ứng Tích hợp AI:<br/>1 AI Harness Runtime dùng chung, Hybrid RAG (pgvector), Deterministic Scheduling & Structured Learner Memory"]
     end
 
-    subgraph ExternalServices["Hệ thống Dịch vụ Ngoại vi (Secondary Actors)"]
-        LLMProvider["🤖 Provider-Agnostic LLM<br/>[External AI System]<br/>OpenAI / Google Gemini / Anthropic Claude / Local Ollama<br/>(Giao tiếp qua LiteLLM / OpenAI-Compatible SDK & MockLLMAdapter)"]
-        PaymentGW["💳 Payment Gateway<br/>[External Financial System]<br/>PayOS / VNPay Sandbox & LocalMockPaymentAdapter<br/>(Thanh toán VietQR & Webhook HMAC-SHA256)"]
-        CalendarApps["📅 External Calendar Application<br/>[External Calendar System]<br/>Google Calendar (Đồng bộ 2 chiều OAuth2 có kiểm soát)<br/>& Apple/Outlook Calendar (Đồng bộ 1 chiều WebCal .ics SHA-256)"]
+    subgraph ExternalServices["Hệ thống Dịch vụ Ngoại vi (Secondary Actors: ACT-04..ACT-07)"]
+        LLMProvider["🤖 External LLM Provider (ACT-04)<br/>[External AI System]<br/>Google Gemini (gemini-2.5-flash / pro + text-embedding-004)<br/>(Giao tiếp qua GeminiAdapter / LiteLLMAdapter & MockLLMAdapter)"]
+        PaymentGW["💳 Payment Gateway (ACT-05)<br/>[External Financial System]<br/>PayOS / VNPay Sandbox & LocalMockPaymentAdapter<br/>(Thanh toán VietQR & Webhook HMAC-SHA256)"]
+        CalendarApps["📅 External Calendar Service (ACT-06)<br/>[External Calendar System]<br/>Google Calendar (Đồng bộ 2 chiều OAuth2 freeBusy & syncToken)<br/>& Apple/Outlook Calendar (Đồng bộ 1 chiều WebCal .ics SHA-256)"]
+        EmailSvc["📧 Email Notification Service (ACT-07)<br/>[External Messaging System]<br/>SMTP / Transactional Email (Khôi phục mật khẩu & Cảnh báo task quá hạn 00:05)"]
     end
 
-    Learner -->|"HTTPS: Thiết lập mục tiêu, duyệt lịch AI, học tập Pomodoro, xem báo cáo SRL"| FocusFlowSystem
-    Admin -->|"HTTPS: Quản lý người dùng, cấp phát Quota, giám sát token & độ trễ AI"| FocusFlowSystem
-    FocusFlowSystem -->|"HTTPS / LLMProviderPort: Gửi sanitized prompt, nhận Structured JSON & SSE stream"| LLMProvider
-    FocusFlowSystem -->|"HTTPS / PaymentGatewayPort: Tạo liên kết thanh toán nâng cấp gói Premium"| PaymentGW
+    Learner -->|"HTTPS: Thiết lập mục tiêu/tài liệu, duyệt Roadmap & Schedule, học Pomodoro/MVS, Prove Mode, Weekly Review"| FocusFlowSystem
+    Admin -->|"HTTPS: Quản lý người dùng, đối soát giao dịch, giám sát token & độ trễ AI"| FocusFlowSystem
+    FocusFlowSystem -->|"HTTPS / LLMProviderPort: Gửi 5-Layer Context đã làm sạch, nhận Structured JSON, SSE stream & Embeddings"| LLMProvider
+    FocusFlowSystem -->|"HTTPS / PaymentGatewayPort: Tạo liên kết thanh toán & đối soát nâng cấp gói Premium"| PaymentGW
     PaymentGW -->|"HTTPS POST Webhook (HMAC-SHA256): Thông báo kết quả giao dịch bất đồng bộ"| FocusFlowSystem
-    FocusFlowSystem <-->|"HTTPS / CalendarSyncPort: Đồng bộ 2 chiều OAuth2 (kéo Free/Busy & đẩy lịch học)"| CalendarApps
+    FocusFlowSystem <-->|"HTTPS / CalendarSyncPort: Đồng bộ 2 chiều OAuth2 (kéo freeBusy/syncToken & đẩy schedule_blocks)"| CalendarApps
     CalendarApps -->|"HTTPS GET: Kéo lịch học 1 chiều qua /api/v1/calendar/webcal/{token}.ics (RFC 5545)"| FocusFlowSystem
+    FocusFlowSystem -->|"SMTP/HTTPS / EmailNotificationPort: Gửi email cảnh báo task quá hạn"| EmailSvc
 ```
 
 ---
@@ -82,20 +85,20 @@ Biểu đồ vùng chứa phân rã hệ thống FocusFlow thành **6 Vùng ch�
 flowchart TB
     LearnerActor["👤 Learner<br/>[Person]"]
     AdminActor["🛡️ Administrator<br/>[Person]"]
-    LLMProvider["🤖 External LLM Provider<br/>[OpenAI / Gemini / Claude / Ollama]"]
+    LLMProvider["🤖 External LLM Provider<br/>[Gemini 2.5 Flash/Pro + Embeddings]"]
     PaymentGW["💳 Payment Gateway<br/>[PayOS / VNPay Sandbox]"]
     ExtCalActor["📅 External Calendar<br/>[Google OAuth2 & WebCal .ics]"]
 
     subgraph Containers["Hạ tầng 6 Vùng chứa FocusFlow (Docker Compose / Cloud Deployment)"]
         SPA["💻 Angular 21+ SPA<br/>[Container: TypeScript, Tailwind CSS v4, PrimeNG v21, Nginx]<br/>Zoneless Change Detection, Standalone OnPush Components, Signals / rxResource, Lucide Icons<br/>Port: 3000 / 80"]
         
-        BackendAPI["⚙️ FastAPI Backend<br/>[Container: Python 3.12, FastAPI, SQLAlchemy 2.0 Async, Uvicorn]<br/>Context-First Modular Monolith (account, planning, execution, evaluation + shared_kernel)<br/>Port: 8000"]
+        BackendAPI["⚙️ FastAPI Backend<br/>[Container: Python 3.12, FastAPI, SQLAlchemy 2.0 Async, Uvicorn]<br/>Context-First Modular Monolith (account, planning, execution, evaluation + shared_kernel AI Harness)<br/>Port: 8000"]
         
-        TaskiqWorker["⚡ Taskiq Worker<br/>[Container: Python 3.12, Taskiq, taskiq-fastapi, asyncpg]<br/>Thực thi bất đồng bộ: Outbox Relay, AI Profile Aggregation, Calendar Sync, Sweeps"]
+        TaskiqWorker["⚡ Taskiq Worker<br/>[Container: Python 3.12, Taskiq, taskiq-fastapi, asyncpg]<br/>Thực thi bất đồng bộ: Outbox Relay, Durable Workflow Runner, Learner Memory Aggregation, Calendar Sync, Sweeps"]
         
         TaskiqScheduler["⏰ Taskiq Scheduler (replicas: 1)<br/>[Container: Python 3.12, TaskiqScheduler Singleton]<br/>Kích hoạt lịch định kỳ mỗi 60s/hàng ngày vào Redis Streams (không chạy trùng lặp)"]
         
-        PostgresDB[("🐘 PostgreSQL 16 (24 tables)<br/>[Container: PostgreSQL 16 Alpine]<br/>24 bảng chuẩn 3NF/BCNF, UUIDv7, ACID Quota Reservation & Transactional Outbox<br/>Port: 5432")]
+        PostgresDB[("🐘 PostgreSQL 16 + pgvector (35 tables)<br/>[Container: PostgreSQL 16 Alpine + pgvector]<br/>35 bảng chuẩn 3NF/BCNF, UUIDv7, Hybrid RAG (tsvector + vector(768)), Durable Workflows & Outbox<br/>Port: 5432")]
         
         RedisStore[("🔴 Redis 7 (AOF + Streams)<br/>[Container: Redis 7 Alpine - appendonly yes]<br/>RedisStreamBroker (XREADGROUP/XACK), Refresh Token Rotation, Rate Limit, SSE Pub/Sub<br/>Port: 6379")]
     end
@@ -131,47 +134,49 @@ flowchart TB
 
     subgraph BackendContainer["FastAPI Backend Container (backend/src/)"]
         
-        subgraph AccountBC["Bounded Context 1: account (src/account/)"]
-            AccPres["Presentation: AuthRouter, ProfileRouter, AvailabilityRouter, BillingRouter, AdminUserRouter"]
-            AccApp["Application: AuthUC, AvailabilityUC, QuotaService, BillingUpgradeUC, AdminUserUC"]
-            AccDom["Domain: User, LearnerProfile, AvailabilityProfile, AIQuota, AIQuotaReservation, WeeklySchedule, TimeSlot<br/>+ Pure Service: HybridAvailabilityRuleEngine"]
-            AccInfra["Infrastructure: 9 ORM Models (availabilities, availability_slots, ai_quotas...), PayOSAdapter, LocalMockPaymentAdapter, Argon2/PyJWT/Fernet"]
-            AccAPI["public_api.py: AvailabilityQueryPort, QuotaFacadePort, LearnerProfileQueryPort"]
+        subgraph AccountBC["Bounded Context 1: account (src/account/ - 12 Tables)"]
+            AccPres["Presentation: AuthRouter, ProfileRouter, LearnerMemoryRouter, AvailabilityRouter, BillingRouter, AdminUserRouter"]
+            AccApp["Application: AuthUC, StructuredMemoryService, AvailabilityUC, QuotaService, BillingUpgradeUC, AdminUserUC"]
+            AccDom["Domain: User, LearnerProfile, LearnerMemoryItem, LearnerConceptMastery, AvailabilityProfile, CalendarConnection, WebCalToken, AIQuota, AIQuotaReservation<br/>+ Pure Services: HybridAvailabilityRuleEngine, AvailabilityNormalizer, LearnerFeatureAggregator"]
+            AccInfra["Infrastructure: 12 ORM Models (users, learner_profiles, learner_memory_items, learner_concept_masteries, availabilities...), PayOSAdapter, LocalMockPaymentAdapter, Argon2/PyJWT/Fernet"]
+            AccAPI["public_api.py: AvailabilityQueryPort, QuotaFacadePort, LearnerProfileQueryPort, WebCalTokenQueryPort"]
         end
 
-        subgraph PlanningBC["Bounded Context 2: planning (src/planning/)"]
-            PlanPres["Presentation: GoalRouter, RoadmapRouter, ScheduleRouter"]
-            PlanApp["Application: DecomposeGoalUC, GenerateScheduleUC, ValidationGateOrchestrator, ApplyScheduleUC"]
-            PlanDom["Domain: Goal, Roadmap, Milestone, OfficialSchedule, ScheduleProposal"]
-            PlanInfra["Infrastructure: 5 ORM Models (goals, roadmaps, milestones, official_schedules, schedule_proposals), PedagogicalJudgeAdapter"]
-            PlanAPI["public_api.py: RoadmapScheduleQueryPort"]
+        subgraph PlanningBC["Bounded Context 2: planning (src/planning/ - 10 Tables)"]
+            PlanPres["Presentation: GoalRouter, KnowledgeRouter, RoadmapRouter, ScheduleRouter"]
+            PlanApp["Application: PlanCreationWorkflowUC, KnowledgeEngine (SSRF + Hybrid RAG), ScheduleGenerationWorkflowUC, ValidationGateOrchestrator, ApplyScheduleUC"]
+            PlanDom["Domain: Goal, KnowledgeSource, KnowledgeChunk, Roadmap, Milestone, OfficialSchedule, ScheduleProposal, ScheduleBlock, LearningConcept, ConceptPrerequisite<br/>+ Pure Service: RollingHorizonScheduler"]
+            PlanInfra["Infrastructure: 10 ORM Models (goals, knowledge_sources, knowledge_chunks [tsvector+pgvector], roadmaps, milestones, official_schedules, schedule_proposals, schedule_blocks...), PedagogicalJudgeAdapter"]
+            PlanAPI["public_api.py: RoadmapScheduleQueryPort, KnowledgeConceptQueryPort"]
         end
 
-        subgraph ExecutionBC["Bounded Context 3: execution (src/execution/)"]
+        subgraph ExecutionBC["Bounded Context 3: execution (src/execution/ - 5 Tables)"]
             ExecPres["Presentation: TaskRouter, SessionRouter, NoteRouter, CalendarRouter"]
-            ExecApp["Application: TaskUC, StudySessionUC, HeartbeatUC, StudyNoteUC, CalendarSyncUC"]
-            ExecDom["Domain: Task, TaskDependency, StudySession, SessionTask, StudyNote<br/>+ Pure Service: DagCycleValidator"]
+            ExecApp["Application: TaskUC, StudySessionUC (kèm Daily Check-in), HeartbeatUC, StudyNoteUC, CalendarSyncUC"]
+            ExecDom["Domain: Task, TaskDependency, StudySession, SessionTask, StudyNote<br/>+ Pure Services: DagCycleValidator, DeterministicTakeawayGuard"]
             ExecInfra["Infrastructure: 5 ORM Models (tasks, task_dependencies, study_sessions, session_tasks, study_notes), GoogleCalendarOAuthAdapter, IcsFeedGenerator"]
             ExecAPI["public_api.py: StudyExecutionQueryPort"]
         end
 
-        subgraph EvaluationBC["Bounded Context 4: evaluation (src/evaluation/)"]
-            EvalPres["Presentation: PauseRouter, AnalyticsRouter, ReviewRouter, AdaptationRouter, AdminMonitoringRouter"]
-            EvalApp["Application: PauseRoadmapUC, AnalyticsUC, GenerateAIReviewUC, DominoShiftUC, SingleRoadmapRescheduleUC, AdminMonitoringUC"]
-            EvalDom["Domain: PauseRecord, AIReview, ScheduleChangeLog, QuantitativeMetrics<br/>+ Pure Service: DominoShiftEngine"]
-            EvalInfra["Infrastructure: 3 ORM Models (pause_records, ai_reviews, schedule_change_logs), SmtpEmailNotificationAdapter"]
+        subgraph EvaluationBC["Bounded Context 4: evaluation (src/evaluation/ - 4 Tables)"]
+            EvalPres["Presentation: PauseRouter, AnalyticsRouter, ReviewRouter, ProveModeRouter, AdaptationRouter, AdminMonitoringRouter"]
+            EvalApp["Application: PauseRoadmapUC, AnalyticsUC, WeeklyReviewWorkflowUC, ProveMilestoneUC, DominoShiftUC, OverdueRecoveryWorkflowUC, AdminMonitoringUC"]
+            EvalDom["Domain: PauseRecord, AIReview, ScheduleChangeLog, MilestoneProof, QuantitativeMetrics<br/>+ Pure Services: DominoShiftEngine, MistakeIntelligenceAnalyzer"]
+            EvalInfra["Infrastructure: 4 ORM Models (pause_records, ai_reviews, schedule_change_logs, milestone_proofs), SmtpEmailNotificationAdapter"]
             EvalAPI["public_api.py: EvaluationMetricsQueryPort"]
         end
 
-        subgraph SharedKernel["Shared Kernel (src/shared_kernel/)"]
+        subgraph SharedKernel["Shared Kernel & AI Harness Runtime (src/shared_kernel/ - 4 Tables)"]
             SKUoW["AsyncUnitOfWork & SqlAlchemyUoW<br/>(Quản lý Transaction ACID & ghi tự động outbox_events)"]
+            SKWorkflow["DurableWorkflowEngine<br/>(2 ORM Models: workflow_runs, workflow_step_executions)"]
+            SKHarness["Shared AI Harness Runtime<br/>(PromptEngine, 5-Layer ContextEngine, ToolRegistry, OutputEngine, ExecutionManager)"]
             SKOutbox["OutboxRelay & IdempotentConsumer<br/>(2 ORM Models: outbox_events, processed_events)"]
-            SKLLM["LLMProviderPort + LiteLLMAdapter & MockLLMAdapter<br/>(Provider-Agnostic OpenAI/Gemini/Claude/Ollama + PromptSanitizer)"]
+            SKLLM["ModelGateway (LLMProviderPort) + GeminiAdapter, LiteLLMAdapter & MockLLMAdapter<br/>(gemini-2.5-flash/pro + text-embedding-004 + PromptSanitizer)"]
             SKLog["Structlog JSON Logger + PII Sanitizer + Security Middlewares"]
         end
     end
 
-    PG[("🐘 PostgreSQL 16 (24 Bảng 3NF/BCNF)")]
+    PG[("🐘 PostgreSQL 16 + pgvector (35 Bảng 3NF/BCNF)")]
     Redis[("🔴 Redis 7 (Streams & Token Store)")]
     ExtLLM["🤖 External LLM Provider"]
     ExtPay["💳 PayOS / VNPay Sandbox"]
@@ -278,9 +283,9 @@ flowchart LR
         CalSyncTask["6. CalendarSyncTask<br/>[execution - Event-driven & Mỗi 15m]<br/>Đồng bộ 2 chiều Google Calendar OAuth2 qua CalendarSyncPort"]
     end
 
-    subgraph PGStore["PostgreSQL 16 (24 Bảng 3NF/BCNF)"]
-        OutboxTables[("outbox_events &<br/>processed_events")]
-        DomainTables[("study_sessions, ai_quotas,<br/>ai_quota_reservations, tasks,<br/>learner_profiles, ai_reviews")]
+    subgraph PGStore["PostgreSQL 16 + pgvector (35 Bảng 3NF/BCNF)"]
+        OutboxTables[("outbox_events, processed_events,<br/>workflow_runs, workflow_step_executions")]
+        DomainTables[("study_sessions, ai_quotas, ai_quota_reservations,<br/>tasks, schedule_blocks, learner_profiles,<br/>learner_memory_items, learner_concept_masteries, ai_reviews")]
     end
 
     SchedulerDaemon -->|"Đẩy lịch kích hoạt định kỳ"| StreamBroker
@@ -303,17 +308,21 @@ flowchart LR
 | Tên Thành phần (Component) | Bounded Context | Tầng (Layer) | Trách nhiệm duy nhất (Single Responsibility) | Giao diện Cung cấp / Cổng (Port) | Phụ thuộc (Dependencies) |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **`AsyncUnitOfWork` / `SqlAlchemyUoW`** | `shared_kernel` | Application / Infrastructure | Quản lý giao dịch ACID `asyncpg` và tự động lưu các Domain Events phát sinh từ Aggregate Roots vào bảng `outbox_events` trong cùng 1 transaction. | `AsyncUnitOfWork` Protocol | PostgreSQL 16 (`outbox_events`) |
-| **`LiteLLMAdapter` & `MockLLMAdapter`** | `shared_kernel` | Infrastructure | Cài đặt `LLMProviderPort` theo mẫu Strategy/Factory hỗ trợ OpenAI, Gemini, Claude, Ollama và chế độ giả lập offline tất định. | `LLMProviderPort` | `LiteLLM` SDK, `PromptSanitizer` |
-| **`HybridAvailabilityRuleEngine`** | `account` | Domain (`services/`) | Thẩm định trần giờ rảnh Mode A (Hard Ceiling), khớp khung giờ vị trí thực tế Mode B (Slot-fit & Soft Overflow $\le 30\text{m}$) và trừ khoảng bận (`Interval Subtraction`). | `validate_daily_ceiling()`, `validate_proposal_against_slots()` | Thuần Python (`AvailabilityProfile`, `WeeklySchedule`, `TimeSlot`) |
-| **`SqlAlchemyAvailabilityRepository`** | `account` | Infrastructure | Lưu trữ và tái tạo Aggregate `AvailabilityProfile` cùng Value Object `WeeklySchedule`/`TimeSlot` từ 2 bảng chuẩn hóa 3NF/BCNF `availabilities` và `availability_slots`. | `AvailabilityRepositoryPort` | PostgreSQL 16 (`availabilities`, `availability_slots`) |
+| **`DurableWorkflowEngine`** | `shared_kernel` | Application / Infrastructure | Quản lý trạng thái bền vững (`workflow_runs`, `workflow_step_executions`) cho 5 workflow cốt lõi, hỗ trợ tạm dừng `PAUSED_WAITING_USER` và phục hồi từ bước dở dang. | `WorkflowEnginePort` | PostgreSQL 16 (`workflow_runs`, `workflow_step_executions`) |
+| **`Shared AI Harness Runtime`** (`PromptEngine`, `ContextEngine`, `ToolRegistry`, `OutputEngine`, `ExecutionManager`) | `shared_kernel` | Application | Lắp ghép ngữ cảnh 5 tầng theo hướng Hermes, quản lý versioned prompt, công cụ đọc có hợp đồng, kiểm soát timeout/retry/2-Phase Quota và ép kiểu đầu ra Pydantic v2. | `AIHarnessRuntime` | `LLMProviderPort`, `QuotaFacadePort` |
+| **`GeminiAdapter`, `LiteLLMAdapter` & `MockLLMAdapter`** | `shared_kernel` | Infrastructure | Cài đặt `LLMProviderPort` (`ModelGateway`) kết nối chuẩn hóa với `gemini-2.5-flash`/`pro`, `text-embedding-004` và chế độ giả lập offline tất định. | `LLMProviderPort` | Google GenAI / `LiteLLM` SDK, `PromptSanitizer` |
+| **`AvailabilityNormalizer` & `HybridAvailabilityRuleEngine`** | `account` | Domain (`services/`) | Hợp nhất cấu hình Mode A/B với Google Calendar `freeBusy`/`syncToken` thành `UnifiedAvailabilityModel`; thẩm định trần giờ Mode A và khung giờ Mode B. | `normalize_availability()`, `validate_daily_ceiling()` | Thuần Python (`AvailabilityProfile`, `WeeklySchedule`, `TimeSlot`) |
+| **`StructuredMemoryService` & `LearnerFeatureAggregator`** | `account` | Domain / Application | Tổng hợp JSON Feature tinh gọn (< 600 tokens) và quản lý bộ nhớ 4 danh mục $\times$ 3 tầng nhận thức (`learner_memory_items`) cùng `learner_concept_masteries`. | `LearnerProfileQueryPort` | `learner_profiles`, `learner_memory_items`, `learner_concept_masteries` |
 | **`QuotaService` & `QuotaFacade`** | `account` | Application / `public_api.py` | Thực thi giữ chỗ hạn ngạch 2 pha ACID (`Reserve` $\to$ `Commit` / `Release`) với `SELECT ... FOR UPDATE` và ghi nhận `ai_usage_logs`. | `QuotaFacadePort` | `ai_quotas`, `ai_quota_reservations`, `ai_usage_logs` |
 | **`PayOSAdapter` & `LocalMockPaymentAdapter`** | `account` | Infrastructure | Tạo phiên thanh toán VietQR, xác thực Webhook chữ ký `HMAC-SHA256` và hỗ trợ nâng cấp gói giả lập khi demo offline. | `PaymentGatewayPort` | PayOS/VNPay API, `payment_transactions` |
-| **`DagCycleValidator`** | `execution` | Domain (`services/`) | Kiểm tra đồ thị có hướng không chu trình (DAG) bằng thuật toán DFS/Kahn $O(V+E)$ trên danh sách `TaskDependency`. | `validate_no_cycles()` | Thuần Python (`Task`, `TaskDependency`) |
-| **`ValidationGateOrchestrator`** | `planning` | Application | Điều phối cổng kiểm duyệt 3 tầng: Tier 1 (Pydantic Schema) & Tier 2 (Domain Rule Engines) là 2 cổng chặn cứng kích hoạt tối đa 2 vòng tự sửa lỗi; Tier 3 (`PedagogicalJudgeAdapter`) là cổng tư vấn mềm ($\le 5\text{s}$ timeout, Fail-Open) đính kèm `pedagogical_warnings`. | `validate_and_refine_proposal()` | `StudyExecutionQueryPort` (`DagCycleValidator`), `AvailabilityQueryPort`, `LLMProviderPort` |
-| **`StudySessionUseCase` & `HeartbeatUseCase`** | `execution` | Application | Quản lý vòng đời phiên học Pomodoro/Stopwatch, ghi nhận Heartbeat mỗi 60s và phát sự kiện `StudySessionCompletedEvent` vào Outbox. | `SessionInputPort` | `tasks`, `task_dependencies`, `study_sessions`, `session_tasks`, `study_notes`, `AsyncUnitOfWork` |
-| **`GoogleCalendarOAuthAdapter` & `IcsFeedGenerator`** | `execution` | Infrastructure | Đồng bộ lịch 2 chiều có kiểm soát qua Google OAuth2 (mã hóa token bằng Fernet) và xuất luồng lịch 1 chiều `.ics` chuẩn RFC 5545. | `CalendarSyncPort` | Google Calendar API, `WebCalTokenQueryPort` |
-| **`DominoShiftEngine` & `SingleRoadmapRescheduleUC`** | `evaluation` | Domain / Application | Quản lý bảo lưu (`pause_records`), giải thuật tất định tịnh tiến Domino Shift (< 50ms), tái lập lịch AI đơn lộ trình (bỏ qua 3-Tier Gate, chỉ kiểm tra JSON schema & dung lượng/xung đột cơ bản của lộ trình đó) và kiểm tra ngưỡng chống lặp `reschedule_count >= 3`. | `calculate_domino_shift()`, `reschedule_overdue_roadmap()` | `pause_records`, `ai_reviews`, `schedule_change_logs`, `EmailNotificationPort` |
-| **`AdminUserRouter` & `AdminMonitoringRouter`** | `account` & `evaluation` | Presentation | Cung cấp API quản trị người dùng, hạn ngạch Quota (`UC-18`) và bảng điều khiển giám sát chi phí/độ trễ token AI (`UC-19`). | `/api/v1/admin/users/*`, `/api/v1/admin/monitoring/*` | RBAC Guard (`role == 'ADMIN'`), `ai_usage_logs` |
+| **`KnowledgeEngine` & `HybridKnowledgeRetriever`** | `planning` | Application / Infrastructure | Kiểm tra SSRF, bóc tách PDF/DOCX/TXT/URL, cắt chunk kèm provenance, bọc `<untrusted_knowledge_context>` và truy xuất lai `tsvector` GIN + `pgvector` HNSW. | `KnowledgeConceptQueryPort` | `knowledge_sources`, `knowledge_chunks`, `learning_concepts` |
+| **`RollingHorizonScheduler`** | `planning` | Domain (`services/`) | Phân bổ tất định `tasks.estimated_minutes` thành các khối `schedule_blocks.scheduled_duration_minutes` trong cửa sổ trượt 7–14 ngày với 5 cơ chế `Schedule Resilience`. | `ScheduleOptimizerPort` | Thuần Python (`OfficialSchedule`, `ScheduleBlock`) |
+| **`DagCycleValidator`** | `execution` | Domain (`services/`) | Kiểm tra đồ thị có hướng không chu trình (DAG) bằng thuật toán DFS/Kahn $O(V+E)$ trên danh sách `TaskDependency` và `ConceptPrerequisite`. | `validate_no_cycles()` | Thuần Python (`Task`, `TaskDependency`) |
+| **`ValidationGateOrchestrator`** | `planning` | Application | Điều phối cổng kiểm duyệt 3 tầng (`UC-12`): Tier 1 (Pydantic Schema) & Tier 2 (`DagCycleValidator`, `HybridAvailabilityRuleEngine`, `RollingHorizonScheduler`) là 2 cổng chặn cứng; Tier 3 (`PedagogicalJudgeAdapter`) là cổng tư vấn mềm ($\le 5\text{s}$ timeout, Fail-Open). | `validate_and_refine_proposal()` | `StudyExecutionQueryPort`, `AvailabilityQueryPort`, `LLMProviderPort` |
+| **`StudySessionUseCase` & `HeartbeatUseCase`** | `execution` | Application | Quản lý vòng đời phiên học Pomodoro/Stopwatch & MVS, thu thập `Daily Learning Check-in` (`checkin_*`), ghi nhận Heartbeat mỗi 60s và phát `StudySessionCompletedEvent`. | `SessionInputPort` | `tasks`, `task_dependencies`, `study_sessions`, `session_tasks`, `study_notes`, `AsyncUnitOfWork` |
+| **`GoogleCalendarOAuthAdapter` & `IcsFeedGenerator`** | `execution` | Infrastructure | Đồng bộ lịch 2 chiều có kiểm soát qua Google OAuth2 (`freeBusy`, `syncToken`, `schedule_blocks.external_calendar_event_id`) và xuất luồng `.ics` chuẩn RFC 5545. | `CalendarSyncPort` | Google Calendar API, `WebCalTokenQueryPort` |
+| **`DominoShiftEngine`, `OverdueRecoveryWorkflowUC` & `ProveMilestoneUC`** | `evaluation` | Domain / Application | Quản lý bảo lưu (`pause_records`), giải thuật Domino Shift (< 50ms), phục hồi quá hạn theo cửa sổ trượt 7–14 ngày qua cổng 3 tầng (`UC-12`, `UC-23`), kiểm chứng Prove Mode 2 tầng & phân loại `Mistake Taxonomy` (`UC-20`). | `calculate_domino_shift()`, `recover_overdue_schedule()`, `prove_milestone()` | `pause_records`, `ai_reviews`, `schedule_change_logs`, `milestone_proofs`, `EmailNotificationPort` |
+| **`AdminUserRouter` & `AdminMonitoringRouter`** | `account` & `evaluation` | Presentation | Cung cấp API quản trị người dùng, hạn ngạch Quota, đối soát giao dịch (`UC-26`, `UC-27`) và bảng điều khiển giám sát chi phí/độ trễ token AI (`UC-28`). | `/api/v1/admin/users/*`, `/api/v1/admin/monitoring/*` | RBAC Guard (`role == 'ADMIN'`), `ai_usage_logs` |
 
 ### 7.2 Danh mục Thành phần Frontend Angular 21+ (`frontend/src/app/`)
 
@@ -333,21 +342,21 @@ flowchart LR
 | **`OutboxRelayTask`** | Taskiq Worker + Scheduler | Mỗi 5–10 giây | Đọc `outbox_events` (`PENDING`) bằng `FOR UPDATE SKIP LOCKED`, đẩy vào `RedisStreamBroker` và đánh dấu `PUBLISHED`. |
 | **`AbandonedSessionSweeperTask`** | Taskiq Worker + Scheduler | Mỗi 60 giây | Quét `study_sessions` (`IN_PROGRESS`) ngừng gửi heartbeat $> 5$ phút (`OS-07`), phân định `PARTIAL_COMPLETED` / `CANCELLED` theo `OS-01`. |
 | **`QuotaReservationSweeperTask`** | Taskiq Worker + Scheduler | Mỗi 60 giây | Quét `ai_quota_reservations` ở trạng thái **`'RESERVED'`** đã quá hạn TTL **`120 seconds (2 minutes)`** (`expires_at < NOW()`), chuyển sang `'EXPIRED'` và hoàn trả `reserved_calls` vào `ai_quotas`. |
-| **`OverdueAntiLoopSweeperTask`** (`Overdue Scanner`) | Taskiq Worker + Scheduler | Hàng ngày (`00:05 UTC+7`) | Quét các `tasks` quá hạn (`scheduled_date < CURRENT_DATE` và `status != 'COMPLETED'`). **Không tự động sửa ngầm `scheduled_date`**; gửi Email Notification tới email đăng ký của người học (qua `EmailNotificationPort` / SMTP Adapter) và hiển thị các task quá hạn trong mục `Needs Attention` kèm nút **"AI Reschedule (Dời lịch hợp lý)"** (dời lịch chỉ cho các task chưa hoàn thành của riêng lộ trình đó, bỏ qua 3-Tier Gate, tăng `reschedule_count` và kích hoạt `STALLED` khi `>= 3` — `ADR-010`). |
-| **`LearnerProfileAggregatorTask`** | Taskiq Worker | Event-driven & Chủ Nhật 23:55 | Tiêu thụ `StudySessionCompletedEvent` (qua `processed_events`), cập nhật `learner_profiles` và kích hoạt sinh báo cáo `ai_reviews`. |
-| **`CalendarSyncTask`** | Taskiq Worker + Scheduler | Event-driven & Mỗi 15 phút | Đồng bộ 2 chiều có kiểm soát với Google Calendar OAuth2 qua `CalendarSyncPort` (`execution`). |
+| **`OverdueAntiLoopSweeperTask`** (`Overdue Scanner`) | Taskiq Worker + Scheduler | Hàng ngày (`00:05 UTC+7`) | Quét các `tasks` quá hạn (`scheduled_date < CURRENT_DATE` và `status != 'COMPLETED'`). **Không tự động sửa ngầm `scheduled_date`**; gửi Email Notification tới email đăng ký của người học (qua `EmailNotificationPort` / SMTP Adapter) và hiển thị các task quá hạn trong mục `Needs Attention` kèm nút **"AI Reschedule (Dời lịch hợp lý)"** (`UC-23`: chạy Rolling-Horizon Overdue Recovery trong cửa sổ trượt 7–14 ngày, đi qua đủ 3 tầng `UC-12`, tăng `reschedule_count` và kích hoạt `STALLED` khi `>= 3` — `ADR-010`). |
+| **`LearnerProfileAggregatorTask`** | Taskiq Worker | Event-driven & Chủ Nhật 23:55 | Tiêu thụ `StudySessionCompletedEvent` / `MilestoneProofCompletedEvent` (qua `processed_events`), cập nhật `learner_profiles`, `learner_memory_items` (4×3), `learner_concept_masteries` và kích hoạt sinh báo cáo `ai_reviews`. |
+| **`CalendarSyncTask`** | Taskiq Worker + Scheduler | Event-driven & Mỗi 15 phút | Đồng bộ 2 chiều có kiểm soát với Google Calendar OAuth2 (`freeBusy`/`syncToken` & `schedule_blocks`) qua `CalendarSyncPort` (`execution`). |
 
 ---
 
 ## 8. Kiểm toán Tính nhất quán & Kiểm soát Kiến trúc Tự động (Architecture Audit)
 
-Bảng đối soát kiểm toán xác nhận mô hình C4 v2.0 đồng bộ tuyệt đối với toàn bộ hồ sơ thiết kế của đồ án:
+Bảng đối soát kiểm toán xác nhận mô hình C4 v3.2 đồng bộ tuyệt đối với toàn bộ hồ sơ thiết kế của đồ án:
 
 | Tiêu chuẩn Kiểm toán | Kết quả | Bằng chứng Kỹ thuật & Cơ chế Bảo vệ |
 | :--- | :--- | :--- |
-| **Đồng bộ 5 Tác nhân & Hệ thống Ngoại vi (C4 Level 1)** | ✅ Đạt 100% | Khớp 1:1 với `SRS v1.2`: `Learner`, `Administrator`, `Provider-Agnostic LLM`, `Payment Gateway (PayOS/VNPay)`, `External Calendar (Google OAuth2 & WebCal .ics)`. |
-| **Đồng bộ 6 Vùng chứa Thực thi (C4 Level 2)** | ✅ Đạt 100% | Khớp 1:1 với `docker-compose.yml` và `ADR-006`: `Angular 21+ SPA`, `FastAPI Backend`, `Taskiq Worker`, `Taskiq Scheduler (replicas: 1)`, `PostgreSQL 16`, `Redis 7 (AOF + Streams)`. |
-| **Cô lập 4 Bounded Contexts & Hexagonal Purity (C4 Level 3)** | ✅ Đạt 100% | Khóa chặt tự động bằng 2 hợp đồng **`import-linter`** (`forbidden` cross-context internal imports & `layers` dependency direction) trong `backend/pyproject.toml`. |
-| **Đồng nhất với 24 Bảng 3NF/BCNF (`ADR-007`)** | ✅ Đạt 100% | Phân bổ chính xác quyền sở hữu 24 bảng vật lý (`account`: 9, `planning`: 5, `execution`: 5, `evaluation`: 3, `shared_kernel`: 2); cấm ORM JOIN chéo Context. |
+| **Đồng bộ 8 Tác nhân & Hệ thống Ngoại vi (`ACT-00`..`ACT-07` — C4 Level 1)** | ✅ Đạt 100% | Khớp 1:1 với `SRS v1.4` (`28 Use Cases`): **8 Tác nhân (`ACT-00`..`ACT-07`)** gồm `Guest (ACT-00)`, `Registered User (ACT-01 — abstract)`, `Learner (ACT-02)`, `Administrator (ACT-03)`, `External LLM Provider (ACT-04)`, `Payment Gateway (ACT-05)`, `External Calendar Service (ACT-06)`, `Email Notification Service (ACT-07)`. Các thành phần `TaskiqScheduler`, `TaskiqWorker`, `Redis`, `PostgreSQL`, và `Shared AI Harness` là các C4 Containers/Components nội bộ nằm hoàn toàn bên trong FocusFlow System Boundary (không biểu diễn làm Use Case Actor). |
+| **Đồng bộ 6 Vùng chứa Thực thi (C4 Level 2)** | ✅ Đạt 100% | Khớp 1:1 với `docker-compose.yml` và `ADR-006`: `Angular 21+ SPA`, `FastAPI Backend`, `Taskiq Worker`, `Taskiq Scheduler (replicas: 1)`, `PostgreSQL 16 + pgvector`, `Redis 7 (AOF + Streams)`. |
+| **Cô lập 4 Bounded Contexts, Shared AI Harness & Hexagonal Purity (C4 Level 3)** | ✅ Đạt 100% | Khóa chặt tự động bằng 2 hợp đồng **`import-linter`** (`forbidden` cross-context internal imports & `layers` dependency direction) trong `backend/pyproject.toml`. |
+| **Đồng nhất với 35 Bảng 3NF/BCNF + `pgvector` (`ADR-007`)** | ✅ Đạt 100% | Phân bổ chính xác quyền sở hữu 35 bảng vật lý (`account`: 12, `planning`: 10, `execution`: 5, `evaluation`: 4, `shared_kernel`: 4); cấm ORM JOIN chéo Context. |
 | **Đồng nhất Ngăn xếp Frontend Angular 21+ (`ADR-003`)** | ✅ Đạt 100% | Chuẩn hóa trên Angular 21+ Zoneless Signals, Tailwind CSS v4, PrimeNG v21, Lucide Icons, `openapi-typescript`, Vitest/Playwright và đủ 9 Feature Modules. |
-| **Đồng nhất Công nghệ Bất đồng bộ & Sự kiện** | ✅ Đạt 100% | Sử dụng xuyên suốt **Taskiq + Redis 7 Streams (`RedisStreamBroker`) + `TaskiqScheduler` (`replicas: 1`)** kết hợp **Transactional Outbox (`outbox_events` & `processed_events`)**. |
+| **Đồng nhất Công nghệ Bất đồng bộ, Durable Workflow & Sự kiện** | ✅ Đạt 100% | Sử dụng xuyên suốt **Durable Workflow State (`workflow_runs`, `workflow_step_executions`) + Taskiq + Redis 7 Streams (`RedisStreamBroker`) + `TaskiqScheduler` (`replicas: 1`)** kết hợp **Transactional Outbox (`outbox_events` & `processed_events`)**. |

@@ -4,13 +4,13 @@ Hướng dẫn cho AI agent làm việc trong repo này. Đọc hết file trư�
 
 ## 1. Dự án
 
-FocusFlow là hệ thống lập kế hoạch và thực thi lộ trình tự học thích ứng tích hợp AI (mô hình SRL của Zimmerman: Forethought → Performance → Self-Reflection).
+FocusFlow là hệ thống quản lý và điều phối học tập cá nhân hóa thông minh tích hợp AI (**FocusFlow Learning Intelligence Harness — An adaptive AI-powered learning management system**), vận hành theo chu trình 6 bước (*Understand → Plan → Schedule → Adapt → Learn → Improve*) thống nhất với mô hình SRL 3 pha của Zimmerman (*Forethought → Performance → Self-Reflection*).
 
 | Phần | Công nghệ |
 |---|---|
-| Backend | Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2.0 async (asyncpg), Alembic, Taskiq + Redis Streams, PostgreSQL 16 |
+| Backend | Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2.0 async (asyncpg), Alembic, Taskiq + Redis Streams, PostgreSQL 16 (pgvector) |
 | Frontend | Angular 21+ (standalone, zoneless, OnPush, Signals), Tailwind CSS v4, PrimeNG v21, Lucide, openapi-typescript |
-| Kiến trúc | Context-First Modular Monolith + Hexagonal. 4 Bounded Context: `account`, `planning`, `execution`, `evaluation`, cùng `shared_kernel`. 24 bảng |
+| Kiến trúc | Context-First Modular Monolith + Hexagonal + Shared AI Harness Runtime. 4 Bounded Context: `account`, `planning`, `execution`, `evaluation`, cùng `shared_kernel`. 35 bảng (12 `account`, 10 `planning`, 5 `execution`, 4 `evaluation`, 4 `shared_kernel`) |
 | Hạ tầng | Docker Compose 4 container: postgres, redis, backend (gộp Uvicorn API, Taskiq worker, Taskiq scheduler qua Supervisord), frontend |
 | Test | pytest + pytest-asyncio, Vitest, Playwright |
 
@@ -33,7 +33,7 @@ Nếu skill chưa được cài, đọc trực tiếp `focusflow-*/SKILL.md` và
 
 ## 3. Nguồn chân lý và cách xử lý mâu thuẫn
 
-1. Yêu cầu nghiệp vụ, hành vi quan sát được, state machine, số Use Case: **SRS v1.2** (`UC-01..UC-25`).
+1. Yêu cầu nghiệp vụ, hành vi quan sát được, state machine, số Use Case: **SRS v1.3** (`docs/srs/srs-v1.3.md`, `UC-01..UC-28`).
 2. Cách làm kỹ thuật (thư viện, kiến trúc, hạ tầng): **ADR-001..010**.
 3. Hai nguồn lệch nhau: xem `references/spec-conflicts.md` trong skill, áp dụng cách giải quyết đã ghi, và **nói rõ với người dùng** bạn đã chọn gì, vì sao, tài liệu nào cần cập nhật. Không im lặng chọn.
 4. Chỗ SRS/ADR chưa quy định: đề xuất tối thiểu hợp lý, đánh dấu `TODO(spec)`, hỏi người dùng nếu liên quan tiền, quota, xóa dữ liệu hoặc quyền truy cập.
@@ -46,7 +46,9 @@ Nếu skill chưa được cài, đọc trực tiếp `focusflow-*/SKILL.md` và
 - `Depends`/`TaskiqDepends` chỉ ở `presentation/deps.py`. Router và Taskiq task gọi cùng một use case.
 - Giao dịch qua `AsyncUnitOfWork`. Repository chỉ `add/flush`, không `commit`. Event liên context ghi `outbox_events` cùng giao dịch. Consumer idempotent qua `processed_events`.
 - Không `relationship()` hoặc JOIN giữa bảng của hai context. Mọi tài nguyên phải kiểm `user_id` (IDOR); không thuộc user thì trả 404.
-- Mọi lệnh gọi LLM đi qua `LLMProviderPort` và nằm trong vòng đời quota RESERVE → COMMIT/RELEASE/EXPIRE. Ràng buộc cứng kiểm bằng code tất định, không bằng LLM.
+- Mọi lệnh gọi LLM đi qua **Shared AI Harness Runtime** (`LLMProviderPort`, Context Builder, Prompt Registry, Tool/Skill Layer, Guardrail & Verification Layer, Memory Extraction, Observability & Eval) và nằm trong vòng đời quota RESERVE → COMMIT/RELEASE/EXPIRE.
+- Phân tách rạch ròi **AI Reasoning vs. Deterministic Scheduling Engine** và **3 thực thể cốt lõi**: (1) **Roadmap** (học gì, thứ tự nào — `estimated_effort`), (2) **Schedule** (học khi nào — `schedule_blocks` với `scheduled_duration`, thay đổi giờ rảnh chỉ chạy lại Schedule Optimization mà không tạo lại Roadmap), (3) **Learner Model** (học như thế nào — `learner_profiles`, `learner_memory_items`, `learner_concept_masteries` lưu giữ xuyên suốt nhiều Roadmap). Ràng buộc cứng kiểm bằng code tất định, không bằng LLM.
+- Tài liệu RAG (`knowledge_sources`, `knowledge_chunks`) bắt buộc đóng gói trong thẻ `<untrusted_knowledge_context>` và kiểm tra SSRF khi nạp URL.
 - AI chỉ tạo `ScheduleProposal(DRAFT)`. Chỉ hành động Apply của người học mới ghi `OfficialSchedule`.
 - Task quá hạn không bị tự dời `scheduled_date`; chỉ gắn cờ và gửi email. Domino Shift không tăng `reschedule_count`.
 - Bảo mật: cookie JWT HttpOnly, `PyJWT` + `pwdlib[argon2]`, WebCal token chỉ lưu sha256, OAuth token mã hóa Fernet, webhook `HMAC-SHA256` + khóa lũy đẳng. Không log secret/token/PII.
@@ -105,7 +107,7 @@ Chạy toàn hệ thống: `docker compose up --build`. Chế độ offline/demo
 ## 8. Những việc không làm khi chưa được phép
 
 - Thêm thư viện lớn hoặc đổi công nghệ đã chốt trong ADR.
-- Thêm bảng mới hoặc đổi số lượng 24 bảng.
+- Thêm bảng mới hoặc đổi số lượng 35 bảng (12 `account`, 10 `planning`, 5 `execution`, 4 `evaluation`, 4 `shared_kernel`).
 - Sửa nội dung ADR/SRS (chỉ đề xuất thay đổi).
 - Xóa dữ liệu, `git push --force`, đổi cấu hình CI/CD, hoặc chạm vào file `.env` thật.
 - Gọi LLM thật hoặc cổng thanh toán thật trong test/CI.

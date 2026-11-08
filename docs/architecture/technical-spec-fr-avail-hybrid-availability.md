@@ -89,7 +89,7 @@ Một trong những quyết định kiến trúc quan trọng nhất trong phiê
 
 | Tiêu chí Đánh giá | Phương án A: Lưu cột `JSONB` nguyên khối trong DB | Phương án B: Anemic CRUD trực tiếp trên bảng 1-N (Không có Value Object) | Phương án C (Được chọn - v2.0): Rich DDD Value Objects (`WeeklySchedule`/`TimeSlot`) + Bảng chuẩn hóa 3NF/BCNF (`availabilities` & `availability_slots`) qua Repository |
 | :--- | :--- | :--- | :--- |
-| **Chuẩn hóa Học thuật 3NF/BCNF** | **Vi phạm 1NF** dưới góc nhìn CSDL quan hệ thuần túy (lưu mảng lặp các slot giờ vào 1 ô JSONB, không truy vấn SQL trực tiếp từng slot được). | **Đạt 3NF/BCNF** (tách bảng cha `availabilities` và bảng con `availability_slots`). | **Đạt tuyệt đối 3NF/BCNF** trên toàn bộ 24 bảng PostgreSQL 16: bảng cha `availabilities` lưu cấu hình chung và bảng con `availability_slots` lưu từng dòng khung giờ/quỹ giờ theo ngày. |
+| **Chuẩn hóa Học thuật 3NF/BCNF** | **Vi phạm 1NF** dưới góc nhìn CSDL quan hệ thuần túy (lưu mảng lặp các slot giờ vào 1 ô JSONB, không truy vấn SQL trực tiếp từng slot được). | **Đạt 3NF/BCNF** (tách bảng cha `availabilities` và bảng con `availability_slots`). | **Đạt tuyệt đối 3NF/BCNF** trên toàn bộ 35 bảng PostgreSQL 16: bảng cha `availabilities` lưu cấu hình chung và bảng con `availability_slots` lưu từng dòng khung giờ/quỹ giờ theo ngày. |
 | **Mô hình hóa Nghiệp vụ (DDD)** | Tốt ở tầng Domain nhưng rò rỉ cấu trúc lưu trữ tài liệu JSONB. | **Kém (Anemic):** Mất tính đóng gói của Aggregate Root, khó kiểm tra chồng lấn khung giờ trên toàn tuần. | **Xuất sắc (Rich DDD + Pure Domain Service):** Trong bộ nhớ (`account/domain/`), `AvailabilityProfile` nắm giữ Value Object bất biến `WeeklySchedule`, `DaySchedule`, `TimeSlot` và phối hợp cùng `HybridAvailabilityRuleEngine`. |
 | **Vai trò của Hexagonal Adapter** | Ánh xạ 1-1 đơn giản nhưng hy sinh ràng buộc khóa/kiểu dữ liệu SQL trên từng slot. | Không có ranh giới Domain/Infrastructure rõ ràng. | **`SqlAlchemyAvailabilityRepository`** đóng vai trò **Data Mapper** đích thực: khi đọc (`get_by_user_id`), gom các dòng từ `availabilities` + `availability_slots` để tái tạo `WeeklySchedule` VO; khi ghi (`save`), đồng bộ nguyên tử (atomic replacement trong `AsyncUnitOfWork`) từ `WeeklySchedule` VO xuống bảng `availability_slots`. |
 
@@ -551,7 +551,7 @@ sequenceDiagram
 ## 5. Thiết Kế Cơ Sở Dữ Liệu 3NF/BCNF & Chiến Lược Lưu Trữ (Persistence Design)
 
 ### 5.1. Lược đồ 2 Bảng Vật lý Chuẩn hóa 3NF/BCNF: `availabilities` & `availability_slots` (PostgreSQL 16)
-Tuân thủ thiết kế chuẩn hóa 24 bảng tại `docs/database/schema.sql` (v3.0), `Class Diagram v5.0` và `ADR-007`, cấu hình thời gian rảnh được lưu trữ chuẩn hóa 3NF/BCNF trên 2 bảng thuộc sở hữu của Bounded Context `account` (lưu ý: cột `timezone` nằm tại bảng `users`, không lặp lại ở `availabilities`):
+Tuân thủ thiết kế chuẩn hóa 35 bảng tại `docs/database/schema.sql` (v3.2), `Class Diagram` và `ADR-007`, cấu hình thời gian rảnh được lưu trữ chuẩn hóa 3NF/BCNF trên 2 bảng thuộc sở hữu của Bounded Context `account` (lưu ý: cột `timezone` nằm tại bảng `users`, không lặp lại ở `availabilities`):
 
 ```sql
 -- =============================================================================

@@ -1,20 +1,20 @@
 # ADR-003: Lựa chọn Nền tảng Công nghệ Frontend: Angular 21+ (Zoneless & Signals), Tailwind CSS v4, PrimeNG v21 & `openapi-typescript`
 
-* **Trạng thái:** Được chấp thuận (Approved — Cập nhật Kiến trúc v2.0)
-* **Ngày quyết định:** 29/09/2026 (Cập nhật v2.0: 25/10/2026)
+* **Trạng thái:** Được chấp thuận (Approved — Cập nhật Kiến trúc v2.0; Đồng bộ v2.1: 28 Use Cases)
+* **Ngày quyết định:** 29/09/2026 (Cập nhật v2.0: 25/10/2026; Cập nhật v2.1: 03/11/2026)
 * **Người quyết định:** Vũ Toàn Thắng, Phan Đình Duẩn
 * **Căn cứ đánh giá:** Khung Rubric Đồ án Tốt nghiệp CNTT — Tiêu chí TC2.1, TC2.3 & TC2.7 (Mức 5)
-* **Yêu cầu liên quan:** `ASR-03`, `FR-PLAN-003`, `FR-SESSION-001`, `FR-SESSION-002`, `UC-01` đến `UC-19`, `NFR-UX-001`, `NFR-UX-002`, `EVAL-04`, `EVAL-05`
+* **Yêu cầu liên quan:** `ASR-03`, `FR-PLAN-003`, `FR-SESSION-001`, `FR-SESSION-002`, `UC-01` đến `UC-28`, `NFR-UX-001`, `NFR-UX-002`, `EVAL-04`, `EVAL-05`
 
 ---
 
 ## 1. Ngữ cảnh & Đặt vấn đề (Context)
-Giao diện người dùng của FocusFlow phục vụ toàn bộ 19 Use Cases trải dài từ người học (`Learner`) đến quản trị viên (`Administrator`), với các đặc thù kỹ thuật khắt khe:
-1. **Không gian Thực thi Tập trung Thời gian thực (Pomodoro Study Workspace - `UC-10`, `UC-11`):** Đồng hồ đếm ngược Pomodoro/Stopwatch cập nhật mỗi giây, kết hợp trình soạn thảo ghi chú Markdown (Scratchpad), danh sách nhiệm vụ và cơ chế gửi Heartbeat định kỳ 60 giây.
-2. **Luồng Tương tác AI Streaming 2 Chặng (`UC-06`, `UC-07`, `ASR-03`):** Hiển thị tiến trình sinh Milestones và Schedule Proposal theo thời gian thực qua Server-Sent Events (`EventSource`) với thời gian hiển thị token đầu tiên $\le 2.5\text{s}$, kết hợp giao diện kéo-thả / duyệt lịch trực quan.
-3. **Biểu đồ Phân tích Học tập, Thanh toán & Quản trị Hệ thống (`UC-05`, `UC-14`, `UC-18`, `UC-19`):** Đòi hỏi bộ thành phần UI giàu tính năng (Data Table phân trang/lọc cho Admin, Timeline/Calendar, Dialog, Toast, Chart, Stepper) đạt chuẩn tiếp cận **Lighthouse Accessibility $\ge 90$** (`NFR-UX-002`).
+Giao diện người dùng của FocusFlow phục vụ toàn bộ 28 Use Cases trải dài từ người học (`Learner`) đến quản trị viên (`Administrator`), với các đặc thù kỹ thuật khắt khe:
+1. **Không gian Thực thi Tập trung Thời gian thực (Pomodoro Study Workspace - `UC-14`, `UC-15`, `UC-16`):** Đồng hồ đếm ngược Pomodoro/Stopwatch cập nhật mỗi giây, kết hợp phiên học tối thiểu MVS (`UC-15`), trình soạn thảo ghi chú Markdown (Scratchpad/Takeaway), danh sách nhiệm vụ và cơ chế gửi Heartbeat định kỳ 60 giây (`UC-16`).
+2. **Luồng Tương tác AI Streaming 2 Chặng (`UC-07`, `UC-08`, `ASR-03`):** Hiển thị tiến trình sinh Milestones và Schedule Proposal theo thời gian thực qua Server-Sent Events (`EventSource`) với thời gian hiển thị token đầu tiên $\le 2.5\text{s}$, kết hợp giao diện kéo-thả / duyệt lịch trực quan qua Cổng kiểm định 3 tầng (`UC-12`).
+3. **Biểu đồ Phân tích Học tập, Thanh toán & Quản trị Hệ thống (`UC-04`, `UC-05`, `UC-19..UC-21`, `UC-26..UC-28`):** Đòi hỏi bộ thành phần UI giàu tính năng (Data Table phân trang/lọc cho Admin, Timeline/Calendar, Dialog, Toast, Chart, Stepper) đạt chuẩn tiếp cận **Lighthouse Accessibility $\ge 90$** (`NFR-UX-002`).
 
-Trong bản thiết kế sơ bộ v1.0, việc dự kiến dùng Angular 19 kèm thư viện Spartan UI bộc lộ hạn chế khi hệ thống mở rộng sang các màn hình phức tạp như bảng lịch học đa chế độ, bảng quản trị người dùng (`UC-18`), giám sát hệ thống (`UC-19`) và cổng thanh toán nâng cấp gói (`UC-05`), do Spartan UI thiếu các component doanh nghiệp hoàn chỉnh. Đồng thời, cần loại bỏ hoàn toàn `zone.js` để tối ưu hóa hiệu năng render cho bộ đếm Pomodoro.
+Trong bản thiết kế sơ bộ v1.0, việc dự kiến dùng Angular 19 kèm thư viện Spartan UI bộc lộ hạn chế khi hệ thống mở rộng sang các màn hình phức tạp như bảng lịch học đa chế độ, bảng quản trị người dùng & hạn ngạch (`UC-26`), đối soát thanh toán (`UC-27`), giám sát hệ thống (`UC-28`) và cổng thanh toán nâng cấp gói (`UC-04`, `UC-05`), do Spartan UI thiếu các component doanh nghiệp hoàn chỉnh. Đồng thời, cần loại bỏ hoàn toàn `zone.js` để tối ưu hóa hiệu năng render cho bộ đếm Pomodoro.
 
 ---
 
@@ -59,16 +59,16 @@ Trong bản thiết kế sơ bộ v1.0, việc dự kiến dùng Angular 19 kèm
 * Đảm bảo **100% Compile-Time Type Safety** giữa Pydantic v2 DTOs ở Backend và TypeScript Services ở Frontend; bất kỳ thay đổi tên trường nào từ Backend đều được phát hiện ngay lúc biên dịch Frontend.
 
 ### 3.5. Cấu trúc 9 Feature Slices & Kiểm thử Tự động (Vitest + Playwright)
-Tổ chức thư mục `frontend/src/app/features/` thành **9 Feature Slices** độc lập (nạp lười qua `loadComponent` / `loadChildren`), bao phủ trọn vẹn 19 Use Cases:
+Tổ chức thư mục `frontend/src/app/features/` thành **9 Feature Slices** độc lập (nạp lười qua `loadComponent` / `loadChildren`), bao phủ trọn vẹn 28 Use Cases:
 1. `auth/`: Đăng ký, đăng nhập, quên mật khẩu, khởi tạo Onboarding (`UC-01`, `UC-02`).
-2. `dashboard/`: Tổng quan tiến độ hôm nay, mục `Needs Attention` cảnh báo quá hạn (kèm nút `AI Reschedule`), hạn ngạch AI, truy cập nhanh phiên học.
-3. `planning/` (tương ứng `roadmaps/` — `UC-06..UC-09`): Thiết lập mục tiêu, AI sinh & duyệt Milestones, sinh & duyệt Schedule Proposal.
-4. `workspace/` (`UC-11`, `UC-12`): Không gian học tập Pomodoro/Stopwatch, ghi chú Markdown (`StudyNote`), Heartbeat 60s.
-5. `calendar/` (tương ứng `schedule/` — `UC-10`, `UC-13`): Lịch học chính thức dạng Calendar/Timeline, đồng bộ Google Calendar OAuth2 & WebCal `.ics`.
-6. `tasks/` (`UC-09`, `UC-17`): Quản lý danh sách công việc, đồ thị phụ thuộc DAG và xử lý cảnh báo chống lặp quá hạn (`STALLED` intervention dialog).
-7. `analytics/` (`UC-14..UC-16`): Biểu đồ thống kê định lượng (Adherence, Velocity), báo cáo đánh giá AI định kỳ SRL và tạm dừng/tiếp tục lộ trình.
-8. `settings/` (`UC-03..UC-05`, bao gồm `billing`): Thiết lập lịch rảnh Mode A/B & hồ sơ năng lực SRL (`UC-03`), nâng cấp gói Premium (`UC-04`), và **thanh toán QR (`UC-05` — `billing`)**.
-9. `admin/` (`UC-18`, `UC-19`): Cổng quản trị người dùng, hạn ngạch (`UC-18`) và bảng giám sát sức khỏe hệ thống, nhật ký AI (`UC-19`).
+2. `dashboard/`: Tổng quan tiến độ hôm nay (`UC-13`), mục `Needs Attention` cảnh báo quá hạn (kèm nút `AI Reschedule` — `UC-23`, `UC-25`), hạn ngạch AI (`UC-06`), truy cập nhanh phiên học.
+3. `planning/` (tương ứng `roadmaps/` — `UC-07..UC-10`, `UC-12`): Thiết lập mục tiêu, AI sinh & duyệt Milestones (`UC-07`), sinh & duyệt Schedule Proposal (`UC-08`), tạo lập thủ công (`UC-09`), quản lý danh mục (`UC-10`) và thẩm định Cổng 3 tầng (`UC-12`).
+4. `workspace/` (`UC-14..UC-16`): Không gian học tập Pomodoro/Stopwatch (`UC-14`), phiên học tối thiểu MVS (`UC-15`), ghi chú Markdown (`StudyNote`), Heartbeat 60s và tự động thu hồi phiên treo (`UC-16`).
+5. `calendar/` (tương ứng `schedule/` — `UC-13`, `UC-17`, `UC-18`): Lịch học chính thức dạng Calendar/Timeline (`UC-13`), đồng bộ Google Calendar OAuth2 hai chiều (`UC-17`) & xuất lịch WebCal `.ics` một chiều (`UC-18`).
+6. `tasks/` (`UC-11`, `UC-23`, `UC-24`): Quản lý danh sách công việc, đồ thị phụ thuộc DAG (`UC-11`), dời lịch AI đơn lộ trình (`UC-23`) và xử lý cảnh báo chống lặp quá hạn (`STALLED` intervention dialog / Post-Failure Reset Ritual — `UC-24`).
+7. `analytics/` (`UC-19..UC-22`): Biểu đồ thống kê định lượng & dòng thời gian bằng chứng (`UC-19`), khảo sát năng lực Prove Mode (`UC-20`), báo cáo đánh giá AI định kỳ SRL / Weekly Review Ritual (`UC-21`), và tạm dừng/tiếp tục lộ trình Domino Shift (`UC-22`).
+8. `settings/` (`UC-03..UC-05`, bao gồm `billing`): Thiết lập lịch rảnh Mode A/B & hồ sơ năng lực SRL (`UC-03`), nâng cấp gói Premium (`UC-04`), và **thanh toán QR / Webhook (`UC-05` — `billing`)**.
+9. `admin/` (`UC-26..UC-28`): Cổng quản trị người dùng, hạn ngạch (`UC-26`), đối soát giao dịch thanh toán (`UC-27`), và bảng giám sát sức khỏe hệ thống, nhật ký AI (`UC-28`).
 
 * **Công cụ Kiểm thử:** Sử dụng **Vitest** tốc độ cao cho Unit Test (Signal Stores, Components, Pipes) và **Playwright** cho kiểm thử tích hợp đầu-cuối (E2E User Flows).
 
@@ -82,5 +82,5 @@ Tổ chức thư mục `frontend/src/app/features/` thành **9 Feature Slices** 
 ---
 
 ## 5. Hệ quả & Kiểm chứng (Consequences & Verification)
-* **Tích cực:** Kiến trúc Frontend hiện đại, đồng bộ hoàn toàn với 19 Use Cases (bao gồm `admin` và `billing`); dễ dàng đóng gói thành SPA tĩnh chạy trên Nginx Alpine.
+* **Tích cực:** Kiến trúc Frontend hiện đại, đồng bộ hoàn toàn với 28 Use Cases (bao gồm `admin` và `billing`); dễ dàng đóng gói thành SPA tĩnh chạy trên Nginx Alpine.
 * **Kiểm chứng Tự động:** Chạy kiểm tra kiểu `ng build --configuration production`, chạy unit test bằng `vitest run` và E2E test bằng `playwright test`.
