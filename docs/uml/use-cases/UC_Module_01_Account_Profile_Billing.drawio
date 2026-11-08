@@ -1,78 +1,128 @@
-<mxfile host="app.diagrams.net" modified="2026-10-27T03:50:00.000Z" agent="FocusFlow-UML" version="24.0.0">
+<mxfile host="app.diagrams.net" agent="FocusFlow-UML" pages="2">
   <diagram name="Module-1-Account-Profile-Billing" id="FF-UC-Mod-1">
-    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="800" math="0" shadow="0">
+    <mxGraphModel dx="4166" dy="1392" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="920" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
-
-        <!-- Actors Primary (Left) -->
-        <mxCell id="actor-learner" value="Người học&#xa;(Learner)" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;fillColor=#EBF8FF;strokeColor=#2B6CB0;fontStyle=1;fontColor=#1A202C;" vertex="1" parent="1">
-          <mxGeometry x="80" y="240" width="50" height="100" as="geometry" />
+        <mxCell id="act-guest" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;fillColor=#EDF2F7;strokeColor=#718096;fontStyle=1;fontColor=#1A202C;" value="ACT-00: Khách vãng lai&#xa;(Guest / Anonymous User)" vertex="1">
+          <mxGeometry height="85" width="50" x="60" y="60" as="geometry" />
         </mxCell>
-        <mxCell id="actor-admin" value="Quản trị viên&#xa;(Administrator)" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;fillColor=#FEFCBF;strokeColor=#B7791F;fontStyle=1;fontColor=#1A202C;" vertex="1" parent="1">
-          <mxGeometry x="80" y="440" width="50" height="100" as="geometry" />
+        <mxCell id="act-reguser" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;fillColor=#E2E8F0;strokeColor=#4A5568;fontStyle=1;fontColor=#1A202C;" value="ACT-01: Người dùng đã đăng ký&#xa;(Registered User)" vertex="1">
+          <mxGeometry height="85" width="50" x="60" y="200" as="geometry" />
         </mxCell>
-
-        <!-- System Boundary -->
-        <mxCell id="mod-boundary" value="Hệ thống FocusFlow — Module 1: Quản lý Tài khoản, Hồ sơ &amp; Gói học tập" style="shape=rect;html=1;verticalAlign=top;fontStyle=1;whiteSpace=wrap;align=center;fillColor=#F7FAFC;strokeColor=#2B6CB0;fontSize=14;fontColor=#1A202C;rounded=1;" vertex="1" parent="1">
-          <mxGeometry x="220" y="80" width="620" height="520" as="geometry" />
+        <mxCell id="act-learner" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;fillColor=#EBF8FF;strokeColor=#2B6CB0;fontStyle=1;fontColor=#1A202C;" value="ACT-02: Người học&#xa;(Learner)" vertex="1">
+          <mxGeometry height="85" width="50" x="60" y="360" as="geometry" />
         </mxCell>
-
-        <!-- Use Cases -->
-        <mxCell id="uc-01" value="UC-01&#xa;Đăng ký tài khoản người học" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="270" y="140" width="220" height="60" as="geometry" />
+        <mxCell id="act-admin" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;fillColor=#FEFCBF;strokeColor=#B7791F;fontStyle=1;fontColor=#1A202C;" value="ACT-03: Quản trị viên hệ thống&#xa;(Administrator)" vertex="1">
+          <mxGeometry height="85" width="50" x="-270" y="375" as="geometry" />
         </mxCell>
-        <mxCell id="uc-02" value="UC-02&#xa;Đăng nhập hệ thống&#xa;(bao gồm luồng Đăng xuất)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="270" y="230" width="220" height="60" as="geometry" />
-        </mxCell>
-        <mxCell id="uc-03" value="UC-03&#xa;Thiết lập thời gian rảnh và hồ sơ học tập&#xa;(Hybrid Mode A/B &amp; Hồ sơ SRL)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="270" y="320" width="250" height="70" as="geometry" />
-        </mxCell>
-        <mxCell id="uc-04" value="UC-04&#xa;Nâng cấp gói học tập (Premium)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="270" y="430" width="230" height="60" as="geometry" />
-        </mxCell>
-        <mxCell id="uc-05" value="UC-05&#xa;Thanh toán trực tuyến&#xa;(Tạo đơn / QR &amp; Xác thực Webhook)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="580" y="430" width="230" height="60" as="geometry" />
-        </mxCell>
-
-        <!-- Secondary Supporting Actors (Right) -->
-        <mxCell id="sys-calendar" value="&amp;lt;&amp;lt;system&amp;gt;&amp;gt;&#xa;Ứng dụng Lịch ngoài&#xa;(Google / Apple Calendar)" style="shape=rect;html=1;whiteSpace=wrap;fillColor=#EDF2F7;strokeColor=#4A5568;fontStyle=1;fontColor=#1A202C;align=center;rounded=1;" vertex="1" parent="1">
-          <mxGeometry x="930" y="325" width="180" height="60" as="geometry" />
-        </mxCell>
-        <mxCell id="sys-payment" value="&amp;lt;&amp;lt;system&amp;gt;&amp;gt;&#xa;Cổng thanh toán&#xa;(PayOS / VNPay Sandbox)" style="shape=rect;html=1;whiteSpace=wrap;fillColor=#EDF2F7;strokeColor=#4A5568;fontStyle=1;fontColor=#1A202C;align=center;rounded=1;" vertex="1" parent="1">
-          <mxGeometry x="930" y="430" width="180" height="60" as="geometry" />
-        </mxCell>
-
-        <!-- Associations -->
-        <mxCell id="edge-learner-uc01" edge="1" parent="1" source="actor-learner" target="uc-01" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;">
+        <mxCell id="gen-learner-reguser" edge="1" parent="1" source="act-learner" style="endArrow=block;endFill=0;html=1;strokeColor=#4A5568;strokeWidth=1.5;" target="act-reguser">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="edge-learner-uc02" edge="1" parent="1" source="actor-learner" target="uc-02" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;">
+        <mxCell id="gen-admin-reguser" edge="1" parent="1" source="act-admin" style="endArrow=block;endFill=0;html=1;strokeColor=#4A5568;strokeWidth=1.5;" target="act-reguser">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="edge-admin-uc02" edge="1" parent="1" source="actor-admin" target="uc-02" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;">
+        <mxCell id="mod1-boundary" parent="1" style="shape=rect;html=1;verticalAlign=top;fontStyle=1;whiteSpace=wrap;align=center;fillColor=#F7FAFC;strokeColor=#2B6CB0;fontSize=14;fontColor=#1A202C;rounded=1;" value="Hệ thống FocusFlow — Phân hệ 1: Quản lý Tài khoản, Hồ sơ &amp;amp; Gói dịch vụ" vertex="1">
+          <mxGeometry height="840" width="810" x="260" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="pkg-1a" parent="1" style="shape=rect;html=1;verticalAlign=top;fontStyle=1;whiteSpace=wrap;align=left;spacingLeft=15;spacingTop=10;fillColor=#EDF2F7;strokeColor=#CBD5E0;fontColor=#2D3748;fontSize=13;rounded=1;" value="Gói 1A: Xác thực &amp; Hồ sơ (Authentication, Profile &amp; Memory — 6 UCs)" vertex="1">
+          <mxGeometry height="370" width="760" x="285" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-acc-01" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;align=center;" value="UC-ACC-01&#xa;Đăng ký tài khoản" vertex="1">
+          <mxGeometry height="60" width="270" x="315" y="115" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-acc-02" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;align=center;" value="UC-ACC-02&#xa;Đăng nhập" vertex="1">
+          <mxGeometry height="60" width="270" x="315" y="190" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-acc-03" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;align=center;" value="UC-ACC-03&#xa;Đặt lại mật khẩu" vertex="1">
+          <mxGeometry height="60" width="270" x="315" y="255" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-acc-04" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;align=center;" value="UC-ACC-04&#xa;Cấu hình hồ sơ và&#xa;thời gian rảnh" vertex="1">
+          <mxGeometry height="65" width="330" x="490" y="360" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-acc-05" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;align=center;" value="UC-ACC-05&#xa;Xóa tài khoản" vertex="1">
+          <mxGeometry height="60" width="270" x="770" y="215" as="geometry" />
+        </mxCell>
+        <mxCell id="pkg-1b" parent="1" style="shape=rect;html=1;verticalAlign=top;fontStyle=1;whiteSpace=wrap;align=left;spacingLeft=15;spacingTop=10;fillColor=#EDF2F7;strokeColor=#CBD5E0;fontColor=#2D3748;fontSize=13;rounded=1;" value="Gói 1B: Gói dịch vụ &amp; Hạn ngạch (Billing &amp; Quota Management)" vertex="1">
+          <mxGeometry height="375" width="760" x="285" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-acc-06" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;align=center;" value="UC-ACC-06&#xa;Nâng cấp hoặc gia hạn&#xa;gói Premium" vertex="1">
+          <mxGeometry height="65" width="290" x="730" y="520" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-acc-07" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;align=center;" value="UC-ACC-07&#xa;Xử lý thông báo kết quả&#xa;thanh toán (Webhook)" vertex="1">
+          <mxGeometry height="65" width="320" x="700" y="720" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-acc-08" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;align=center;" value="UC-ACC-08&#xa;Dọn bản ghi giữ chỗ và&#xa;đơn thanh toán treo" vertex="1">
+          <mxGeometry height="65" width="290" x="350" y="740" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-acc-09" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;align=center;" value="UC-ACC-09&#xa;Làm mới hạn ngạch&#xa;chu kỳ tháng" vertex="1">
+          <mxGeometry height="65" width="290" x="380" y="540" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-acc-10" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;align=center;" value="UC-ACC-10&#xa;Hạ cấp gói dịch vụ&#xa;hết hạn" vertex="1">
+          <mxGeometry height="65" width="290" x="370" y="630" as="geometry" />
+        </mxCell>
+        <mxCell id="act-paygateway" parent="1" style="shape=rect;rounded=1;whiteSpace=wrap;html=1;fillColor=#EDF2F7;strokeColor=#4A5568;fontStyle=1;fontColor=#1A202C;align=center;" value="«system»&#xa;ACT-05: Cổng thanh toán&#xa;(Payment Gateway)" vertex="1">
+          <mxGeometry height="65" width="220" x="1120" y="510" as="geometry" />
+        </mxCell>
+        <mxCell id="act-email" parent="1" style="shape=rect;rounded=1;whiteSpace=wrap;html=1;fillColor=#EDF2F7;strokeColor=#4A5568;fontStyle=1;fontColor=#1A202C;align=center;" value="«system»&#xa;ACT-07: Dịch vụ Email&#xa;(Email Notification Service)" vertex="1">
+          <mxGeometry height="65" width="220" x="1120" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-guest-uc-acc-01" edge="1" parent="1" source="act-guest" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;" target="uc-acc-01">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="edge-learner-uc03" edge="1" parent="1" source="actor-learner" target="uc-03" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;">
+        <mxCell id="edge-reguser-uc-acc-02" edge="1" parent="1" source="act-reguser" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;" target="uc-acc-02">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="edge-learner-uc04" edge="1" parent="1" source="actor-learner" target="uc-04" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;">
+        <mxCell id="edge-reguser-uc-acc-03" edge="1" parent="1" source="act-reguser" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;" target="uc-acc-03">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-
-        <!-- Include UC04 -> UC05 -->
-        <mxCell id="edge-include-uc04-uc05" value="&amp;lt;&amp;lt;include&amp;gt;&amp;gt;" edge="1" parent="1" source="uc-04" target="uc-05" style="endArrow=open;dashed=1;html=1;strokeColor=#4A5568;strokeWidth=1.5;endFill=0;">
+        <mxCell id="edge-learner-uc-acc-04" edge="1" parent="1" source="act-learner" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;" target="uc-acc-04">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-
-        <!-- Secondary Actor Links -->
-        <mxCell id="edge-uc03-cal" edge="1" parent="1" source="uc-03" target="sys-calendar" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;">
+        <mxCell id="edge-learner-uc-acc-05" edge="1" parent="1" source="act-learner" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;" target="uc-acc-05">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="edge-uc05-pay" edge="1" parent="1" source="uc-05" target="sys-payment" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;">
+        <mxCell id="edge-uc-acc-03-email" edge="1" parent="1" source="uc-acc-03" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;" target="act-email">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-
+        <mxCell id="edge-learner-uc-acc-06" edge="1" parent="1" source="act-learner" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;" target="uc-acc-06">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-uc-acc-06-pay" edge="1" parent="1" source="uc-acc-06" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;" target="act-paygateway">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-pay-uc-acc-07" edge="1" parent="1" source="act-paygateway" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;" target="uc-acc-07">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-learner-uc-acc-08" edge="1" parent="1" source="act-learner" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;" target="uc-acc-08">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-admin-uc-acc-08" edge="1" parent="1" source="act-admin" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;" target="uc-acc-08">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-learner-uc-acc-09" edge="1" parent="1" source="act-learner" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;" target="uc-acc-09">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-learner-uc-acc-10" edge="1" parent="1" source="act-learner" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;" target="uc-acc-10">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-acc-11" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;align=center;" value="UC-ACC-11&#xa;Quản lý ghi chú&#xa;thói quen học tập" vertex="1">
+          <mxGeometry height="65" width="330" x="700" y="295" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-learner-uc-acc-11" edge="1" parent="1" source="act-learner" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;" target="uc-acc-11">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-uc-acc-01-email" edge="1" parent="1" source="uc-acc-01" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;" target="act-email">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="6zVldl3-ET52Xo77SPIe" name="Trang-2">
+    <mxGraphModel dx="2296" dy="1155" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
       </root>
     </mxGraphModel>
   </diagram>

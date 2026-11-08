@@ -1,5 +1,10 @@
 @startuml uc-mod-03-study-execution-calendar
-title FocusFlow — Phân hệ 3: Thực thi Học tập & Tích hợp Lịch ngoại vi (UC-13..UC-17)
+' ========================================================
+' Chuẩn hóa 8 Tác nhân (ACT-00..ACT-07): 4 Human/Role Actors + 4 External System Actors
+' Tuân thủ nghiêm ngặt OMG UML 2.5.1 Clause 18: Các thành phần nội bộ (Taskiq, Redis, DB,
+' AI Harness) và bộ định thời nội bộ (internal clock triggers) nằm bên trong Ranh giới Hệ thống.
+' ========================================================
+title FocusFlow — Phân hệ 3: Thực thi Học tập & Tích hợp Lịch ngoại vi (9 Use Cases)
 
 left to right direction
 skinparam packageStyle rectangle
@@ -7,8 +12,8 @@ skinparam roundcorner 8
 skinparam monochrome false
 skinparam shadowing false
 skinparam defaultFontName "Helvetica", "Arial", sans-serif
-skinparam nodesep 40
-skinparam ranksep 75
+skinparam nodesep 35
+skinparam ranksep 70
 
 skinparam actor {
     BackgroundColor #EBF8FF
@@ -37,36 +42,53 @@ skinparam rectangle<<system>> {
     FontColor #1A202C
 }
 
-' 1. TÁC NHÂN CHÍNH (PRIMARY ACTORS - BÊN TRÁI)
-actor "ACT-01: Người học\n(Learner)" as Learner #EBF8FF
-actor "ACT-03: Bộ lập lịch hệ thống\n(System Scheduler)" as Scheduler <<system>> #E6FFFA
+' ========================================================
+' 1. TÁC NHÂN CON NGƯỜI / VAI TRÒ (HUMAN / ROLE ACTOR - BÊN TRÁI)
+' ========================================================
+actor "ACT-02: Người học\n(Learner)" as Learner #EBF8FF
 
+' ========================================================
 ' 2. RANH GIỚI HỆ THỐNG (SYSTEM BOUNDARY)
+' ========================================================
 rectangle "Hệ thống FocusFlow — Phân hệ 3: Thực thi Học tập & Tích hợp Lịch ngoại vi" as Mod3Boundary {
-    usecase "UC-13\nXem lịch học và Dời lịch\ncông việc thủ công" as UC13
-    usecase "UC-14\nThực hiện phiên học tập trung\nvà Ghi chú" as UC14
-    usecase "UC-15\nTự động chốt phiên học\nbị gián đoạn" as UC15
-    usecase "UC-16\nKết nối và Đồng bộ khoảng bận\ntừ lịch ngoại vi" as UC16
-    usecase "UC-17\nXuất lịch học .ics và\nQuản lý liên kết WebCal" as UC17
-    usecase "UC-12\nKiểm định tính hợp lệ\ncủa lịch học" as UC12 <<subfunction>> #F7FAFC
+    usecase "UC-EXEC-01\nXem lịch học và\nTiêu điểm Hôm nay" as UC_EXEC_01
+    usecase "UC-EXEC-02\nDời lịch công việc\nthủ công" as UC_EXEC_02
+    usecase "UC-EXEC-03\nĐánh dấu hoàn thành\nnhanh" as UC_EXEC_03
+    usecase "UC-EXEC-04\nThực hiện phiên học tập trung\n(Tiêu chuẩn & Rút gọn)" as UC_EXEC_04
+    usecase "UC-EXEC-05\nChia nhỏ bài học\nbằng AI" as UC_EXEC_05
+    usecase "UC-EXEC-06\nTự động lưu phiên học\nkhi mất kết nối" as UC_EXEC_06
+    usecase "UC-EXEC-07\nKết nối tài khoản\nGoogle Calendar" as UC_EXEC_07
+    usecase "UC-EXEC-08\nTự động cập nhật thời gian bận\ntừ Google Calendar" as UC_EXEC_08
+    usecase "UC-EXEC-09\nĐồng bộ lịch học sang\nGoogle Calendar / ứng dụng lịch" as UC_EXEC_09
+    usecase "UC-PLAN-09\nKiểm định tính hợp lệ\ncủa lịch học" as UC_PLAN_09 <<subfunction>> #F7FAFC
 }
 
-' 3. TÁC NHÂN HỆ THỐNG PHỤ TRỢ (SUPPORTING SYSTEM ACTORS - BÊN PHẢI)
+' ========================================================
+' 3. TÁC NHÂN HỆ THỐNG NGOẠI VI (EXTERNAL SYSTEM ACTORS - BÊN PHẢI)
+' ========================================================
 rectangle "ACT-04: Nhà cung cấp dịch vụ LLM\n(External LLM Provider)" as LLM <<system>>
-rectangle "ACT-05: Dịch vụ Lịch ngoại vi\n(External Calendar Service)" as CalService <<system>>
+rectangle "ACT-06: Dịch vụ Lịch ngoại vi\n(External Calendar Service)" as ExtCal <<system>>
 
-' 4. QUAN HỆ (ASSOCIATIONS & INCLUDE)
-Learner -- UC13
-Learner -- UC14
-Learner -- UC16
-Learner -- UC17
+' ========================================================
+' 4. QUAN HỆ GIAO TIẾP (ASSOCIATIONS & INCLUDE)
+' ========================================================
+Learner -- UC_EXEC_01
+Learner -- UC_EXEC_02
+Learner -- UC_EXEC_03
+Learner -- UC_EXEC_04
+Learner -- UC_EXEC_05
+Learner -- UC_EXEC_06
+Learner -- UC_EXEC_07
+Learner -- UC_EXEC_08
+Learner -- UC_EXEC_09
 
-Scheduler -- UC15
+UC_EXEC_02 ..> UC_PLAN_09 : <<include>>
 
-UC13 ..> UC12 : <<include>>
+UC_EXEC_04 -- LLM
+UC_EXEC_05 -- LLM
 
-UC14 -- LLM
-UC16 -- CalService
-UC17 -- CalService
+UC_EXEC_07 -- ExtCal
+UC_EXEC_08 -- ExtCal
+UC_EXEC_09 -- ExtCal
 
 @enduml

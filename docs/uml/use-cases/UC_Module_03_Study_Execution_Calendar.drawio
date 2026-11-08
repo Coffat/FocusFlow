@@ -1,60 +1,96 @@
-<mxfile host="app.diagrams.net" modified="2026-10-27T03:50:00.000Z" agent="FocusFlow-UML" version="24.0.0">
+<mxfile host="app.diagrams.net" agent="FocusFlow-UML">
   <diagram name="Module-3-Study-Execution-Calendar" id="FF-UC-Mod-3">
-    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="800" math="0" shadow="0">
+    <mxGraphModel dx="2296" dy="1155" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="890" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
-
-        <!-- Primary Actor (Left) -->
-        <mxCell id="actor-learner" value="Người học&#xa;(Learner)" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;fillColor=#EBF8FF;strokeColor=#2B6CB0;fontStyle=1;fontColor=#1A202C;" vertex="1" parent="1">
-          <mxGeometry x="80" y="270" width="50" height="100" as="geometry" />
+        <mxCell id="act-learner" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;fillColor=#EBF8FF;strokeColor=#2B6CB0;fontStyle=1;fontColor=#1A202C;" value="ACT-02: Người học&#xa;(Learner)" vertex="1">
+          <mxGeometry height="90" width="50" x="65" y="270" as="geometry" />
         </mxCell>
-
-        <!-- System Boundary -->
-        <mxCell id="mod-boundary" value="Hệ thống FocusFlow — Module 3: Thực thi Học tập &amp; Đồng bộ Lịch" style="shape=rect;html=1;verticalAlign=top;fontStyle=1;whiteSpace=wrap;align=center;fillColor=#F7FAFC;strokeColor=#2B6CB0;fontSize=14;fontColor=#1A202C;rounded=1;" vertex="1" parent="1">
-          <mxGeometry x="220" y="80" width="670" height="540" as="geometry" />
+        <mxCell id="mod3-boundary" parent="1" style="shape=rect;html=1;verticalAlign=top;fontStyle=1;whiteSpace=wrap;align=center;fillColor=#F7FAFC;strokeColor=#2B6CB0;fontSize=14;fontColor=#1A202C;rounded=1;" value="Hệ thống FocusFlow — Phân hệ 3: Thực thi Học tập &amp;amp; Tích hợp Lịch" vertex="1">
+          <mxGeometry height="800" width="800" x="230" y="40" as="geometry" />
         </mxCell>
-
-        <!-- Use Cases -->
-        <mxCell id="uc-10" value="UC-10&#xa;Quản lý lịch học, nhiệm vụ và Backlog&#xa;(Theo dõi lịch, dời lịch, DAG, Backlog &amp; Quick Complete)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="270" y="130" width="320" height="75" as="geometry" />
+        <mxCell id="uc-exec-01" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;align=center;" value="UC-EXEC-01&#xa;Xem lịch học và&#xa;Tiêu điểm Hôm nay" vertex="1">
+          <mxGeometry height="60" width="310" x="270" y="80" as="geometry" />
         </mxCell>
-        <mxCell id="uc-11" value="UC-11&#xa;Thực hiện phiên học tập trung&#xa;(Pomodoro / Stopwatch, Scratchpad, Takeaways)&#xa;&amp;lt;&amp;lt;extension points&amp;gt;&amp;gt;&#xa;Session Interrupted" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="270" y="250" width="310" height="90" as="geometry" />
+        <mxCell id="uc-exec-02" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;align=center;" value="UC-EXEC-02&#xa;Dời lịch công việc&#xa;thủ công" vertex="1">
+          <mxGeometry height="60" width="310" x="270" y="160" as="geometry" />
         </mxCell>
-        <mxCell id="uc-12" value="UC-12&#xa;Xử lý gián đoạn và phục hồi phiên học&#xa;(Dừng sớm / Khôi phục phiên / Chốt OS-01)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="640" y="260" width="230" height="70" as="geometry" />
+        <mxCell id="uc-exec-03" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;align=center;" value="UC-EXEC-03&#xa;Đánh dấu hoàn thành&#xa;nhanh" vertex="1">
+          <mxGeometry height="60" width="310" x="270" y="240" as="geometry" />
         </mxCell>
-        <mxCell id="uc-13" value="UC-13&#xa;Đồng bộ lịch học 2 chiều và xuất lịch ngoại vi&#xa;(Đọc Free/Busy, Đồng bộ sự kiện, WebCal &amp; .ics)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="270" y="390" width="320" height="80" as="geometry" />
+        <mxCell id="uc-exec-04" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;align=center;" value="UC-EXEC-04&#xa;Thực hiện phiên học tập trung&#xa;(Tiêu chuẩn &amp; Rút gọn)" vertex="1">
+          <mxGeometry height="65" width="310" x="270" y="320" as="geometry" />
         </mxCell>
-
-        <!-- Secondary Supporting Actor (Right) -->
-        <mxCell id="sys-cal" value="&amp;lt;&amp;lt;system&amp;gt;&amp;gt;&#xa;Ứng dụng Lịch ngoài&#xa;(Google / Apple Calendar)" style="shape=rect;html=1;whiteSpace=wrap;fillColor=#EDF2F7;strokeColor=#4A5568;fontStyle=1;fontColor=#1A202C;align=center;rounded=1;" vertex="1" parent="1">
-          <mxGeometry x="960" y="400" width="180" height="60" as="geometry" />
+        <mxCell id="uc-exec-05" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;align=center;" value="UC-EXEC-05&#xa;Chia nhỏ bài học&#xa;bằng AI" vertex="1">
+          <mxGeometry height="60" width="310" x="270" y="405" as="geometry" />
         </mxCell>
-
-        <!-- Associations -->
-        <mxCell id="edge-learner-uc10" edge="1" parent="1" source="actor-learner" target="uc-10" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;">
+        <mxCell id="uc-exec-06" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;align=center;" value="UC-EXEC-06&#xa;Tự động lưu phiên học&#xa;khi mất kết nối" vertex="1">
+          <mxGeometry height="60" width="310" x="270" y="490" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-exec-07" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;align=center;" value="UC-EXEC-07&#xa;Kết nối tài khoản&#xa;Google Calendar" vertex="1">
+          <mxGeometry height="60" width="310" x="270" y="570" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-exec-08" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;align=center;" value="UC-EXEC-08&#xa;Tự động cập nhật thời gian bận&#xa;từ Google Calendar" vertex="1">
+          <mxGeometry height="60" width="310" x="270" y="650" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-exec-09" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;align=center;" value="UC-EXEC-09&#xa;Đồng bộ lịch học sang&#xa;Google Calendar / ứng dụng lịch" vertex="1">
+          <mxGeometry height="60" width="310" x="270" y="730" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-plan-09" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#EDF2F7;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;align=center;" value="«subfunction»&#xa;UC-PLAN-09&#xa;Kiểm định tính hợp lệ&#xa;của lịch học" vertex="1">
+          <mxGeometry height="70" width="290" x="680" y="155" as="geometry" />
+        </mxCell>
+        <mxCell id="act-llm" parent="1" style="shape=rect;rounded=1;whiteSpace=wrap;html=1;fillColor=#EDF2F7;strokeColor=#4A5568;fontStyle=1;fontColor=#1A202C;align=center;" value="«system»&#xa;ACT-04: Nhà cung cấp dịch vụ LLM&#xa;(External LLM Provider)" vertex="1">
+          <mxGeometry height="65" width="240" x="1080" y="400" as="geometry" />
+        </mxCell>
+        <mxCell id="act-calservice" parent="1" style="shape=rect;rounded=1;whiteSpace=wrap;html=1;fillColor=#EDF2F7;strokeColor=#4A5568;fontStyle=1;fontColor=#1A202C;align=center;" value="«system»&#xa;ACT-06: Dịch vụ Lịch ngoại vi&#xa;(External Calendar Service)" vertex="1">
+          <mxGeometry height="65" width="240" x="1080" y="640" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-learner-uc-exec-01" edge="1" parent="1" source="act-learner" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="uc-exec-01">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="edge-learner-uc11" edge="1" parent="1" source="actor-learner" target="uc-11" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;">
+        <mxCell id="edge-learner-uc-exec-02" edge="1" parent="1" source="act-learner" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;" target="uc-exec-02">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="edge-learner-uc13" edge="1" parent="1" source="actor-learner" target="uc-13" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;">
+        <mxCell id="edge-learner-uc-exec-03" edge="1" parent="1" source="act-learner" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;" target="uc-exec-03">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-
-        <!-- Extend UC12 -> UC11 -->
-        <mxCell id="edge-extend-uc12-uc11" value="&amp;lt;&amp;lt;extend&amp;gt;&amp;gt;&#xa;[Phiên bị gián đoạn / Dừng sớm]" edge="1" parent="1" source="uc-12" target="uc-11" style="endArrow=open;dashed=1;html=1;strokeColor=#4A5568;strokeWidth=1.5;endFill=0;">
+        <mxCell id="edge-learner-uc-exec-04" edge="1" parent="1" source="act-learner" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;" target="uc-exec-04">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-
-        <!-- Supporting Actor Link -->
-        <mxCell id="edge-uc13-cal" edge="1" parent="1" source="uc-13" target="sys-cal" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;">
+        <mxCell id="edge-learner-uc-exec-05" edge="1" parent="1" source="act-learner" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;" target="uc-exec-05">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-
+        <mxCell id="edge-learner-uc-exec-07" edge="1" parent="1" source="act-learner" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="uc-exec-07">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-learner-uc-exec-09" edge="1" parent="1" source="act-learner" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="uc-exec-09">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-learner-uc-exec-06" edge="1" parent="1" source="act-learner" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;entryX=0;entryY=0;entryDx=0;entryDy=0;" target="uc-exec-06">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-learner-uc-exec-08" edge="1" parent="1" source="act-learner" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="uc-exec-08">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-inc-exec02-plan09" edge="1" parent="1" source="uc-exec-02" style="endArrow=open;dashed=1;html=1;strokeColor=#4A5568;strokeWidth=1.5;endFill=0;labelBackgroundColor=#FFFFFF;fontStyle=2;fontSize=11;fontColor=#4A5568;" target="uc-plan-09" value="«include»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-uc-exec-05-llm" edge="1" parent="1" source="uc-exec-05" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;" target="act-llm">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-uc-exec-07-cal" edge="1" parent="1" source="uc-exec-07" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;" target="act-calservice">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-uc-exec-08-cal" edge="1" parent="1" source="uc-exec-08" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;" target="act-calservice">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-uc-exec-09-cal" edge="1" parent="1" source="uc-exec-09" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;" target="act-calservice">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-uc-exec-04-llm" edge="1" parent="1" source="uc-exec-04" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;" target="act-llm">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
       </root>
     </mxGraphModel>
   </diagram>

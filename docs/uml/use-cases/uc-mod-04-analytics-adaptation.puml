@@ -1,5 +1,10 @@
 @startuml uc-mod-04-analytics-adaptation
-title FocusFlow — Phân hệ 4: Phân tích Tiến độ & Thích ứng Lịch trình (UC-18..UC-22)
+' ========================================================
+' Chuẩn hóa 8 Tác nhân (ACT-00..ACT-07): 4 Human/Role Actors + 4 External System Actors
+' Tuân thủ nghiêm ngặt OMG UML 2.5.1 Clause 18: Các thành phần nội bộ (Taskiq, Redis, DB,
+' AI Harness) và bộ định thời nội bộ (internal clock triggers) nằm bên trong Ranh giới Hệ thống.
+' ========================================================
+title FocusFlow — Phân hệ 4: Phân tích Tiến độ, Kiểm chứng Năng lực & Thích ứng Lịch trình (10 Use Cases)
 
 left to right direction
 skinparam packageStyle rectangle
@@ -7,8 +12,8 @@ skinparam roundcorner 8
 skinparam monochrome false
 skinparam shadowing false
 skinparam defaultFontName "Helvetica", "Arial", sans-serif
-skinparam nodesep 40
-skinparam ranksep 75
+skinparam nodesep 35
+skinparam ranksep 70
 
 skinparam actor {
     BackgroundColor #EBF8FF
@@ -37,39 +42,58 @@ skinparam rectangle<<system>> {
     FontColor #1A202C
 }
 
-' 1. TÁC NHÂN CHÍNH (PRIMARY ACTORS - BÊN TRÁI)
-actor "ACT-01: Người học\n(Learner)" as Learner #EBF8FF
-actor "ACT-03: Bộ lập lịch hệ thống\n(System Scheduler)" as Scheduler <<system>> #E6FFFA
+' ========================================================
+' 1. TÁC NHÂN CON NGƯỜI / VAI TRÒ (HUMAN / ROLE ACTOR - BÊN TRÁI)
+' ========================================================
+actor "ACT-02: Người học\n(Learner)" as Learner #EBF8FF
 
+' ========================================================
 ' 2. RANH GIỚI HỆ THỐNG (SYSTEM BOUNDARY)
-rectangle "Hệ thống FocusFlow — Phân hệ 4: Phân tích Tiến độ & Thích ứng Lịch trình" as Mod4Boundary {
-    usecase "UC-18\nXem báo cáo thống kê\ntiến độ học tập\n---\nextension points:\nAI Deep Evaluation Request" as UC18
-    usecase "UC-19\nYêu cầu AI đánh giá chuyên sâu\nvà Gợi ý điều chỉnh" as UC19
-    usecase "UC-20\nTạm dừng và Tiếp tục\nlộ trình học tập (Domino Shift)" as UC20
-    usecase "UC-21\nDời lịch bằng AI\ncho bài học quá hạn" as UC21
-    usecase "UC-22\nQuét công việc quá hạn, Tổng hợp\nhồ sơ thói quen và Gửi thông báo" as UC22
-    usecase "UC-12\nKiểm định tính hợp lệ\ncủa lịch học" as UC12 <<subfunction>> #F7FAFC
+' ========================================================
+rectangle "Hệ thống FocusFlow — Phân hệ 4: Phân tích Tiến độ, Kiểm chứng Năng lực & Thích ứng Lịch trình" as Mod4Boundary {
+    usecase "UC-ADAPT-01\nXem báo cáo tiến độ và\nbằng chứng học tập" as UC_ADAPT_01
+    usecase "UC-ADAPT-02\nLàm bài kiểm tra cột mốc" as UC_ADAPT_02
+    usecase "UC-ADAPT-03\nĐánh giá học tập\ncuối tuần" as UC_ADAPT_03
+    usecase "UC-ADAPT-04\nTạm dừng lộ trình" as UC_ADAPT_04
+    usecase "UC-ADAPT-05\nTiếp tục lộ trình và\ndời lịch bù ngày dừng" as UC_ADAPT_05
+    usecase "UC-ADAPT-06\nDời lịch bằng AI cho\nbài quá hạn" as UC_ADAPT_06
+    usecase "UC-ADAPT-07\nKhôi phục lộ trình\nbị gián đoạn lâu ngày" as UC_ADAPT_07
+    usecase "UC-ADAPT-08\nGửi email nhắc nhở bài quá hạn\nvà lộ trình gián đoạn" as UC_ADAPT_08
+    usecase "UC-ADAPT-09\nTổng hợp hồ sơ\nthói quen học tập" as UC_ADAPT_09
+    usecase "UC-ADAPT-10\nĐặt lại ngân sách\ndời lịch hàng tuần" as UC_ADAPT_10
+    usecase "UC-PLAN-09\nKiểm định tính hợp lệ\ncủa lịch học" as UC_PLAN_09 <<subfunction>> #F7FAFC
 }
 
-' 3. TÁC NHÂN HỆ THỐNG PHỤ TRỢ (SUPPORTING SYSTEM ACTORS - BÊN PHẢI)
+' ========================================================
+' 3. TÁC NHÂN HỆ THỐNG NGOẠI VI (EXTERNAL SYSTEM ACTORS - BÊN PHẢI)
+' ========================================================
 rectangle "ACT-04: Nhà cung cấp dịch vụ LLM\n(External LLM Provider)" as LLM <<system>>
-rectangle "ACT-07: Dịch vụ Email\n(Email Notification Service)" as EmailService <<system>>
+rectangle "ACT-07: Dịch vụ Email\n(Email Notification Service)" as EmailSvc <<system>>
 
-' 4. QUAN HỆ (ASSOCIATIONS, INCLUDE & EXTEND)
-Learner -- UC18
-Learner -- UC19
-Learner -- UC20
-Learner -- UC21
+' ========================================================
+' 4. QUAN HỆ GIAO TIẾP (ASSOCIATIONS & INCLUDE)
+' ========================================================
+Learner -- UC_ADAPT_01
+Learner -- UC_ADAPT_02
+Learner -- UC_ADAPT_03
+Learner -- UC_ADAPT_04
+Learner -- UC_ADAPT_05
+Learner -- UC_ADAPT_06
+Learner -- UC_ADAPT_07
+Learner -- UC_ADAPT_08
+Learner -- UC_ADAPT_09
+Learner -- UC_ADAPT_10
 
-Scheduler -- UC22
+UC_ADAPT_04 ..> UC_PLAN_09 : <<include>>
+UC_ADAPT_05 ..> UC_PLAN_09 : <<include>>
+UC_ADAPT_06 ..> UC_PLAN_09 : <<include>>
+UC_ADAPT_07 ..> UC_PLAN_09 : <<include>>
 
-UC19 ..> UC18 : <<extend>>\n[Yêu cầu đánh giá chuyên sâu]
+UC_ADAPT_02 -- LLM
+UC_ADAPT_03 -- LLM
+UC_ADAPT_06 -- LLM
+UC_ADAPT_07 -- LLM
 
-UC20 ..> UC12 : <<include>>
-UC21 ..> UC12 : <<include>>
-
-UC19 -- LLM
-UC21 -- LLM
-UC22 -- EmailService
+UC_ADAPT_08 -- EmailSvc
 
 @enduml

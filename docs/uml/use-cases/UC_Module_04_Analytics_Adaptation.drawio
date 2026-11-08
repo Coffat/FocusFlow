@@ -1,63 +1,111 @@
-<mxfile host="app.diagrams.net" modified="2026-10-27T03:50:00.000Z" agent="FocusFlow-UML" version="24.0.0">
+<mxfile host="app.diagrams.net" agent="FocusFlow-UML">
   <diagram name="Module-4-Analytics-Adaptation" id="FF-UC-Mod-4">
-    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="800" math="0" shadow="0">
+    <mxGraphModel dx="2296" dy="1155" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1420" pageHeight="930" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
-
-        <!-- Primary Actor (Left) -->
-        <mxCell id="actor-learner" value="Người học&#xa;(Learner)" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;fillColor=#EBF8FF;strokeColor=#2B6CB0;fontStyle=1;fontColor=#1A202C;" vertex="1" parent="1">
-          <mxGeometry x="80" y="270" width="50" height="100" as="geometry" />
+        <mxCell id="act-learner" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;fillColor=#EBF8FF;strokeColor=#2B6CB0;fontStyle=1;fontColor=#1A202C;" value="ACT-02: Người học&#xa;(Learner)" vertex="1">
+          <mxGeometry height="90" width="50" x="65" y="270" as="geometry" />
         </mxCell>
-
-        <!-- System Boundary -->
-        <mxCell id="mod-boundary" value="Hệ thống FocusFlow — Module 4: Đánh giá Tiến độ &amp; Thích ứng Lịch trình" style="shape=rect;html=1;verticalAlign=top;fontStyle=1;whiteSpace=wrap;align=center;fillColor=#F7FAFC;strokeColor=#2B6CB0;fontSize=14;fontColor=#1A202C;rounded=1;" vertex="1" parent="1">
-          <mxGeometry x="220" y="80" width="670" height="540" as="geometry" />
+        <mxCell id="mod4-boundary" parent="1" style="shape=rect;html=1;verticalAlign=top;fontStyle=1;whiteSpace=wrap;align=center;fillColor=#F7FAFC;strokeColor=#2B6CB0;fontSize=14;fontColor=#1A202C;rounded=1;" value="Hệ thống FocusFlow — Phân hệ 4: Phân tích Tiến độ, Kiểm chứng Năng lực &amp;amp; Thích ứng Lịch trình" vertex="1">
+          <mxGeometry height="850" width="810" x="230" y="40" as="geometry" />
         </mxCell>
-
-        <!-- Use Cases -->
-        <mxCell id="uc-14" value="UC-14&#xa;Xem báo cáo tiến độ định lượng&#xa;(Giờ tập trung, Hoàn thành, Plan Adherence)&#xa;&amp;lt;&amp;lt;extension points&amp;gt;&amp;gt;&#xa;Qualitative AI Review Request" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="270" y="130" width="310" height="90" as="geometry" />
+        <mxCell id="uc-adapt-01" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;align=center;" value="UC-ADAPT-01&#xa;Xem báo cáo tiến độ và&#xa;bằng chứng học tập" vertex="1">
+          <mxGeometry height="60" width="320" x="270" y="75" as="geometry" />
         </mxCell>
-        <mxCell id="uc-15" value="UC-15&#xa;Yêu cầu AI đánh giá định kỳ&#xa;(Phản tư Zimmerman SRL 3 phần)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="640" y="140" width="220" height="70" as="geometry" />
+        <mxCell id="uc-adapt-02" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;align=center;" value="UC-ADAPT-02&#xa;Làm bài kiểm tra cột mốc" vertex="1">
+          <mxGeometry height="60" width="320" x="270" y="513" as="geometry" />
         </mxCell>
-        <mxCell id="uc-16" value="UC-16&#xa;Tạm dừng và khôi phục lộ trình (Domino Shift)&#xa;(Đóng băng lộ trình PAUSED &amp; tịnh tiến lịch)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="270" y="270" width="320" height="75" as="geometry" />
+        <mxCell id="uc-adapt-03" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;align=center;" value="UC-ADAPT-03&#xa;Đánh giá học tập&#xa;cuối tuần" vertex="1">
+          <mxGeometry height="60" width="320" x="270" y="437" as="geometry" />
         </mxCell>
-        <mxCell id="uc-17" value="UC-17&#xa;Xử lý nhiệm vụ quá hạn và tái cấu trúc lịch với AI&#xa;(Email OVERDUE, Dời lịch AI 1 lộ trình, STALLED &gt;= 3)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="270" y="400" width="330" height="85" as="geometry" />
+        <mxCell id="uc-adapt-04" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;align=center;" value="UC-ADAPT-04&#xa;Tạm dừng lộ trình" vertex="1">
+          <mxGeometry height="55" width="320" x="270" y="230" as="geometry" />
         </mxCell>
-
-        <!-- Secondary Supporting Actor (Right) -->
-        <mxCell id="sys-llm" value="&amp;lt;&amp;lt;system&amp;gt;&amp;gt;&#xa;Dịch vụ AI (External LLM)&#xa;(Google Gemini API)" style="shape=rect;html=1;whiteSpace=wrap;fillColor=#EDF2F7;strokeColor=#4A5568;fontStyle=1;fontColor=#1A202C;align=center;rounded=1;" vertex="1" parent="1">
-          <mxGeometry x="960" y="270" width="180" height="65" as="geometry" />
+        <mxCell id="uc-adapt-05" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;align=center;" value="UC-ADAPT-05&#xa;Tiếp tục lộ trình và&#xa;dời lịch bù ngày dừng" vertex="1">
+          <mxGeometry height="60" width="320" x="260" y="153" as="geometry" />
         </mxCell>
-
-        <!-- Associations -->
-        <mxCell id="edge-learner-uc14" edge="1" parent="1" source="actor-learner" target="uc-14" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;">
+        <mxCell id="uc-adapt-06" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;align=center;" value="UC-ADAPT-06&#xa;Dời lịch bằng AI cho&#xa;bài quá hạn" vertex="1">
+          <mxGeometry height="60" width="320" x="250" y="293" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-adapt-07" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;align=center;" value="UC-ADAPT-07&#xa;Khôi phục lộ trình&#xa;bị gián đoạn lâu ngày" vertex="1">
+          <mxGeometry height="60" width="320" x="280" y="360" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-adapt-08" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;align=center;" value="UC-ADAPT-08&#xa;Gửi email nhắc nhở bài quá hạn&#xa;và lộ trình gián đoạn" vertex="1">
+          <mxGeometry height="65" width="320" x="270" y="595" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-adapt-09" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;align=center;" value="UC-ADAPT-09&#xa;Tổng hợp hồ sơ&#xa;thói quen học tập" vertex="1">
+          <mxGeometry height="60" width="320" x="270" y="675" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-adapt-10" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;align=center;" value="UC-ADAPT-10&#xa;Đặt lại ngân sách&#xa;dời lịch hàng tuần" vertex="1">
+          <mxGeometry height="60" width="320" x="270" y="750" as="geometry" />
+        </mxCell>
+        <mxCell id="uc-plan-09" parent="1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#EDF2F7;strokeColor=#2B6CB0;fontColor=#1A202C;fontSize=12;fontStyle=1;align=center;" value="«subfunction»&#xa;UC-PLAN-09&#xa;Kiểm định tính hợp lệ&#xa;của lịch học" vertex="1">
+          <mxGeometry height="80" width="290" x="700" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="act-llm" parent="1" style="shape=rect;rounded=1;whiteSpace=wrap;html=1;fillColor=#EDF2F7;strokeColor=#4A5568;fontStyle=1;fontColor=#1A202C;align=center;" value="«system»&#xa;ACT-04: Nhà cung cấp dịch vụ LLM&#xa;(External LLM Provider)" vertex="1">
+          <mxGeometry height="65" width="240" x="780" y="550" as="geometry" />
+        </mxCell>
+        <mxCell id="act-email" parent="1" style="shape=rect;rounded=1;whiteSpace=wrap;html=1;fillColor=#EDF2F7;strokeColor=#4A5568;fontStyle=1;fontColor=#1A202C;align=center;" value="«system»&#xa;ACT-07: Dịch vụ Email&#xa;(Email Notification Service)" vertex="1">
+          <mxGeometry height="65" width="240" x="1090" y="595" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-learner-uc-adapt-01" edge="1" parent="1" source="act-learner" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="uc-adapt-01">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="edge-learner-uc16" edge="1" parent="1" source="actor-learner" target="uc-16" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;">
+        <mxCell id="edge-learner-uc-adapt-02" edge="1" parent="1" source="act-learner" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="uc-adapt-02">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="edge-learner-uc17" edge="1" parent="1" source="actor-learner" target="uc-17" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;">
+        <mxCell id="edge-learner-uc-adapt-03" edge="1" parent="1" source="act-learner" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="uc-adapt-03">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-
-        <!-- Extend UC15 -> UC14 -->
-        <mxCell id="edge-extend-uc15-uc14" value="&amp;lt;&amp;lt;extend&amp;gt;&amp;gt;&#xa;[Yêu cầu đánh giá định tính]" edge="1" parent="1" source="uc-15" target="uc-14" style="endArrow=open;dashed=1;html=1;strokeColor=#4A5568;strokeWidth=1.5;endFill=0;">
+        <mxCell id="edge-learner-uc-adapt-04" edge="1" parent="1" source="act-learner" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;" target="uc-adapt-04">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-
-        <!-- Supporting Actor Connections -->
-        <mxCell id="edge-uc15-llm" edge="1" parent="1" source="uc-15" target="sys-llm" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;">
+        <mxCell id="edge-learner-uc-adapt-05" edge="1" parent="1" source="act-learner" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;" target="uc-adapt-05">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="edge-uc17-llm" edge="1" parent="1" source="uc-17" target="sys-llm" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;">
+        <mxCell id="edge-learner-uc-adapt-06" edge="1" parent="1" source="act-learner" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="uc-adapt-06">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-
+        <mxCell id="edge-learner-uc-adapt-07" edge="1" parent="1" source="act-learner" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="uc-adapt-07">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-learner-uc-adapt-08" edge="1" parent="1" source="act-learner" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="uc-adapt-08">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-learner-uc-adapt-09" edge="1" parent="1" source="act-learner" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="uc-adapt-09">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-learner-uc-adapt-10" edge="1" parent="1" source="act-learner" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="uc-adapt-10">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-inc-adapt05-plan09" edge="1" parent="1" source="uc-adapt-05" style="endArrow=open;dashed=1;html=1;strokeColor=#4A5568;strokeWidth=1.5;endFill=0;labelBackgroundColor=#FFFFFF;fontStyle=2;fontSize=11;fontColor=#4A5568;" target="uc-plan-09" value="«include»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-inc-adapt06-plan09" edge="1" parent="1" source="uc-adapt-06" style="endArrow=open;dashed=1;html=1;strokeColor=#4A5568;strokeWidth=1.5;endFill=0;labelBackgroundColor=#FFFFFF;fontStyle=2;fontSize=11;fontColor=#4A5568;exitX=1;exitY=0;exitDx=0;exitDy=0;" target="uc-plan-09" value="«include»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-inc-adapt07-plan09" edge="1" parent="1" source="uc-adapt-07" style="endArrow=open;dashed=1;html=1;strokeColor=#4A5568;strokeWidth=1.5;endFill=0;labelBackgroundColor=#FFFFFF;fontStyle=2;fontSize=11;fontColor=#4A5568;exitX=1;exitY=0.4;exitDx=0;exitDy=0;exitPerimeter=0;" target="uc-plan-09" value="«include»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-uc-adapt-02-llm" edge="1" parent="1" source="uc-adapt-02" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;" target="act-llm">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-uc-adapt-03-llm" edge="1" parent="1" source="uc-adapt-03" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;" target="act-llm">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-uc-adapt-06-llm" edge="1" parent="1" source="uc-adapt-06" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" target="act-llm">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-uc-adapt-07-llm" edge="1" parent="1" source="uc-adapt-07" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;exitX=1;exitY=1;exitDx=0;exitDy=0;" target="act-llm">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-uc-adapt-08-email" edge="1" parent="1" source="uc-adapt-08" style="endArrow=none;html=1;strokeColor=#4A5568;strokeWidth=1.5;" target="act-email">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge-inc-adapt04-plan09" edge="1" parent="1" source="uc-adapt-04" style="endArrow=open;dashed=1;html=1;strokeColor=#4A5568;strokeWidth=1.5;endFill=0;labelBackgroundColor=#FFFFFF;fontStyle=2;fontSize=11;fontColor=#4A5568;" target="uc-plan-09" value="«include»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
       </root>
     </mxGraphModel>
   </diagram>

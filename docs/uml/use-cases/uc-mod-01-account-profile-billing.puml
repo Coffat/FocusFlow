@@ -1,5 +1,10 @@
 @startuml uc-mod-01-account-profile-billing
-title FocusFlow — Phân hệ 1: Quản lý Tài khoản, Hồ sơ & Gói dịch vụ (UC-01..UC-06)
+' ========================================================
+' Chuẩn hóa 8 Tác nhân (ACT-00..ACT-07): 4 Human/Role Actors + 4 External System Actors
+' Tuân thủ nghiêm ngặt OMG UML 2.5.1 Clause 18: Các thành phần nội bộ (Taskiq, Redis, DB,
+' AI Harness) và bộ định thời nội bộ (internal clock triggers) nằm bên trong Ranh giới Hệ thống.
+' ========================================================
+title FocusFlow — Phân hệ 1: Quản lý Tài khoản, Hồ sơ & Gói dịch vụ (11 Use Cases)
 
 left to right direction
 skinparam packageStyle rectangle
@@ -7,8 +12,8 @@ skinparam roundcorner 8
 skinparam monochrome false
 skinparam shadowing false
 skinparam defaultFontName "Helvetica", "Arial", sans-serif
-skinparam nodesep 40
-skinparam ranksep 75
+skinparam nodesep 35
+skinparam ranksep 70
 
 skinparam actor {
     BackgroundColor #EBF8FF
@@ -37,37 +42,71 @@ skinparam rectangle<<system>> {
     FontColor #1A202C
 }
 
-' 1. TÁC NHÂN CHÍNH (PRIMARY ACTORS - BÊN TRÁI)
-actor "Người dùng đã xác thực\n(Authenticated User)" as AuthUser #E2E8F0
-actor "ACT-01: Người học\n(Learner)" as Learner #EBF8FF
-actor "ACT-02: Quản trị viên hệ thống\n(Administrator)" as Admin #FEFCBF
-actor "ACT-03: Bộ lập lịch hệ thống\n(System Scheduler)" as Scheduler <<system>> #E6FFFA
+' ========================================================
+' 1. TÁC NHÂN CON NGƯỜI / VAI TRÒ (HUMAN / ROLE ACTORS - BÊN TRÁI)
+' ========================================================
+actor "ACT-00: Khách vãng lai\n(Guest / Anonymous User)" as Guest #EDF2F7
+actor "ACT-01: Người dùng đã đăng ký\n(Registered User)" as RegUser #E2E8F0
+actor "ACT-02: Người học\n(Learner)" as Learner #EBF8FF
+actor "ACT-03: Quản trị viên hệ thống\n(Administrator)" as Admin #FEFCBF
 
-Learner --|> AuthUser
-Admin --|> AuthUser
+' Kế thừa tác nhân
+Learner --|> RegUser
+Admin --|> RegUser
 
+' ========================================================
 ' 2. RANH GIỚI HỆ THỐNG (SYSTEM BOUNDARY)
+' ========================================================
 rectangle "Hệ thống FocusFlow — Phân hệ 1: Quản lý Tài khoản, Hồ sơ & Gói dịch vụ" as Mod1Boundary {
-    usecase "UC-01\nĐăng ký tài khoản" as UC01
-    usecase "UC-02\nĐăng nhập và Quản lý\nphiên xác thực" as UC02
-    usecase "UC-03\nQuản lý hồ sơ cá nhân\nvà Thời gian rảnh" as UC03
-    usecase "UC-04\nNâng cấp gói dịch vụ Premium" as UC04
-    usecase "UC-05\nXử lý thông báo kết quả\nthanh toán (Webhook)" as UC05
-    usecase "UC-06\nLàm mới hạn ngạch định kỳ và\nThu hồi giữ chỗ quá hạn" as UC06
+
+    ' GÓI 1A: XÁC THỰC & HỒ SƠ
+    package "Gói 1A: Xác thực & Hồ sơ (Authentication & Profile)" as Pkg1A {
+        usecase "UC-ACC-01\nĐăng ký tài khoản" as UC_ACC_01
+        usecase "UC-ACC-02\nĐăng nhập" as UC_ACC_02
+        usecase "UC-ACC-03\nĐặt lại mật khẩu" as UC_ACC_03
+        usecase "UC-ACC-04\nCấu hình hồ sơ và\nthời gian rảnh" as UC_ACC_04
+        usecase "UC-ACC-05\nXóa tài khoản" as UC_ACC_05
+        usecase "UC-ACC-11\nQuản lý ghi chú\nthói quen học tập" as UC_ACC_11
+    }
+
+    ' GÓI 1B: GÓI DỊCH VỤ & HẠN NGẠCH
+    package "Gói 1B: Gói dịch vụ & Hạn ngạch (Billing & Quota Management)" as Pkg1B {
+        usecase "UC-ACC-06\nNâng cấp hoặc gia hạn\ngói Premium" as UC_ACC_06
+        usecase "UC-ACC-07\nXử lý thông báo kết quả\nthanh toán (Webhook)" as UC_ACC_07
+        usecase "UC-ACC-08\nDọn bản ghi giữ chỗ và\nđơn thanh toán treo" as UC_ACC_08
+        usecase "UC-ACC-09\nLàm mới hạn ngạch\nchu kỳ tháng" as UC_ACC_09
+        usecase "UC-ACC-10\nHạ cấp gói dịch vụ\nhết hạn" as UC_ACC_10
+    }
 }
 
+' ========================================================
 ' 3. TÁC NHÂN HỆ THỐNG NGOẠI VI (EXTERNAL SYSTEM ACTORS - BÊN PHẢI)
-rectangle "ACT-06: Cổng thanh toán\n(Payment Gateway)" as PayGateway <<system>>
+' ========================================================
+rectangle "ACT-05: Cổng thanh toán\n(Payment Gateway)" as PayGateway <<system>>
+rectangle "ACT-07: Dịch vụ Email\n(Email Notification Service)" as EmailSvc <<system>>
 
+' ========================================================
 ' 4. QUAN HỆ GIAO TIẾP (ASSOCIATIONS)
-Learner -- UC01
-AuthUser -- UC02
-Learner -- UC03
-Learner -- UC04
+' ========================================================
+' Gói 1A
+Guest -- UC_ACC_01
+RegUser -- UC_ACC_02
+RegUser -- UC_ACC_03
+Learner -- UC_ACC_04
+Learner -- UC_ACC_05
+Learner -- UC_ACC_11
 
-UC04 -- PayGateway
-PayGateway -- UC05
+UC_ACC_01 -- EmailSvc
+UC_ACC_03 -- EmailSvc
 
-Scheduler -- UC06
+' Gói 1B
+Learner -- UC_ACC_06
+UC_ACC_06 -- PayGateway
+PayGateway -- UC_ACC_07
+
+Learner -- UC_ACC_08
+Admin -- UC_ACC_08
+Learner -- UC_ACC_09
+Learner -- UC_ACC_10
 
 @enduml
