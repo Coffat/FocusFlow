@@ -1,118 +1,188 @@
-# Hướng dẫn mô hình hóa lớp
+# Modeling Guide — Phân tích trước khi vẽ
 
-## Mục lục
-1. Chọn góc nhìn
-2. Tìm và lọc lớp
-3. Thuộc tính và thao tác
-4. Cây quyết định chọn quan hệ
-5. Multiplicity
-6. Mẫu thiết kế thường gặp
-7. Kế thừa: dùng và tránh
-8. Truy vết từ use case / quy tắc nghiệp vụ
-9. Lỗi hay gặp
+## 1. Mục tiêu
 
-## 1. Chọn góc nhìn
-Domain (khái niệm nghiệp vụ, đọc được bởi business) / Design (interface, thao tác, navigability) / Implementation (khớp code). Quyết định trước khi vẽ; không đưa `getXxx/setXxx`, `id` khóa ngoại, kiểu `List<>` vào mô hình domain.
+Class Diagram phải là kết quả của phân tích, không phải công cụ để hợp thức hóa danh từ trong SRS hoặc tên bảng trong database. Quy trình này áp dụng cho Domain Overview, Detailed DDD Domain Model và Software Design, nhưng độ sâu đầu ra khác nhau.
 
-## 2. Tìm và lọc lớp
+## 2. Evidence handling
 
-Nguồn: danh từ trong yêu cầu, glossary, luồng use case, biểu mẫu/báo cáo hiện có, bảng CSDL.
+### 2.1. Các trạng thái bằng chứng
 
-Lọc từng ứng viên bằng các câu hỏi:
-1. Nó có **định danh hoặc vòng đời riêng** (tạo, thay đổi, xóa) mà nghiệp vụ quan tâm không? Có → lớp.
-2. Nó chỉ là **một giá trị** của lớp khác (tên, địa chỉ email, ngày)? → thuộc tính (hoặc data type nếu có cấu trúc: Money, Address).
-3. Nó là **actor ngoài hệ thống**? Chỉ thành lớp nếu hệ thống phải lưu thông tin về nó (Customer thì có, người dùng đăng nhập thì thường là User/Account).
-4. Nó là **đồng nghĩa** của lớp khác? → gộp, ghi vào glossary.
-5. Nó quá mơ hồ ("hệ thống", "thông tin", "dữ liệu", "quản lý")? → loại hoặc làm rõ.
-6. Nó là **cấu trúc kỹ thuật** (Controller, DAO, Utility) khi đang ở góc nhìn domain? → loại khỏi domain.
-7. Nó là **sự kiện hoặc giao dịch cần lưu lại** (Order, Payment, Booking)? → lớp, thường có thuộc tính thời gian và trạng thái.
+| Trạng thái | Ý nghĩa | Cách trình bày |
+|---|---|---|
+| `CONFIRMED` | Nguồn có thẩm quyền nêu trực tiếp | Có thể dùng làm baseline; trích dẫn source/ID |
+| `INFERRED` | Suy luận từ nhiều phần thông tin nhất quán | Ghi rõ lập luận và cần xác nhận ở đâu |
+| `PROPOSED` | Phương án kiến trúc/mô hình do Agent đề xuất | Không trình bày như yêu cầu đã được duyệt |
+| `OPEN` | Thiếu thông tin hoặc có mâu thuẫn chưa giải quyết | Dùng TBD/OPEN; không tự điền |
 
-Một lớp tốt: có tên là danh từ số ít, một trách nhiệm rõ, có thuộc tính hoặc thao tác riêng, và tham gia ít nhất một quan hệ.
+Mỗi class quan trọng, relationship quan trọng, multiplicity, lifecycle, Aggregate boundary và Bounded Context nên có evidence status khi quyết định chưa hiển nhiên.
 
-## 3. Thuộc tính và thao tác
+### 2.2. Nguồn và độ thẩm quyền
 
-Thuộc tính:
-- Mỗi thuộc tính có kiểu; nghiệp vụ có đơn vị thì dùng kiểu có đơn vị (Dollars, Minutes) hoặc ghi trong mô tả.
-- Mặc định đáng kể thì ghi: `balance : Dollars = 0`.
-- Không đưa **khóa ngoại**; association thể hiện điều đó. Có thể giữ `id` (định danh riêng) khi cần bàn về code.
-- Không lặp: nếu có association tới `Plane` thì không thêm thuộc tính `plane : Plane`.
-- Thuộc tính tính toán được dùng `/` (derived), ví dụ `/age`.
-- Thuộc tính nhiều giá trị dùng multiplicity: `phones : String [1..3]`.
+Không tồn tại một thứ tự ưu tiên cố định đúng cho mọi dự án. Hãy xác định thẩm quyền theo quy trình quản trị dự án. Thông thường:
 
-Thao tác:
-- Đến từ **trách nhiệm** của lớp: "Flight tính giờ đến", "BankAccount rút tiền".
-- Tên là động từ; chữ ký đủ tham số và kiểu trả về khi ở góc nhìn design.
-- Đặt thao tác ở lớp **sở hữu dữ liệu** cần thiết để thực hiện (information expert).
-- Dấu hiệu God class: > ~15 thao tác, trộn nhiều chủ đề, dùng dữ liệu của lớp khác phần lớn thời gian → tách.
-- Dấu hiệu anemic: lớp chỉ có thuộc tính, mọi logic ở lớp "Service" → xem lại nếu đang mô hình domain đáng kể hành vi.
+- Business policy/requirement được chủ nghiệp vụ phê duyệt: bằng chứng về ý định nghiệp vụ.
+- SRS/BRD đã baseline và Use Case được duyệt: bằng chứng về phạm vi và hành vi yêu cầu.
+- ADR đã được chấp thuận: bằng chứng về quyết định kiến trúc, không tự thay thế yêu cầu nghiệp vụ.
+- API contract: bằng chứng về hợp đồng tích hợp.
+- Schema và source code hiện tại: bằng chứng về implementation hiện tại, không đủ để chứng minh thiết kế nghiệp vụ đúng.
+- Meeting note, chat, draft: có thể hữu ích nhưng phải xác nhận mức độ chính thức.
 
-## 4. Cây quyết định chọn quan hệ
+Nếu hai nguồn cùng thẩm quyền mâu thuẫn, tạo conflict record thay vì tự chọn.
 
-Hỏi lần lượt, dừng ở câu trả lời "có" đầu tiên:
+### 2.3. Mẫu conflict record
 
-1. **A là một loại B** ("A is-a B"), A có thể thay thế B ở mọi nơi, A thừa hưởng toàn bộ đặc tính của B? → **Generalization** (A → B).
-2. **A cài đặt hợp đồng (interface) B**, không thừa hưởng cài đặt? → **Realization** (A ⇢ B, nét đứt).
-3. **A chỉ tạm dùng B** (tham số thao tác, biến cục bộ, tạo rồi bỏ), không giữ tham chiếu lâu dài? → **Dependency**.
-4. **Thông tin cần lưu thuộc về mối quan hệ giữa A và B**, không thuộc riêng bên nào (số dặm của chuyến bay của hội viên, điểm của sinh viên trong môn học)? → **Association class** (hoặc lớp trung gian, xem §6).
-5. **B là bộ phận của A và chỉ thuộc đúng một A, bị hủy khi A bị hủy** (Company–Department, Order–OrderLine)? → **Composition** (thoi đặc ở A).
-6. **B là bộ phận của A nhưng sống độc lập, có thể chuyển giữa các A, hoặc tồn tại trước A** (Car–Wheel) và việc nhấn mạnh toàn thể–bộ phận có ích cho người đọc? → **Aggregation** (thoi rỗng ở A).
-7. Các đối tượng **biết nhau lâu dài** → **Association**; nếu chỉ một phía cần biết → **uni-directional**; mặc định ở domain model là association thường.
+| Conflict ID | Nguồn A | Nguồn B | Vấn đề | Tác động lên model | Cách xử lý |
+|---|---|---|---|---|---|
+| CF-01 | SRS §x | ADR-x §y | Lifecycle khác nhau | Ảnh hưởng status/operation | OPEN — cần owner xác nhận |
 
-Nguyên tắc: khi phân vân giữa aggregation và association thường, chọn **association thường**; khi phân vân giữa composition và association, hỏi "nếu hủy A thì B còn ý nghĩa không?" Nếu không → composition.
+### 2.4. Không bịa traceability
 
-## 5. Multiplicity
+- Dùng đúng ID Use Case, requirement, business rule, ADR và file path có trong nguồn.
+- Nếu không có ID, dùng tên heading hoặc mô tả nguồn, không tự sinh ID giả.
+- Nếu không thể đọc line/page, trích tên file + heading và ghi giới hạn.
+- Một class có thể hỗ trợ nhiều Use Case; một Use Case có thể dùng nhiều class.
+- Không yêu cầu mọi class phải xuất hiện trực tiếp trong Use Case. Một số class có thể phục vụ invariant, shared concepts, event hoặc persistence boundary.
 
-Hỏi hai chiều, ghi cả cận dưới và cận trên:
-- `Flight → Plane`: một Flight có tối thiểu 0 (chưa gán) tối đa 1 Plane → `0..1` ở đầu Plane.
-- `Plane → Flight`: một Plane có 0 (máy bay mới) đến nhiều Flight → `*` ở đầu Flight.
+## 3. Tìm class ứng viên
 
-Cận dưới quan trọng: `0` nghĩa là tùy chọn, `1` nghĩa là bắt buộc phải có khi đối tượng tồn tại → ảnh hưởng đến validation và NOT NULL. Composition: đầu toàn thể là `1` (hoặc `0..1`).
+Bắt đầu từ:
 
-Nhiều–nhiều (`* -- *`): kiểm tra xem mối quan hệ có thuộc tính riêng không (thời điểm, vai trò, số lượng). Có → association class (mỗi cặp chỉ có đúng một liên kết) hoặc lớp trung gian (cặp có thể có nhiều liên kết, ví dụ nhiều lần đặt cùng một sản phẩm).
+1. Thuật ngữ trong glossary/Ubiquitous Language.
+2. Danh từ và cụm danh từ trong requirements, business rules và Use Case.
+3. Những đối tượng được tạo, đọc, sửa, hoàn tất, hủy, lưu lịch sử hoặc cần audit.
+4. Những khái niệm tham gia vào quyết định/quy tắc nghiệp vụ.
+5. Những mối quan hệ có dữ liệu hoặc lifecycle riêng.
 
-## 6. Mẫu thiết kế thường gặp
+Danh từ chỉ là ứng viên. Với mỗi ứng viên, hỏi:
 
-- **Association class vs lớp trung gian**: association class mặc định ràng buộc "một instance cho mỗi cặp". Nếu cùng một cặp có thể có nhiều bản ghi (nhiều giao dịch, nhiều lần ghi nhận), tách thành lớp thường với hai association `1` – `*`.
-- **Trạng thái**: dùng `«enumeration»` (`OrderStatus`) cho trạng thái đơn giản; vòng đời phức tạp có quy tắc chuyển trạng thái thì thêm state machine diagram, đừng nhét vào class diagram.
-- **Giá trị có cấu trúc**: `Money{amount, currency}`, `Address`, `DateRange` là data type, không phải entity.
-- **Phân cấp tự tham chiếu** (cấp tổ chức, danh mục): reflexive association với hai role (`parent 0..1`, `children *`).
-- **Vai trò thay đổi theo thời gian** (một Person vừa là Customer vừa là Employee): dùng quan hệ Person–Role (association/composition), không tạo lớp con Customer, Employee kế thừa Person nếu một người có thể chuyển vai.
-- **Đa hình**: tách interface (`PaymentMethod`) và các lớp cài đặt (`CreditCard`, `BankTransfer`) bằng realization.
-- **Lớp báo cáo / view**: biết lớp nghiệp vụ nhưng lớp nghiệp vụ không biết lớp báo cáo (uni-directional) để giảm coupling.
-- **Lịch sử/hiệu lực theo thời gian**: thêm lớp có `effectiveFrom/effectiveTo` thay vì ghi đè giá trị cũ.
+- Nó mô tả một khái niệm nghiệp vụ hay chỉ là dữ liệu/implementation detail?
+- Có identity nghiệp vụ không? Identity có ổn định dù thuộc tính thay đổi không?
+- Có lifecycle hoặc trạng thái riêng không?
+- Có behavior/invariant thuộc về nó không?
+- Có thể thay thế bằng thuộc tính/VO của class khác không?
+- Nó có phải chỉ là vai trò/alias của khái niệm đã tồn tại không?
+- Nó có phải actor/external system thay vì classifier trong domain model không?
+- Nó có phải request/response DTO, persistence record, API payload hoặc adapter không?
 
-## 7. Kế thừa: dùng và tránh
+### 3.1. Dấu hiệu Entity
 
-Dùng khi: các lớp con thật sự là các **loại** (CheckingAccount, SavingsAccount là BankAccount), có hành vi hoặc thuộc tính riêng, dùng đa hình được. Lớp cha abstract khi không có ý nghĩa tạo instance trực tiếp và có thao tác abstract (`withdrawal`) để lớp con hiện thực.
+- Có identity nghiệp vụ xuyên thời gian.
+- Có thể thay đổi thuộc tính nhưng vẫn là cùng một đối tượng.
+- Có lifecycle hoặc các hành vi gắn với identity đó.
+- Có quy tắc cần bảo vệ qua các lần thay đổi.
 
-Tránh khi:
-- Chỉ để **tái sử dụng code** (dùng composition/delegation thay thế).
-- Lớp con **không dùng được** thuộc tính hoặc hành vi của cha (vi phạm Liskov).
-- Phân cấp sâu quá 3 mức.
-- Phân loại theo thuộc tính chỉ khác giá trị (thay vì tạo `GoldCustomer`, `SilverCustomer`, dùng thuộc tính/enum `tier`), trừ khi hành vi khác nhau thật.
-- Lớp con chỉ khác nhau vai trò tạm thời (xem §6).
+### 3.2. Dấu hiệu Value Object
 
-## 8. Truy vết từ use case và quy tắc nghiệp vụ
+- Không cần identity độc lập.
+- Hai instance có cùng giá trị được xem là tương đương theo ngữ nghĩa domain.
+- Thể hiện một khái niệm bằng giá trị/thuộc tính; thường bất biến.
+- Có thể chứa validation và behavior, không chỉ là một struct dữ liệu.
 
-Nếu có use case spec (ví dụ từ skill `usecase-analyst`):
-- Danh từ trong **luồng chính** và **dữ liệu vào/ra** → lớp ứng viên và thuộc tính.
-- Động từ tại mỗi bước hệ thống → thao tác của một lớp (hoặc điều phối giữa các lớp).
-- **Tiền/hậu điều kiện** → trạng thái (enum) và ràng buộc.
-- **Quy tắc nghiệp vụ** (BR-xx) → ràng buộc `{}` trên thuộc tính/association, multiplicity, hoặc thao tác validate. Ghi mã BR vào mô tả lớp.
-- Ghi bảng truy vết: Lớp ↔ Use case (UC-xx) trong mô tả lớp.
+### 3.3. Dấu hiệu Association Class
 
-## 9. Lỗi hay gặp (kiểm tra trước khi giao)
+- Dữ liệu thuộc về chính mối quan hệ giữa hai hoặc nhiều classifier.
+- Dữ liệu không có ý nghĩa độc lập ở một đầu quan hệ.
+- Có thể có lifecycle/hành vi riêng của relationship.
+- Nếu quan hệ có identity/lifecycle mạnh, xem xét mô hình nó thành Entity liên kết thay vì chỉ dùng association class.
 
-1. Vẽ **thoi ở sai phía** hoặc nhầm thoi rỗng/đặc.
-2. Nhầm **realization (nét đứt)** với **generalization (nét liền)**.
-3. **Thiếu multiplicity** hoặc để nguyên giá trị mặc định tưởng tượng.
-4. Dùng kế thừa chỉ để tái sử dụng code, hoặc dùng cho vai trò thay đổi.
-5. Thêm khóa ngoại thành thuộc tính **và** vẽ association (thông tin trùng).
-6. **Lớp không có quan hệ** nào (mồ côi) mà không có lý do.
-7. Aggregation tràn lan; quan hệ nào cũng thoi rỗng.
-8. Composition nhưng bộ phận dùng chung cho nhiều toàn thể (mâu thuẫn "chỉ thuộc một").
-9. Lớp God / lớp rỗng; tên lớp là động từ hoặc số nhiều.
-10. Trộn góc nhìn: domain model lẫn Controller, Repository, DTO.
-11. Association class nhưng cùng một cặp có thể có nhiều bản ghi.
-12. Một diagram > 20 lớp mà không chia gói/chủ đề.
-13. Mô tả trình tự hoặc luồng xử lý trên class diagram (thuộc sequence/activity diagram).
+### 3.4. Dấu hiệu class không nên tạo
+
+- Chỉ là một trường dữ liệu không có identity, behavior hay cấu trúc phức tạp.
+- Chỉ là tên khác của class có sẵn.
+- Chỉ đại diện một API request/response hoặc database row.
+- Chỉ được tạo ra vì framework/ORM yêu cầu.
+- Không có trách nhiệm, dữ liệu hoặc quan hệ có ý nghĩa.
+- Actor hoặc hệ thống ngoài phạm vi được đưa nhầm thành domain entity.
+
+Không loại class chỉ vì nó ít thuộc tính hoặc ít method; child entity trong Aggregate có thể dựa vào root để bảo vệ invariant.
+
+## 4. Phân biệt các loại mô hình
+
+| Thành phần | Domain Overview | Detailed Domain Model | Software/Implementation Design |
+|---|---|---|---|
+| Entity | Tên và quan hệ cốt lõi | Identity, behavior, lifecycle, invariant | Class implementation detail nếu cần |
+| Value Object | Chỉ khi là khái niệm trọng yếu | Type, value semantics, invariant | Class/record/struct theo công nghệ |
+| Aggregate | Nhóm/ranh giới có thể chú thích | Root, members, invariants, update boundary | Package/transaction implementation khi cần |
+| Domain Service | Thường ẩn hoặc ghi catalog | Có thể biểu diễn trách nhiệm | Class/interface và dependency nếu cần |
+| Application Service | Không | Không thuộc core domain model | Điều phối use case |
+| Repository | Không | Chỉ mô tả vai trò nếu cần | Interface/implementation |
+| DTO/API Model | Không | Không | Có |
+| Database FK/PK | Không | Không; domain identifier là trường hợp riêng | Có trong persistence model/ERD |
+
+## 5. Relationship discovery
+
+Trước khi chọn ký hiệu, xác định bản chất:
+
+1. **Business association:** hai khái niệm có liên hệ nghiệp vụ.
+2. **Ownership/lifecycle:** một object có sở hữu và kiểm soát vòng đời object khác không?
+3. **Aggregate membership:** object nằm trong cùng consistency boundary không?
+4. **Identity reference:** object giữ định danh của Aggregate khác hay điều hướng trực tiếp?
+5. **Implementation dependency:** một class dùng class/interface khác qua parameter, field, local variable hoặc service call?
+
+Không dùng một đường UML để diễn đạt tất cả các ý này. Chẳng hạn, composition không tự chứng minh Aggregate membership; dependency không tự chứng minh bounded-context relationship.
+
+## 6. Attributes và operations
+
+### 6.1. Attributes
+
+Chỉ đưa thuộc tính có ý nghĩa ở profile đã chọn. Với mỗi thuộc tính quan trọng, ghi:
+
+- Tên domain language.
+- Type ở mức phù hợp.
+- Multiplicity nếu nhiều giá trị.
+- Ý nghĩa/đơn vị nghiệp vụ.
+- Constraint (range, format, optionality, uniqueness) khi có bằng chứng.
+- Nguồn/trạng thái bằng chứng khi chưa chắc chắn.
+
+Không đưa mặc định vào Domain Overview: `createdAt`, `updatedAt`, UUID kỹ thuật, FK/PK, password hash, refresh token, access token, encryption key, cache field, retry counter hoặc telemetry. Các trường này có thể hợp lệ trong Software/Implementation/Data Model nếu mục tiêu yêu cầu.
+
+**Không nhầm domain identifier với database FK:** `CustomerId` có thể là domain value type/reference trong Detailed DDD Model. `customer_id` là tên cột persistence. Hai thứ có thể ánh xạ với nhau nhưng không đồng nghĩa.
+
+### 6.2. Stored và derived attributes
+
+- UML derived property dùng dấu `/`, ví dụ `/totalMinutes`.
+- Nếu một giá trị được tính từ dữ liệu khác, hãy chỉ rõ nguồn tính.
+- Không vừa đánh dấu derived vừa mô tả thao tác mutate trực tiếp trừ khi có cached/materialized value và quy tắc đồng bộ rõ.
+- Khi cùng một thông tin có nhiều nguồn, chỉ định source of truth.
+
+### 6.3. Operations
+
+Operation phù hợp khi:
+
+- Bảo vệ invariant hoặc thay đổi state hợp lệ.
+- Thể hiện hành vi nghiệp vụ của Entity/VO.
+- Là trách nhiệm design cần được thể hiện ở Software Design.
+- Có input, output, điều kiện hoặc side effect có ý nghĩa.
+
+Không đưa getter/setter, CRUD method máy móc hoặc `markX()` chỉ bọc một phép gán nếu không có rule. Không dồn mọi nghiệp vụ vào Service class chỉ vì thuận tiện.
+
+## 7. Multiplicity
+
+Đối với mỗi association, hỏi riêng hai chiều:
+
+- Một instance A liên kết với tối thiểu/tối đa bao nhiêu instance B?
+- Một instance B liên kết với tối thiểu/tối đa bao nhiêu instance A?
+
+Các dạng thường dùng: `1`, `0..1`, `0..*`/`*`, `1..*`, `2..5`.
+
+Kiểm tra thêm:
+
+- Quan hệ có bắt buộc ngay lúc tạo hay chỉ sau một bước workflow?
+- Có trạng thái draft/unassigned cho phép chưa liên kết không?
+- Xét toàn bộ lifecycle hay chỉ một trạng thái?
+- Có uniqueness constraint không?
+- Cardinality là business invariant hay chỉ là giới hạn UI/database?
+
+Nếu yêu cầu chỉ cho biết “một Roadmap có nhiều Milestone” mà không xác định tối thiểu một hay có thể bằng không, không tự động chọn `1..*`; đưa ra OPEN hoặc đề xuất rõ ràng.
+
+## 8. Phân tách diagram
+
+Tách theo câu hỏi người đọc cần trả lời, không theo một con số lớp cố định. Dấu hiệu cần tách:
+
+- Nhiều đường giao cắt làm mất khả năng đọc.
+- Nhiều khái niệm thuộc các quy trình nghiệp vụ khác nhau.
+- Người đọc overview bị kéo vào chi tiết persistence/design.
+- Một nhóm class có thể được hiểu độc lập trong một context/aggregate.
+
+Giữ overview làm bản đồ; detailed diagrams là nơi mở rộng. Mọi sơ đồ con phải có tên, phạm vi và liên kết về overview.
