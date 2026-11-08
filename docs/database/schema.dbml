@@ -1,19 +1,24 @@
-// FocusFlow — Physical Database Schema v3.0 (PostgreSQL 16)
+// FocusFlow — Physical Database Schema v3.3 (PostgreSQL 16 + pgvector)
 // Generated for dbdiagram.io (DBML - Database Markup Language)
-// 24 Tables across 4 Bounded Contexts + Shared Kernel: 9 / 5 / 5 / 3 / 2
+// 35 Tables across 4 Bounded Contexts + Shared Kernel: 12 / 10 / 5 / 4 / 4
+// Normalized to 3NF/BCNF with Controlled JSONB Value Objects (DB-level CHECK constraints)
+// Total 74 Specialized Indexes (7 Partial Unique, 2 Hybrid RAG GIN/HNSW, 65 B-Tree)
 
-Project FocusFlow_v3 {
+Project FocusFlow_v3_3 {
   database_type: 'PostgreSQL 16'
   Note: '''
-    # FocusFlow Physical Database Schema v3.0
-    - Bounded Contexts: account (9), planning (5), execution (5), evaluation (3), shared_kernel (2)
+    # FocusFlow Physical Database Schema v3.3
+    - Bounded Contexts: account (12), planning (10), execution (5), evaluation (4), shared_kernel (4)
+    - Total Physical Tables: 35 Tables normalized to 3NF/BCNF with Controlled JSONB Value Objects
     - Primary Keys: UUIDv7 (RFC 9562 Monotonic Time-Ordered)
-    - Architecture: Context-First Modular Monolith + Hexagonal Architecture
+    - Architecture: Context-First Modular Monolith + Hexagonal Architecture + FocusFlow Learning Intelligence Harness
+    - Total Indexes: 74 Specialized Indexes (Including 7 Foreign Key Optimization Indexes v3.3)
+    - Extensions: pgvector (Hybrid RAG: tsvector GIN + vector(768) HNSW)
   '''
 }
 
 // ============================================================================
-// BOUNDED CONTEXT 1: ACCOUNT & BILLING (9 TABLES)
+// BOUNDED CONTEXT 1: ACCOUNT (12 TABLES)
 // ============================================================================
 
 Table users {
@@ -25,8 +30,15 @@ Table users {
   role varchar(20) [not null, default: 'LEARNER', note: 'LEARNER, ADMIN']
   tier varchar(20) [not null, default: 'FREE', note: 'FREE, PREMIUM']
   is_locked boolean [not null, default: false]
+  premium_expires_at timestamptz [null]
+  last_login_at timestamptz [null]
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    email [unique, name: 'uq_users_email']
+    (email) [unique, name: 'uq_users_lower_email', note: 'Functional unique index on lower(email)']
+  }
 
   Note: 'Learner & Admin identity core entity'
 }
@@ -51,28 +63,46 @@ Table webcal_tokens {
   id uuid [pk, default: `gen_random_uuid()`]
   user_id uuid [not null, unique, ref: - users.id]
   token_hash varchar(64) [not null, unique]
-  oauth_refresh_token_encrypted text
-  external_calendar_id varchar(255)
   is_active boolean [not null, default: true]
   last_used_at timestamptz
   rotated_at timestamptz
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz [not null, default: `now()`]
 
-  Note: 'External calendar integration & secret WebCal feed token'
+  Note: '1-way private calendar feed token (SHA-256 hash)'
+}
+
+Table calendar_connections {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null, ref: > users.id]
+  provider varchar(30) [not null, default: 'GOOGLE', note: 'GOOGLE, OUTLOOK, LOCAL_MOCK']
+  external_calendar_id varchar(255) [not null, default: 'primary']
+  oauth_refresh_token_encrypted text [not null]
+  sync_status varchar(20) [not null, default: 'ACTIVE', note: 'ACTIVE, REVOKED, ERROR']
+  last_synced_at timestamptz
+  error_detail text
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (user_id, provider) [unique, name: 'uq_calendar_connections_user_provider']
+    (user_id, sync_status) [name: 'idx_calendar_connections_user_status']
+  }
+
+  Note: '2-way OAuth calendar connections (SRS §12, 3NF normalized)'
 }
 
 Table availabilities {
   id uuid [pk, default: `gen_random_uuid()`]
   user_id uuid [not null, unique, ref: - users.id]
   mode varchar(20) [not null, default: 'MODE_A', note: 'MODE_A, MODE_B']
-  calendar_integration_mode varchar(20) [not null, default: 'NONE', note: 'NONE, BUSY_OVERLAY, TWO_WAY']
-  daily_quotas jsonb [not null, default: '{}', note: 'Minutes per weekday for Mode A']
+  calendar_integration_mode varchar(20) [not null, default: 'NONE', note: 'NONE, EXPORT_ICS, CONNECTED']
+  daily_quotas jsonb [not null, default: '{}', note: 'Controlled JSONB Value Object validated by fn_validate_daily_quotas(daily_quotas, mode): keys in MON..SUN, numeric hours 0.5..14.0']
   min_session_minutes integer [not null, default: 30]
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz [not null, default: `now()`]
 
-  Note: 'Learner weekly availability strategy and baseline'
+  Note: 'Learner weekly availability strategy and Mode A/B baseline'
 }
 
 Table availability_slots {
@@ -83,11 +113,17 @@ Table availability_slots {
   end_time time [not null]
   end_day_offset smallint [not null, default: 0, note: '0=same day, 1=next day overnight']
   slot_type varchar(20) [not null, default: 'ALLOWED', note: 'ALLOWED, FIXED']
+  energy_level varchar(10) [not null, default: 'MEDIUM', note: 'LOW, MEDIUM, HIGH']
   is_active boolean [not null, default: true]
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz [not null, default: `now()`]
 
-  Note: '3NF normalized discrete time slots for Mode B'
+  indexes {
+    (availability_id, day_of_week, start_time) [unique, name: 'uq_availability_slots_active_time']
+    (availability_id, day_of_week) [name: 'idx_avail_slots_availability_day']
+  }
+
+  Note: '3NF normalized discrete time slots with circadian energy level'
 }
 
 Table ai_quotas {
@@ -110,27 +146,40 @@ Table ai_quota_reservations {
   quota_id uuid [not null, ref: > ai_quotas.id]
   user_id uuid [not null, ref: > users.id]
   operation_type varchar(50) [not null]
-  status varchar(20) [not null, default: 'RESERVED', note: 'RESERVED, COMMITTED, RELEASED']
+  status varchar(20) [not null, default: 'RESERVED', note: 'RESERVED, COMMITTED, RELEASED, EXPIRED']
   tokens_reserved integer [not null, default: 0]
   expires_at timestamptz [not null]
   created_at timestamptz [not null, default: `now()`]
   resolved_at timestamptz
 
-  Note: '2-Phase ACID reservation preventing AI call overrun'
+  indexes {
+    (expires_at) [name: 'idx_quota_reservations_cleanup']
+    (user_id, status, created_at) [name: 'idx_quota_reservations_user_status']
+    (quota_id) [name: 'idx_ai_quota_reservations_quota_id']
+  }
+
+  Note: '2-Phase ACID reservation preventing AI call overrun (TTL 5m / 300s)'
 }
 
 Table ai_usage_logs {
   id uuid [pk, default: `gen_random_uuid()`]
   user_id uuid [not null, ref: > users.id]
-  action_type varchar(50) [not null]
-  model_name varchar(100) [not null, default: 'gpt-4o-mini']
+  reservation_id uuid [null, ref: > ai_quota_reservations.id]
+  action_type varchar(50) [not null, note: '11 standard AI action types including KNOWLEDGE_INGESTION & WHAT_IF_SIMULATION']
+  model_name varchar(100) [not null, default: 'gemini-2.5-flash']
+  attempt_no smallint [not null, default: 1, note: '1..5']
   prompt_tokens integer [not null, default: 0]
   completion_tokens integer [not null, default: 0]
   total_tokens integer [not null, default: 0]
   latency_ms integer [not null, default: 0]
-  status varchar(20) [not null, default: 'SUCCESS', note: 'SUCCESS, ERROR']
+  estimated_cost_usd numeric(10,6) [not null, default: 0]
+  status varchar(20) [not null, default: 'SUCCESS', note: 'SUCCESS, FAILED, RATE_LIMITED, TIMEOUT']
   error_message text
   created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (user_id, action_type, created_at) [name: 'idx_ai_usage_logs_user_action']
+  }
 
   Note: 'Granular prompt & completion telemetry audit log'
 }
@@ -139,21 +188,74 @@ Table payment_transactions {
   id uuid [pk, default: `gen_random_uuid()`]
   user_id uuid [not null, ref: > users.id]
   transaction_ref varchar(100) [not null, unique]
-  gateway_provider varchar(20) [not null, default: 'PAYOS']
+  gateway_provider varchar(20) [not null, default: 'PAYOS', note: 'PAYOS, VNPAY, MOCK']
   amount_vnd integer [not null]
   currency varchar(10) [not null, default: 'VND']
-  status varchar(20) [not null, default: 'PENDING', note: 'PENDING, PAID, CANCELLED, FAILED']
+  status varchar(20) [not null, default: 'PENDING', note: 'PENDING, PAID, FAILED, CANCELLED, EXPIRED']
   qr_code_url text
   webhook_signature_verified boolean [not null, default: false]
   paid_at timestamptz
+  expires_at timestamptz [null]
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz [not null, default: `now()`]
 
-  Note: 'PayOS QR payment orders and subscription upgrades'
+  indexes {
+    (user_id, created_at) [name: 'idx_payment_transactions_user_created']
+    (status, created_at) [name: 'idx_payment_transactions_status']
+    (expires_at) [name: 'idx_payment_transactions_pending_expires']
+  }
+
+  Note: 'PayOS QR payment orders and subscription upgrades (ON DELETE RESTRICT)'
+}
+
+Table learner_memory_items {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null, ref: > users.id]
+  memory_category varchar(30) [not null, note: 'PROFILE, BEHAVIORAL, KNOWLEDGE, INTERACTION']
+  epistemic_type varchar(20) [not null, note: 'EXPLICIT, OBSERVED, INFERRED']
+  memory_key varchar(120) [not null]
+  claim_value jsonb [not null, note: 'Controlled JSONB object (jsonb_typeof = object)']
+  source_evidence text [not null, default: '']
+  sample_size integer [not null, default: 1]
+  observation_window_days integer [null]
+  confidence_score numeric(4,3) [not null, default: 1.000, note: '0.000..1.000']
+  confirmation_status varchar(25) [not null, default: 'UNCONFIRMED', note: 'UNCONFIRMED, CONFIRMED, REJECTED, EDITED']
+  confirmed_at timestamptz [null]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (user_id, memory_category, memory_key) [unique, name: 'uq_learner_memory_items_user_cat_key']
+    (user_id, memory_category, confirmation_status) [name: 'idx_learner_memory_items_user_cat']
+  }
+
+  Note: 'Structured Learner Memory (4 Categories × 3 Epistemic Levels) — NEW v3.2'
+}
+
+Table learner_concept_masteries {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null, ref: > users.id]
+  concept_id varchar(120) [not null, ref: > learning_concepts.concept_id]
+  mastery_score numeric(5,2) [not null, default: 0.00, note: '0.00..100.00']
+  mastery_level varchar(20) [not null, default: 'NOVICE', note: 'NOVICE, DEVELOPING, PROFICIENT, MASTERED']
+  evidence_count integer [not null, default: 0]
+  mistake_pattern_summary jsonb [not null, default: '[]', note: 'Controlled JSONB array']
+  last_practiced_at timestamptz [null]
+  next_review_at timestamptz [null]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (user_id, concept_id) [unique, name: 'uq_learner_concept_masteries_user_concept']
+    (user_id, next_review_at) [name: 'idx_learner_concept_masteries_user_review']
+    (concept_id) [name: 'idx_learner_concept_masteries_concept']
+  }
+
+  Note: 'Skill Mastery & Spaced Revision Tracking — NEW v3.2'
 }
 
 // ============================================================================
-// BOUNDED CONTEXT 2: PLANNING (5 TABLES)
+// BOUNDED CONTEXT 2: PLANNING (10 TABLES)
 // ============================================================================
 
 Table goals {
@@ -162,9 +264,15 @@ Table goals {
   title text [not null]
   raw_description text [not null]
   target_date date
-  status varchar(20) [not null, default: 'ACTIVE', note: 'ACTIVE, ARCHIVED']
+  status varchar(20) [not null, default: 'ACTIVE', note: 'DRAFT, CLARIFIED, ACTIVE, PAUSED, COMPLETED, ABANDONED']
+  prior_knowledge_level varchar(50) [not null, default: 'BEGINNER', note: 'BEGINNER, INTERMEDIATE, ADVANCED']
+  clarification_context text
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (user_id) [name: 'idx_goals_user_id']
+  }
 
   Note: 'High-level learning objective'
 }
@@ -172,16 +280,27 @@ Table goals {
 Table roadmaps {
   id uuid [pk, default: `gen_random_uuid()`]
   user_id uuid [not null, ref: > users.id]
-  goal_id uuid [not null, ref: > goals.id]
+  goal_id uuid [not null, unique, ref: - goals.id]
   title varchar(255) [not null]
   description text
   status varchar(20) [not null, default: 'INITIALIZED', note: 'INITIALIZED, ACTIVE, PAUSED, COMPLETED, ARCHIVED']
   start_date date
   target_date date
+  weekly_reschedule_budget smallint [not null, default: 3]
+  weekly_reschedule_used smallint [not null, default: 0]
+  budget_week_start date [not null, default: `CURRENT_DATE`]
+  last_study_activity_at timestamptz
+  reset_ritual_count smallint [not null, default: 0]
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz [not null, default: `now()`]
 
-  Note: 'Structured learning roadmap aggregate root'
+  indexes {
+    (user_id, status) [name: 'idx_roadmaps_user_status']
+    (goal_id) [name: 'idx_roadmaps_goal_id']
+    (status, last_study_activity_at) [name: 'idx_roadmaps_dormant_scan']
+  }
+
+  Note: 'Structured learning roadmap aggregate root with budget & dormancy tracking'
 }
 
 Table milestones {
@@ -190,23 +309,34 @@ Table milestones {
   sequence_order integer [not null]
   title varchar(255) [not null]
   description text
-  status varchar(20) [not null, default: 'PENDING', note: 'PENDING, IN_PROGRESS, COMPLETED']
+  status varchar(20) [not null, default: 'PENDING', note: 'PENDING, APPROVED, IN_PROGRESS, COMPLETED']
+  proof_status varchar(20) [not null, default: 'UNVERIFIED', note: 'UNVERIFIED, PENDING_REVIEW, PROVEN, NEEDS_REVIEW']
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz [not null, default: `now()`]
 
-  Note: 'Curricular milestones (Tier-1 decomposition)'
+  indexes {
+    (roadmap_id, sequence_order) [unique, name: 'uq_milestones_roadmap_seq']
+  }
+
+  Note: 'Curricular milestones (Tier-1 decomposition) with competence proof status'
 }
 
 Table official_schedules {
   id uuid [pk, default: `gen_random_uuid()`]
   roadmap_id uuid [not null, unique, ref: - roadmaps.id]
+  version_number integer [not null, default: 1]
+  strategy varchar(20) [not null, default: 'MERGE_EXISTING', note: 'MERGE_EXISTING, REPLACE_ALL']
   total_sessions integer [not null, default: 0]
   total_planned_minutes integer [not null, default: 0]
+  buffer_minutes_per_week integer [not null, default: 60]
+  recovery_window_days smallint [not null, default: 7]
+  daily_workload_cap_minutes integer [not null, default: 180]
+  stability_weight numeric(3,2) [not null, default: 0.80]
   activated_at timestamptz [not null, default: `now()`]
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz [not null, default: `now()`]
 
-  Note: 'Approved frozen schedule baseline'
+  Note: 'Approved frozen schedule baseline & Resilience Policy (Buffer, Cap, Stability)'
 }
 
 Table schedule_proposals {
@@ -214,12 +344,133 @@ Table schedule_proposals {
   roadmap_id uuid [not null, ref: > roadmaps.id]
   user_id uuid [not null, ref: > users.id]
   proposal_data jsonb [not null]
-  status varchar(20) [not null, default: 'DRAFT', note: 'DRAFT, APPLIED, REJECTED']
+  status varchar(20) [not null, default: 'DRAFT', note: 'DRAFT, APPLIED, DISCARDED']
+  proposal_type varchar(30) [not null, default: 'INITIAL_SCHEDULE', note: 'INITIAL_SCHEDULE, AI_RECOVERY, POST_FAILURE_RESET, WHAT_IF_SIMULATION, SCHEDULE_ONLY_REOPTIMIZE']
+  original_proposal_data jsonb
+  user_edit_count integer [not null, default: 0]
   applied_at timestamptz
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz [not null, default: `now()`]
 
-  Note: 'AI generated schedule draft prior to learner approval'
+  indexes {
+    (roadmap_id) [unique, name: 'uq_schedule_proposals_roadmap_draft']
+    (roadmap_id, status) [name: 'idx_schedule_proposals_roadmap_status']
+    (user_id) [name: 'idx_schedule_proposals_user_id']
+  }
+
+  Note: 'AI generated schedule draft & What-If Simulation with baseline capture for Proposal Edit Rate KPI'
+}
+
+Table learning_concepts {
+  concept_id varchar(120) [pk, note: 'Standard academic concept code (e.g. python.asyncio)']
+  title varchar(255) [not null]
+  summary text [not null]
+  domain varchar(100) [not null]
+  difficulty_level varchar(50) [not null, default: 'BEGINNER']
+  estimated_effort_minutes integer [not null, default: 60]
+  keywords jsonb [not null, default: '[]']
+  learning_outcomes jsonb [not null, default: '[]']
+  verification_status varchar(30) [not null, default: 'VERIFIED', note: 'VERIFIED, UNVERIFIED, DEPRECATED']
+  version varchar(20) [not null, default: '1.0.0']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (domain, difficulty_level, verification_status) [name: 'idx_learning_concepts_domain_level']
+  }
+
+  Note: 'Global Knowledge Base: standardized curriculum concepts'
+}
+
+Table concept_prerequisites {
+  source_concept_id varchar(120) [not null, ref: > learning_concepts.concept_id]
+  prerequisite_concept_id varchar(120) [not null, ref: > learning_concepts.concept_id]
+  relation_type varchar(30) [not null, default: 'REQUIRES', note: 'REQUIRES, RECOMMENDED_BEFORE']
+  rationale text [not null, default: '']
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (source_concept_id, prerequisite_concept_id) [pk]
+    (source_concept_id) [name: 'idx_concept_prerequisites_source']
+    (prerequisite_concept_id) [name: 'idx_concept_prerequisites_prereq']
+  }
+
+  Note: 'Directed knowledge dependency graph edges'
+}
+
+Table knowledge_sources {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null, ref: > users.id]
+  goal_id uuid [not null, ref: > goals.id]
+  source_type varchar(20) [not null, note: 'PDF, DOCX, TXT, URL']
+  title varchar(255) [not null]
+  source_uri text [null]
+  content_hash varchar(64) [not null, note: 'SHA-256 hex digest']
+  ingestion_status varchar(20) [not null, default: 'PENDING', note: 'PENDING, PROCESSING, INDEXED, FAILED, QUARANTINED']
+  chunk_count integer [not null, default: 0]
+  provenance_metadata jsonb [not null, default: '{}']
+  error_detail text [null]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (goal_id, ingestion_status) [name: 'idx_knowledge_sources_goal_status']
+    (user_id, created_at) [name: 'idx_knowledge_sources_user_created']
+  }
+
+  Note: 'Knowledge Engine input documents & URLs with SSRF guard and SHA-256 deduplication — NEW v3.2'
+}
+
+Table knowledge_chunks {
+  id uuid [pk, default: `gen_random_uuid()`]
+  source_id uuid [not null, ref: > knowledge_sources.id]
+  goal_id uuid [not null, ref: > goals.id]
+  chunk_index integer [not null]
+  section_title varchar(255) [null]
+  page_number integer [null]
+  content text [not null]
+  token_count integer [not null]
+  search_vector tsvector [null, note: 'GIN Full-Text Search index']
+  embedding vector(768) [null, note: 'HNSW pgvector 768-dim cosine similarity index']
+  provenance_json jsonb [not null, default: '{}']
+  created_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (source_id, chunk_index) [unique, name: 'uq_knowledge_chunks_source_idx']
+    (goal_id) [name: 'idx_knowledge_chunks_goal_id']
+    (search_vector) [type: gin, name: 'idx_knowledge_chunks_search_vector']
+    (embedding) [type: hnsw, name: 'idx_knowledge_chunks_embedding_hnsw']
+  }
+
+  Note: 'Hybrid RAG knowledge chunks (GIN tsvector + HNSW pgvector) — NEW v3.2'
+}
+
+Table schedule_blocks {
+  id uuid [pk, default: `gen_random_uuid()`]
+  roadmap_id uuid [not null, ref: > roadmaps.id]
+  official_schedule_id uuid [not null, ref: > official_schedules.id]
+  task_id uuid [null, ref: > tasks.id]
+  sequence_in_task smallint [not null, default: 1]
+  block_type varchar(20) [not null, default: 'STUDY', note: 'STUDY, BUFFER, REVISION, RECOVERY']
+  block_date date [not null]
+  start_time timestamptz [not null]
+  end_time timestamptz [not null]
+  scheduled_duration_minutes integer [not null, note: '10..240']
+  is_protected boolean [not null, default: false]
+  status varchar(20) [not null, default: 'PLANNED', note: 'PLANNED, COMPLETED, MISSED, RESCHEDULED, CANCELLED']
+  external_calendar_event_id varchar(255) [null]
+  placement_rationale text [null]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (roadmap_id, block_date, start_time) [name: 'idx_schedule_blocks_roadmap_date']
+    (official_schedule_id) [name: 'idx_schedule_blocks_schedule_id']
+    (task_id) [name: 'idx_schedule_blocks_task_id']
+    (external_calendar_event_id) [name: 'idx_schedule_blocks_external_event']
+  }
+
+  Note: 'Decoupled execution schedule blocks & 2-way External Calendar event mapping — NEW v3.2'
 }
 
 // ============================================================================
@@ -231,9 +482,12 @@ Table tasks {
   roadmap_id uuid [not null, ref: > roadmaps.id]
   milestone_id uuid [not null, ref: > milestones.id]
   official_schedule_id uuid [ref: > official_schedules.id]
+  parent_task_id uuid [ref: > tasks.id]
+  concept_id varchar(120) [ref: > learning_concepts.concept_id]
   title varchar(255) [not null]
   description text
-  estimated_minutes integer [not null]
+  estimated_minutes integer [not null, note: '15..240 (AI estimated effort)']
+  learning_resources_json jsonb [not null, default: '[]', note: 'Controlled JSONB array of RAG source citations']
   scheduled_date date
   scheduled_start timestamptz
   scheduled_end timestamptz
@@ -243,7 +497,18 @@ Table tasks {
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz [not null, default: `now()`]
 
-  Note: 'Actionable micro-learning unit'
+  indexes {
+    (roadmap_id, scheduled_date) [name: 'idx_tasks_roadmap_scheduled_date']
+    (scheduled_start) [name: 'idx_tasks_scheduled_start']
+    (scheduled_date) [name: 'idx_tasks_overdue']
+    (milestone_id) [name: 'idx_tasks_milestone_id']
+    (official_schedule_id) [name: 'idx_tasks_official_schedule_id']
+    (parent_task_id) [name: 'idx_tasks_parent_task_id']
+    (concept_id) [name: 'idx_tasks_concept_id']
+    (roadmap_id, milestone_id, reschedule_count) [name: 'idx_tasks_backlog_queue']
+  }
+
+  Note: 'Actionable micro-learning unit with subtask hierarchy, concept mapping & RAG citations'
 }
 
 Table task_dependencies {
@@ -254,6 +519,13 @@ Table task_dependencies {
   is_mandatory boolean [not null, default: true]
   created_at timestamptz [not null, default: `now()`]
 
+  indexes {
+    (predecessor_id, successor_id) [unique, name: 'uq_task_deps_pair']
+    (successor_id) [name: 'idx_task_deps_successor']
+    (predecessor_id) [name: 'idx_task_deps_predecessor']
+    (roadmap_id) [name: 'idx_task_deps_roadmap']
+  }
+
   Note: 'Directed Acyclic Graph (DAG) task prerequisites'
 }
 
@@ -261,16 +533,30 @@ Table study_sessions {
   id uuid [pk, default: `gen_random_uuid()`]
   user_id uuid [not null, ref: > users.id]
   roadmap_id uuid [not null, ref: > roadmaps.id]
+  session_mode varchar(20) [not null, default: 'STANDARD', note: 'STANDARD, MVS']
+  timer_mode varchar(20) [not null, default: 'POMODORO', note: 'POMODORO, STOPWATCH']
   started_at timestamptz [not null, default: `now()`]
   ended_at timestamptz
   planned_minutes integer [not null]
   actual_minutes integer [not null, default: 0]
-  status varchar(20) [not null, default: 'IN_PROGRESS', note: 'IN_PROGRESS, COMPLETED, ABANDONED']
+  status varchar(20) [not null, default: 'IN_PROGRESS', note: 'IN_PROGRESS, COMPLETED, PARTIAL_COMPLETED, CANCELLED']
+  pending_takeaway boolean [not null, default: false]
+  checkin_time_sufficiency varchar(20) [null, note: 'ENOUGH, TIGHT, INSUFFICIENT']
+  checkin_perceived_difficulty varchar(20) [null, note: 'EASY, AS_EXPECTED, HARDER']
+  checkin_focus_level smallint [null, note: '1..5']
   last_heartbeat_at timestamptz [not null, default: `now()`]
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz [not null, default: `now()`]
 
-  Note: 'Pomodoro or Stopwatch study session execution unit'
+  indexes {
+    (user_id) [unique, name: 'uq_study_sessions_user_active']
+    (user_id, started_at) [name: 'idx_study_sessions_user_started']
+    (roadmap_id, started_at) [name: 'idx_study_sessions_roadmap_started']
+    (last_heartbeat_at) [name: 'idx_study_sessions_heartbeat']
+    (user_id, ended_at) [name: 'idx_study_sessions_pending_takeaway']
+  }
+
+  Note: 'Study session execution unit with MVS support, Daily Learning Check-in & takeaway obligation gate'
 }
 
 Table session_tasks {
@@ -279,12 +565,18 @@ Table session_tasks {
   task_id uuid [not null, ref: > tasks.id]
   allocated_minutes integer [not null, default: 0]
   actual_minutes integer [not null, default: 0]
-  status_after_session varchar(20) [not null, default: 'IN_PROGRESS', note: 'IN_PROGRESS, COMPLETED, BLOCKED']
+  status_after_session varchar(20) [not null, default: 'IN_PROGRESS', note: 'TODO, IN_PROGRESS, COMPLETED']
   notes text
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz [not null, default: `now()`]
 
-  Note: 'Association entity linking sessions to executed tasks'
+  indexes {
+    (session_id, task_id) [unique, name: 'uq_session_tasks_session_task']
+    (task_id) [name: 'idx_session_tasks_task_id']
+    (session_id) [name: 'idx_session_tasks_session_id']
+  }
+
+  Note: 'Association entity linking sessions to executed tasks (ON DELETE RESTRICT)'
 }
 
 Table study_notes {
@@ -292,28 +584,42 @@ Table study_notes {
   user_id uuid [not null, ref: > users.id]
   session_id uuid [ref: > study_sessions.id]
   task_id uuid [ref: > tasks.id]
-  note_type varchar(20) [not null, note: 'SCRATCHPAD, KEY_TAKEAWAY, REFLECTION']
+  note_type varchar(20) [not null, note: 'SCRATCHPAD, TAKEAWAY, GENERAL']
   content text [not null, default: '']
+  self_confidence smallint [note: 'Likert 1..5']
+  ai_evidence_score numeric(3,2) [note: '1.00..5.00']
+  alignment_flag varchar(25) [not null, default: 'UNCHECKED', note: 'UNCHECKED, ALIGNED, SUPERFICIAL, OFF_TOPIC, CONTRADICTORY']
+  verification_status varchar(25) [not null, default: 'PENDING_PROVE', note: 'PENDING_PROVE, VERIFIED, FLAGGED_SHALLOW, NEEDS_REVIEW']
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz [not null, default: `now()`]
 
-  Note: 'Learner markdown notes and reflection takeaways'
+  indexes {
+    (session_id, task_id) [unique, name: 'uq_study_notes_takeaway']
+    (user_id, session_id) [name: 'idx_study_notes_user_session']
+    (task_id) [name: 'idx_study_notes_task_id']
+  }
+
+  Note: 'Learner markdown notes with SRL cognitive evaluation & calibration metrics'
 }
 
 // ============================================================================
-// BOUNDED CONTEXT 4: EVALUATION & ADAPTATION (3 TABLES)
+// BOUNDED CONTEXT 4: EVALUATION & ADAPTATION (4 TABLES)
 // ============================================================================
 
 Table pause_records {
   id uuid [pk, default: `gen_random_uuid()`]
   roadmap_id uuid [not null, ref: > roadmaps.id]
   pause_start_date date [not null]
-  pause_end_date date [not null]
-  shifted_days integer [not null]
+  pause_end_date date [null]
+  shifted_days integer [null]
   reason text
-  status varchar(20) [not null, default: 'ACTIVE', note: 'ACTIVE, RESUMED']
+  status varchar(20) [not null, default: 'ACTIVE', note: 'ACTIVE, COMPLETED']
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (roadmap_id) [name: 'idx_pause_records_roadmap_id']
+  }
 
   Note: 'Roadmap pause intervals and Domino Shift ledger'
 }
@@ -323,19 +629,27 @@ Table ai_reviews {
   roadmap_id uuid [not null, ref: > roadmaps.id]
   user_id uuid [not null, ref: > users.id]
   milestone_id uuid [ref: > milestones.id]
-  review_cycle varchar(20) [not null, note: 'WEEKLY, MILESTONE_END']
+  review_cycle varchar(20) [not null, note: 'WEEKLY, MILESTONE']
   period_start date
   period_end date
   quantitative_summary jsonb [not null, default: '{}']
+  user_reflection_payload jsonb [not null, default: '{}']
   strengths_feedback text [not null]
   bottlenecks_feedback text [not null]
   action_recommendations text [not null]
-  model_used varchar(100) [not null]
+  model_used varchar(100) [not null, default: 'gemini-2.5-flash']
   generated_at timestamptz [not null, default: `now()`]
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz [not null, default: `now()`]
 
-  Note: 'Periodic AI pedagogical feedback based on Zimmerman SRL'
+  indexes {
+    (roadmap_id, period_start, period_end) [unique, name: 'uq_ai_reviews_weekly']
+    (roadmap_id, milestone_id) [unique, name: 'uq_ai_reviews_milestone']
+    (roadmap_id, review_cycle, generated_at) [name: 'idx_ai_reviews_roadmap_cycle']
+    (user_id) [name: 'idx_ai_reviews_user_id']
+  }
+
+  Note: 'Periodic AI pedagogical feedback & Weekly Reflection based on Zimmerman SRL'
 }
 
 Table schedule_change_logs {
@@ -343,18 +657,57 @@ Table schedule_change_logs {
   roadmap_id uuid [not null, ref: > roadmaps.id]
   schedule_id uuid [ref: > official_schedules.id]
   task_id uuid [ref: > tasks.id]
-  trigger_type varchar(30) [not null, note: 'DOMINO_SHIFT, MANUAL_DRAG, AI_RESCHEDULE, OVERDUE_AUTO']
+  trigger_type varchar(30) [not null, note: 'DOMINO_SHIFT, MANUAL_PROACTIVE_EDIT, OVERDUE_RESCHEDULE, AI_REPLAN, STALLED_COMMITMENT_CONTRACT, BACKLOG_QUEUE_MOVE, POST_FAILURE_RESET, CALENDAR_SYNC']
   reason text
   affected_tasks_count integer [not null, default: 1]
   total_shifted_minutes integer [not null, default: 0]
   diff_payload jsonb [not null, default: '{}']
+  disruption_category varchar(30) [not null, default: 'UNSPECIFIED', note: 'UNSPECIFIED, LEGITIMATE_HEALTH, LEGITIMATE_WORK_SCHOOL, LEGITIMATE_EXTERNAL_CALENDAR, OVERLOAD_TASK_TOO_LARGE, OVERLOAD_PREREQUISITE_GAP, PROCRASTINATION_LOW_ENERGY, PROCRASTINATION_AVOIDANCE']
+  counts_toward_budget boolean [not null, default: false]
   created_at timestamptz [not null, default: `now()`]
 
-  Note: 'Audit log of schedule mutations and shifts'
+  indexes {
+    (roadmap_id, created_at) [name: 'idx_sched_change_logs_roadmap_created']
+    (trigger_type, created_at) [name: 'idx_sched_change_logs_trigger']
+    (schedule_id) [name: 'idx_sched_change_logs_schedule_id']
+    (task_id) [name: 'idx_sched_change_logs_task_id']
+  }
+
+  Note: 'Immutable audit log of schedule mutations with disruption taxonomy'
+}
+
+Table milestone_proofs {
+  id uuid [pk, default: `gen_random_uuid()`]
+  milestone_id uuid [not null, ref: > milestones.id]
+  roadmap_id uuid [not null, ref: > roadmaps.id]
+  user_id uuid [not null, ref: > users.id]
+  attempt_no smallint [not null, default: 1]
+  recall_exchanges_payload jsonb [not null, default: '[]']
+  mistake_taxonomy_json jsonb [not null, default: '[]', note: 'Controlled JSONB array: MISSING_FOUNDATION, CONCEPT_MISCONCEPTION, PROCESS_ERROR, LACK_OF_PRACTICE']
+  avg_self_confidence numeric(3,2) [not null, note: '1.00..5.00']
+  ai_evidence_score numeric(3,2) [not null, note: '1.00..5.00']
+  calibration_gap numeric(4,2) [note: 'GENERATED ALWAYS AS (avg_self_confidence - ai_evidence_score) STORED']
+  proof_verdict varchar(25) [not null, default: 'PENDING', note: 'PENDING, PROVEN, NEEDS_REVIEW, FLAGGED_SHALLOW']
+  feedback_summary text [not null, default: '']
+  corrective_task_id uuid [ref: > tasks.id]
+  model_used varchar(100) [not null, default: 'gemini-2.5-flash']
+  evaluated_at timestamptz [not null, default: `now()`]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (milestone_id, attempt_no) [unique, name: 'uq_milestone_proofs_attempt']
+    (milestone_id, attempt_no) [name: 'idx_milestone_proofs_milestone']
+    (user_id, proof_verdict, evaluated_at) [name: 'idx_milestone_proofs_user_verdict']
+    (roadmap_id) [name: 'idx_milestone_proofs_roadmap_id']
+    (corrective_task_id) [name: 'idx_milestone_proofs_corrective_task_id']
+  }
+
+  Note: 'Prove Mode: AI Recall Check evidence, Mistake Intelligence & competence verification attempts'
 }
 
 // ============================================================================
-// SHARED KERNEL: TRANSACTIONAL INFRASTRUCTURE (2 TABLES)
+// SHARED KERNEL: TRANSACTIONAL INFRASTRUCTURE & DURABLE WORKFLOWS (4 TABLES)
 // ============================================================================
 
 Table outbox_events {
@@ -368,6 +721,11 @@ Table outbox_events {
   correlation_id varchar(64)
   created_at timestamptz [not null, default: `now()`]
   published_at timestamptz
+
+  indexes {
+    (created_at) [name: 'idx_outbox_events_pending']
+    (aggregate_type, aggregate_id) [name: 'idx_outbox_events_aggregate']
+  }
 
   Note: 'Transactional Outbox pattern for guaranteed at-least-once event delivery'
 }
@@ -384,31 +742,85 @@ Table processed_events {
   Note: 'Idempotent consumer ledger preventing duplicate handler execution'
 }
 
+Table workflow_runs {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null, ref: > users.id]
+  goal_id uuid [null, ref: > goals.id]
+  roadmap_id uuid [null, ref: > roadmaps.id]
+  workflow_type varchar(40) [not null, note: 'PLAN_CREATION, SCHEDULE_GENERATION, OVERDUE_RECOVERY, WEEKLY_REVIEW, CONTINUOUS_LEARNING']
+  current_step varchar(60) [not null]
+  status varchar(25) [not null, default: 'RUNNING', note: 'RUNNING, PAUSED_WAITING_USER, COMPLETED, FAILED, CANCELLED']
+  context_snapshot jsonb [not null, default: '{}']
+  error_detail text [null]
+  started_at timestamptz [not null, default: `now()`]
+  paused_at timestamptz [null]
+  completed_at timestamptz [null]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (user_id, status, updated_at) [name: 'idx_workflow_runs_user_status']
+    (roadmap_id, workflow_type) [name: 'idx_workflow_runs_roadmap_type']
+    (goal_id) [name: 'idx_workflow_runs_goal_id']
+  }
+
+  Note: 'Durable workflow orchestration state for 5 core workflows — NEW v3.2'
+}
+
+Table workflow_step_executions {
+  id uuid [pk, default: `gen_random_uuid()`]
+  workflow_run_id uuid [not null, ref: > workflow_runs.id]
+  step_name varchar(60) [not null]
+  step_order smallint [not null]
+  status varchar(25) [not null, default: 'RUNNING', note: 'PENDING, RUNNING, WAITING_USER, COMPLETED, FAILED, SKIPPED']
+  input_summary jsonb [not null, default: '{}']
+  output_payload jsonb [not null, default: '{}']
+  ai_usage_log_id uuid [null, ref: > ai_usage_logs.id]
+  retry_count smallint [not null, default: 0]
+  started_at timestamptz [not null, default: `now()`]
+  completed_at timestamptz [null]
+
+  indexes {
+    (workflow_run_id, step_order) [name: 'idx_workflow_step_executions_run_order']
+    (ai_usage_log_id) [name: 'idx_workflow_step_executions_ai_log_id']
+  }
+
+  Note: 'Step-by-step checkpoint & LLM execution trace for durable workflows — NEW v3.2'
+}
+
 // ============================================================================
-// TABLE GROUPS FOR DBMGRAPH / DBDATAGROUP VISUALIZATION
+// TABLE GROUPS FOR DBMGRAPH / DBDATAGROUP VISUALIZATION (COLOR CODED BY CONTEXT)
 // ============================================================================
 
-TableGroup AccountContext {
+TableGroup AccountContext [color: #4F46E5] {
   users
   learner_profiles
   webcal_tokens
+  calendar_connections
   availabilities
   availability_slots
   ai_quotas
   ai_quota_reservations
   ai_usage_logs
   payment_transactions
+  learner_memory_items
+  learner_concept_masteries
 }
 
-TableGroup PlanningContext {
+TableGroup PlanningContext [color: #059669] {
   goals
   roadmaps
   milestones
   official_schedules
   schedule_proposals
+  learning_concepts
+  concept_prerequisites
+  knowledge_sources
+  knowledge_chunks
+  schedule_blocks
 }
 
-TableGroup ExecutionContext {
+TableGroup ExecutionContext [color: #D97706] {
   tasks
   task_dependencies
   study_sessions
@@ -416,13 +828,16 @@ TableGroup ExecutionContext {
   study_notes
 }
 
-TableGroup EvaluationContext {
+TableGroup EvaluationContext [color: #DB2777] {
   pause_records
   ai_reviews
   schedule_change_logs
+  milestone_proofs
 }
 
-TableGroup SharedKernel {
+TableGroup SharedKernel [color: #64748B] {
   outbox_events
   processed_events
+  workflow_runs
+  workflow_step_executions
 }
