@@ -1,28 +1,45 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
+import { FloatingNavbarComponent } from '../../shared/components/floating-navbar/floating-navbar.component';
+import { LandingFooterComponent } from '../../shared/components/landing-footer/landing-footer.component';
+import { BentoCardComponent } from '../../shared/components/bento-card/bento-card.component';
+import { TestimonialCardComponent } from '../../shared/components/testimonial-card/testimonial-card.component';
+import { SkeletonLoaderComponent } from '../../shared/ui/skeleton-loader/skeleton-loader.component';
+import {
+  InteractiveWorkspaceComponent,
+  WorkspaceTab,
+} from '../../shared/components/interactive-workspace/interactive-workspace.component';
+import {
+  ScenarioId,
+  ScenarioMilestone,
+  StudyScenario,
+  StudyScenariosComponent,
+} from '../../shared/components/study-scenarios/study-scenarios.component';
 
-export interface ScenarioMilestone {
-  timeframe: string;
-  title: string;
-  description: string;
-  status: string;
-  statusType: 'completed' | 'in-progress' | 'upcoming';
-}
+export type { ScenarioMilestone, StudyScenario };
 
-export interface StudyScenario {
-  id: 'thesis' | 'aws' | 'ai';
-  tabTitle: string;
-  title: string;
-  objective: string;
-  durationBadge: string;
-  milestones: ScenarioMilestone[];
+export interface TestimonialItem {
+  quote: string;
+  authorName: string;
+  authorRole: string;
+  avatarInitials: string;
+  badgeColor: string;
 }
 
 @Component({
   selector: 'app-landing',
   standalone: true,
-  imports: [RouterLink],
+  imports: [
+    RouterLink,
+    FloatingNavbarComponent,
+    LandingFooterComponent,
+    BentoCardComponent,
+    TestimonialCardComponent,
+    SkeletonLoaderComponent,
+    InteractiveWorkspaceComponent,
+    StudyScenariosComponent,
+  ],
   templateUrl: './landing.component.html',
   styleUrl: './landing.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -30,11 +47,11 @@ export interface StudyScenario {
 export class LandingComponent {
   protected readonly authService = inject(AuthService);
 
-  readonly activeWorkspaceTab = signal<'dag' | 'schedule' | 'pomodoro'>('dag');
-  readonly activeScenario = signal<'thesis' | 'aws' | 'ai'>('thesis');
+  readonly activeWorkspaceTab = signal<WorkspaceTab>('dag');
+  readonly activeScenario = signal<ScenarioId>('thesis');
   readonly mobileMenuOpen = signal<boolean>(false);
 
-  readonly scenarios: Record<'thesis' | 'aws' | 'ai', StudyScenario> = {
+  readonly scenarios: Record<ScenarioId, StudyScenario> = {
     thesis: {
       id: 'thesis',
       tabTitle: 'Khóa luận Tốt nghiệp CNTT',
@@ -129,11 +146,38 @@ export class LandingComponent {
 
   readonly currentScenario = computed(() => this.scenarios[this.activeScenario()]);
 
-  setWorkspaceTab(tab: 'dag' | 'schedule' | 'pomodoro'): void {
+  readonly testimonials: TestimonialItem[] = [
+    {
+      quote:
+        'Tính năng Domino Shift đã cứu sống khóa luận của mình. Mỗi lần làm thêm ở công ty về muộn, ứng dụng tự tính toán lại mà mình không hề cảm thấy tội lỗi hay nản chí.',
+      authorName: 'Đăng Nguyên',
+      authorRole: 'Thủ khoa CNTT • ĐH Bách Khoa',
+      avatarInitials: 'ĐN',
+      badgeColor: 'bg-secondary-container text-on-secondary-container',
+    },
+    {
+      quote:
+        'Giao diện phẳng, sạch và tinh tế như một cuốn sổ da đắt tiền. Không có chuông báo phiền nhiễu hay gamification trẻ con. Rất chuẩn mực cho người làm kỹ thuật.',
+      authorName: 'Thanh Loan',
+      authorRole: 'Senior Backend Engineer',
+      avatarInitials: 'TL',
+      badgeColor: 'bg-surface-container-high text-on-surface',
+    },
+    {
+      quote:
+        'Việc phân rã đồ thị tri thức giúp mình thi đỗ chứng chỉ AWS chỉ trong 5 tuần tự học mỗi tối. Một công cụ định hình tư duy xuất sắc.',
+      authorName: 'Minh Huy',
+      authorRole: 'Cloud Solutions Architect',
+      avatarInitials: 'MH',
+      badgeColor: 'bg-tertiary-fixed text-on-tertiary-fixed',
+    },
+  ];
+
+  setWorkspaceTab(tab: WorkspaceTab): void {
     this.activeWorkspaceTab.set(tab);
   }
 
-  setScenario(scenario: 'thesis' | 'aws' | 'ai'): void {
+  setScenario(scenario: ScenarioId): void {
     this.activeScenario.set(scenario);
   }
 

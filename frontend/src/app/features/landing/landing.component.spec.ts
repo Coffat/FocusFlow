@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, DeferBlockBehavior, DeferBlockState, TestBed } from '@angular/core/testing';
 import { signal, WritableSignal } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { LandingComponent } from './landing.component';
@@ -9,11 +9,22 @@ describe('LandingComponent', () => {
   let fixture: ComponentFixture<LandingComponent>;
   let mockIsAuthenticated: WritableSignal<boolean>;
 
+  beforeAll(() => {
+    if (typeof (globalThis as any).IntersectionObserver === 'undefined') {
+      (globalThis as any).IntersectionObserver = class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      };
+    }
+  });
+
   beforeEach(async () => {
     mockIsAuthenticated = signal(false);
 
     await TestBed.configureTestingModule({
       imports: [LandingComponent],
+      deferBlockBehavior: DeferBlockBehavior.Playthrough,
       providers: [
         provideRouter([]),
         {
@@ -28,6 +39,12 @@ describe('LandingComponent', () => {
     fixture = TestBed.createComponent(LandingComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
+
+    // Render all defer blocks so below-the-fold content is populated in tests
+    const deferBlocks = await fixture.getDeferBlocks();
+    for (const deferBlock of deferBlocks) {
+      await deferBlock.render(DeferBlockState.Complete);
+    }
   });
 
   it('should initialize component with default state', () => {
