@@ -1,4 +1,4 @@
-@keyframes shimmer {
+@keyframes shimmerSweep {
   0% {
     background-position: -200% 0;
   }
@@ -10,18 +10,18 @@
 .skeleton-shimmer {
   background: linear-gradient(
     90deg,
-    rgba(229, 226, 225, 0.45) 0%,
-    rgba(255, 255, 255, 0.75) 50%,
-    rgba(229, 226, 225, 0.45) 100%
+    rgba(235, 231, 231, 0.6) 0%,
+    rgba(255, 255, 255, 0.95) 50%,
+    rgba(235, 231, 231, 0.6) 100%
   );
   background-size: 200% 100%;
-  animation: shimmer 1.8s ease-in-out infinite;
+  animation: shimmerSweep 1.6s infinite ease-in-out;
   will-change: background-position;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .skeleton-shimmer {
     animation: none !important;
-    background: rgba(229, 226, 225, 0.6) !important;
+    background: rgba(235, 231, 231, 0.6) !important;
   }
 }

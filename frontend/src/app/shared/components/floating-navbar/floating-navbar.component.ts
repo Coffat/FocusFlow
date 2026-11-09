@@ -1,4 +1,13 @@
-import { ChangeDetectionStrategy, Component, input, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  HostListener,
+  PLATFORM_ID,
+  inject,
+  input,
+  signal,
+} from '@angular/core';
+import { isPlatformBrowser } from '@angular/common';
 import { RouterLink } from '@angular/router';
 
 export interface NavLink {
@@ -15,6 +24,8 @@ export interface NavLink {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class FloatingNavbarComponent {
+  private readonly platformId = inject(PLATFORM_ID);
+
   readonly brandName = input<string>('FocusFlow');
   readonly navLinks = input<NavLink[]>([
     { label: 'Phương pháp', href: '#methodology' },
@@ -28,6 +39,14 @@ export class FloatingNavbarComponent {
   readonly registerUrl = input<string>('/sign-up');
 
   readonly mobileMenuOpen = signal<boolean>(false);
+  readonly isScrolled = signal<boolean>(false);
+
+  @HostListener('window:scroll')
+  onWindowScroll(): void {
+    if (isPlatformBrowser(this.platformId) && typeof window !== 'undefined') {
+      this.isScrolled.set(window.scrollY > 20);
+    }
+  }
 
   toggleMobileMenu(): void {
     this.mobileMenuOpen.update((v) => !v);

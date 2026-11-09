@@ -106,3 +106,23 @@ body {
   padding: 0;
   -webkit-font-smoothing: antialiased;
 }
+
+/* Attio/Linear-style Scroll Reveal Directive */
+[appScrollReveal] {
+  will-change: opacity, transform;
+}
+
+[appScrollReveal].is-revealed {
+  opacity: 1 !important;
+  transform: translate(0, 0) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [appScrollReveal],
+  [appScrollReveal].is-revealed {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+    animation: none !important;
+  }
+}

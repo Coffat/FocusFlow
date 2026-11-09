@@ -80,7 +80,7 @@ describe('LandingComponent', () => {
       await fixture.whenStable();
 
       expect(compiled.textContent).toContain('Không Gian Học Sâu Pomodoro Zen');
-      expect(compiled.textContent).toContain('18:42');
+      expect(compiled.textContent).toContain('25:00');
 
       component.setWorkspaceTab('dag');
       fixture.detectChanges();

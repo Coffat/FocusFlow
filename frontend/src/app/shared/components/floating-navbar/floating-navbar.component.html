@@ -1,7 +1,9 @@
 <!-- FLOATING CAPSULE NAVBAR -->
 <header class="fixed top-6 left-1/2 -translate-x-1/2 z-50 max-w-4xl w-[calc(100%-2rem)]">
   <nav
-    class="rounded-full bg-white/90 backdrop-blur-md border border-outline-variant/60 shadow-[0_4px_20px_-2px_rgba(17,17,17,0.05)] flex items-center justify-between gap-4 px-5 sm:px-6 py-2.5"
+    [class]="isScrolled()
+      ? 'rounded-full bg-white/95 backdrop-blur-xl border border-outline-variant/80 shadow-[0_12px_36px_-4px_rgba(17,17,17,0.12)] flex items-center justify-between gap-4 px-5 sm:px-6 py-2.5 transition-all duration-300'
+      : 'rounded-full bg-white/90 backdrop-blur-md border border-outline-variant/60 shadow-[0_4px_20px_-2px_rgba(17,17,17,0.05)] flex items-center justify-between gap-4 px-5 sm:px-6 py-2.5 transition-all duration-300'"
     aria-label="Điều hướng chính"
   >
     <!-- Brand Logo -->
@@ -35,7 +37,7 @@
       @if (isAuthenticated()) {
         <a
           [routerLink]="dashboardUrl()"
-          class="inline-flex items-center justify-center gap-1.5 bg-primary text-white hover:bg-primary-container px-4 py-1.5 rounded-full text-xs font-semibold font-sans transition-all duration-150 shadow-sm"
+          class="inline-flex items-center justify-center gap-1.5 bg-primary text-white hover:bg-primary-container px-4 py-1.5 rounded-full text-xs font-semibold font-sans transition-all duration-200 shadow-sm hover:scale-[1.02] active:scale-[0.98] hover:shadow-[0_4px_20px_rgba(36,107,74,0.3)]"
         >
           <span>Vào Dashboard</span>
           <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
@@ -49,7 +51,7 @@
         </a>
         <a
           [routerLink]="registerUrl()"
-          class="inline-flex items-center justify-center bg-on-surface text-white hover:bg-primary px-4 py-1.5 rounded-full text-xs font-semibold font-sans transition-all duration-150 shadow-sm"
+          class="inline-flex items-center justify-center bg-on-surface text-white hover:bg-primary px-4 py-1.5 rounded-full text-xs font-semibold font-sans transition-all duration-200 shadow-sm hover:scale-[1.02] active:scale-[0.98] hover:shadow-[0_4px_20px_rgba(36,107,74,0.3)]"
         >
           Bắt đầu ngay
         </a>

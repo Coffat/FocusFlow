@@ -64,4 +64,16 @@ describe('FloatingNavbarComponent', () => {
     expect(preventSpy).toHaveBeenCalled();
     expect(component.mobileMenuOpen()).toBe(false);
   });
+
+  it('should update isScrolled when window is scrolled past threshold', () => {
+    expect(component.isScrolled()).toBe(false);
+
+    Object.defineProperty(window, 'scrollY', { value: 50, writable: true });
+    component.onWindowScroll();
+    expect(component.isScrolled()).toBe(true);
+
+    Object.defineProperty(window, 'scrollY', { value: 10, writable: true });
+    component.onWindowScroll();
+    expect(component.isScrolled()).toBe(false);
+  });
 });

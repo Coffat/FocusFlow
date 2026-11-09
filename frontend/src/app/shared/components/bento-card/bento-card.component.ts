@@ -46,6 +46,6 @@ export class BentoCardComponent {
               ? 'md:col-span-6'
               : `md:col-span-${span}`;
 
-    return `${spanClass} hairline-card rounded-xl p-6 md:p-8 flex flex-col justify-between hover:-translate-y-0.5 hover:shadow-md transition-all duration-200`;
+    return `${spanClass} hairline-card rounded-xl p-6 md:p-8 flex flex-col justify-between hover:-translate-y-1.5 hover:shadow-[0_16px_36px_-6px_rgba(0,0,0,0.08)] hover:border-primary/50 transition-all duration-250`;
   });
 }

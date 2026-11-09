@@ -6,7 +6,12 @@
   <!-- HERO SECTION -->
   <section class="max-w-5xl mx-auto px-6 text-center pt-8 md:pt-14 pb-12">
     <!-- Eyebrow Pill Badge -->
-    <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white border border-outline-variant/60 shadow-[0_2px_12px_rgba(0,0,0,0.03)] mb-6 transition-all">
+    <div
+      appScrollReveal
+      [revealDelay]="0"
+      revealDirection="up"
+      class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white border border-outline-variant/60 shadow-[0_2px_12px_rgba(0,0,0,0.03)] mb-6 transition-all"
+    >
       <span class="w-2 h-2 rounded-full bg-primary-container breathing-dot"></span>
       <span class="text-[11px] font-sans text-on-surface-variant font-medium tracking-wide">
         Rõ từng lộ trình • Xếp lịch thông minh • Kỹ năng thành hình
@@ -14,22 +19,37 @@
     </div>
 
     <!-- Headline -->
-    <h1 class="font-serif-headline text-3xl sm:text-4xl md:text-5xl text-on-surface max-w-3xl mx-auto tracking-tight leading-[1.14]">
+    <h1
+      appScrollReveal
+      [revealDelay]="50"
+      revealDirection="up"
+      class="font-serif-headline text-3xl sm:text-4xl md:text-5xl text-on-surface max-w-3xl mx-auto tracking-tight leading-[1.14]"
+    >
       Lộ trình tự học thích ứng.<br />
       <span class="italic font-normal text-primary">Xếp lịch thông minh theo nhịp sống thực.</span>
     </h1>
 
     <!-- Subheadline -->
-    <p class="mt-6 text-base md:text-lg text-on-surface-variant max-w-2xl mx-auto font-normal font-sans leading-relaxed">
+    <p
+      appScrollReveal
+      [revealDelay]="100"
+      revealDirection="up"
+      class="mt-6 text-base md:text-lg text-on-surface-variant max-w-2xl mx-auto font-normal font-sans leading-relaxed"
+    >
       Tự động phân rã mục tiêu lớn thành lộ trình khả thi, điều phối thời gian theo lịch rảnh thực tế và tự cân bằng thông minh khi có việc đột xuất — không dồn ép, không cảm giác tội lỗi.
     </p>
 
     <!-- CTA Cluster -->
-    <div class="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3.5">
+    <div
+      appScrollReveal
+      [revealDelay]="150"
+      revealDirection="up"
+      class="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3.5"
+    >
       @if (authService.isAuthenticated()) {
         <a
           routerLink="/dashboard"
-          class="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-primary text-white hover:bg-primary-container px-7 py-3 rounded-full text-sm font-semibold font-sans transition-all duration-150 shadow-[0_2px_10px_rgba(0,0,0,0.08)]"
+          class="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-primary text-white hover:bg-primary-container px-7 py-3 rounded-full text-sm font-semibold font-sans transition-all duration-200 shadow-[0_2px_10px_rgba(0,0,0,0.08)] hover:scale-[1.02] active:scale-[0.98] hover:shadow-[0_4px_24px_rgba(36,107,74,0.3)] cursor-pointer"
         >
           <span>Vào Dashboard của bạn</span>
           <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
@@ -37,7 +57,7 @@
       } @else {
         <a
           routerLink="/sign-up"
-          class="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-on-surface text-white hover:bg-primary-container px-7 py-3 rounded-full text-sm font-semibold font-sans transition-all duration-150 shadow-[0_2px_10px_rgba(0,0,0,0.08)]"
+          class="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-on-surface text-white hover:bg-primary-container px-7 py-3 rounded-full text-sm font-semibold font-sans transition-all duration-200 shadow-[0_2px_10px_rgba(0,0,0,0.08)] hover:scale-[1.02] active:scale-[0.98] hover:shadow-[0_4px_24px_rgba(36,107,74,0.3)] cursor-pointer"
         >
           <span>Tạo lộ trình ngay — Hoàn toàn miễn phí</span>
           <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
@@ -46,7 +66,7 @@
       <a
         href="#scenarios"
         (click)="scrollTo('scenarios', $event)"
-        class="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-white border border-outline-variant/60 text-on-surface hover:bg-surface-container-low px-6 py-3 rounded-full text-sm font-semibold font-sans transition-all duration-150"
+        class="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-white border border-outline-variant/60 text-on-surface hover:bg-surface-container-low px-6 py-3 rounded-full text-sm font-semibold font-sans transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
       >
         <span class="material-symbols-outlined text-[18px] text-on-surface-variant">explore</span>
         <span>Khám phá kịch bản mẫu</span>
@@ -54,13 +74,23 @@
     </div>
 
     <!-- INTERACTIVE WORKSPACE CANVAS (Attio-Style Precision Board) -->
-    <div class="mt-14">
+    <div
+      class="mt-14"
+      appScrollReveal
+      [revealDelay]="200"
+      revealDirection="up"
+    >
       <app-interactive-workspace [(activeTab)]="activeWorkspaceTab" />
     </div>
   </section>
 
   <!-- ACADEMIC & INDUSTRY PARTNER STRIP -->
-  <section class="max-w-5xl mx-auto px-6 py-10 border-t border-b border-outline-variant/30 text-center">
+  <section
+    appScrollReveal
+    [revealDelay]="100"
+    revealDirection="up"
+    class="max-w-5xl mx-auto px-6 py-10 border-t border-b border-outline-variant/30 text-center"
+  >
     <p class="text-xs uppercase tracking-widest text-on-surface-variant/70 mb-6 font-semibold font-sans">
       ĐỒNG HÀNH CÙNG SINH VIÊN VÀ KỸ SƯ TẠI CÁC ĐẠI HỌC &amp; CỘNG ĐỒNG CÔNG NGHỆ
     </p>
@@ -76,7 +106,12 @@
 
   <!-- CORE CAPABILITIES BENTO GRID -->
   <section class="max-w-5xl mx-auto px-6 py-20" id="capabilities">
-    <div class="max-w-2xl mb-12">
+    <div
+      appScrollReveal
+      [revealDelay]="0"
+      revealDirection="up"
+      class="max-w-2xl mb-12"
+    >
       <div class="inline-flex items-center gap-2 text-primary text-xs uppercase tracking-wider font-semibold mb-2 font-sans">
         <span class="w-1.5 h-1.5 rounded-full bg-primary-container"></span>
         Kiến trúc Tính năng
@@ -95,6 +130,9 @@
         <!-- Bento Card 1: DAG Knowledge Tree (7 Cols) -->
         <app-bento-card
           [colSpan]="7"
+          appScrollReveal
+          [revealDelay]="0"
+          revealDirection="up"
           icon="account_tree"
           title="Phân rã Mục tiêu bằng Đồ thị Tri thức (DAG)"
           description="Thuật toán tự động biến mục tiêu trừu tượng (như &quot;Thành thạo Microservices&quot;) thành mạng lưới đồ thị có hướng không chu trình. Bạn luôn biết rõ điều kiện tiên quyết trước khi bắt đầu bài học mới."
@@ -119,6 +157,9 @@
         <!-- Bento Card 2: Domino Shift Algorithm (5 Cols) -->
         <app-bento-card
           [colSpan]="5"
+          appScrollReveal
+          [revealDelay]="150"
+          revealDirection="up"
           icon="dynamic_feed"
           title="Thuật toán Domino Shift Tự phục hồi"
           description="Khi bạn bỏ lỡ một buổi học vì tăng ca hoặc mệt mỏi, hệ thống sẽ tự động trượt các khối bài học sang khe thời gian tối ưu tiếp theo mà không làm gãy nhịp tiến độ."
@@ -135,6 +176,9 @@
         <!-- Bento Card 3: Deep Work Zen Pomodoro (5 Cols) -->
         <app-bento-card
           [colSpan]="5"
+          appScrollReveal
+          [revealDelay]="300"
+          revealDirection="up"
           icon="timer"
           title="Không gian Deep Work Pomodoro Zen"
           description="Bộ đếm thời gian 25:00 phẳng không viền, tiếng mưa rào nhẹ nhàng và Cognitive Scratchpad giúp bạn cất tạm những ý nghĩ xao nhãng để giữ nguyên dòng chảy tập trung."
@@ -151,6 +195,9 @@
         <!-- Bento Card 4: SRL Self-Regulation Analytics (7 Cols) -->
         <app-bento-card
           [colSpan]="7"
+          appScrollReveal
+          [revealDelay]="450"
+          revealDirection="up"
           icon="bar_chart"
           title="Báo cáo Nhận thức &amp; Đo lường Tự điều hòa (SRL)"
           description="Định lượng mức độ hoàn thành dựa trên mô hình Zimmerman: Phân tích trước (Forethought), Giám sát hiệu suất (Performance Control) và Tự suy ngẫm (Self-Reflection) sau mỗi phiên học."
@@ -194,7 +241,7 @@
           </div>
         </app-bento-card>
       </div>
-    } @placeholder (minimum 300ms) {
+    } @placeholder (minimum 800ms) {
       <div class="min-h-[640px] w-full">
         <app-skeleton-loader variant="bento" />
       </div>
@@ -204,7 +251,12 @@
   <!-- METHODOLOGY SECTION -->
   <section class="max-w-5xl mx-auto px-6 py-16 border-t border-outline-variant/30" id="methodology">
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
-      <div class="lg:col-span-5">
+      <div
+        appScrollReveal
+        [revealDelay]="0"
+        revealDirection="up"
+        class="lg:col-span-5"
+      >
         <span class="text-xs uppercase tracking-wider text-primary font-semibold mb-2 block font-sans">Phương pháp luận FocusFlow</span>
         <h2 class="font-serif-headline text-3xl sm:text-4xl text-on-surface tracking-tight leading-tight mb-4">
           Khoa học thần kinh về việc hoàn thành mục tiêu học tập.
@@ -217,9 +269,19 @@
         </p>
       </div>
 
-      <div class="lg:col-span-7 hairline-card rounded-xl p-6 md:p-8 space-y-5 bg-white">
+      <div
+        appScrollReveal
+        [revealDelay]="100"
+        revealDirection="up"
+        class="lg:col-span-7 hairline-card rounded-xl p-6 md:p-8 space-y-5 bg-white shadow-sm"
+      >
         <!-- Principle 1 -->
-        <div class="flex items-start gap-4">
+        <div
+          appScrollReveal
+          [revealDelay]="150"
+          revealDirection="up"
+          class="flex items-start gap-4"
+        >
           <span class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center font-mono text-primary font-bold text-sm shrink-0 border border-outline-variant/40">01</span>
           <div>
             <h4 class="text-sm font-semibold text-on-surface mb-1 font-sans">Thiết kế vi mô (Micro-Scaffolding)</h4>
@@ -229,7 +291,12 @@
         <div class="h-px bg-outline-variant/30 w-full"></div>
 
         <!-- Principle 2 -->
-        <div class="flex items-start gap-4">
+        <div
+          appScrollReveal
+          [revealDelay]="250"
+          revealDirection="up"
+          class="flex items-start gap-4"
+        >
           <span class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center font-mono text-primary font-bold text-sm shrink-0 border border-outline-variant/40">02</span>
           <div>
             <h4 class="text-sm font-semibold text-on-surface mb-1 font-sans">Thuật toán Điều hòa Động (Dynamic Calibration)</h4>
@@ -239,7 +306,12 @@
         <div class="h-px bg-outline-variant/30 w-full"></div>
 
         <!-- Principle 3 -->
-        <div class="flex items-start gap-4">
+        <div
+          appScrollReveal
+          [revealDelay]="350"
+          revealDirection="up"
+          class="flex items-start gap-4"
+        >
           <span class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center font-mono text-primary font-bold text-sm shrink-0 border border-outline-variant/40">03</span>
           <div>
             <h4 class="text-sm font-semibold text-on-surface mb-1 font-sans">Cơ chế Hồi tưởng Chủ động (Active Recall Spaced Repetition)</h4>
@@ -252,7 +324,12 @@
 
   <!-- INTERACTIVE STUDY SCENARIOS -->
   <section class="max-w-5xl mx-auto px-6 py-20 border-t border-outline-variant/30" id="scenarios">
-    <div class="text-center max-w-2xl mx-auto mb-10">
+    <div
+      appScrollReveal
+      [revealDelay]="0"
+      revealDirection="up"
+      class="text-center max-w-2xl mx-auto mb-10"
+    >
       <span class="text-xs uppercase tracking-wider text-primary font-semibold mb-2 block font-sans">Kịch bản Thực tế</span>
       <h2 class="font-serif-headline text-3xl sm:text-4xl text-on-surface tracking-tight leading-tight">
         Lộ trình mẫu được kiến trúc hóa sẵn sàng cho bạn.
@@ -264,8 +341,15 @@
 
     <!-- Deferred Study Scenarios -->
     @defer (on viewport) {
-      <app-study-scenarios [(activeScenario)]="activeScenario" class="animate-fade-in-up" />
-    } @placeholder (minimum 300ms) {
+      <div
+        appScrollReveal
+        [revealDelay]="150"
+        revealDirection="up"
+        class="animate-fade-in-up"
+      >
+        <app-study-scenarios [(activeScenario)]="activeScenario" />
+      </div>
+    } @placeholder (minimum 800ms) {
       <div class="min-h-[460px] w-full">
         <app-skeleton-loader variant="timeline" [count]="3" />
       </div>
@@ -274,7 +358,12 @@
 
   <!-- TESTIMONIALS -->
   <section class="max-w-5xl mx-auto px-6 py-20 border-t border-outline-variant/30" id="testimonials">
-    <div class="text-center max-w-xl mx-auto mb-12">
+    <div
+      appScrollReveal
+      [revealDelay]="0"
+      revealDirection="up"
+      class="text-center max-w-xl mx-auto mb-12"
+    >
       <span class="text-xs uppercase tracking-wider text-primary font-semibold mb-2 block font-sans">Minh chứng Học thuật</span>
       <h2 class="font-serif-headline text-3xl sm:text-4xl text-on-surface tracking-tight leading-tight">
         Lời nhận xét từ những người kiên định.
@@ -287,8 +376,11 @@
     <!-- Deferred Testimonials -->
     @defer (on viewport) {
       <div class="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in-up">
-        @for (item of testimonials; track item.authorName) {
+        @for (item of testimonials; track item.authorName; let idx = $index) {
           <app-testimonial-card
+            appScrollReveal
+            [revealDelay]="idx * 150"
+            revealDirection="up"
             [quote]="item.quote"
             [authorName]="item.authorName"
             [authorRole]="item.authorRole"
@@ -297,7 +389,7 @@
           />
         }
       </div>
-    } @placeholder (minimum 300ms) {
+    } @placeholder (minimum 800ms) {
       <div class="min-h-[240px] w-full">
         <app-skeleton-loader variant="card" [count]="3" />
       </div>
@@ -306,7 +398,12 @@
 
   <!-- BOTTOM CTA BANNER -->
   <section class="max-w-5xl mx-auto px-6 py-20 text-center" id="cta">
-    <div class="hairline-card rounded-2xl p-8 md:p-14 bg-white border border-outline-variant/60 shadow-[0_10px_30px_rgba(0,0,0,0.03)]">
+    <div
+      appScrollReveal
+      [revealDelay]="0"
+      revealDirection="up"
+      class="hairline-card rounded-2xl p-8 md:p-14 bg-white border border-outline-variant/60 shadow-[0_10px_30px_rgba(0,0,0,0.03)]"
+    >
       <span class="w-2.5 h-2.5 rounded-full bg-primary-container inline-block mb-4"></span>
       <h2 class="font-serif-headline text-3xl sm:text-4xl md:text-5xl text-on-surface max-w-2xl mx-auto tracking-tight leading-tight mb-4">
         Sẵn sàng xây dựng kỹ năng mới với lộ trình rõ ràng và lịch học tự thích ứng?
@@ -318,7 +415,7 @@
         @if (authService.isAuthenticated()) {
           <a
             routerLink="/dashboard"
-            class="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-primary text-white hover:bg-primary-container px-8 py-3.5 rounded-full text-sm font-semibold font-sans transition-all duration-150 shadow-sm"
+            class="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-primary text-white hover:bg-primary-container px-8 py-3.5 rounded-full text-sm font-semibold font-sans transition-all duration-200 shadow-sm hover:scale-[1.02] active:scale-[0.98] hover:shadow-[0_4px_24px_rgba(36,107,74,0.3)] cursor-pointer"
           >
             <span>Tiếp tục lộ trình của bạn</span>
             <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
@@ -326,7 +423,7 @@
         } @else {
           <a
             routerLink="/sign-up"
-            class="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-on-surface text-white hover:bg-primary-container px-8 py-3.5 rounded-full text-sm font-semibold font-sans transition-all duration-150 shadow-sm"
+            class="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-on-surface text-white hover:bg-primary-container px-8 py-3.5 rounded-full text-sm font-semibold font-sans transition-all duration-200 shadow-sm hover:scale-[1.02] active:scale-[0.98] hover:shadow-[0_4px_24px_rgba(36,107,74,0.3)] cursor-pointer"
           >
             <span>Bắt Đầu Ngay Hôm Nay — Hoàn Toàn Miễn Phí</span>
             <span class="material-symbols-outlined text-[16px]">arrow_forward</span>

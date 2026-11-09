@@ -21,13 +21,13 @@
     </div>
 
     <!-- View Switcher Tabs -->
-    <div class="inline-flex p-0.5 rounded-lg bg-surface-container border border-outline-variant/40 text-xs font-sans">
+    <div class="inline-flex p-1 rounded-xl bg-surface-container/90 border border-outline-variant/50 text-xs font-sans shadow-inner">
       <button
         type="button"
         (click)="setTab('dag')"
         [class]="activeTab() === 'dag'
-          ? 'px-3 py-1 rounded bg-white shadow-sm text-primary font-semibold flex items-center gap-1.5 transition-all'
-          : 'px-3 py-1 rounded text-on-surface-variant hover:text-on-surface flex items-center gap-1.5 transition-all'"
+          ? 'px-3.5 py-1.5 rounded-lg bg-white shadow-[0_2px_8px_rgba(0,0,0,0.08)] text-primary font-semibold flex items-center gap-1.5 transition-all duration-200 border border-outline-variant/30 scale-[1.02]'
+          : 'px-3.5 py-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-white/50 flex items-center gap-1.5 transition-all duration-200 border border-transparent'"
       >
         <span class="material-symbols-outlined text-[14px]">account_tree</span>
         <span>Cây Lộ trình</span>
@@ -36,8 +36,8 @@
         type="button"
         (click)="setTab('schedule')"
         [class]="activeTab() === 'schedule'
-          ? 'px-3 py-1 rounded bg-white shadow-sm text-primary font-semibold flex items-center gap-1.5 transition-all'
-          : 'px-3 py-1 rounded text-on-surface-variant hover:text-on-surface flex items-center gap-1.5 transition-all'"
+          ? 'px-3.5 py-1.5 rounded-lg bg-white shadow-[0_2px_8px_rgba(0,0,0,0.08)] text-primary font-semibold flex items-center gap-1.5 transition-all duration-200 border border-outline-variant/30 scale-[1.02]'
+          : 'px-3.5 py-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-white/50 flex items-center gap-1.5 transition-all duration-200 border border-transparent'"
       >
         <span class="material-symbols-outlined text-[14px]">calendar_today</span>
         <span>Lịch Thích ứng</span>
@@ -46,8 +46,8 @@
         type="button"
         (click)="setTab('pomodoro')"
         [class]="activeTab() === 'pomodoro'
-          ? 'px-3 py-1 rounded bg-white shadow-sm text-primary font-semibold flex items-center gap-1.5 transition-all'
-          : 'px-3 py-1 rounded text-on-surface-variant hover:text-on-surface flex items-center gap-1.5 transition-all'"
+          ? 'px-3.5 py-1.5 rounded-lg bg-white shadow-[0_2px_8px_rgba(0,0,0,0.08)] text-primary font-semibold flex items-center gap-1.5 transition-all duration-200 border border-outline-variant/30 scale-[1.02]'
+          : 'px-3.5 py-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-white/50 flex items-center gap-1.5 transition-all duration-200 border border-transparent'"
       >
         <span class="material-symbols-outlined text-[14px]">hourglass_top</span>
         <span>Chế độ Focus</span>
@@ -321,9 +321,22 @@
               </div>
             </div>
 
-            <div class="mt-4 p-3 rounded-lg border border-outline-variant/40 bg-surface-container-low/40">
-              <p class="text-[11px] font-mono uppercase tracking-wider text-on-surface-variant font-semibold mb-1">Cognitive Scratchpad</p>
-              <p class="text-xs text-on-surface italic">"Lưu ý: Domain models không được import bất kỳ dependency nào từ SQLAlchemy hay FastAPI."</p>
+            <div class="mt-4 p-3.5 rounded-lg border border-outline-variant/40 bg-surface-container-low/50">
+              <div class="flex items-center justify-between mb-2">
+                <label for="scratchpad-input" class="text-[11px] font-mono uppercase tracking-wider text-on-surface-variant font-semibold flex items-center gap-1.5">
+                  <span class="material-symbols-outlined text-[14px] text-primary">edit_note</span>
+                  <span>Cognitive Scratchpad (Gõ thử nghiệm)</span>
+                </label>
+                <span class="text-[10px] font-mono text-outline">Tự lưu tức thì</span>
+              </div>
+              <textarea
+                id="scratchpad-input"
+                rows="2"
+                [value]="scratchpadNote()"
+                (input)="onScratchpadInput($event)"
+                placeholder="Ghi nhanh suy nghĩ xao nhãng để giữ nguyên dòng chảy tập trung..."
+                class="w-full text-xs text-on-surface bg-white rounded border border-outline-variant/60 p-2 font-sans focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all resize-none italic"
+              ></textarea>
             </div>
           </div>
 
@@ -347,16 +360,41 @@
               <span class="text-xs font-mono px-2 py-0.5 rounded bg-primary/10 text-primary font-semibold border border-primary/20">Flow State: 98%</span>
             </div>
 
-            <div class="p-6 rounded-xl bg-surface-container-low/30 border border-outline-variant/40 text-center my-2">
-              <span class="font-serif-headline text-5xl md:text-6xl text-on-surface font-normal tracking-tight block mb-2">18:42</span>
-              <p class="text-xs font-mono text-primary font-semibold">ĐANG TẬP TRUNG CAO ĐỘ • KHÔNG GIAN PHẲNG</p>
+            <div class="p-6 rounded-xl bg-surface-container-low/30 border border-outline-variant/40 text-center my-2 transition-all">
+              <span class="font-serif-headline text-5xl md:text-6xl text-on-surface font-normal tracking-tight block mb-2 tabular-nums">
+                {{ formattedTime() }}
+              </span>
+              <p class="text-xs font-mono text-primary font-semibold flex items-center justify-center gap-1.5">
+                @if (isTimerRunning()) {
+                  <span class="w-2 h-2 rounded-full bg-primary-container breathing-dot inline-block"></span>
+                  <span>ĐANG TẬP TRUNG CAO ĐỘ • KHÔNG GIAN PHẲNG</span>
+                } @else {
+                  <span class="w-2 h-2 rounded-full bg-outline-variant inline-block"></span>
+                  <span>TẠM DỪNG • SẴN SÀNG TIẾP TỤC</span>
+                }
+              </p>
               <div class="mt-5 flex items-center justify-center gap-3">
-                <span class="px-4 py-1.5 rounded-full bg-on-surface text-white text-xs font-medium inline-flex items-center gap-1.5 shadow-sm">
-                  <span class="material-symbols-outlined text-[15px]">pause</span> Tạm dừng
-                </span>
-                <span class="px-4 py-1.5 rounded-full bg-white border border-outline-variant/60 text-on-surface text-xs font-medium inline-flex items-center gap-1.5">
-                  <span class="material-symbols-outlined text-[15px]">done_all</span> Hoàn tất phiên
-                </span>
+                <button
+                  type="button"
+                  (click)="toggleTimer()"
+                  class="px-5 py-2 rounded-full bg-on-surface text-white text-xs font-medium inline-flex items-center gap-1.5 shadow-sm hover:bg-primary transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                >
+                  @if (isTimerRunning()) {
+                    <span class="material-symbols-outlined text-[16px]">pause</span>
+                    <span>Tạm dừng</span>
+                  } @else {
+                    <span class="material-symbols-outlined text-[16px]">play_arrow</span>
+                    <span>Bắt đầu</span>
+                  }
+                </button>
+                <button
+                  type="button"
+                  (click)="resetTimer()"
+                  class="px-4 py-2 rounded-full bg-white border border-outline-variant/60 text-on-surface text-xs font-medium inline-flex items-center gap-1.5 hover:bg-surface-container-low transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                >
+                  <span class="material-symbols-outlined text-[16px]">restart_alt</span>
+                  <span>Đặt lại</span>
+                </button>
               </div>
             </div>
 

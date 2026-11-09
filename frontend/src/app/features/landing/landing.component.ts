@@ -6,6 +6,7 @@ import { LandingFooterComponent } from '../../shared/components/landing-footer/l
 import { BentoCardComponent } from '../../shared/components/bento-card/bento-card.component';
 import { TestimonialCardComponent } from '../../shared/components/testimonial-card/testimonial-card.component';
 import { SkeletonLoaderComponent } from '../../shared/ui/skeleton-loader/skeleton-loader.component';
+import { ScrollRevealDirective } from '../../shared/directives/scroll-reveal.directive';
 import {
   InteractiveWorkspaceComponent,
   WorkspaceTab,
@@ -37,6 +38,7 @@ export interface TestimonialItem {
     BentoCardComponent,
     TestimonialCardComponent,
     SkeletonLoaderComponent,
+    ScrollRevealDirective,
     InteractiveWorkspaceComponent,
     StudyScenariosComponent,
   ],
