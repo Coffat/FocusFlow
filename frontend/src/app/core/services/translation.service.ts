@@ -11,7 +11,7 @@ export type TranslationDictionary = { [key: string]: TranslationNode };
   providedIn: 'root'
 })
 export class TranslationService {
-  private readonly http = inject(HttpClient);
+  private readonly http = inject(HttpClient, { optional: true });
   private readonly _currentLanguage = signal<LanguageCode>('vi');
   readonly currentLanguage = this._currentLanguage.asReadonly();
   private readonly _translations = signal<TranslationDictionary>({});
@@ -20,6 +20,10 @@ export class TranslationService {
   readonly currentLang = computed(() => this._currentLanguage());
 
   async loadTranslations(lang: LanguageCode) {
+    if (!this.http) {
+      this._currentLanguage.set(lang);
+      return;
+    }
     try {
       const data = await firstValueFrom(
         this.http.get<TranslationDictionary>(`/assets/i18n/${lang}.json`)
@@ -36,6 +40,8 @@ export class TranslationService {
   }
 
   get(keyPath: string): string {
+    // Track both signals for zoneless change detection reactivity
+    this._currentLanguage();
     const keys = keyPath.split('.');
     let current: TranslationNode = this._translations();
 
