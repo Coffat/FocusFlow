@@ -5,13 +5,13 @@ import { authGuard } from './guards/auth.guard';
 export const routes: Routes = [
   {
     path: '',
+    pathMatch: 'full',
+    loadComponent: () => import('./features/landing/landing.component').then(m => m.LandingComponent)
+  },
+  {
+    path: '',
     component: AuthLayoutComponent,
     children: [
-      {
-        path: '',
-        redirectTo: 'sign-in',
-        pathMatch: 'full'
-      },
       {
         path: 'sign-in',
         loadComponent: () => import('./features/auth/sign-in/sign-in.component').then(m => m.SignInComponent)

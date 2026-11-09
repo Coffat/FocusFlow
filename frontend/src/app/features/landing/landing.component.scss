@@ -1,0 +1,51 @@
+:host {
+  display: block;
+  width: 100%;
+  min-height: 100vh;
+  background-color: #fcf9f8;
+  color: #1c1b1b;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Hairline borders & luxury card styling */
+.hairline-border {
+  border: 1px solid rgba(191, 201, 192, 0.45);
+}
+
+.hairline-card {
+  border: 1px solid rgba(229, 226, 225, 0.9);
+  background-color: #ffffff;
+}
+
+.hairline-table td,
+.hairline-table th {
+  border-bottom: 1px solid rgba(240, 237, 236, 0.95);
+}
+
+/* Subtle breathing pulsation for active nodes & indicator dots */
+@keyframes pulse-subtle {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.08);
+  }
+}
+
+.breathing-dot {
+  animation: pulse-subtle 2.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Serif typography accents */
+.font-serif-headline {
+  font-family: var(--font-serif);
+  font-feature-settings: 'cv01' on, 'cv02' on;
+}
+
+/* Smooth transition for tabs and scenario steps */
+.tab-transition {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
