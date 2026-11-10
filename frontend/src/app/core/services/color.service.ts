@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 
@@ -8,11 +8,7 @@ export type ColorMap = Record<string, string>;
   providedIn: 'root'
 })
 export class ColorService {
-  http: HttpClient;
-
-  constructor(http: HttpClient) {
-    this.http = http;
-  }
+  private readonly http = inject(HttpClient);
 
   async loadColors() {
     try {

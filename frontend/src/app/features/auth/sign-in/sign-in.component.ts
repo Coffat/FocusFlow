@@ -1,9 +1,7 @@
-import { Component, OnInit, DestroyRef, inject } from '@angular/core';
-import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
+import { Component, OnInit, DestroyRef, inject, ChangeDetectionStrategy, signal } from '@angular/core';
+import { FormBuilder, Validators, ReactiveFormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { ButtonModule } from 'primeng/button';
-import { CheckboxModule } from 'primeng/checkbox';
 import { HttpErrorResponse } from '@angular/common/http';
 import { parseHttpErrorMessage } from '../../../core/utils/error-parser.util';
 import { strictEmailValidator } from '../../../shared/validators/email.validator';
@@ -12,49 +10,45 @@ import { GoogleSsoService } from '../../../core/services/google-sso.service';
 import { TranslationService, LanguageCode } from '../../../core/services/translation.service';
 import { TranslatePipe } from '../../../shared/pipes/translate.pipe';
 import { GoogleAuthRequest, LoginRequest, LoginResponse } from '../../../models/auth.interface';
+import { AuthHeaderComponent } from '../shared/auth-header/auth-header.component';
+import { SocialAuthComponent } from '../shared/social-auth/social-auth.component';
 
 @Component({
   selector: 'app-sign-in',
-  imports: [ReactiveFormsModule, RouterLink, ButtonModule, CheckboxModule, TranslatePipe],
+  standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [
+    ReactiveFormsModule,
+    RouterLink,
+    TranslatePipe,
+    AuthHeaderComponent,
+    SocialAuthComponent
+  ],
   templateUrl: './sign-in.component.html',
   styleUrl: './sign-in.component.scss'
 })
 export class SignInComponent implements OnInit {
-  authService: AuthService;
-  googleSsoService: GoogleSsoService;
-  translationService: TranslationService;
-  formBuilder: FormBuilder;
-  router: Router;
-  destroyRef: DestroyRef;
+  readonly authService = inject(AuthService);
+  readonly googleSsoService = inject(GoogleSsoService);
+  readonly translationService = inject(TranslationService);
+  readonly formBuilder = inject(FormBuilder);
+  readonly router = inject(Router);
+  readonly destroyRef = inject(DestroyRef);
 
-  signInForm: FormGroup;
-  isPasswordVisible = false;
-  isLoading = false;
-  errorMessage = '';
+  readonly signInForm = this.formBuilder.group({
+    email: ['', [Validators.required, strictEmailValidator]],
+    password: ['', [Validators.required]],
+    rememberMe: [true]
+  });
 
-  constructor(
-    authService: AuthService,
-    googleSsoService: GoogleSsoService,
-    translationService: TranslationService,
-    formBuilder: FormBuilder,
-    router: Router
-  ) {
-    this.authService = authService;
-    this.googleSsoService = googleSsoService;
-    this.translationService = translationService;
-    this.formBuilder = formBuilder;
-    this.router = router;
-    this.destroyRef = inject(DestroyRef);
-
-    this.signInForm = this.formBuilder.group({
-      email: ['', [Validators.required, strictEmailValidator]],
-      password: ['', [Validators.required]],
-      rememberMe: [true]
-    });
-  }
+  readonly isPasswordVisible = signal<boolean>(false);
+  readonly isLoading = signal<boolean>(false);
+  readonly errorMessage = signal<string>('');
+  readonly infoMessage = signal<string>('');
 
   ngOnInit() {
-    this.errorMessage = '';
+    this.errorMessage.set('');
+    this.infoMessage.set('');
     this.initGoogleAuth();
   }
 
@@ -66,7 +60,7 @@ export class SignInComponent implements OnInit {
           this.handleGoogleAuth({ idToken: credential, accessToken: '' });
         },
         error: (_err: Error) => {
-          this.errorMessage = this.translationService.get('auth.signIn.googleAuthFailed');
+          this.errorMessage.set(this.translationService.get('auth.signIn.googleAuthFailed'));
         },
         complete: () => {}
       });
@@ -78,7 +72,7 @@ export class SignInComponent implements OnInit {
           this.handleGoogleAuth({ idToken: '', accessToken: token });
         },
         error: (_err: Error) => {
-          this.errorMessage = this.translationService.get('auth.signIn.googleAuthFailed');
+          this.errorMessage.set(this.translationService.get('auth.signIn.googleAuthFailed'));
         },
         complete: () => {}
       });
@@ -87,8 +81,8 @@ export class SignInComponent implements OnInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (_errorMsg: string) => {
-          this.isLoading = false;
-          this.errorMessage = this.translationService.get('auth.signIn.googleAuthFailed');
+          this.isLoading.set(false);
+          this.errorMessage.set(this.translationService.get('auth.signIn.googleAuthFailed'));
         },
         error: (_err: Error) => {},
         complete: () => {}
@@ -98,34 +92,35 @@ export class SignInComponent implements OnInit {
   }
 
   signInWithGoogle() {
-    this.errorMessage = '';
-    this.isLoading = true;
+    this.errorMessage.set('');
+    this.infoMessage.set('');
+    this.isLoading.set(true);
     this.googleSsoService.requestGoogleSignIn();
   }
 
   handleGoogleAuth(request: GoogleAuthRequest) {
-    this.isLoading = true;
-    this.errorMessage = '';
+    this.isLoading.set(true);
+    this.errorMessage.set('');
 
     this.authService.signInWithGoogle(request)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (_response: LoginResponse) => {
-          this.isLoading = false;
+          this.isLoading.set(false);
           this.router.navigate(['/dashboard']);
         },
         error: (err: HttpErrorResponse) => {
-          this.isLoading = false;
-          this.errorMessage = parseHttpErrorMessage(err, this.translationService.get('auth.signIn.googleAuthFailed'));
+          this.isLoading.set(false);
+          this.errorMessage.set(parseHttpErrorMessage(err, this.translationService.get('auth.signIn.googleAuthFailed')));
         },
         complete: () => {
-          this.isLoading = false;
+          this.isLoading.set(false);
         }
       });
   }
 
   togglePasswordVisibility() {
-    this.isPasswordVisible = !this.isPasswordVisible;
+    this.isPasswordVisible.update(v => !v);
   }
 
   switchLanguage(lang: LanguageCode) {
@@ -138,8 +133,9 @@ export class SignInComponent implements OnInit {
       return;
     }
 
-    this.isLoading = true;
-    this.errorMessage = '';
+    this.isLoading.set(true);
+    this.errorMessage.set('');
+    this.infoMessage.set('');
 
     const credentials: LoginRequest = {
       email: String(this.signInForm.get('email')?.value || '').trim().toLowerCase(),
@@ -151,15 +147,15 @@ export class SignInComponent implements OnInit {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (_response: LoginResponse) => {
-          this.isLoading = false;
+          this.isLoading.set(false);
           this.router.navigate(['/dashboard']);
         },
         error: (err: HttpErrorResponse) => {
-          this.isLoading = false;
-          this.errorMessage = parseHttpErrorMessage(err, 'Authentication failed. Please verify credentials.');
+          this.isLoading.set(false);
+          this.errorMessage.set(parseHttpErrorMessage(err, this.translationService.get('auth.signIn.authFailedError')));
         },
         complete: () => {
-          this.isLoading = false;
+          this.isLoading.set(false);
         }
       });
   }

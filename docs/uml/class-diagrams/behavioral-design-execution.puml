@@ -1,0 +1,40 @@
+@startuml FocusFlow_Behavioral_Design_Execution
+title FocusFlow — Behavioral Design Class Diagram: Execution
+
+hide empty members
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+
+class Task <<AggregateRoot>> {
+  +start() : void
+  +complete() : void
+  +cancel() : void
+  +reschedule(date : Date, reason : String [0..1]) : void
+  +addSubtask(task : Task) : void
+  +addPrerequisite(task : Task) : void
+}
+class StudySession <<AggregateRoot>> {
+  +complete(endedAt : Timestamp) : void
+  +autoClose(endedAt : Timestamp) : void
+  +recordCheckin(checkin : DailyCheckin) : void
+  +addNote(note : StudyNote) : void
+}
+class SessionTask <<AssociationClass>> {
+  +recordActualMinutes(minutes : Integer) : void
+  +recordStatus(status : SessionTaskStatus) : void
+}
+class DailyCheckin <<ValueObject>> {
+  +validate() : void
+}
+class StudyNote <<Entity>> {
+  +revise(content : String) : void
+}
+class KeyTakeaway <<Entity>> {
+  +setSelfConfidence(score : Integer) : void
+  +recordVerification(status : TakeawayVerification, evidenceScore : Decimal) : void
+}
+note bottom
+  Timer ticking, persistence, and AI micro-stepping are not entity operations.
+  Task rescheduling must be coordinated with OfficialSchedule and its validation gate.
+end note
+@enduml

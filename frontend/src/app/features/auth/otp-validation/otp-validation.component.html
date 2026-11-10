@@ -1,136 +1,83 @@
-<main class="otp-card">
+<div class="w-full max-w-md mx-auto my-auto py-6">
   <!-- Brand Header -->
-  <div class="brand-header">
-    <img
-      src="assets/logo.svg"
-      [alt]="'auth.otp.logoAlt' | translate"
-      class="brand-logo"
-    />
-    <h1 class="headline-title">
-      <span class="material-symbols-outlined title-icon">verified_user</span>
-      <span>{{ 'auth.otp.enterCodeTitle' | translate }}</span>
+  <div class="text-center mb-8">
+    <div class="flex items-center justify-center mb-4">
+      <img src="assets/logo.svg" alt="FocusFlow" class="h-12 w-12 object-contain" />
+    </div>
+    <h1 class="font-serif text-2xl sm:text-[32px] sm:leading-[40px] font-medium tracking-tight text-on-surface inline-flex items-center justify-center gap-2">
+      <span class="material-symbols-outlined text-2xl text-primary">verified_user</span>
+      <span>Enter verification code</span>
     </h1>
-    <p class="headline-subtitle">
-      <span>{{ 'auth.otp.dispatchedSubtitle' | translate }} </span>
-      <strong class="email-highlight">{{ email }}</strong>. 
-      <span>{{ 'auth.otp.enterBelowToVerify' | translate }}</span>
-      <a routerLink="/sign-up" class="change-email-link">
-        {{ 'auth.otp.changeEmail' | translate }}
-      </a>
+    <p class="mt-2.5 text-sm font-sans text-secondary leading-relaxed">
+      We have dispatched a 6-digit code to
+      <strong class="text-on-surface font-medium">{{ email() || 'your email' }}</strong>.
+      Enter the code below to verify your identity.
+      <a routerLink="/sign-up" class="ml-1 text-primary hover:underline underline-offset-4 font-medium text-xs">Change email</a>
     </p>
   </div>
 
-  <!-- Status Banners -->
-  @if (errorMessage) {
-    <div class="error-banner">
-      <span class="material-symbols-outlined">error</span>
-      <span>{{ errorMessage }}</span>
+  <!-- Error Banner -->
+  @if (errorMessage()) {
+    <div class="mb-5 p-3.5 rounded-lg bg-[#ffdad6] text-[#93000a] text-xs font-sans flex items-start gap-2.5 border border-[#ba1a1a]/20">
+      <span class="material-symbols-outlined text-[18px] text-[#ba1a1a] shrink-0">error</span>
+      <span class="leading-relaxed">{{ errorMessage() }}</span>
     </div>
   }
 
-  @if (successMessage) {
-    <div class="success-banner">
-      <span class="material-symbols-outlined">check_circle</span>
-      <span>{{ successMessage }}</span>
+  <!-- Success Banner -->
+  @if (successMessage()) {
+    <div class="mb-5 p-3.5 rounded-lg bg-[#aaf2c8]/30 text-[#005234] text-xs font-sans flex items-start gap-2.5 border border-[#005234]/20">
+      <span class="material-symbols-outlined text-[18px] text-[#005234] shrink-0">check_circle</span>
+      <span class="leading-relaxed">{{ successMessage() }}</span>
     </div>
   }
 
-  <!-- OTP Form -->
-  <form (submit)="$event.preventDefault(); verifyOtp()" class="otp-form">
-    <div class="otp-section">
-      <div class="otp-header-row">
-        <label class="otp-meta-label">{{ 'auth.otp.temporalCodeLabel' | translate }}</label>
-        @if (isAutoFilled) {
-          <span class="otp-autofill-tag">{{ 'auth.otp.autoFillDetected' | translate }}</span>
-        }
-      </div>
+  <!-- OTP Verification Form -->
+  <form (submit)="$event.preventDefault(); verifyOtp()" class="space-y-6">
+    <app-otp-input
+      label="TEMPORAL AUTHENTICATION CODE"
+      [disabled]="isLoading()"
+      (codeChange)="onOtpChange($event)"
+      (codeCompleted)="onOtpCompleted($event)"
+      (resend)="resendOtp()"
+    />
 
-      <!-- 6-digit Grid -->
-      <div class="otp-grid" id="otp-container">
-        @for (digit of otpDigits; track $index; let i = $index) {
-          <input
-            #digitInput
-            type="text"
-            inputmode="numeric"
-            maxlength="1"
-            class="otp-cell"
-            [class.filled]="digit.length > 0"
-            [placeholder]="'·'"
-            [value]="digit"
-            (input)="onDigitInput($event, i)"
-            (keydown)="onDigitKeyDown($event, i)"
-            (paste)="onDigitPaste($event)"
-            autocomplete="one-time-code"
-            [attr.aria-label]="'Digit ' + (i + 1)"
-          />
-        }
-      </div>
-    </div>
-
-    <!-- Resend Row -->
-    <div class="resend-row">
-      <span class="resend-meta">
-        <span class="material-symbols-outlined schedule-icon">schedule</span>
-        <span>{{ 'auth.otp.didntReceiveCode' | translate }}</span>
-      </span>
-      <div class="resend-action">
-        @if (cooldownSeconds() > 0) {
-          <span class="timer-countdown">{{ formattedCooldown() }}</span>
-        } @else {
-          <button
-            pButton
-            type="button"
-            class="resend-button"
-            (click)="resendOtp()"
-            [disabled]="isLoading"
-          >
-            {{ 'auth.otp.resendCodeNow' | translate }}
-          </button>
-        }
-      </div>
-    </div>
-
-    <!-- CTA Verify Button -->
+    <!-- Primary CTA Capsule Button -->
     <button
-      pButton
-      type="button"
-      (click)="verifyOtp()"
-      class="submit-button"
-      [disabled]="fullOtp.length !== 6 || isLoading"
+      type="submit"
+      [disabled]="isLoading() || currentOtp().length !== 6"
+      class="w-full h-12 rounded-full bg-[#111111] hover:bg-primary-container text-surface-container-lowest font-sans text-sm font-medium tracking-tight transition-colors duration-150 flex items-center justify-center gap-2 group shadow-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
     >
-      @if (isLoading) {
-        <span class="material-symbols-outlined spin-icon">progress_activity</span>
-      } @else {
-        <span class="submit-text">{{ 'auth.otp.verifyAndProceed' | translate }}</span>
-        <span class="arrow-glyph">→</span>
-      }
+      <span>{{ isLoading() ? 'Đang xác thực...' : 'Verify & Proceed' }}</span>
+      <span class="material-symbols-outlined text-lg transition-transform duration-150 group-hover:translate-x-0.5">arrow_forward</span>
     </button>
 
-    <!-- Alternate Actions -->
-    <div class="alternate-actions">
-      <button
-        pButton
-        type="button"
-        class="action-link-btn"
-        (click)="onUseBackupKey()"
-      >
-        <span class="material-symbols-outlined">vpn_key</span>
-        <span>{{ 'auth.otp.useBackupKey' | translate }}</span>
-      </button>
-      <span class="action-divider">•</span>
-      <a routerLink="/sign-in" class="action-link-btn">
-        <span class="material-symbols-outlined">arrow_back</span>
-        <span>{{ 'auth.otp.backToSignIn' | translate }}</span>
-      </a>
+    <!-- Alternative Links -->
+    <div class="pt-2 text-center">
+      <div class="flex flex-col sm:flex-row items-center justify-center gap-4 font-sans text-xs">
+        <button
+          type="button"
+          (click)="onUseBackupKey()"
+          class="inline-flex items-center gap-1.5 text-secondary hover:text-on-surface hover:underline transition-colors duration-150 cursor-pointer"
+        >
+          <span class="material-symbols-outlined text-sm">vpn_key</span>
+          <span>Use backup recovery key instead</span>
+        </button>
+        <span class="hidden sm:inline text-outline-variant">•</span>
+        <a routerLink="/sign-in" class="inline-flex items-center gap-1 text-secondary hover:text-on-surface hover:underline transition-colors duration-150">
+          <span class="material-symbols-outlined text-sm">arrow_back</span>
+          <span>Back to Sign In</span>
+        </a>
+      </div>
     </div>
   </form>
 
-  <!-- Cryptographic Session Lock Card -->
-  <div class="session-lock-banner">
-    <span class="material-symbols-outlined banner-icon">shield</span>
-    <div class="banner-content">
-      <strong class="banner-title">{{ 'auth.otp.sessionLockTitle' | translate }}:</strong>
-      <span class="banner-text"> {{ 'auth.otp.sessionLockText' | translate }}</span>
+  <!-- Cryptographic Session Lock Info Box -->
+  <div class="mt-8 p-3.5 rounded-lg border border-outline-variant bg-surface flex items-start gap-3">
+    <span class="material-symbols-outlined text-primary text-base mt-0.5">shield</span>
+    <div class="font-sans text-xs text-secondary leading-snug">
+      <span class="font-semibold text-on-surface">Cryptographic Session Lock:</span>
+      Attempts are limited to 5 sequential verification requests per 15-minute epoch.
     </div>
   </div>
-</main>
+</div>

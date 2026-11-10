@@ -4,7 +4,25 @@ import { of } from 'rxjs';
 import { authInterceptor } from './auth.interceptor';
 import { API_BASE_URL } from '../constant/api.constant';
 
+let mockStore: Record<string, string> = {};
+
+const storageMock = {
+  getItem: (key: string) => mockStore[key] ?? null,
+  setItem: (key: string, value: string) => { mockStore[key] = value; },
+  removeItem: (key: string) => { delete mockStore[key]; },
+  clear: () => { mockStore = {}; },
+  key: (index: number) => Object.keys(mockStore)[index] ?? null,
+  length: 0
+};
+
 describe('authInterceptor', () => {
+  beforeAll(() => {
+    Object.defineProperty(globalThis, 'localStorage', {
+      value: storageMock,
+      writable: true
+    });
+  });
+
   beforeEach(() => {
     localStorage.clear();
   });

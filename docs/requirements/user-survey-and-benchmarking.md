@@ -4,7 +4,7 @@
 > **Chuyên ngành:** Công nghệ Phần mềm — Khoa Công nghệ Thông tin  
 > **Cấp độ tài liệu:** Báo cáo Nghiên cứu Tiền khả thi, Khảo sát Thực chứng & Phân tích Đối sánh (Research, Empirical Survey & Benchmarking Artifact)  
 > **Mã tài liệu:** `DOC-REQ-SURVEY-01`  
-> **Tài liệu liên kết:** `docs/requirements/problem-definition.md`, `docs/srs/srs-v1.0.md`, `docs_ute/WBS 1.1 - Khảo sát nhu cầu tự học và nghiên cứu đối sánh giải pháp (Benchmarking).md`  
+> **Tài liệu liên kết:** `docs/requirements/problem-definition.md`, `docs/srs/srs-v1.0.md`, `docs_ute/04_wbs_deliverables/WBS 1.1 - Khảo sát nhu cầu tự học và nghiên cứu đối sánh giải pháp (Benchmarking).md`  
 > **Căn cứ đánh giá học thuật:** Khung Rubric Chấm Đồ án Tốt nghiệp / Khóa luận CNTT:
 > - **Tiêu chí TC1 (Mức 5):** "Tính cấp thiết rõ ràng; So sánh $\ge 3$ giải pháp hiện có, nêu rõ khoảng trống với phân tích thực tế khách quan; Xác định rõ $\ge 5$ mục tiêu/KPI cụ thể định lượng ngay từ đầu."
 > - **Tiêu chí TC2.1 (Mức 5):** "Đặc tả đầy đủ yêu cầu chức năng & $\ge 5$ yêu cầu phi chức năng định lượng."
@@ -40,7 +40,8 @@
    - 5.2 [Ma trận truy vết từ Khảo sát đến SRS và 5 KPI nghiệm thu](#52-ma-trận-truy-vết-từ-khảo-sát-đến-srs-và-5-kpi-nghiệm-thu)
 6. [Góc Nhìn Cố Vấn Khóa Luận (Thesis Mentor Guidance & Defense Q&A)](#6-góc-nhìn-cố-vấn-khóa-luận-thesis-mentor-guidance--defense-qa)
    - 6.1 [Các bẫy lập luận sinh viên thường mắc phải](#61-các-bẫy-lập-luận-sinh-viên-thường-mắc-phải)
-   - 6.2 [Bộ câu hỏi phản biện mẫu của Hội đồng bảo vệ](#62-bộ-câu-hỏi-phản-biện-mẫu-của-hội-đồng-bảo-vệ)
+   - 6.2 [Danh sách 'Không nên nói' vs 'Nên nói' khi thuyết minh đồ án](#62-danh-sách-không-nên-nói-vs-nên-nói-khi-thuyết-minh-đồ-án)
+   - 6.3 [Bộ câu hỏi phản biện mẫu & Câu chuyện bảo vệ trước Hội đồng](#63-bộ-câu-hỏi-phản-biện-mẫu--câu-chuyện-bảo-vệ-trước-hội-đồng)
 7. [Kết luận & Kế hoạch Tiếp theo](#7-kết-luận--kế-hoạch-tiếp-theo)
 8. [Danh mục Tài liệu Tham khảo (Academic References)](#8-danh-mục-tài-liệu-tham-khảo-academic-references)
 
@@ -218,67 +219,55 @@ Nhằm bảo đảm tính trung thực học thuật và chuẩn mực nghiên c
 
 Đáp ứng trọn vẹn tiêu chí **Rubric TC1 (Mức 5: So sánh $\ge 3$ giải pháp hiện có, nêu rõ khoảng trống với phân tích thực tế khách quan)**.
 
-### 4.1 Lựa chọn đối tượng đối sánh
-Để đảm bảo tính khách quan và bao quát, nghiên cứu lựa chọn **4 nhóm công cụ đại diện thị trường** mà người tự học hiện nay đang cố gắng kết hợp:
-1. **Nhóm Lịch số & Time-blocking cá nhân:**
-   - **Google Calendar:** Đại diện tiêu biểu nhất cho công cụ quản lý thời gian truyền thống (tĩnh).
-   - **Reclaim.ai / Motion:** Đại diện cho thế hệ công cụ lịch ứng dụng AI tự động xếp lịch thương mại.
-2. **Nhóm Quản lý Tri thức & Công việc (Productivity & Task Management):**
-   - **Notion:** Đại diện cho không gian làm việc tự do, linh hoạt dựa trên cơ sở dữ liệu và templates.
-   - **Todoist:** Đại diện cho ứng dụng quản lý danh sách việc cần làm (To-Do List) chuyên sâu.
-3. **Nhóm Trợ lý Trí tuệ Nhân tạo Tạo sinh (Generative AI Chatbots):**
-   - **ChatGPT (OpenAI) / Claude (Anthropic):** Đại diện cho mô hình ngôn ngữ lớn dạng hội thoại đa năng.
-4. **Nhóm Nền tảng Định hướng Lộ trình Học tập (Learning Roadmaps):**
-   - **Roadmap.sh:** Nền tảng mã nguồn mở trực quan hóa bản đồ kiến thức nghề nghiệp CNTT phổ biến nhất hiện nay.
+### 4.1 Bối cảnh cạnh tranh đến 11/2026 (4 Nhóm Đối thủ Thị trường)
+Để đảm bảo tính khách quan và bao quát, nghiên cứu đối sánh phân loại thị trường công cụ tự học và năng suất năm 2026 thành **4 nhóm đối thủ chính**:
+
+1. **Nhóm AI Study Planner:** Các công cụ chuyên tạo kế hoạch học tập tự động (MyStudyLife, Scholarly, Taskade AI Study Planner, Notion AI study templates, Root Tutor, và các AI schedule generators).
+2. **Nhóm AI Calendar / Productivity:** Các công cụ tối ưu hóa lịch biểu và tự động xếp việc bằng AI (Motion, Reclaim.ai, SkedPal, Sunsama, FlowSavvy, Akiflow, Trevor AI, Morgen).
+3. **Nhóm AI Tutor:** Các trợ lý gia sư AI giảng dạy nội dung và luyện tập cá nhân hóa (Khanmigo, ChatGPT Study Mode, Quizlet AI, Duolingo Max, Socratic, Photomath, StudyFetch, Knowt).
+4. **Nhóm Knowledge Workspace:** Các không gian làm việc và quản trị tri thức cá nhân (Notion AI, Obsidian, Mem, Reflect, Capacities, Evernote AI, OneNote Copilot).
 
 ---
 
-### 4.2 Phân tích chi tiết từng giải pháp hiện hữu
+### 4.2 Phân tích chuyên sâu 4 nhóm đối thủ hiện hữu
 
-#### 1. Google Calendar
-- **Bản chất:** Hệ thống quản lý sự kiện và lịch biểu cá nhân/doanh nghiệp dựa trên khung giờ cố định.
-- **Điểm mạnh:** Miễn phí, ổn định tuyệt đối, đồng bộ hóa mạnh mẽ trên mọi thiết bị và hệ điều hành, giao diện trực quan quen thuộc.
-- **Điểm yếu cốt tử đối với việc tự học:**
-  - *Không có tính ngữ cảnh học tập:* Một ô lịch học tập bị đối xử y hệt một cuộc hẹn nha sĩ. Không có checklist công việc con, không có đồng hồ bấm giờ, không có chỗ lưu ghi chú đúc kết.
-  - *Tính thụ động tuyệt đối (Zero Adaptation):* Khi người dùng không học vào khung giờ đã định, sự kiện đơn giản là trôi vào quá khứ. Hệ thống không cảnh báo quá hạn, không tự dồn lịch bù, buộc người dùng phải tự kéo thả thủ công từng event.
+#### 1. Nhóm AI Study Planner (MyStudyLife, Scholarly, Taskade, Root Tutor)
+- **Bản chất:** Các nền tảng sinh lịch học tự động dựa trên hạn chót kỳ thi (exam deadlines), giáo trình môn học (syllabus) hoặc thời khóa biểu.
+- **Xu hướng năm 2026:** Tự động quét và nhận diện thời khóa biểu từ ảnh chụp/PDF; tích hợp flashcards, câu hỏi trắc nghiệm (quiz), thuật toán lặp lại ngắt quãng (Spaced Repetition); bước đầu hỗ trợ lập lịch dựa trên tài liệu học (*material-aware planning*).
+- **Điểm mạnh:** Thiết kế gần gũi với học sinh/sinh viên; thời gian thiết lập ban đầu nhanh hơn làm thủ công; nhiều công cụ có gói miễn phí (free-tier).
+- **Điểm yếu cốt tử so với FocusFlow:**
+  - *Thiên về tạo kế hoạch ban đầu hơn là điều hành vòng học dài hạn:* Tập trung sinh ra một bản lịch đẹp nhưng thiếu cơ chế giám sát thực thi sâu và thiếu hệ thống kỷ luật hành vi (accountability).
+  - *Cơ chế phục hồi khi vỡ kế hoạch rất sơ sài:* Khi người học trễ hẹn, hệ thống thường chỉ có 2 lựa chọn cực đoan: sinh lại toàn bộ lịch từ đầu (regenerate toàn bộ làm đảo lộn cam kết) hoặc dời từng task đơn lẻ mà không xét đến toàn cục.
+  - *Không phân biệt nguyên nhân trễ hạn:* Đối xử cào bằng giữa gián đoạn chính đáng (bệnh, thi cử, tăng ca) và sự trì hoãn né tránh, dễ gây nản lòng hoặc tạo kẽ hở cho thói quen trì hoãn.
+  - *Thiếu kiểm soát kiến trúc:* Không có nhật ký kiểm toán (audit trail), không có cơ chế duyệt minh bạch (Human-in-the-loop approval), thiếu kiểm soát hạn ngạch AI (quota guard) và cổng kiểm duyệt ràng buộc (validation gate).
 
-#### 2. Reclaim.ai / Motion (AI Calendar Scheduling)
-- **Bản chất:** Ứng dụng tự động tối ưu hóa lịch biểu và công việc dành cho chuyên gia và người đi làm bận rộn bằng thuật toán tối ưu hóa lịch trình.
-- **Điểm mạnh:** Tự động tìm khoảng trống thời gian để xếp việc; tự động đẩy lùi việc sang hôm sau nếu bị trùng cuộc họp đột xuất.
-- **Điểm yếu cốt tử đối với việc tự học:**
-  - *Đắt đỏ, rào cản chi phí lớn đối với sinh viên:* Giá dịch vụ từ **$10 – $34/tháng/người dùng**, hoàn toàn không phù hợp với đối tượng học sinh, sinh viên và người tự học phổ thông.
-  - *Định hướng cho công việc văn phòng (Work-centric), không phải học tập:* Tập trung giải quyết xung đột lịch họp giữa các phòng ban trong công ty. Hoàn toàn không có tính năng phân rã kiến thức học tập, không có bộ công cụ Study Workspace (Pomodoro, Scratchpad, Key Takeaways).
-  - *Thiếu kiểm soát con người (Blackbox Automation):* AI tự động xáo trộn toàn bộ lịch mà người dùng khó can thiệp theo logic trình tự bài học.
+#### 2. Nhóm AI Calendar / Productivity (Motion, Reclaim.ai, SkedPal, FlowSavvy, Sunsama, Akiflow)
+- **Bản chất:** Ứng dụng quản trị thời gian cao cấp dành cho chuyên gia và người đi làm, sử dụng thuật toán AI để tự động chèn task công việc vào các khoảng trống lịch biểu (time-blocking).
+- **Xu hướng năm 2026:** Tự động xếp lịch task linh hoạt quanh các cuộc họp (smart meeting auto-scheduling); tự động bảo vệ thời gian tập trung sâu (Focus Time Defense); tái lập lịch động tức thì khi có biến cố; phân tầng rõ rệt giữa thuật toán auto-scheduler tự động và bảng kế hoạch thủ công.
+- **Điểm mạnh:** Giải quyết xuất sắc bài toán tối ưu hóa thời gian cho người đi làm có lịch họp dày đặc; thuật toán time-blocking và giải quyết xung đột rất mạnh mẽ; giao diện người dùng (UX) hiện đại, trưởng thành.
+- **Điểm yếu cốt tử so với FocusFlow:**
+  - *Định hướng công việc văn phòng (Work-centric), không hiểu bản chất học tập:* Tối ưu hóa cuộc họp và deadline công sở, hoàn toàn không hiểu logic học tập: không biết quan hệ tiên quyết (*prerequisites*) giữa các bài học, không hiểu cấu trúc Milestone phân cấp.
+  - *Thiếu hoàn toàn không gian thực thi học tập (Study Workspace):* Không có Pomodoro/Stopwatch gắn liền ngữ cảnh, không có Scratchpad ghi chép thô, không bắt buộc đúc kết Key Takeaways.
+  - *Rủi ro "Hộp đen tự động" (Blackbox Automation):* AI tự ý xáo trộn toàn bộ lịch trình mà người học không hiểu nguyên do, làm mất đi cảm giác làm chủ lộ trình (*Sense of Agency*).
+  - *Chi phí quá đắt đỏ:* Mức giá từ **$10 – $34/tháng/người dùng** là rào cản quá lớn đối với đối tượng học sinh, sinh viên và người tự học độc lập.
 
-#### 3. Notion
-- **Bản chất:** Ứng dụng "All-in-one Workspace" cho phép người dùng tùy biến trang ghi chú, bảng tính và cơ sở dữ liệu quan hệ.
-- **Điểm mạnh:** Tùy biến cực kỳ linh hoạt, hỗ trợ Markdown/Code snippet xuất sắc, hệ sinh thái template phong phú.
-- **Điểm yếu cốt tử đối với việc tự học:**
-  - *Gánh nặng thiết lập (High Setup Friction):* Để có một hệ thống học tập hoàn chỉnh, người dùng phải bỏ ra hàng chục giờ đồng hồ để cấu hình database, công thức formula, liên kết quan hệ (relations/rollups).
-  - *Thiếu tính hành động (Action Deficiency):* Notion là một "kho lưu trữ tĩnh" (*Information Repository*). Người dùng có xu hướng sa đà vào việc "trang trí Notion" thay vì thực sự ngồi vào học (*Procrastination via Organizing*).
-  - *Không có cơ chế thích ứng thời gian:* Không thể tự động tính toán dồn ngày khi trễ hạn nếu không lập trình các script tự động hóa phức tạp bên ngoài.
+#### 3. Nhóm AI Tutor (Khanmigo, ChatGPT Study Mode, Quizlet AI, Duolingo Max, StudyFetch)
+- **Bản chất:** Trợ lý trí tuệ nhân tạo tương tác đóng vai trò người gia sư, hướng dẫn giải thích khái niệm, giải bài tập và luyện tập kỹ năng.
+- **Xu hướng năm 2026:** Phương pháp hướng dẫn Socrates (Socratic Tutoring - gợi mở thay vì cho đáp án ngay); hội thoại và tương tác giọng nói thời gian thực (Voice/Chat-based); tự động tạo flashcards và bài tập trắc nghiệm từ tài liệu cá nhân tải lên; nhập vai tình huống (roleplay).
+- **Điểm mạnh:** Khả năng giải thích kiến thức sâu sắc, trực quan; hỗ trợ gợi nhớ chủ động (Active Recall) xuất sắc; cá nhân hóa bài giảng theo lỗ hổng kiến thức của từng người học.
+- **Điểm yếu cốt tử so với FocusFlow:**
+  - *Chỉ dạy nội dung, không quản trị vòng đời kế hoạch dài hạn:* Tập trung trả lời câu hỏi trong phiên, hoàn toàn không quản lý thời gian biểu, không nắm được thời gian rảnh thực tế của người học.
+  - *Không xử lý thích ứng lịch:* Không có khái niệm lịch biểu, không phát hiện quá hạn tất định, không có cơ chế tạm dừng lộ trình hay phục hồi kế hoạch khi có biến cố đời sống.
+  - *Không thể thay thế hệ thống kỷ luật (Discipline System):* Giúp người học "hiểu bài khi đã ngồi vào bàn", nhưng bất lực trong việc kéo người học quay trở lại bàn học sau 3 ngày bỏ lỡ.
 
-#### 4. Todoist
-- **Bản chất:** Ứng dụng quản lý công việc cá nhân tối giản theo phương pháp GTD (Getting Things Done).
-- **Điểm mạnh:** Giao diện nhanh, gọn nhẹ, xử lý ngôn ngữ tự nhiên tốt khi nhập hạn chót (ví dụ: "mai lúc 8h tối"), hỗ trợ phân cấp task.
-- **Điểm yếu cốt tử đối với việc tự học:**
-  - *Mô hình phẳng, thiếu chiều sâu lộ trình:* Không hỗ trợ cấu trúc lộ trình học tập 2 cấp (Milestone $\rightarrow$ Task).
-  - *Thiếu liên kết tài nguyên:* Không gian ghi chú hạn hẹp, không tích hợp timer chuyên dụng cho phiên học.
-
-#### 5. Generic AI Chatbots (ChatGPT / Claude)
-- **Bản chất:** Mô hình ngôn ngữ lớn tương tác qua giao diện hội thoại (Chat UI).
-- **Điểm mạnh:** Khả năng tổng hợp tri thức khổng lồ, giải thích khái niệm tốt, sinh lộ trình học tập rất nhanh theo yêu cầu ngôn ngữ tự nhiên.
-- **Điểm yếu cốt tử đối với việc tự học:**
-  - *Trôi dạt dữ liệu (Unstructured Ephemeral Output):* Kết quả trả về là chuỗi văn bản tự do (*Markdown text*), trôi dần theo lịch sử chat. Người học không thể "tick hoàn thành", không thể gắn vào mốc lịch cụ thể.
-  - *Mù thời gian thực (Time-blindness):* LLM không biết người dùng thực tế rảnh bao nhiêu tiếng vào thứ Ba, rảnh khung giờ nào vào Chủ Nhật. Lộ trình do AI sinh ra thường mang tính viễn vông, không khả thi.
-  - *Nguy cơ ảo giác và rủi ro chi phí:* Thiếu cơ chế kiểm soát schema kỹ thuật, dễ gây quá tải nếu gọi API vô tội vạ.
-
-#### 6. Roadmap.sh
-- **Bản chất:** Nền tảng bản đồ kỹ năng nghề nghiệp cộng đồng trực quan hóa dưới dạng cây sơ đồ tương tác.
-- **Điểm mạnh:** Lộ trình chuẩn hóa theo chuẩn công nghiệp, cộng đồng đóng góp lớn, giao diện cây thư mục rất đẹp và rõ ràng.
-- **Điểm yếu cốt tử đối với việc tự học:**
-  - *Tĩnh và đại trà (One-size-fits-all):* Lộ trình chung cho toàn cầu, không cá nhân hóa theo nền tảng kiến thức và quỹ thời gian của từng người.
-  - *Không hỗ trợ thực thi:* Chỉ có thể bấm "Done" ở từng ô kỹ năng. Hoàn toàn không phân rã thành lịch trình học hàng ngày hay hỗ trợ không gian bấm giờ tập trung.
+#### 4. Nhóm Knowledge Workspace (Notion AI, Obsidian, Mem, Reflect, Capacities)
+- **Bản chất:** Không gian làm việc và quản trị tri thức cá nhân (Personal Knowledge Management - PKM / Second Brain) dựa trên mạng lưới liên kết ghi chú và cơ sở dữ liệu tùy biến.
+- **Xu hướng năm 2026:** Tích hợp AI tìm kiếm ngữ nghĩa (Semantic Search); tự động tóm tắt và liên kết tri thức (Auto-linking); phát triển Second Brain; sự phân hóa chiến lược rõ nét giữa trường phái dữ liệu cục bộ (Local-first như Obsidian) và đám mây (Cloud-first như Notion).
+- **Điểm mạnh:** Lưu trữ và tổ chức tri thức dài hạn vượt trội; khả năng tùy biến vô hạn; hệ sinh thái plugin, template và cộng đồng người dùng khổng lồ.
+- **Điểm yếu cốt tử so với FocusFlow:**
+  - *Dễ biến thành "Kho lưu trữ thụ động" (Information Hoarding):* Người dùng thường sa đà vào việc sao chép tài liệu, trang trí template màu mè (*Procrastination via Organizing*) thay vì thực sự học và tiếp thu kiến thức.
+  - *Gánh nặng thiết lập quá cao (High Setup Friction):* Đòi hỏi hàng chục giờ mày mò công thức, cơ sở dữ liệu quan hệ mới có thể tạo ra một trang theo dõi học tập tạm dùng được.
+  - *Thiếu tính hành động và không có trách nhiệm tự nhiên (Zero Native Accountability):* Không ép người học chuyển hóa ghi chú thành phiên học cụ thể; không trả lời được câu hỏi cốt tử: *"Hôm nay tôi cần học gì, trong bao lâu và bắt đầu từ đâu?"*.
 
 ---
 
@@ -317,9 +306,9 @@ Bảng đối sánh tổng hợp giữa các giải pháp hiện hữu và **H�
 | **4. Không gian phiên học tích hợp** | ❌ Không | ⚠️ Nhúng widget ngoài | ❌ Không | ❌ Không | ⚠️ Timer cơ bản | ❌ Không | ❌ Không | ✅ **Timer, Checklist, Scratchpad & Takeaways** |
 | **5. Thu thập Key Takeaways đúc kết** | ❌ Không | ⚠️ Phải tự ghi | ❌ Không | ❌ Không | ❌ Không | ❌ Không | ❌ Không | ✅ **Modal đúc kết bắt buộc sau phiên** |
 | **6. Phục hồi phiên học gián đoạn** | ❌ Không | ❌ Không | ❌ Không | ❌ Không | ❌ Không | ❌ Không | ❌ Không | ✅ **Crash Recovery tự động** |
-| **7. Tự động thích ứng khi quá hạn** | ❌ Thủ công | ❌ Lọc sửa thủ công | ❌ Thủ công | ⚠️ AI hộp đen | ⚠️ Đẩy việc dở dang | ❌ Không | ❌ Không | ✅ **Celery Beat Auto-shift tất định** |
+| **7. Tự động thích ứng khi quá hạn** | ❌ Thủ công | ❌ Lọc sửa thủ công | ❌ Thủ công | ⚠️ AI hộp đen | ⚠️ Đẩy việc dở dang | ❌ Không | ❌ Không | ✅ **Quét quá hạn tất định + Email báo nhắc & AI dời lịch 1 lộ trình** |
 | **8. Tạm dừng lộ trình (Domino Shift)**| ❌ Kéo thả tay | ❌ Sửa date tay | ❌ Kéo thả tay | ❌ Không | ❌ Không | ❌ Không | ❌ Không | ✅ **Tịnh tiến ngày tự động 100%** |
-| **9. Đồng bộ Lịch ngoại vi an toàn** | Gốc | ⚠️ Qua Zapier | ⚠️ iCal cơ bản | Gốc (OAuth 2 chiều)| Gốc | ❌ Không | ❌ Không | ✅ **Secure Token WebCal (RFC 5545)** |
+| **9. Đồng bộ Lịch ngoại vi an toàn** | Gốc | ⚠️ Qua Zapier | ⚠️ iCal cơ bản | Gốc (OAuth 2 chiều)| Gốc | ❌ Không | ❌ Không | ✅ **2-Way Sync có kiểm soát & Secure Token WebCal (RFC 5545)** |
 | **10. Báo cáo định lượng & AI Review** | ❌ Không | ⚠️ Formula phức tạp | ⚠️ Karma điểm | ⚠️ Báo cáo họp | ⚠️ Báo cáo ngày | ❌ Hỏi đáp rời rạc | ❌ Không | ✅ **Thống kê toán học + AI Review tuần** |
 | **11. Phù hợp túi tiền sinh viên** | Miễn phí | Miễn phí / $8+ | Miễn phí / $5 | Đắt ($10–$34/tháng) | Đắt ($16–$20/tháng)| Miễn phí / $20 | Miễn phí | ✅ **Miễn phí cho tính năng cốt lõi / Open-source** |
 | **12. Kiểm soát rủi ro & Quota AI** | Không có AI | Không có AI | Không có AI | Đóng kín | Không có AI | Không kiểm soát | Không có AI | ✅ **Quota Guard + Redis Rate Limit + RBAC** |
@@ -360,25 +349,37 @@ Từ ma trận đối sánh trên, nghiên cứu chỉ ra **3 khoảng trống t
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
+#### Bảng tổng hợp so sánh 4 nhóm đối thủ & Khoảng trống của FocusFlow
+
+| Nhóm đối thủ | Giải tốt | Thiếu sót lớn | Khoảng trống FocusFlow lấp đầy |
+|---|---|---|---|
+| **AI Study Planner** *(MyStudyLife, Scholarly, Taskade, Root Tutor)* | Tạo lịch học nhanh từ deadline/syllabus | Thiếu tính kỷ luật (accountability), phục hồi sơ sài khi vỡ kế hoạch, thiếu vòng thực thi thực tế | Nền tảng điều hành vòng đời học tập dài hạn với cơ chế phục hồi có kiểm soát |
+| **AI Calendar / Productivity** *(Motion, Reclaim.ai, SkedPal, FlowSavvy)* | Auto-schedule thời gian quanh meeting rất mạnh | Định hướng công sở, không hiểu logic prerequisite bài học, thiếu không gian học tập thực sự | Lập lịch chuyên biệt cho việc học, bảo toàn đồ thị kiến thức và Human-in-the-loop Apply |
+| **AI Tutor** *(Khanmigo, ChatGPT, Quizlet AI, Duolingo Max)* | Giải thích nội dung, luyện tập tương tác, Socratic tutoring | Quản trị lịch dài hạn, xây dựng thói quen kỷ luật, phục hồi sau biến cố đời sống | Kết nối giải thích nội dung với hành vi học hàng ngày, cam kết thời gian và chống trì hoãn |
+| **Knowledge Workspace** *(Notion AI, Obsidian, Mem, Capacities)* | Lưu trữ và truy xuất tri thức cá nhân xuất sắc | Dễ biến thành kho lưu trữ thụ động, không ép hành động hàng ngày, không gian thực thi rời rạc | Tích hợp không gian thực thi (Study Workspace), đúc kết Takeaways và đo lường tiến bộ thực |
+
+> **Khoảng trống chiến lược cốt lõi của FocusFlow:** Một hệ thống duy nhất kết nối thống nhất **Learning Plan + Execution Workspace + Evidence of Learning + Adaptive Recovery** thành một vòng vận hành khép kín (**Understand $\rightarrow$ Plan $\rightarrow$ Execute $\rightarrow$ Prove $\rightarrow$ Adapt**).
+
 ---
 
 ## 5. Định vị Giải pháp FocusFlow & Ma trận Truy vết Nhu cầu
 
 ### 5.1 Tuyên ngôn giá trị cốt lõi của FocusFlow
 FocusFlow không định vị là một "Chatbot AI dạy kèm" hay một "Ứng dụng Lịch đa năng", mà là:  
-**"Hệ thống hỗ trợ lập kế hoạch và thực thi lộ trình tự học thích ứng tích hợp AI chuyên biệt dành cho người tự học, giải phóng người học khỏi gánh nặng quản lý dữ liệu bằng quy trình học tập khép kín và cơ chế phục hồi kế hoạch thông minh."**
+
+> **Adaptive Self-Learning Operating System (Hệ điều hành tự học thích ứng)** — Nền tảng toàn diện dành cho người học có quỹ thời gian hạn chế, giúp chuyển mục tiêu lớn thành lịch học khả thi, hỗ trợ phiên học tập trung, đo bằng chứng học tập thực chất và phục hồi kế hoạch khi đời sống làm gián đoạn — với cơ chế Human-in-the-loop và Cổng Kiểm Duyệt 3 Tầng (3-Tier Validation Gate) để đảm bảo người học luôn làm chủ lịch chính thức.
 
 ---
 
 ### 5.2 Ma trận truy vết từ Khảo sát đến SRS và 5 KPI nghiệm thu
 
-Tuân thủ nghiêm ngặt nguyên tắc kỹ thuật phần mềm: **Mọi yêu cầu chức năng (FR) và yêu cầu phi chức năng (NFR) trong SRS v1.0 đều phải có nguồn gốc chứng minh từ dữ liệu khảo sát thực tế và phân tích đối sánh.**
+Tuân thủ nghiêm ngặt nguyên tắc kỹ thuật phần mềm: **Mọi yêu cầu chức năng (FR) và yêu cầu phi chức năng (NFR) trong SRS v1.2 đều phải có nguồn gốc chứng minh từ dữ liệu nghiên cứu thứ cấp, thực nghiệm công thái học và phân tích đối sánh.**
 
-| Phát hiện từ Khảo sát (Survey Finding) | Nỗi đau thực tế (User Pain Point) | Giải pháp thiết kế trong FocusFlow | Module & Mã Yêu cầu SRS tương ứng | KPI Nghiệp vụ đo lường (Rubric TC1) |
+| Phát hiện từ Nghiên cứu Thứ cấp & Thực nghiệm (Empirical Finding) | Nỗi đau thực tế (User Pain Point) | Giải pháp thiết kế trong FocusFlow | Module & Mã Yêu cầu SRS tương ứng | KPI Nghiệp vụ đo lường (Rubric TC1) |
 |---|---|---|---|---|
-| **82.2%** gặp khó khăn khi chia nhỏ mục tiêu; mất **48.6 phút** để lên lịch thủ công | **Rào cản phân rã mục tiêu (Decomposition Barrier)** | Khảo sát nhu cầu qua Q&A $\rightarrow$ Phân rã 2 cấp (Milestones & Schedule Proposal) $\rightarrow$ Phê duyệt Apply | Module Lập kế hoạch AI: `FR-GOAL-001`, `FR-PLAN-001`, `FR-PLAN-002`, `FR-PLAN-003` | **KPI 1:** Thời gian tạo kế hoạch $\le \mathbf{5}$ phút (thay vì 48.6 phút). |
-| **77.8%** mệt mỏi vì dùng trung bình **3.6 công cụ** rời rạc; mất 8-12 phút vào đầu phiên | **Quá tải & Phân mảnh công cụ (Tool Fragmentation)** | Không gian học tích hợp khép kín: Task list + Timer Pomodoro/Stopwatch + Scratchpad + Key Takeaways | Module Không gian Thực thi: `FR-SESSION-001`, `FR-SESSION-002`, `FR-SESSION-003` | **KPI 2:** Tỷ lệ hoàn thành task trong phiên đạt $\ge \mathbf{80\%}$. |
-| **88.9%** nản lòng hoặc bỏ cuộc khi bị trễ hạn 2-3 ngày; mất 30 phút sửa lịch thủ công | **Đứt gãy kế hoạch khi có biến cố (Rigid Planning Failure)** | Thuật toán quét quá hạn tất định; Nút Tạm dừng lộ trình với cơ chế tịnh tiến dây chuyền Domino Shift | Module Thích ứng & Lịch trình: `FR-ADAPT-001`, `FR-PAUSE-001`, `BUSR-06`, `BUSR-07` | **KPI 3:** Tỷ lệ duy trì lộ trình (Plan Adherence Rate) đạt $\ge \mathbf{70\%}$. |
+| **73.7%** tự học công nghệ mới (*Stack Overflow 2023*); mất **52 phút** (45–60 phút) để lên lịch thủ công (*Cognitive Walkthrough*) | **Rào cản phân rã mục tiêu (Decomposition Barrier)** | Khảo sát nhu cầu qua Q&A $\rightarrow$ Phân rã 2 cấp (Milestones & Schedule Proposal) $\rightarrow$ Phê duyệt Apply | Module Lập kế hoạch AI: `FR-GOAL-001`, `FR-PLAN-001`, `FR-PLAN-002`, `FR-PLAN-003` | **KPI 1:** Thời gian tạo kế hoạch $\le \mathbf{5}$ phút (thay vì 52 phút). |
+| Mất **23m15s** hồi phục tập trung (*ACM CHI 2005*); dùng **3–4 công cụ** rời rạc, mất **9 phút** (8–12 phút) chuẩn bị đầu phiên (*Walkthrough*) | **Quá tải & Phân mảnh công cụ (Tool Fragmentation)** | Không gian học tích hợp khép kín: Task list + Timer Pomodoro/Stopwatch + Scratchpad + Key Takeaways | Module Không gian Thực thi: `FR-SESSION-001`, `FR-SESSION-002`, `FR-SESSION-003` | **KPI 2:** Tỷ lệ hoàn thành task trong phiên đạt $\ge \mathbf{80\%}$. |
+| **85%–95%** bỏ cuộc giữa chừng (*Science 2019*); mất **25 phút** (20–30 phút) kéo thả lịch thủ công khi trễ hạn 3 ngày (*Walkthrough*) | **Đứt gãy kế hoạch khi có biến cố (Rigid Planning Failure)** | Quét quá hạn tất định kèm Email thông báo; Dời lịch hợp lý bằng AI (1 lộ trình); Nút Tạm dừng lộ trình với cơ chế tịnh tiến dây chuyền Domino Shift | Module Thích ứng & Lịch trình: `FR-ADAPT-001`, `FR-ADAPT-002`, `FR-ADAPT-003`, `FR-PAUSE-001`, `BUSR-06`, `BUSR-07` | **KPI 3:** Tỷ lệ duy trì lộ trình (Plan Adherence Rate) đạt $\ge \mathbf{70\%}$. |
 | Người dùng ngại sự phức tạp, rối rắm của Notion và sợ mất dữ liệu | **Rào cản tiếp cận & Độ phức tạp giao diện** | Luồng giao diện tinh gọn, phản hồi tức thì $\le 500$ms, thiết kế chuẩn Accessibility đa thiết bị | Yêu cầu Giao diện & Trải nghiệm: `NFR-UX-001`, `NFR-PERF-001`, `NFR-PERF-002`, `FR-TASK-001` | **KPI 4:** Tỷ lệ hoàn thành tác vụ (Task Success Rate) $\ge \mathbf{90\%}$. |
 | Mong muốn trải nghiệm liền mạch, chuyên nghiệp nhưng thân thiện sinh viên | **Nhu cầu về trải nghiệm sản phẩm tin cậy** | Quy trình duyệt Human-in-the-loop, bảo mật token WebCal, không lo sợ ảo giác AI | Toàn bộ hệ thống & Đánh giá UAT: `NFR-SEC-001`, `NFR-AI-001`, `FR-CALENDAR-001` | **KPI 5:** Điểm độ hài lòng trải nghiệm người dùng $\mathbf{SUS} \ge \mathbf{80/100}$. |
 
@@ -403,30 +404,52 @@ Là một sinh viên làm đồ án tốt nghiệp ngành Công nghệ Phần m�
 
 ---
 
-### 6.2 Bộ câu hỏi phản biện mẫu của Hội đồng bảo vệ
+### 6.2 Danh sách "Không nên nói" vs "Nên nói" khi thuyết minh đồ án (§12 Mentor)
+Để tránh bị Hội đồng chấm phản biện vào các điểm yếu truyền thống của ứng dụng AI, nhóm tác giả đúc kết bộ quy tắc phát ngôn chiến lược:
 
-Dưới đây là các câu hỏi mà Giảng viên phản biện và Hội đồng tốt nghiệp chắc chắn sẽ đặt ra liên quan đến chương Khảo sát & Đối sánh, kèm câu trả lời chuẩn mực kỹ thuật:
+| Không nên nói (Dễ bị Hội đồng phản biện) | Nên nói (Thể hiện bản lĩnh kỹ sư & làm chủ công nghệ) |
+|---|---|
+| *"FocusFlow là ChatGPT cho học tập."* | *"FocusFlow giải quyết khoảng trống chí mạng giữa kế hoạch và thực thi, biến roadmap văn bản thành hệ thống hành động có lifecycle khép kín."* |
+| *"FocusFlow tự động học thay người dùng."* | *"FocusFlow dùng AI ở nơi cần ngữ nghĩa (phân rã mục tiêu, tổng hợp review), dùng thuật toán tất định ở nơi cần an toàn (Domino Shift, Overdue sweep, Validation Gate)."* |
+| *"AI sẽ đảm bảo 100% người dùng không bỏ cuộc."* | *"FocusFlow xem vỡ kế hoạch là một trạng thái bình thường tất yếu cần phục hồi (MVS, Pause, Reschedule), không phán xét hay tạo cảm giác tội lỗi cho người học."* |
+| *"FocusFlow tốt hơn Google Calendar vì có nhiều tính năng hơn."* | *"FocusFlow không để AI tự ghi đè lịch chính thức; mọi đề xuất đều cần người học duyệt (Human-in-the-loop Apply) và bảo toàn đồ thị tiên quyết."* |
+| *"Hệ thống dùng AI xử lý toàn bộ logic nghiệp vụ."* | *"Hệ thống được thiết kế theo mô hình SRL của Zimmerman (Forethought $\rightarrow$ Performance $\rightarrow$ Self-Reflection), mở rộng thành chu trình 5 vòng: Understand $\rightarrow$ Plan $\rightarrow$ Execute $\rightarrow$ Prove $\rightarrow$ Adapt."* |
 
-#### Câu hỏi 1: "Tại sao người dùng không dùng trực tiếp ChatGPT để tạo lộ trình và Google Calendar để lưu lịch, mà phải cài đặt và sử dụng ứng dụng FocusFlow của em?"
+---
+
+### 6.3 Bộ câu hỏi phản biện mẫu & Câu chuyện bảo vệ trước Hội đồng (§12 Mentor)
+
+Dưới đây là bộ câu hỏi kinh điển mà Giảng viên phản biện và Hội đồng chấm tốt nghiệp chắc chắn sẽ đặt ra, kèm câu trả lời chuẩn mực kỹ thuật và câu chuyện bảo vệ nhất quán:
+
+#### Câu hỏi 1: "Tại sao không dùng ChatGPT + Google Calendar + Notion mà phải xây dựng FocusFlow?"
 > **Gợi ý trả lời bảo vệ:**  
-> *"Thưa Thầy/Cô, qua thử nghiệm thực chứng mô phỏng (Dogfooding Walkthrough) và nghiên cứu hành vi người học công nghệ, chúng em nhận thấy khi người học tự ghép nối ChatGPT với Google Calendar, họ đối mặt 2 rào cản chí mạng:*  
-> *Thứ nhất là **Chi phí chuyển đổi ngữ cảnh (Context Switching):** Theo nghiên cứu của TS. Gloria Mark (ACM CHI 2005), con người mất hơn 23 phút để hồi phục độ tập trung sau mỗi lần bị gián đoạn. Người học phải mất từ 45-60 phút chỉ để sao chép văn bản lộ trình thủ công vào Calendar, gây mệt mỏi ý chí (Planning Fatigue) trước khi kịp học.*  
-> *Thứ hai là **Sự đứt gãy khi có biến cố (Rigid Planning):** Google Calendar là lịch sự kiện tĩnh. Khi người học bận đột xuất 2-3 ngày, các buổi học trôi vào quá khứ và không có cơ chế tự thích ứng. Tỷ lệ bỏ cuộc trong tự học trực tuyến lên tới 85-95% (theo nghiên cứu của MIT/Harvard trên tạp chí Science 2019) phần lớn bắt nguồn từ sự nản chí khi nợ lịch tích tụ. FocusFlow giải quyết triệt để vấn đề này bằng một chu trình khép kín: AI sinh đề xuất bám sát quỹ thời gian thực $\rightarrow$ Người dùng phê duyệt $\rightarrow$ Thực thi tập trung trong phiên học $\rightarrow$ Và tự động phục hồi lịch bằng thuật toán Domino Shift khi có sự cố."*
+> *"Thưa Thầy/Cô, vì ba công cụ đó **hoàn toàn không chia sẻ cùng một trạng thái học tập (Learning State)**:  
+> 1. **ChatGPT** tạo văn bản lộ trình rất hay nhưng 'mù' thời gian thực, không biết quỹ thời gian rảnh thực tế của người học và kết quả chỉ trôi dạt trong lịch sử chat mà không có lifecycle.  
+> 2. **Google Calendar** giữ mốc giờ nhưng đối xử bài học như cuộc hẹn nha sĩ, hoàn toàn không hiểu logic tiên quyết (prerequisites) giữa các bài, lỡ 1 buổi là hỏng cả chuỗi.  
+> 3. **Notion** lưu trữ ghi chú rất tốt nhưng dễ biến thành 'kho chứa thụ động' (information hoarding), setup friction quá cao và không có cơ chế kéo người học vào hành động.  
+> **FocusFlow** biến mục tiêu, task, thời gian rảnh, phiên học, đúc kết takeaway và phục hồi thích ứng thành **một vòng dữ liệu khép kín duy nhất**. Giá trị cốt lõi không nằm ở từng tính năng đơn lẻ, mà ở việc trạng thái học tập được duy trì liên tục và có thể phục hồi khi đời sống làm gián đoạn."*
 
-#### Câu hỏi 2: "Tại sao đề tài lại lựa chọn kết hợp Nghiên cứu Thứ cấp (Secondary Research) và Thực nghiệm Công thái học (Heuristic Walkthrough) thay vì tiến hành một cuộc khảo sát đại trà ngay từ đầu?"
+#### Câu hỏi 2: "Motion và Reclaim.ai cũng tự động dời lịch thông minh bằng AI, FocusFlow khác gì?"
+> **Gợi ý trả lời bảo vệ:**  
+> *"Thưa Thầy/Cô, chúng em đã nghiên cứu rất kỹ Motion và Reclaim.ai. FocusFlow có 3 sự khác biệt bản chất:*  
+> 1. **Mục tiêu tối ưu:** Motion/Reclaim tối ưu hóa lịch làm việc văn phòng (Work-centric) để giải quyết xung đột lịch họp. FocusFlow tối ưu **lộ trình học tập có cấu trúc sư phạm (Learning-centric)**. Khi một buổi học bị lỡ, hệ thống bảo toàn nghiêm ngặt đồ thị kiến thức tiên quyết (Prerequisite Graph), không bao giờ đảo lộn trật tự bài học.  
+> 2. **Cơ chế kiểm soát:** Motion dùng AI hộp đen tự ý xáo trộn toàn bộ lịch khiến người dùng bị động. FocusFlow áp dụng triết lý **Human-in-the-loop**: AI chỉ sinh đề xuất (`ScheduleProposal (DRAFT)`), hiển thị tường minh bảng đối chiếu `Recovery Proposal Diff` và bắt buộc người học bấm `Apply`.  
+> 3. **Không gian thực thi & Đúc kết tri thức:** Motion/Reclaim hoàn toàn không có Study Workspace (Pomodoro, Scratchpad, Key Takeaways bắt buộc, và Prove Mode kiểm chứng hiểu bài). Ngoài ra, chi phí của họ ($10–$34/tháng) là rào cản quá lớn đối với sinh viên."*
+
+#### Câu hỏi 3: "Tính mới và đóng góp khoa học / công nghệ của đề tài là gì?"
+> **Gợi ý trả lời bảo vệ:**  
+> *"Thưa Thầy/Cô, tính mới của đề tài nằm ở **Cơ chế Phục hồi Thích ứng có kiểm soát (Controlled Adaptive Recovery) dành riêng cho người tự học**:*  
+> 1. **Mô hình kiến trúc lai (Deterministic Engine + Generative AI):** Dùng AI ở nơi cần ngữ nghĩa (phân rã mục tiêu, tổng hợp nhận xét định tính), nhưng dùng thuật toán tất định 100% ở nơi cần an toàn và kỷ luật (quét quá hạn 00:05 UTC+7, tịnh tiến Domino Shift khi tạm dừng, kiểm tra trần thời gian rảnh).  
+> 2. **Cổng kiểm duyệt 3 tầng (3-Tier Validation Gate):** Đảm bảo mọi đề xuất lịch trình từ AI đều phải vượt qua kiểm tra cấu trúc JSON Schema, kiểm tra dung lượng thời gian thực và kiểm tra tính hợp lý sư phạm trước khi đến tay người học.  
+> 3. **Trục đo lường bằng chứng học tập (Evidence of Learning):** Không dừng lại ở việc đếm giờ học hay tick task hình thức, FocusFlow bắt buộc đúc kết Key Takeaways và kiểm chứng Prove Mode cuối Milestone để triệt tiêu hiện tượng ảo tưởng năng lực."*
+
+#### Câu hỏi 4: "Tại sao đề tài lại lựa chọn kết hợp Nghiên cứu Thứ cấp (Secondary Research) và Thực nghiệm Công thái học (Heuristic Walkthrough) thay vì tiến hành một cuộc khảo sát đại trà ngay từ đầu?"
 > **Gợi ý trả lời bảo vệ:**  
 > *"Thưa Thầy/Cô, đây là một quyết định phương pháp luận có chủ đích nhằm bảo đảm tính trung thực và chuẩn mực khoa học kỹ thuật phần mềm:*  
-> *1. **Tránh nguy cơ sai lệch số liệu khảo sát nhỏ:** Một cuộc khảo sát thuận tiện quy mô vài chục người nếu triển khai vội vã thường dễ mắc sai lệch tự báo cáo (Recall Bias) và không đủ tính đại diện thống kê để khẳng định bản chất vấn đề.*  
-> *2. **Tận dụng các công trình khoa học quốc tế uy tín:** Đề tài đã khai thác các dữ liệu lớn đã được bình duyệt (Peer-reviewed) từ Tạp chí Science (phân tích hàng triệu học viên MOOC với tỷ lệ bỏ cuộc 85-95%), nghiên cứu của TS. Gloria Mark tại ACM CHI về chi phí chuyển đổi ngữ cảnh 23m15s, và báo cáo Stack Overflow Developer Survey 2023 khẳng định 73.7% lập trình viên tự học công nghệ mới.*  
-> *3. **Thực nghiệm công thái học trực tiếp:** Nhóm tác giả đã tiến hành thử nghiệm mô phỏng (Cognitive Walkthrough) trên chính 6 công cụ hiện hữu trong 4 tuần để đo đạc thời gian thao tác thực tế và nhận diện chính xác các điểm nghẽn nghiệp vụ.*  
-> *4. **Cam kết kiểm chứng UAT trên người dùng thật:** Toàn bộ bảng công cụ khảo sát 15 tiêu chí định lượng đã được thiết kế sẵn sàng để phục vụ cho pha Đánh giá Chấp nhận Người dùng (UAT Testing) với $\ge 10$ người dùng thật, đo lường tự động tỷ lệ Task Completion $\ge 90\%$ và điểm SUS $\ge 80/100$ theo đúng chuẩn Rubric TC2.7."*
-
-#### Câu hỏi 3: "Hiện nay các ứng dụng như Reclaim.ai hay Motion cũng có tính năng tự động dời lịch thông minh bằng AI. Vậy tính mới và sự khác biệt của FocusFlow là gì?"
-> **Gợi ý trả lời bảo vệ:**  
-> *"Thưa Thầy/Cô, chúng em đã nghiên cứu rất kỹ Reclaim.ai và Motion trong ma trận đối sánh tại Mục 4 của báo cáo. FocusFlow có 3 sự khác biệt cốt tử:*  
-> *1. **Về đối tượng và mục tiêu nghiệp vụ:** Reclaim.ai/Motion là công cụ quản lý lịch làm việc doanh nghiệp (Work-centric), giải quyết bài toán xung đột lịch họp văn phòng. Chúng hoàn toàn thiếu không gian phiên học chuyên biệt (Study Tool Suite với Pomodoro, Scratchpad và Key Takeaways) phục vụ cho chu trình hấp thu tri thức.*  
-> *2. **Về rào cản chi phí:** Reclaim/Motion có giá từ $10 đến $34/tháng, tạo rào cản kinh tế rất lớn cho sinh viên và người tự học phổ thông. FocusFlow được thiết kế với chi phí tối ưu, quản trị hạn ngạch AI tại middleware.*  
-> *3. **Về nguyên lý thích ứng:** Reclaim dùng thuật toán AI hộp đen tự động xáo trộn lịch khiến người dùng bị động. FocusFlow trao quyền kiểm soát cho người dùng (Human-in-the-loop) với nút Tạm dừng lộ trình minh bạch và thuật toán tịnh tiến dây chuyền (Domino Shift) tất định, bảo toàn 100% logic thứ tự kiến thức trước - sau của bài học."*
+> 1. **Tránh nguy cơ sai lệch số liệu khảo sát nhỏ:** Một cuộc khảo sát thuận tiện quy mô vài chục người nếu triển khai vội vã thường dễ mắc sai lệch tự báo cáo (Recall Bias) và không đủ tính đại diện thống kê để khẳng định bản chất vấn đề.  
+> 2. **Tận dụng các công trình khoa học quốc tế uy tín:** Đề tài đã khai thác các dữ liệu lớn đã được bình duyệt (Peer-reviewed) từ Tạp chí Science (phân tích hàng triệu học viên MOOC với tỷ lệ bỏ cuộc 85-95%), nghiên cứu của TS. Gloria Mark tại ACM CHI về chi phí chuyển đổi ngữ cảnh 23m15s, và báo cáo Stack Overflow Developer Survey 2023 khẳng định 73.7% lập trình viên tự học công nghệ mới.  
+> 3. **Thực nghiệm công thái học trực tiếp:** Nhóm tác giả đã tiến hành thử nghiệm mô phỏng (Cognitive Walkthrough) trên chính các công cụ hiện hữu trong 4 tuần để đo đạc thời gian thao tác thực tế và nhận diện chính xác các điểm nghẽn nghiệp vụ.  
+> 4. **Cam kết kiểm chứng UAT trên người dùng thật:** Toàn bộ bảng công cụ khảo sát 15 tiêu chí định lượng đã được thiết kế sẵn sàng để phục vụ cho pha Đánh giá Chấp nhận Người dùng (UAT Testing) với $\ge 10$ người dùng thật, đo lường tự động tỷ lệ Task Completion $\ge 90\%$ và điểm SUS $\ge 80/100$ theo đúng chuẩn Rubric TC2.7."*
 
 ---
 
@@ -456,6 +479,6 @@ Tuân thủ quy chuẩn trích dẫn khoa học chính quy **IEEE Reference Styl
 8. [8] ISO/IEC/IEEE, "ISO/IEC/IEEE 29148:2018 Systems and software engineering — Life cycle processes — Requirements engineering," *ISO/IEC/IEEE Standard*, pp. 1–104, Nov. 2018.
 9. [9] J. Brooke, "SUS: A 'quick and dirty' usability scale," in *Usability Evaluation In Industry*, P. W. Jordan, B. Thomas, B. A. Weerdmeester, and I. L. McClelland, Eds., London, UK: Taylor & Francis, 1996, pp. 189–194.
 10. [10] B. Deshpande, C. Knoerle, and F. Dawson, "Internet Calendaring and Scheduling Core Object Specification (iCalendar)," *IETF RFC 5545*, Sep. 2009. [Online]. Available: https://datatracker.ietf.org/doc/html/rfc5545
-11. [11] FocusFlow Engineering Team, "FocusFlow Software Requirements Specification (SRS) v1.0," *Internal Technical Report*, `docs/srs/srs-v1.0.md`, Sep. 2026.
+11. [11] FocusFlow Engineering Team, "FocusFlow Software Requirements Specification (SRS) v1.2," *Internal Technical Report*, `docs/srs/srs-v1.0.md`, Oct. 2026.
 12. [12] FocusFlow Engineering Team, "FocusFlow Problem Definition & Requirements Discovery Document," *Internal Technical Report*, `docs/requirements/problem-definition.md`, Sep. 2026.
 

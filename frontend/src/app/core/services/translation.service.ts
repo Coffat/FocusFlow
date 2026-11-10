@@ -1,4 +1,4 @@
-import { Injectable, signal, computed } from '@angular/core';
+import { Injectable, signal, computed, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 
@@ -11,23 +11,25 @@ export type TranslationDictionary = { [key: string]: TranslationNode };
   providedIn: 'root'
 })
 export class TranslationService {
-  http: HttpClient;
-  currentLanguage = signal<LanguageCode>('vi');
-  translations = signal<TranslationDictionary>({});
+  private readonly http = inject(HttpClient, { optional: true });
+  private readonly _currentLanguage = signal<LanguageCode>('vi');
+  readonly currentLanguage = this._currentLanguage.asReadonly();
+  private readonly _translations = signal<TranslationDictionary>({});
+  readonly translations = this._translations.asReadonly();
 
-  currentLang = computed(() => this.currentLanguage());
-
-  constructor(http: HttpClient) {
-    this.http = http;
-  }
+  readonly currentLang = computed(() => this._currentLanguage());
 
   async loadTranslations(lang: LanguageCode) {
+    if (!this.http) {
+      this._currentLanguage.set(lang);
+      return;
+    }
     try {
       const data = await firstValueFrom(
         this.http.get<TranslationDictionary>(`/assets/i18n/${lang}.json`)
       );
-      this.translations.set(data);
-      this.currentLanguage.set(lang);
+      this._translations.set(data);
+      this._currentLanguage.set(lang);
     } catch (_error) {
       // Keep existing translations
     }
@@ -38,8 +40,10 @@ export class TranslationService {
   }
 
   get(keyPath: string): string {
+    // Track both signals for zoneless change detection reactivity
+    this._currentLanguage();
     const keys = keyPath.split('.');
-    let current: TranslationNode = this.translations();
+    let current: TranslationNode = this._translations();
 
     for (const key of keys) {
       if (typeof current === 'object' && key in current) {

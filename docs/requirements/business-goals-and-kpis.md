@@ -7,7 +7,7 @@
 > **Tài liệu liên kết:** 
 > - [**`problem-definition.md`**](problem-definition.md) *(Định nghĩa bài toán & Cơ sở yêu cầu)*
 > - [**`user-survey-and-benchmarking.md`**](user-survey-and-benchmarking.md) *(Nghiên cứu đối sánh, dữ liệu thực chứng & Khảo sát)*
-> - [**`../srs/srs-v1.0.md`**](../srs/srs-v1.0.md) *(Đặc tả Yêu cầu Phần mềm v1.0 — Mục 4, Mục 9 EVAL-01 đến EVAL-05)*  
+> - [**`../srs/srs-v1.0.md`**](../srs/srs-v1.0.md) *(Đặc tả Yêu cầu Phần mềm v1.2 — Mục 4, Mục 9 EVAL-01 đến EVAL-05)*  
 > **Căn cứ đánh giá học thuật:** Khung Rubric Chấm Đồ án Tốt nghiệp CNTT:
 > - **Tiêu chí TC1 (Mức 5):** "Xác định rõ $\ge 5$ mục tiêu/KPI cụ thể định lượng ngay từ đầu; Phân tích thực tế khách quan."
 > - **Tiêu chí TC2.1 (Mức 5):** "Đặc tả các ràng buộc định lượng, đo lường được bằng công cụ kỹ thuật."
@@ -27,6 +27,8 @@
    - 3.3 [KPI 3 — Tỷ lệ duy trì lộ trình (Plan Adherence Rate)](#33-kpi-3--tỷ-lệ-duy-trì-lộ-trình-plan-adherence-rate)
    - 3.4 [KPI 4 — Tỷ lệ hoàn thành tác vụ người dùng (Task Success Rate)](#34-kpi-4--tỷ-lệ-hoàn-thành-tác-vụ-người-dùng-task-success-rate)
    - 3.5 [KPI 5 — Điểm hài lòng trải nghiệm chuẩn hóa (System Usability Scale - SUS)](#35-kpi-5--điểm-hài-lòng-trải-nghiệm-chuẩn-hóa-system-usability-scale---sus)
+   - 3.6 [North Star Metric: Weekly Recovered Learning Sessions (WRLS)](#36-north-star-metric-weekly-recovered-learning-sessions-wrls)
+   - 3.7 [Hệ thống 13 Chỉ số KPI Sản phẩm Bổ sung (Product Metrics Catalog)](#37-hệ-thống-13-chỉ-số-kpi-sản-phẩm-bổ-sung-product-metrics-catalog)
 4. [Giao thức Thực nghiệm Nghiệm thu Người dùng Thật (UAT Protocol)](#4-giao-thức-thực-nghiệm-nghiệm-thu-người-dùng-thật-uat-protocol)
    - 4.1 [Quy mô & Tiêu chuẩn chọn mẫu UAT](#41-quy-mô--tiêu-chuẩn-chọn-mẫu-uat)
    - 4.2 [Kịch bản 4 tác vụ cốt lõi đo lường Task Success Rate](#42-kịch-bản-4-tác-vụ-cốt-lõi-đo-lường-task-success-rate)
@@ -90,7 +92,7 @@ Hệ thống FocusFlow được định hướng bởi 5 mục tiêu nghiệp v�
   Tích hợp không gian học tập thống nhất (Study Workspace) khép kín, triệt tiêu chi phí chuyển đổi ngữ cảnh (Context Switching) qua nhiều ứng dụng rời rạc, hỗ trợ người học hoàn tất các mục tiêu bài học trong ngày.
 
 - **BG-03: Bảo vệ tính liên tục của kế hoạch học tập trước các biến cố đời sống**  
-  Cung cấp cơ chế thích ứng lịch thông minh (Deterministic Overdue Detection, Domino Shift khi Pause) giúp kế hoạch tự phục hồi khi người học bận đột xuất, ngăn chặn tâm lý nản chí và từ bỏ lộ trình giữa chừng.
+  Cung cấp cơ chế thích ứng lịch thông minh (Deterministic Overdue Detection kèm Email thông báo, Single-Roadmap AI Reschedule, và Domino Shift khi Pause) giúp kế hoạch phục hồi hợp lý khi người học bận đột xuất mà không làm xáo trộn các lộ trình khác, ngăn chặn tâm lý nản chí và từ bỏ lộ trình giữa chừng.
 
 - **BG-04: Đạt độ tin cậy và trải nghiệm tương tác trực quan chuẩn mực**  
   Xây dựng giao diện web responsive đạt chuẩn tiếp cận cao (Accessibility $\ge 90$), thời gian phản hồi tức thì ($\le 500$ms) và quy trình phê duyệt Human-in-the-loop minh bạch giúp người dùng hoàn toàn làm chủ hệ thống.
@@ -102,7 +104,7 @@ Hệ thống FocusFlow được định hướng bởi 5 mục tiêu nghiệp v�
 
 ## 3. Đặc tả Chi tiết 5 Chỉ số KPI Định lượng (Detailed KPI Specifications)
 
-Đáp ứng chuẩn **Rubric TC1 Mức 5** và liên kết chặt chẽ với các mã đánh giá `EVAL-01` đến `EVAL-05` trong [SRS v1.0](../srs/srs-v1.0.md#1150-1165):
+Đáp ứng chuẩn **Rubric TC1 Mức 5** và liên kết chặt chẽ với các mã đánh giá `EVAL-01` đến `EVAL-05` trong [SRS v1.2](../srs/srs-v1.0.md#9-tiêu-chí-đánh-giá-dự-án--thử-nghiệm-evaluation-metrics--benchmarks):
 
 ### 3.1 KPI 1 — Thời gian khởi tạo lộ trình (Plan Creation Time)
 *Mã truy vết SRS:* `EVAL-01` | *Mục tiêu liên kết:* `BG-01`, `BR-001`
@@ -110,15 +112,31 @@ Hệ thống FocusFlow được định hướng bởi 5 mục tiêu nghiệp v�
 - **Định nghĩa:** Tổng thời gian thực tế tính từ thời điểm người học bắt đầu gửi thông tin mục tiêu ban đầu trên giao diện cho đến khi bản Đề xuất Lịch trình (Schedule Proposal) được người dùng chỉnh sửa, bấm nút "Apply" và Backend Validation Gate lưu trữ thành công thành Lịch chính thức (Official Schedule).
 - **Mục tiêu định lượng (Benchmark Threshold):** 
   $$\mathbf{T_{\text{plan}}} \le \mathbf{5\text{ phút (300 giây)}}$$
-  *(Đối chứng thực tế: Kết quả khảo sát Mục 3.2 cho thấy người tự học mất trung bình **48.6 phút** khi làm thủ công qua nhiều ứng dụng. FocusFlow rút ngắn $\ge 89.7\%$ thời gian thiết lập).*
+  *(Đối chứng thực tế: Nhật ký thực nghiệm công thái học Mục 3.2 & 3.5 tại tài liệu khảo sát cho thấy người tự học mất tới **52 phút** (45–60 phút) khi lập lịch thủ công qua nhiều ứng dụng. FocusFlow rút ngắn $\ge 90.4\%$ thời gian thiết lập).*
 - **Công thức tính toán:**
-  $$T_{\text{plan}} = t_{\text{apply\_success}} - t_{\text{goal\_submit}}$$
+  $$T_{\text{plan}} = t_{\text{activated}} - t_{\text{goal\_created}}$$
   Trong đó:
-  - $t_{\text{goal\_submit}}$: Timestamp hệ thống ghi nhận sự kiện người dùng bấm gửi form mục tiêu ban đầu (`FR-GOAL-001`).
-  - $t_{\text{apply\_success}}$: Timestamp hệ thống trả về HTTP 201 Created khi lưu trữ Official Schedule thành công sau khi vượt qua cổng kiểm tra (`FR-PLAN-003`).
+  - $t_{\text{goal\_created}}$: Timestamp hệ thống ghi nhận mục tiêu được khởi tạo (`goals.created_at`).
+  - $t_{\text{activated}}$: Timestamp hệ thống kích hoạt Lịch chính thức (`official_schedules.activated_at` hoặc `official_schedules.created_at` khi `status = 'ACTIVE'`).
 - **Nguồn dữ liệu & Công cụ đo:**
-  - Bản ghi kiểm toán hành vi (Audit Log / Telemetry): Trích xuất chênh lệch thời gian từ bảng `audit_events` với 2 sự kiện `GOAL_SUBMITTED` và `OFFICIAL_SCHEDULE_CREATED`.
-  - Đo kiểm trong đợt thử nghiệm UAT với đồng hồ bấm giờ độc lập.
+  - Cơ sở dữ liệu quan hệ PostgreSQL 16: Trích xuất trực tiếp chênh lệch thời gian giữa bảng `goals` (`goals.created_at`) và bảng `official_schedules` (`official_schedules.activated_at` / `created_at`) thông qua quan hệ 1–1 với `roadmaps` (`goals.id = roadmaps.goal_id AND roadmaps.id = official_schedules.roadmap_id`). Loại bỏ hoàn toàn sự phụ thuộc vào bảng phụ trợ không tồn tại (`audit_events`), bảo đảm tính toàn vẹn 100% với lược đồ 3NF của hệ thống.
+  - Câu truy vấn SQL đo lường chuẩn xác:
+  ```sql
+  SELECT
+      g.id AS goal_id,
+      g.user_id,
+      g.title AS goal_title,
+      g.created_at AS goal_created_at,
+      os.activated_at AS schedule_activated_at,
+      EXTRACT(EPOCH FROM (os.activated_at - g.created_at)) AS duration_seconds,
+      ROUND(EXTRACT(EPOCH FROM (os.activated_at - g.created_at)) / 60.0, 2) AS duration_minutes
+  FROM goals g
+  JOIN roadmaps r ON r.goal_id = g.id
+  JOIN official_schedules os ON os.roadmap_id = r.id
+  WHERE os.status = 'ACTIVE'
+  ORDER BY g.created_at DESC;
+  ```
+  - Đo kiểm trong đợt thử nghiệm UAT kết hợp đồng hồ bấm giờ độc lập.
 - **Điều kiện biên & Ngoại lệ:**
   - *Khoảng thời gian nghỉ (Idle Time):* Nếu người dùng tạm ngưng thao tác (không có tương tác chuột/phím) liên tục $> 5$ phút giữa các bước xem xét Proposal, phiên khởi tạo đó bị đánh dấu ngoại lệ và loại khỏi mẫu tính toán để tránh sai lệch do yếu tố ngoại cảnh.
   - *Lỗi nhà cung cấp AI:* Thời gian chờ do lỗi mạng LLM bên ngoài gây timeout được ghi log riêng, kích hoạt luồng retry.
@@ -153,7 +171,7 @@ Hệ thống FocusFlow được định hướng bởi 5 mục tiêu nghiệp v�
 - **Định nghĩa:** Tỷ lệ phần trăm số ngày/buổi học người dùng thực sự kích hoạt Study Workspace và tham gia học tập so với tổng số ngày/buổi học đã được lên lịch chính thức trong khoảng thời gian theo dõi của lộ trình.
 - **Mục tiêu định lượng (Benchmark Threshold):** 
   $$\mathbf{AR_{\text{plan}}} \ge \mathbf{70\%}$$
-  *(Đối chứng thực tế: Khảo sát Mục 3.4 chỉ ra 88.9% người học nản chí bỏ cuộc khi bị dồn ứ lịch. Chỉ số $\ge 70\%$ chứng minh tính hiệu quả vượt bậc của cơ chế thích ứng Domino Shift).*
+  *(Đối chứng thực tế: Nghiên cứu thứ cấp Mục 3.1 & 3.4 chỉ ra **85% – 95%** người tự học trực tuyến bỏ cuộc giữa chừng (Science 2019) và mất **25 phút** kéo thả lịch thủ công khi trễ hạn 3 ngày. Chỉ số $\ge 70\%$ chứng minh tính hiệu quả vượt bậc của cơ chế thích ứng Domino Shift và Single-Roadmap AI Reschedule).*
 - **Công thức tính toán:**
   $$AR = \left( \frac{D_{\text{attended}}}{D_{\text{scheduled}} - D_{\text{paused}}} \right) \times 100\%$$
   Trong đó:
@@ -164,6 +182,12 @@ Hệ thống FocusFlow được định hướng bởi 5 mục tiêu nghiệp v�
   - Bảng `official_schedules`, `study_sessions`, và bảng `pause_records`.
 - **Điều kiện biên & Ngoại lệ:**
   - Không tính các ngày nghỉ theo cấu hình Availability của người dùng (những ngày quỹ giờ = 0h).
+  - **Quy tắc nghiệm thu phiên học & Ngoại lệ MVS (Quy tắc `OS-01`):**
+    - *Phiên chuẩn (Standard Mode):* Theo quy tắc vận hành `OS-01`, một phiên học thông thường chỉ được xem là hợp lệ (`COMPLETED` hoặc `PARTIAL_COMPLETED`) khi `actual_minutes >= 0.5 * planned_minutes` hoặc hoàn thành tối thiểu 01 task. Nếu thoát trước mốc này, phiên bị đánh dấu `CANCELLED` và không được tính vào $D_{\text{attended}}$.
+    - *Ngoại lệ Minimum Viable Session (`session_mode = 'MVS'`):* Nhằm cứu vãn nhịp học trong những ngày kiệt sức hoặc thời gian biểu đột xuất, khi người học chọn chế độ MVS (phiên 10–15 phút), phiên học được ghi nhận hoàn thành hợp lệ (`status = 'PARTIAL_COMPLETED'`) và **được tính là 01 ngày có mặt hợp lệ ($D_{\text{attended}}$)** với điều kiện kép bắt buộc:
+      1. Thời lượng thực học `actual_minutes >= 10` phút (xác thực qua nhịp Heartbeat định kỳ 60s);
+      2. Người học bắt buộc nhập tối thiểu 01 `Key Takeaway` hợp lệ (vượt qua Tầng 1 Kiểm duyệt tất định: $\ge 30$ ký tự, $\ge 6$ từ riêng biệt, không copy-paste đề bài).
+    - Cơ chế ngoại lệ này giúp người học giữ vững danh tính ("Identity Preservation") và không bị hệ thống trừng phạt điểm Adherence Rate một cách máy móc.
 
 ---
 
@@ -206,6 +230,69 @@ Hệ thống FocusFlow được định hướng bởi 5 mục tiêu nghiệp v�
     $$\overline{SUS} = \frac{1}{U} \sum_{u=1}^{U} SUS_u \ge 80.0$$
 - **Nguồn dữ liệu & Công cụ đo:**
   - Phiếu khảo sát trực tuyến Google Form ẩn danh thu thập kết quả khảo sát SUS ngay sau khi người dùng hoàn tất đợt trải nghiệm UAT.
+
+---
+
+### 3.6 North Star Metric: Weekly Recovered Learning Sessions (WRLS)
+*Mã truy vết chiến lược:* `NSM-RECOVERY` | *Định hướng Mentor:* §11.3 & Báo cáo Đối chiếu Phần 6.1
+
+- **Định nghĩa:** Số phiên học hợp lệ (`status IN ('COMPLETED', 'PARTIAL_COMPLETED')`) mỗi tuần được người học thực hiện sau khi vượt qua một rào cản gián đoạn hoặc đứt gãy kỷ luật học tập.
+- **Ý nghĩa sản phẩm cốt lõi:** Một ứng dụng học tập thông thường chỉ đo lường thời gian sử dụng thụ động (DAU/MAU) hoặc số task tick được trên giao diện. North Star Metric của FocusFlow phản ánh năng lực cốt lõi khác biệt nhất: **Khả năng giữ người học quay trở lại sau khi kế hoạch bị vỡ**, giải quyết triệt để rào cản bỏ cuộc giữa chừng trong tự học trực tuyến.
+- **Tiêu chí một phiên học được tính là "Recovered" (Thỏa mãn ít nhất 1 trong 4 điều kiện):**
+  1. Phiên học ở chế độ **Minimum Viable Session** (`session_mode = 'MVS'`) giúp duy trì nhịp học vào ngày năng lượng thấp;
+  2. Phiên học giải quyết một Task từng bị quá hạn / dời lịch (`tasks.reschedule_count > 0`);
+  3. Phiên học thực hiện một Micro-task được sinh ra từ một Task bị tắc nghẽn (`tasks.parent_task_id IS NOT NULL` khi xử lý Task `STALLED`);
+  4. Phiên học đầu tiên quay trở lại trong vòng 7 ngày sau khi kết thúc đợt **Tạm dừng lộ trình** (`pause_records`) hoặc sau quy trình **Post-Failure Reset Ritual**.
+- **Công thức định lượng toán học:**
+  $$\mathbf{WRLS}_w = \sum_{s \in S_w} \mathbb{I}\left( \text{status}(s) \in \{\text{'COMPLETED'}, \text{'PARTIAL\_COMPLETED'}\} \land \text{is\_recovered}(s) \right)$$
+  Trong đó:
+  - $S_w$: Tập hợp toàn bộ các phiên học bắt đầu trong tuần $w$ (`date_trunc('week', started_at)`).
+  - $\mathbb{I}(\cdot)$: Hàm chỉ thị (Indicator Function, nhận giá trị $1$ nếu điều kiện thỏa mãn, ngược lại là $0$).
+- **Truy vấn SQL chuẩn mực đo lường trên PostgreSQL 16:**
+  ```sql
+  SELECT
+      date_trunc('week', ss.started_at) AS study_week,
+      COUNT(DISTINCT ss.id) AS weekly_recovered_learning_sessions
+  FROM study_sessions ss
+  JOIN session_tasks st ON st.session_id = ss.id
+  JOIN tasks t ON t.id = st.task_id
+  WHERE ss.status IN ('COMPLETED', 'PARTIAL_COMPLETED')
+    AND (
+        ss.session_mode = 'MVS'
+        OR t.reschedule_count > 0
+        OR t.parent_task_id IS NOT NULL
+        OR EXISTS (
+            SELECT 1 FROM pause_records pr
+            WHERE pr.roadmap_id = ss.roadmap_id
+              AND ss.started_at::date BETWEEN pr.pause_end_date AND (pr.pause_end_date + INTERVAL '7 days')
+        )
+    )
+  GROUP BY 1
+  ORDER BY 1 DESC;
+  ```
+
+---
+
+### 3.7 Hệ thống 13 Chỉ số KPI Sản phẩm Bổ sung (Product Metrics Catalog)
+*Định hướng Mentor:* §11.2 & Báo cáo Đối chiếu Phần 6.2
+
+Để đảm bảo FocusFlow được vận hành như một **Adaptive Self-Learning Operating System** hoàn chỉnh theo dõi đa chiều từ Kích hoạt (Activation), Giữ chân (Retention), Phục hồi (Recovery), Chống trì hoãn (Anti-procrastination) đến Bằng chứng học tập (Evidence of Learning) và Mô hình kinh tế (Monetization), hệ thống bổ sung danh mục 13 KPI sản phẩm:
+
+| Nhóm chỉ số | Tên KPI | Công thức định lượng & Nguồn dữ liệu CSDL | Ngưỡng mục tiêu (Target) |
+| :--- | :--- | :--- | :---: |
+| **Activation** | **First Session Started Rate** | $\frac{\text{Số user có } \ge 1 \text{ bản ghi } \texttt{study\_sessions}}{\text{Số user đã Apply } \texttt{official\_schedules}} \times 100\%$ | $\ge 75\%$ |
+| **Activation** | **Time to First Study Session** | $\text{Median}(\texttt{MIN(study\_sessions.started\_at)} - \texttt{users.created\_at})$ | $\le 24\text{h}$ |
+| **Retention** | **D7 / D30 Active Learner Retention** | Tỷ lệ người học có ít nhất 1 phiên $\texttt{COMPLETED / PARTIAL\_COMPLETED}$ vào ngày thứ 7 / thứ 30 sau khi đăng ký tài khoản. | $\text{D7} \ge 45\%$<br>$\text{D30} \ge 25\%$ |
+| **Recovery** | **Overdue Recovery Rate (7d)** | Tỷ lệ các task bị quá hạn ($\texttt{OVERDUE\_RESCHEDULE}$) được hoàn thành ($\texttt{tasks.status = 'COMPLETED'}$) trong vòng $\le 7$ ngày kể từ ngày lên lịch cũ. | $\ge 65\%$ |
+| **Recovery** | **Dormant Roadmap Rate** | Tỷ lệ lộ trình $\texttt{ACTIVE}$ rơi vào trạng thái ngủ đông ($\texttt{NOW() - last\_study\_activity\_at} \ge 7\text{ ngày}$ ngoài thời gian Pause). | $\le 15\%$ |
+| **Anti-Procrastination** | **Reschedule-to-Start Ratio (RSR)** | $\frac{\text{Tổng số lần dời lịch quá hạn }(\texttt{trigger\_type = 'OVERDUE\_RESCHEDULE'})}{\text{Tổng số phiên học thực tế được bắt đầu }(\texttt{study\_sessions})}$ *(Chỉ số càng thấp càng tốt; $> 1.0$ là tín hiệu báo động đỏ về thói quen né tránh)*. | $\le 0.35$ |
+| **Evidence** | **Verified Takeaway Completion Rate** | $\frac{\text{Số phiên có } \texttt{study\_notes(note\_type='TAKEAWAY', alignment\_flag='ALIGNED')}}{\text{Tổng số phiên } \texttt{COMPLETED + PARTIAL\_COMPLETED}} \times 100\%$ | $\ge 85\%$ |
+| **Evidence** | **Milestone Proof Rate** | $\frac{\text{Số Milestone đạt trạng thái } \texttt{proof\_status = 'PROVEN'}}{\text{Tổng số Milestone } \texttt{COMPLETED}} \times 100\%$ | $\ge 70\%$ |
+| **Quality** | **AI Proposal Edit Rate** | $\frac{\text{Số } \texttt{schedule\_proposals} \text{ có } \texttt{user\_edit\_count > 0}}{\text{Tổng số } \texttt{schedule\_proposals} \text{ được } \texttt{APPLIED}} \times 100\%$ | $15\% - 40\%$ |
+| **Trust** | **Proposal Apply Rate** | $\frac{\text{Số } \texttt{schedule\_proposals(status='APPLIED')}}{\text{Tổng số } \texttt{schedule\_proposals} \text{ do AI sinh ra}} \times 100\%$ | $\ge 80\%$ |
+| **Calendar** | **Calendar Sync Adoption** | Tỷ lệ người học kích hoạt đồng bộ lịch $\texttt{availabilities.calendar\_integration\_mode} \in \{\text{'EXPORT\_ICS'}, \text{'CONNECTED'}\}$. | $\ge 40\%$ |
+| **Monetization** | **AI Quota Utilization** | $\text{Avg}\left(\frac{\texttt{ai\_quotas.used\_calls}}{\texttt{ai\_quotas.monthly\_limit}}\right)$ phân tách theo hạng $\texttt{tier = 'FREE'}$ và $\texttt{'PREMIUM'}$. | Quản trị chi phí token |
+| **Monetization** | **Premium Conversion Rate** | $\frac{\text{Số user có giao dịch thành công } \texttt{payment\_transactions(status='PAID')}}{\text{Tổng số user Active toàn hệ thống}} \times 100\%$ | $\ge 5\%$ |
 
 ---
 
@@ -258,11 +345,11 @@ Hệ thống cài đặt sẵn các module đo lường kỹ thuật độc lậ
 
 ### 5.1 Ma trận ánh xạ từ Nỗi đau khảo sát $\rightarrow$ KPI $\rightarrow$ SRS
 
-| Nỗi đau từ Khảo sát Thực tế ($N=45$) | Business Goal | Chỉ số KPI | Mã SRS tương ứng | Ngưỡng Benchmark Nghiệm thu |
+| Phát hiện từ Nghiên cứu Thứ cấp & Thực nghiệm Công thái học | Business Goal | Chỉ số KPI | Mã SRS tương ứng | Ngưỡng Benchmark Nghiệm thu |
 |---|---|---|---|---|
-| **82.2%** khó chia nhỏ mục tiêu; mất **48.6 phút** tạo lịch | `BG-01` | **KPI 1** (Plan Creation Time) | `EVAL-01`, `FR-PLAN-001..003` | $\le \mathbf{5}$ phút (giảm 90% thời gian) |
-| **77.8%** mệt mỏi vì dùng **3.6 công cụ** rời rạc | `BG-02` | **KPI 2** (Session Efficiency) | `EVAL-02`, `FR-SESSION-001..003` | Hoàn thành $\ge \mathbf{80\%}$ task/buổi |
-| **88.9%** nản lòng bỏ cuộc khi bị trễ hạn 2-3 ngày | `BG-03` | **KPI 3** (Plan Adherence) | `EVAL-03`, `FR-PAUSE-001`, `BUSR-07` | Tỷ lệ duy trì $\ge \mathbf{70\%}$ buổi học |
+| **73.7%** tự học công nghệ mới (*Stack Overflow 2023*); mất **52 phút** (45–60 phút) lập lịch thủ công (*Cognitive Walkthrough*) | `BG-01` | **KPI 1** (Plan Creation Time) | `EVAL-01`, `FR-PLAN-001..003` | $\le \mathbf{5}$ phút (giảm $\ge 90\%$ thời gian) |
+| Mất **23m15s** hồi phục tập trung (*ACM CHI 2005*); dùng **3–4 công cụ** rời rạc, mất **9 phút** chuẩn bị đầu phiên (*Walkthrough*) | `BG-02` | **KPI 2** (Session Efficiency) | `EVAL-02`, `FR-SESSION-001..003` | Hoàn thành $\ge \mathbf{80\%}$ task/buổi |
+| **85%–95%** bỏ cuộc giữa chừng (*Science 2019*); mất **25 phút** kéo thả lịch thủ công khi trễ hạn 3 ngày (*Walkthrough*) | `BG-03` | **KPI 3** (Plan Adherence) | `EVAL-03`, `FR-ADAPT-001..003`, `FR-PAUSE-001`, `BUSR-06`, `BUSR-07` | Tỷ lệ duy trì $\ge \mathbf{70\%}$ buổi học |
 | Người dùng e ngại lỗi phần mềm và giao diện phức tạp | `BG-04` | **KPI 4** (Task Success Rate) | `EVAL-04`, `NFR-UX-001..002` | Tỷ lệ hoàn thành tác vụ $\ge \mathbf{90\%}$ |
 | Đòi hỏi độ hoàn thiện cao, tin cậy đối với sinh viên | `BG-04` | **KPI 5** (SUS Usability Score) | `EVAL-05`, `NFR-UX-002` | Điểm $\mathbf{SUS} \ge \mathbf{80/100}$ (Grade A) |
 
@@ -274,7 +361,7 @@ Hệ thống cài đặt sẵn các module đo lường kỹ thuật độc lậ
 |---|---|---|---|
 | **KPI 1** ($T_{\text{plan}} > 5$m) | External LLM phản hồi chậm hoặc nghẽn mạng. | API latency cao từ OpenAI/Anthropic. | Áp dụng Hard Timeout 55s (`FR-AI-002`), cơ chế Auto-retry không tính quota, hỗ trợ Fallback Manual Plan tức thì. |
 | **KPI 2** ($CR < 80\%$) | AI phân bổ khối lượng task quá nặng so với thời gian rảnh. | Prompt thiếu ràng buộc thời lượng task chi tiết. | Backend Hard Ceiling Gate (`BUSR-03`) chặn không cho Apply nếu tổng thời lượng task vượt quá quỹ giờ rảnh đã cấu hình. |
-| **KPI 3** ($AR < 70\%$) | Người dùng quên lịch học hoặc bận đột xuất dài ngày. | Không có thông báo nhắc lịch và ngại dời ngày. | Đồng bộ lịch 1 chiều qua WebCal Feed (`FR-CALENDAR-002`); Nút Pause 1 chạm kích hoạt Domino Shift không phạt trễ hạn. |
+| **KPI 3** ($AR < 70\%$) | Người dùng quên lịch học hoặc bận đột xuất dài ngày. | Không có thông báo nhắc lịch và ngại dời ngày. | Gửi Email thông báo khi phát hiện task quá hạn & nút Dời lịch hợp lý bằng AI cho 1 lộ trình (`FR-ADAPT-001`, `FR-ADAPT-002`); Đồng bộ lịch 2 chiều có kiểm soát & WebCal Feed (`FR-CALENDAR-002`); Nút Pause 1 chạm kích hoạt Domino Shift không phạt trễ hạn. |
 | **KPI 4** ($TSR < 90\%$) | Giao diện gây hiểu lầm hoặc luồng thao tác có điểm nghẽn. | Thiết kế UX chưa tối ưu công thái học. | Tuân thủ Google Lighthouse Accessibility $\ge 90$ (`NFR-UX-002`); Tối giản luồng thao tác qua Wizard từng bước rõ ràng. |
 | **KPI 5** ($SUS < 80$) | Ứng dụng giật lag hoặc phản hồi chậm. | API backend xử lý chậm khi có tải. | Tối ưu hóa API phản hồi $\le 200$ms (`NFR-PERF-002`), áp dụng Optimistic UI cập nhật trạng thái tức thì trên client. |
 
@@ -289,5 +376,5 @@ Hệ thống cài đặt sẵn các module đo lường kỹ thuật độc lậ
 ### Câu hỏi Phản biện 2: "Làm thế nào để Hội đồng tin rằng các số liệu KPI đo lường trong đợt thử nghiệm UAT là trung thực, không phải do sinh viên tự điền vào?"
 > **Gợi ý trả lời bảo vệ:**  
 > *"Thưa Thầy/Cô, toàn bộ số liệu đo lường của FocusFlow được bảo chứng bằng cơ chế kép:  
-> 1. **Dữ liệu kỹ thuật tự động (Automated Telemetry):** Các chỉ số KPI 1, KPI 2, KPI 3 được trích xuất trực tiếp từ các câu lệnh SQL truy vấn bảng cơ sở dữ liệu `study_sessions`, `official_schedules`, và `audit_events` với đầy đủ timestamp hệ thống không thể làm giả thủ công.  
+> 1. **Dữ liệu kỹ thuật tự động (Automated Telemetry):** Các chỉ số KPI 1, KPI 2, KPI 3 và North Star Metric được trích xuất trực tiếp từ các câu lệnh SQL truy vấn bảng cơ sở dữ liệu `goals`, `roadmaps`, `official_schedules`, `study_sessions`, `session_tasks`, `tasks` và `pause_records` với đầy đủ timestamp hệ thống không thể làm giả thủ công.  
 > 2. **Minh chứng độc lập (Independent Artifacts):** Chỉ số KPI 4 và KPI 5 được lưu trữ qua các biên bản kiểm thử UAT có chữ ký xác nhận của từng người tham gia và file xuất dữ liệu gốc (CSV) từ Google Form khảo sát chuẩn hóa SUS. Nhóm sẵn sàng mở trực tiếp cơ sở dữ liệu và dashboard thống kê trước Hội đồng."*

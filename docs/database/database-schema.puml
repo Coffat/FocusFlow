@@ -1,0 +1,672 @@
+@startuml FocusFlow_Database_Diagram
+title FocusFlow — Sơ đồ Lược đồ Cơ sở Dữ liệu Vật lý v3.2 (Physical Database Schema Diagram — 35 Bảng PostgreSQL 16 + pgvector)
+' Chuẩn hóa 3NF/BCNF kết hợp Controlled JSONB Value Objects theo 4 Bounded Contexts + Shared Kernel (12 / 10 / 5 / 4 / 4)
+' Đồng bộ 100% với docs/database/schema.sql và docs/database/schema.dbml (dbdiagram.io)
+
+left to right direction
+skinparam roundcorner 6
+skinparam defaultFontName "Helvetica", "Arial", sans-serif
+skinparam defaultFontSize 11
+skinparam shadowing false
+skinparam linetype ortho
+skinparam nodesep 50
+skinparam ranksep 80
+
+skinparam package {
+    BackgroundColor #F8FAFC
+    BorderColor #64748B
+    FontColor #0F172A
+    FontStyle bold
+}
+
+skinparam entity {
+    BackgroundColor #FFFFFF
+    BorderColor #1E40AF
+    HeaderBackgroundColor #EFF6FF
+    FontColor #0F172A
+}
+
+' =============================================================================
+' BOUNDED CONTEXT 1: ACCOUNT (12 TABLES)
+' =============================================================================
+package "Bounded Context 1: Account & Learner Intelligence (account — 12 Bảng)" as PKG_ACCOUNT {
+
+    entity "users" as users {
+        * id : uuid <<PK>>
+        --
+        * email : varchar(255) <<UK>>
+        * password_hash : varchar(255)
+        * full_name : varchar(100)
+        * timezone : varchar(50)
+        * role : varchar(20)
+        * tier : varchar(20)
+        * is_locked : boolean
+        premium_expires_at : timestamptz
+        last_login_at : timestamptz
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    entity "learner_profiles" as learner_profiles {
+        * id : uuid <<PK>>
+        --
+        * user_id : uuid <<FK, UK>>
+        * optimal_focus_duration_mins : int
+        * peak_productivity_slots : jsonb
+        * estimation_bias_factor : numeric(4,2)
+        * weekly_completion_rate : numeric(5,2)
+        * total_completed_sessions : int
+        * is_cold_start : boolean
+        last_aggregated_at : timestamptz
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    entity "webcal_tokens" as webcal_tokens {
+        * id : uuid <<PK>>
+        --
+        * user_id : uuid <<FK, UK>>
+        * token_hash : varchar(64) <<UK>>
+        * is_active : boolean
+        last_used_at : timestamptz
+        rotated_at : timestamptz
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    entity "calendar_connections" as calendar_connections {
+        * id : uuid <<PK>>
+        --
+        * user_id : uuid <<FK, UK>>
+        * provider : varchar(30) <<UK>>
+        * external_calendar_id : varchar(255)
+        * oauth_refresh_token_encrypted : text
+        * sync_status : varchar(20)
+        last_synced_at : timestamptz
+        error_detail : text
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    entity "availabilities" as availabilities {
+        * id : uuid <<PK>>
+        --
+        * user_id : uuid <<FK, UK>>
+        * mode : varchar(20)
+        * calendar_integration_mode : varchar(20)
+        * daily_quotas : jsonb
+        * min_session_minutes : int
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    entity "availability_slots" as availability_slots {
+        * id : uuid <<PK>>
+        --
+        * availability_id : uuid <<FK>>
+        * day_of_week : smallint
+        * start_time : time
+        * end_time : time
+        * end_day_offset : smallint
+        * slot_type : varchar(20)
+        * energy_level : varchar(10)
+        * is_active : boolean
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    entity "ai_quotas" as ai_quotas {
+        * id : uuid <<PK>>
+        --
+        * user_id : uuid <<FK, UK>>
+        * monthly_limit : int
+        * used_calls : int
+        * reserved_calls : int
+        * tokens_consumed : bigint
+        * cycle_start : timestamptz
+        * cycle_end : timestamptz
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    entity "ai_quota_reservations" as ai_quota_reservations {
+        * id : uuid <<PK>>
+        --
+        * quota_id : uuid <<FK>>
+        * user_id : uuid <<FK>>
+        * operation_type : varchar(50)
+        * status : varchar(20)
+        * tokens_reserved : int
+        * expires_at : timestamptz
+        * created_at : timestamptz
+        resolved_at : timestamptz
+    }
+
+    entity "ai_usage_logs" as ai_usage_logs {
+        * id : uuid <<PK>>
+        --
+        * user_id : uuid <<FK>>
+        reservation_id : uuid <<FK>>
+        * action_type : varchar(50)
+        * model_name : varchar(100)
+        * attempt_no : smallint
+        * prompt_tokens : int
+        * completion_tokens : int
+        * total_tokens : int
+        * latency_ms : int
+        * estimated_cost_usd : numeric(10,6)
+        * status : varchar(20)
+        error_message : text
+        * created_at : timestamptz
+    }
+
+    entity "payment_transactions" as payment_transactions {
+        * id : uuid <<PK>>
+        --
+        * user_id : uuid <<FK>>
+        * transaction_ref : varchar(100) <<UK>>
+        * gateway_provider : varchar(20)
+        * amount_vnd : int
+        * currency : varchar(10)
+        * status : varchar(20)
+        qr_code_url : text
+        * webhook_signature_verified : boolean
+        paid_at : timestamptz
+        expires_at : timestamptz
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    entity "learner_memory_items" as learner_memory_items {
+        * id : uuid <<PK>>
+        --
+        * user_id : uuid <<FK, UK>>
+        * memory_category : varchar(30) <<UK>>
+        * epistemic_type : varchar(20)
+        * memory_key : varchar(120) <<UK>>
+        * claim_value : jsonb
+        * source_evidence : text
+        * sample_size : int
+        observation_window_days : int
+        * confidence_score : numeric(4,3)
+        * confirmation_status : varchar(25)
+        confirmed_at : timestamptz
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    entity "learner_concept_masteries" as learner_concept_masteries {
+        * id : uuid <<PK>>
+        --
+        * user_id : uuid <<FK, UK>>
+        * concept_id : varchar(120) <<FK, UK>>
+        * mastery_score : numeric(5,2)
+        * mastery_level : varchar(20)
+        * evidence_count : int
+        * mistake_pattern_summary : jsonb
+        last_practiced_at : timestamptz
+        next_review_at : timestamptz
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    users ||--o| learner_profiles : "1:1"
+    users ||--o| webcal_tokens : "1:1"
+    users ||--o{ calendar_connections : "1:N"
+    users ||--o| availabilities : "1:0..1"
+    availabilities ||--o{ availability_slots : "1:N"
+    users ||--|| ai_quotas : "1:1"
+    ai_quotas ||--o{ ai_quota_reservations : "1:N"
+    users ||--o{ ai_quota_reservations : "1:N"
+    ai_quota_reservations ||--o{ ai_usage_logs : "0..1:N"
+    users ||--o{ ai_usage_logs : "1:N"
+    users ||--o{ payment_transactions : "1:N"
+    users ||--o{ learner_memory_items : "1:N"
+    users ||--o{ learner_concept_masteries : "1:N"
+}
+
+' =============================================================================
+' BOUNDED CONTEXT 2: PLANNING (10 TABLES)
+' =============================================================================
+package "Bounded Context 2: Roadmap, Planning & Knowledge Engine (planning — 10 Bảng)" as PKG_PLANNING {
+
+    entity "goals" as goals {
+        * id : uuid <<PK>>
+        --
+        * user_id : uuid <<FK>>
+        * title : text
+        * raw_description : text
+        target_date : date
+        * status : varchar(20)
+        * prior_knowledge_level : varchar(50)
+        clarification_context : text
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    entity "roadmaps" as roadmaps {
+        * id : uuid <<PK>>
+        --
+        * user_id : uuid <<FK>>
+        * goal_id : uuid <<FK, UK>>
+        * title : varchar(255)
+        description : text
+        * status : varchar(20)
+        start_date : date
+        target_date : date
+        * weekly_reschedule_budget : smallint
+        * weekly_reschedule_used : smallint
+        * budget_week_start : date
+        last_study_activity_at : timestamptz
+        * reset_ritual_count : smallint
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    entity "milestones" as milestones {
+        * id : uuid <<PK>>
+        --
+        * roadmap_id : uuid <<FK, UK>>
+        * sequence_order : int <<UK>>
+        * title : varchar(255)
+        description : text
+        * status : varchar(20)
+        * proof_status : varchar(20)
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    entity "official_schedules" as official_schedules {
+        * id : uuid <<PK>>
+        --
+        * roadmap_id : uuid <<FK, UK>>
+        * version_number : int
+        * strategy : varchar(20)
+        * total_sessions : int
+        * total_planned_minutes : int
+        * buffer_minutes_per_week : int
+        * recovery_window_days : smallint
+        * daily_workload_cap_minutes : int
+        * stability_weight : numeric(3,2)
+        * activated_at : timestamptz
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    entity "schedule_proposals" as schedule_proposals {
+        * id : uuid <<PK>>
+        --
+        * roadmap_id : uuid <<FK>>
+        * user_id : uuid <<FK>>
+        * proposal_data : jsonb
+        * status : varchar(20)
+        * proposal_type : varchar(30)
+        original_proposal_data : jsonb
+        * user_edit_count : int
+        applied_at : timestamptz
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    entity "learning_concepts" as learning_concepts {
+        * concept_id : varchar(120) <<PK>>
+        --
+        * title : varchar(255)
+        * summary : text
+        * domain : varchar(100)
+        * difficulty_level : varchar(50)
+        * estimated_effort_minutes : int
+        * keywords : jsonb
+        * learning_outcomes : jsonb
+        * verification_status : varchar(30)
+        * version : varchar(20)
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    entity "concept_prerequisites" as concept_prerequisites {
+        * source_concept_id : varchar(120) <<PK, FK>>
+        * prerequisite_concept_id : varchar(120) <<PK, FK>>
+        --
+        * relation_type : varchar(30)
+        * rationale : text
+        * created_at : timestamptz
+    }
+
+    entity "knowledge_sources" as knowledge_sources {
+        * id : uuid <<PK>>
+        --
+        * user_id : uuid <<FK>>
+        * goal_id : uuid <<FK>>
+        * source_type : varchar(20)
+        * title : varchar(255)
+        source_uri : text
+        * content_hash : varchar(64)
+        * ingestion_status : varchar(20)
+        * chunk_count : int
+        * provenance_metadata : jsonb
+        error_detail : text
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    entity "knowledge_chunks" as knowledge_chunks {
+        * id : uuid <<PK>>
+        --
+        * source_id : uuid <<FK, UK>>
+        * goal_id : uuid <<FK>>
+        * chunk_index : int <<UK>>
+        section_title : varchar(255)
+        page_number : int
+        * content : text
+        * token_count : int
+        search_vector : tsvector
+        embedding : vector(768)
+        * provenance_json : jsonb
+        * created_at : timestamptz
+    }
+
+    entity "schedule_blocks" as schedule_blocks {
+        * id : uuid <<PK>>
+        --
+        * roadmap_id : uuid <<FK>>
+        * official_schedule_id : uuid <<FK>>
+        task_id : uuid <<FK>>
+        * sequence_in_task : smallint
+        * block_type : varchar(20)
+        * block_date : date
+        * start_time : timestamptz
+        * end_time : timestamptz
+        * scheduled_duration_minutes : int
+        * is_protected : boolean
+        * status : varchar(20)
+        external_calendar_event_id : varchar(255)
+        placement_rationale : text
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    goals ||--o| roadmaps : "1:0..1"
+    roadmaps ||--o{ milestones : "1:N"
+    roadmaps ||--o| official_schedules : "1:1"
+    roadmaps ||--o{ schedule_proposals : "1:N"
+    learning_concepts ||--o{ concept_prerequisites : "1:N (source)"
+    learning_concepts ||--o{ concept_prerequisites : "1:N (prereq)"
+    goals ||--o{ knowledge_sources : "1:N"
+    knowledge_sources ||--o{ knowledge_chunks : "1:N"
+    goals ||--o{ knowledge_chunks : "1:N"
+    roadmaps ||--o{ schedule_blocks : "1:N"
+    official_schedules ||--o{ schedule_blocks : "1:N"
+}
+
+' =============================================================================
+' BOUNDED CONTEXT 3: EXECUTION (5 TABLES)
+' =============================================================================
+package "Bounded Context 3: Study Execution & Scheduling (execution — 5 Bảng)" as PKG_EXECUTION {
+
+    entity "tasks" as tasks {
+        * id : uuid <<PK>>
+        --
+        * roadmap_id : uuid <<FK>>
+        * milestone_id : uuid <<FK>>
+        official_schedule_id : uuid <<FK>>
+        parent_task_id : uuid <<FK>>
+        concept_id : varchar(120) <<FK>>
+        * title : varchar(255)
+        description : text
+        * estimated_minutes : int
+        * learning_resources_json : jsonb
+        scheduled_date : date
+        scheduled_start : timestamptz
+        scheduled_end : timestamptz
+        * status : varchar(20)
+        completed_at : timestamptz
+        * reschedule_count : int
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    entity "task_dependencies" as task_dependencies {
+        * id : uuid <<PK>>
+        --
+        * predecessor_id : uuid <<FK, UK>>
+        * successor_id : uuid <<FK, UK>>
+        * roadmap_id : uuid <<FK>>
+        * is_mandatory : boolean
+        * created_at : timestamptz
+    }
+
+    entity "study_sessions" as study_sessions {
+        * id : uuid <<PK>>
+        --
+        * user_id : uuid <<FK>>
+        * roadmap_id : uuid <<FK>>
+        * session_mode : varchar(20)
+        * timer_mode : varchar(20)
+        * started_at : timestamptz
+        ended_at : timestamptz
+        * planned_minutes : int
+        * actual_minutes : int
+        * status : varchar(20)
+        * pending_takeaway : boolean
+        checkin_time_sufficiency : varchar(20)
+        checkin_perceived_difficulty : varchar(20)
+        checkin_focus_level : smallint
+        * last_heartbeat_at : timestamptz
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    entity "session_tasks" as session_tasks {
+        * id : uuid <<PK>>
+        --
+        * session_id : uuid <<FK, UK>>
+        * task_id : uuid <<FK, UK>>
+        * allocated_minutes : int
+        * actual_minutes : int
+        * status_after_session : varchar(20)
+        notes : text
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    entity "study_notes" as study_notes {
+        * id : uuid <<PK>>
+        --
+        * user_id : uuid <<FK>>
+        session_id : uuid <<FK>>
+        task_id : uuid <<FK>>
+        * note_type : varchar(20)
+        * content : text
+        self_confidence : smallint
+        ai_evidence_score : numeric(3,2)
+        * alignment_flag : varchar(25)
+        * verification_status : varchar(25)
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    tasks ||--o{ tasks : "0..1:N (subtasks)"
+    tasks ||--o{ task_dependencies : "is predecessor"
+    tasks ||--o{ task_dependencies : "is successor"
+    study_sessions ||--o{ session_tasks : "1:N"
+    tasks ||--o{ session_tasks : "1:N"
+    study_sessions ||--o{ study_notes : "1:N"
+    tasks ||--o{ study_notes : "1:N"
+}
+
+' =============================================================================
+' BOUNDED CONTEXT 4: EVALUATION & ADAPTATION (4 TABLES)
+' =============================================================================
+package "Bounded Context 4: Evaluation & Adaptation (evaluation — 4 Bảng)" as PKG_EVALUATION {
+
+    entity "pause_records" as pause_records {
+        * id : uuid <<PK>>
+        --
+        * roadmap_id : uuid <<FK>>
+        * pause_start_date : date
+        pause_end_date : date
+        shifted_days : int
+        reason : text
+        * status : varchar(20)
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    entity "ai_reviews" as ai_reviews {
+        * id : uuid <<PK>>
+        --
+        * roadmap_id : uuid <<FK>>
+        * user_id : uuid <<FK>>
+        milestone_id : uuid <<FK>>
+        * review_cycle : varchar(20)
+        period_start : date
+        period_end : date
+        * quantitative_summary : jsonb
+        * user_reflection_payload : jsonb
+        * strengths_feedback : text
+        * bottlenecks_feedback : text
+        * action_recommendations : text
+        * model_used : varchar(100)
+        * generated_at : timestamptz
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    entity "schedule_change_logs" as schedule_change_logs {
+        * id : uuid <<PK>>
+        --
+        * roadmap_id : uuid <<FK>>
+        schedule_id : uuid <<FK>>
+        task_id : uuid <<FK>>
+        * trigger_type : varchar(30)
+        reason : text
+        * affected_tasks_count : int
+        * total_shifted_minutes : int
+        * diff_payload : jsonb
+        * disruption_category : varchar(30)
+        * counts_toward_budget : boolean
+        * created_at : timestamptz
+    }
+
+    entity "milestone_proofs" as milestone_proofs {
+        * id : uuid <<PK>>
+        --
+        * milestone_id : uuid <<FK, UK>>
+        * roadmap_id : uuid <<FK>>
+        * user_id : uuid <<FK>>
+        * attempt_no : smallint <<UK>>
+        * recall_exchanges_payload : jsonb
+        * mistake_taxonomy_json : jsonb
+        * avg_self_confidence : numeric(3,2)
+        * ai_evidence_score : numeric(3,2)
+        calibration_gap : numeric(4,2)
+        * proof_verdict : varchar(25)
+        * feedback_summary : text
+        corrective_task_id : uuid <<FK>>
+        * model_used : varchar(100)
+        * evaluated_at : timestamptz
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+}
+
+' =============================================================================
+' SHARED KERNEL (4 TABLES)
+' =============================================================================
+package "Shared Kernel: Infrastructure & Durable Workflows (shared_kernel — 4 Bảng)" as PKG_SHARED {
+
+    entity "outbox_events" as outbox_events {
+        * id : uuid <<PK>>
+        --
+        * aggregate_type : varchar(100)
+        * aggregate_id : uuid
+        * event_type : varchar(120)
+        * payload : jsonb
+        * status : varchar(20)
+        * retry_count : int
+        correlation_id : varchar(64)
+        * created_at : timestamptz
+        published_at : timestamptz
+    }
+
+    entity "processed_events" as processed_events {
+        * event_id : uuid <<PK, FK>>
+        * handler_name : varchar(120) <<PK>>
+        --
+        * processed_at : timestamptz
+    }
+
+    entity "workflow_runs" as workflow_runs {
+        * id : uuid <<PK>>
+        --
+        * user_id : uuid <<FK>>
+        goal_id : uuid <<FK>>
+        roadmap_id : uuid <<FK>>
+        * workflow_type : varchar(40)
+        * current_step : varchar(60)
+        * status : varchar(25)
+        * context_snapshot : jsonb
+        error_detail : text
+        * started_at : timestamptz
+        paused_at : timestamptz
+        completed_at : timestamptz
+        * created_at : timestamptz
+        * updated_at : timestamptz
+    }
+
+    entity "workflow_step_executions" as workflow_step_executions {
+        * id : uuid <<PK>>
+        --
+        * workflow_run_id : uuid <<FK>>
+        * step_name : varchar(60)
+        * step_order : smallint
+        * status : varchar(25)
+        * input_summary : jsonb
+        * output_payload : jsonb
+        ai_usage_log_id : uuid <<FK>>
+        * retry_count : smallint
+        * started_at : timestamptz
+        completed_at : timestamptz
+    }
+
+    outbox_events ||--o{ processed_events : "1:N"
+    workflow_runs ||--o{ workflow_step_executions : "1:N"
+}
+
+' =============================================================================
+' CROSS-CONTEXT FOREIGN KEY RELATIONSHIPS
+' =============================================================================
+learning_concepts ||--o{ learner_concept_masteries : "1:N"
+users ||--o{ goals : "1:N"
+users ||--o{ roadmaps : "1:N"
+users ||--o{ schedule_proposals : "1:N"
+users ||--o{ knowledge_sources : "1:N"
+users ||--o{ study_sessions : "1:N"
+users ||--o{ study_notes : "1:N"
+users ||--o{ ai_reviews : "1:N"
+users ||--o{ milestone_proofs : "1:N"
+users ||--o{ workflow_runs : "1:N"
+
+goals ||--o{ workflow_runs : "0..1:N"
+roadmaps ||--o{ workflow_runs : "0..1:N"
+ai_usage_logs ||--o{ workflow_step_executions : "0..1:N"
+
+tasks ||--o{ schedule_blocks : "0..1:N"
+roadmaps ||--o{ tasks : "1:N"
+milestones ||--o{ tasks : "1:N"
+official_schedules ||--o{ tasks : "0..1:N"
+learning_concepts ||--o{ tasks : "0..1:N"
+roadmaps ||--o{ task_dependencies : "1:N"
+roadmaps ||--o{ study_sessions : "1:N"
+roadmaps ||--o{ pause_records : "1:N"
+roadmaps ||--o{ ai_reviews : "1:N"
+milestones ||--o{ ai_reviews : "0..1:N"
+roadmaps ||--o{ schedule_change_logs : "1:N"
+official_schedules ||--o{ schedule_change_logs : "0..1:N"
+tasks ||--o{ schedule_change_logs : "0..1:N"
+milestones ||--o{ milestone_proofs : "1:N"
+roadmaps ||--o{ milestone_proofs : "1:N"
+tasks ||--o{ milestone_proofs : "0..1:N"
+
+@enduml

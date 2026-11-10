@@ -3,17 +3,9 @@ import {
   OnInit,
   DestroyRef,
   inject,
-  ElementRef,
-  ViewChildren,
-  QueryList,
   signal,
-  computed,
-  ChangeDetectorRef,
-  NgZone
+  ChangeDetectionStrategy
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { ButtonModule } from 'primeng/button';
-import { FormsModule } from '@angular/forms';
 import { Router, RouterLink, ActivatedRoute } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -22,283 +14,154 @@ import { AuthService } from '../../../core/services/auth.service';
 import { TranslationService } from '../../../core/services/translation.service';
 import { TranslatePipe } from '../../../shared/pipes/translate.pipe';
 import { LoginResponse, MessageResponse } from '../../../models/auth.interface';
+import { OtpInputComponent } from '../shared/otp-input/otp-input.component';
 
 @Component({
   selector: 'app-otp-validation',
-  imports: [FormsModule, RouterLink, ButtonModule, TranslatePipe],
+  standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [
+    RouterLink,
+    OtpInputComponent
+  ],
   templateUrl: './otp-validation.component.html',
   styleUrl: './otp-validation.component.scss'
 })
 export class OtpValidationComponent implements OnInit {
-  authService: AuthService;
-  translationService: TranslationService;
-  router: Router;
-  activatedRoute: ActivatedRoute;
-  cdr: ChangeDetectorRef;
-  ngZone: NgZone;
-  destroyRef: DestroyRef;
+  readonly authService = inject(AuthService);
+  readonly translationService = inject(TranslationService);
+  readonly router = inject(Router);
+  readonly activatedRoute = inject(ActivatedRoute);
+  readonly destroyRef = inject(DestroyRef);
 
-  @ViewChildren('digitInput') digitInputs!: QueryList<ElementRef<HTMLInputElement>>;
-
-  email = '';
-  flow = 'register';
-  otpDigits: string[] = ['', '', '', '', '', ''];
-  fullOtp = '';
-  isAutoFilled = false;
-  isLoading = false;
-  errorMessage = '';
-  successMessage = '';
-  cooldownSeconds = signal<number>(60);
-  timerIntervalId: number = 0;
-
-  formattedCooldown = computed<string>(() => {
-    const total = this.cooldownSeconds();
-    const mins = Math.floor(total / 60);
-    const secs = total % 60;
-    const minsStr = mins < 10 ? '0' + mins : String(mins);
-    const secsStr = secs < 10 ? '0' + secs : String(secs);
-    return minsStr + ':' + secsStr;
-  });
-
-  constructor(
-    authService: AuthService,
-    translationService: TranslationService,
-    router: Router,
-    activatedRoute: ActivatedRoute,
-    cdr: ChangeDetectorRef,
-    ngZone: NgZone
-  ) {
-    this.authService = authService;
-    this.translationService = translationService;
-    this.router = router;
-    this.activatedRoute = activatedRoute;
-    this.cdr = cdr;
-    this.ngZone = ngZone;
-    this.destroyRef = inject(DestroyRef);
-  }
+  readonly email = signal<string>('');
+  readonly flow = signal<string>('register');
+  readonly currentOtp = signal<string>('');
+  readonly isLoading = signal<boolean>(false);
+  readonly errorMessage = signal<string>('');
+  readonly successMessage = signal<string>('');
 
   ngOnInit() {
-    this.errorMessage = '';
-    this.successMessage = '';
-
-    this.destroyRef.onDestroy(() => {
-      if (this.timerIntervalId !== 0) {
-        window.clearInterval(this.timerIntervalId);
-        this.timerIntervalId = 0;
-      }
-    });
+    this.errorMessage.set('');
+    this.successMessage.set('');
 
     this.activatedRoute.queryParams
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (params: Record<string, string>) => {
           if (params['email'] && params['email'].length > 0) {
-            this.email = params['email'].trim();
-            sessionStorage.setItem('pending_register_email', this.email);
+            const trimmed = params['email'].trim();
+            this.email.set(trimmed);
+            sessionStorage.setItem('pending_register_email', trimmed);
           } else {
             const stored = sessionStorage.getItem('pending_register_email');
             if (stored) {
-              this.email = stored.trim();
+              this.email.set(stored.trim());
             }
           }
           if (params['flow'] && params['flow'].length > 0) {
-            this.flow = params['flow'];
+            this.flow.set(params['flow']);
           }
-          this.cdr.markForCheck();
         },
         error: (_err: Error) => {},
         complete: () => {}
       });
-
-    this.startCooldownTimer(60);
   }
 
-  startCooldownTimer(seconds: number) {
-    if (this.timerIntervalId !== 0) {
-      window.clearInterval(this.timerIntervalId);
-      this.timerIntervalId = 0;
-    }
-
-    this.cooldownSeconds.set(seconds);
-    this.cdr.markForCheck();
-
-    this.timerIntervalId = window.setInterval(() => {
-      this.ngZone.run(() => {
-        const current = this.cooldownSeconds();
-        if (current <= 1) {
-          this.cooldownSeconds.set(0);
-          window.clearInterval(this.timerIntervalId);
-          this.timerIntervalId = 0;
-        } else {
-          this.cooldownSeconds.set(current - 1);
-        }
-        this.cdr.markForCheck();
-      });
-    }, 1000);
-  }
-
-  onDigitInput(event: Event, index: number) {
-    const target = event.target as HTMLInputElement;
-    const sanitized = target.value.replace(/[^0-9]/g, '');
-    const char = sanitized.length > 0 ? sanitized.slice(-1) : '';
-
-    this.otpDigits[index] = char;
-    target.value = char;
-    this.fullOtp = this.otpDigits.join('');
-    this.cdr.markForCheck();
-
-    if (char.length > 0 && index < 5) {
-      this.focusInput(index + 1);
-    }
-
-    if (this.fullOtp.length === 6) {
-      this.errorMessage = '';
-      this.cdr.markForCheck();
+  onOtpChange(code: string) {
+    this.currentOtp.set(code);
+    if (code.length === 6) {
+      this.errorMessage.set('');
     }
   }
 
-  onDigitKeyDown(event: KeyboardEvent, index: number) {
-    if (event.key === 'Backspace') {
-      const currentVal = this.otpDigits[index];
-      if (currentVal.length === 0 && index > 0) {
-        this.otpDigits[index - 1] = '';
-        this.focusInput(index - 1);
-        this.fullOtp = this.otpDigits.join('');
-      } else {
-        this.otpDigits[index] = '';
-        this.fullOtp = this.otpDigits.join('');
-      }
-      this.cdr.markForCheck();
-    } else if (event.key === 'ArrowLeft' && index > 0) {
-      this.focusInput(index - 1);
-    } else if (event.key === 'ArrowRight' && index < 5) {
-      this.focusInput(index + 1);
-    }
-  }
-
-  onDigitPaste(event: ClipboardEvent) {
-    event.preventDefault();
-    const pastedData = event.clipboardData?.getData('text') || '';
-    const digitsOnly = pastedData.replace(/[^0-9]/g, '').slice(0, 6);
-
-    if (digitsOnly.length === 0) {
-      return;
-    }
-
-    const inputsArray = this.digitInputs ? this.digitInputs.toArray() : [];
-    for (let i = 0; i < 6; i++) {
-      const d = digitsOnly[i] || '';
-      this.otpDigits[i] = d;
-      if (inputsArray[i]) {
-        inputsArray[i].nativeElement.value = d;
-      }
-    }
-
-    this.isAutoFilled = true;
-    this.fullOtp = this.otpDigits.join('');
-    this.cdr.markForCheck();
-
-    const targetFocusIndex = Math.min(digitsOnly.length, 5);
-    this.focusInput(targetFocusIndex);
-  }
-
-  focusInput(index: number) {
-    const inputsArray = this.digitInputs ? this.digitInputs.toArray() : [];
-    if (inputsArray[index]) {
-      inputsArray[index].nativeElement.focus();
-      inputsArray[index].nativeElement.select();
-    }
+  onOtpCompleted(code: string) {
+    this.currentOtp.set(code);
+    this.verifyOtp();
   }
 
   verifyOtp() {
-    if (this.fullOtp.length !== 6) {
-      this.errorMessage = this.translationService.get('auth.otp.otpRequiredError') || 'Vui lòng nhập đủ 6 chữ số OTP.';
-      this.cdr.markForCheck();
+    const code = this.currentOtp();
+    if (code.length !== 6) {
+      this.errorMessage.set('Vui lòng nhập đủ 6 chữ số mã xác thực OTP.');
       return;
     }
 
-    if (!this.email) {
-      this.errorMessage = 'Không xác định được địa chỉ email cần xác thực. Vui lòng quay lại trang Đăng ký.';
-      this.cdr.markForCheck();
+    const emailVal = this.email();
+    if (!emailVal) {
+      this.errorMessage.set('Không xác định được địa chỉ email cần xác thực. Vui lòng quay lại trang Đăng ký.');
       return;
     }
 
-    this.isLoading = true;
-    this.errorMessage = '';
-    this.successMessage = '';
-    this.cdr.markForCheck();
+    this.isLoading.set(true);
+    this.errorMessage.set('');
+    this.successMessage.set('');
 
     this.authService
       .verifyRegisterOtp({
-        email: this.email.trim().toLowerCase(),
-        otpCode: this.fullOtp.trim()
+        email: emailVal.trim().toLowerCase(),
+        otpCode: code.trim()
       })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (_response: LoginResponse) => {
-          this.isLoading = false;
-          this.successMessage = 'Xác thực OTP thành công! Đang chuyển hướng vào hệ thống...';
+          this.isLoading.set(false);
+          this.successMessage.set('Xác thực OTP thành công! Đang chuyển hướng vào hệ thống...');
           sessionStorage.removeItem('pending_register_email');
-          this.cdr.markForCheck();
           setTimeout(() => {
             this.router.navigate(['/dashboard']);
-          }, 300);
+          }, 350);
         },
         error: (err: HttpErrorResponse) => {
-          this.isLoading = false;
-          this.errorMessage = parseHttpErrorMessage(
+          this.isLoading.set(false);
+          this.errorMessage.set(parseHttpErrorMessage(
             err,
-            this.translationService.get('auth.otp.verificationFailed') || 'Xác thực OTP thất bại. Vui lòng thử lại.'
-          );
-          this.cdr.markForCheck();
+            this.translationService.get('auth.otp.verificationFailed') || 'Mã xác thực không hợp lệ hoặc đã hết hạn.'
+          ));
         },
         complete: () => {
-          this.isLoading = false;
-          this.cdr.markForCheck();
+          this.isLoading.set(false);
         }
       });
   }
 
   resendOtp() {
-    if (this.cooldownSeconds() > 0 || this.isLoading) {
+    const emailVal = this.email();
+    if (!emailVal) {
+      this.errorMessage.set('Email không hợp lệ. Vui lòng quay lại trang Đăng ký.');
       return;
     }
 
-    if (!this.email) {
-      this.errorMessage = 'Email không hợp lệ. Vui lòng quay lại trang Đăng ký.';
-      return;
-    }
-
-    this.isLoading = true;
-    this.errorMessage = '';
-    this.successMessage = '';
+    this.isLoading.set(true);
+    this.errorMessage.set('');
+    this.successMessage.set('');
 
     const resendReq$ =
-      this.flow === 'register'
-        ? this.authService.resendRegisterOtp({ email: this.email })
-        : this.authService.requestPasswordResetOtp({ email: this.email });
+      this.flow() === 'register'
+        ? this.authService.resendRegisterOtp({ email: emailVal })
+        : this.authService.requestPasswordResetOtp({ email: emailVal });
 
     resendReq$
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (response: MessageResponse) => {
-          this.isLoading = false;
-          this.successMessage =
-            response.message || this.translationService.get('auth.otp.codeSentSuccess');
-          this.startCooldownTimer(60);
+          this.isLoading.set(false);
+          this.successMessage.set(
+            response.message || 'Mã xác thực mới đã được gửi đến email của bạn.'
+          );
         },
         error: (err: HttpErrorResponse) => {
-          this.isLoading = false;
-          this.errorMessage = parseHttpErrorMessage(err, 'Resend request failed. Please try again.');
+          this.isLoading.set(false);
+          this.errorMessage.set(parseHttpErrorMessage(err, 'Không thể gửi lại mã. Vui lòng thử lại sau.'));
         },
         complete: () => {
-          this.isLoading = false;
+          this.isLoading.set(false);
         }
       });
   }
 
   onUseBackupKey() {
-    this.errorMessage = '';
-    this.successMessage = this.translationService.get('auth.otp.backupKeyNotice');
+    this.errorMessage.set('');
+    this.successMessage.set('Tính năng khóa dự phòng (Backup recovery key) đang được tích hợp.');
   }
 }

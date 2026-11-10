@@ -1,0 +1,1887 @@
+<div class="roadmap-workspace">
+  <!-- Page Header & Portfolio Selector (UC-10) -->
+  <header class="page-header">
+    <div class="header-meta-row">
+      @if (selectedDetail(); as detail) {
+        <span
+          appBadge
+          [variant]="getStatusBadgeVariant(detail.status)"
+          data-testid="roadmap-status-badge"
+          class="system-badge"
+        >
+          <span class="material-symbols-outlined">flag</span>
+          <span>{{ getStatusLabel(detail.status) }}</span>
+        </span>
+        @if (detail.target_date) {
+          <span class="date-pill">
+            <span class="material-symbols-outlined">event</span>
+            <span>Ngày đích: {{ detail.target_date }}</span>
+          </span>
+        }
+      } @else {
+        <span class="system-badge">
+          <span class="material-symbols-outlined">info</span>
+          <span>Chưa chọn lộ trình</span>
+        </span>
+      }
+      <span class="system-badge">
+        <span class="material-symbols-outlined">psychology</span>
+        <span>Zimmerman SRL: Forethought Phase</span>
+      </span>
+    </div>
+
+    <div class="header-main-flex">
+      <div class="header-content">
+        <h1 class="page-title">
+          {{ selectedDetail()?.title || roadmapService.currentRoadmap()?.title || 'Không Gian Lập Kế Hoạch Lộ Trình AI (SRL)' }}
+        </h1>
+        <p class="page-subtitle">
+          {{
+            selectedDetail()?.goal?.raw_description ||
+              selectedDetail()?.description ||
+              roadmapService.currentRoadmap()?.targetGoal ||
+              'Phân rã mục tiêu, phê duyệt cột mốc Cấp 1 và kiểm định Đề xuất Lịch học Cấp 2 trước khi áp dụng chính thức.'
+          }}
+        </p>
+      </div>
+
+      <!-- Portfolio Switcher & Actions Toolbar -->
+      <div class="header-toolbar">
+        @if (roadmapService.roadmaps().length > 0) {
+          <select
+            id="roadmap-portfolio-select"
+            data-testid="roadmap-portfolio-select"
+            aria-label="Chọn lộ trình học tập"
+            [value]="selectedDetail()?.id ?? ''"
+            (change)="onSelectRoadmap($event)"
+            class="portfolio-select"
+          >
+            @for (rm of roadmapService.roadmaps(); track rm.id) {
+              <option [value]="rm.id">
+                {{ rm.title }} ({{ rm.status }})
+              </option>
+            }
+          </select>
+        }
+
+        <button
+          type="button"
+          data-testid="toggle-create-roadmap-btn"
+          (click)="toggleCreateForm()"
+          class="btn-pill-action outline"
+        >
+          <span class="material-symbols-outlined">add</span>
+          <span>Tạo Mục tiêu & Lộ trình mới</span>
+        </button>
+
+        @if (selectedDetail(); as detail) {
+          @if (detail.status !== 'ARCHIVED') {
+            <button
+              type="button"
+              data-testid="archive-roadmap-btn"
+              [disabled]="roadmapService.saving()"
+              (click)="onArchiveRoadmap(detail.id)"
+              class="btn-pill-action ghost"
+            >
+              <span class="material-symbols-outlined">archive</span>
+              <span>Lưu trữ lộ trình</span>
+            </button>
+          }
+        }
+
+        <a routerLink="/workspace" class="btn-pill-action primary">
+          <span>Vào Phiên học</span>
+          <span class="material-symbols-outlined">arrow_forward</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Global Live SSE Progress Banner (ADR-005, aria-live="polite") -->
+  @if (roadmapService.sseProgress().isStreaming || roadmapService.sseProgress().stage === 'VALIDATING_TIER_1_2_3') {
+    <section
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+      data-testid="sse-progress-banner"
+      class="sse-progress-card"
+    >
+      <div class="sse-header-row">
+        <div class="sse-stage-cluster">
+          <span class="material-symbols-outlined animate-spin text-[var(--primary)]" aria-hidden="true">progress_activity</span>
+          <span class="sse-stage-title">
+            Tiến trình AI 2-Stage SSE ({{ roadmapService.sseProgress().stage }})
+          </span>
+        </div>
+
+        <div class="sse-metrics-cluster">
+          @if (roadmapService.sseProgress().retryCount > 0) {
+            <span
+              data-testid="sse-retry-badge"
+              class="sse-retry-tag"
+            >
+              Tự sửa lỗi (Self-Correction): Vòng #{{ roadmapService.sseProgress().retryCount }}
+            </span>
+          }
+          <span class="sse-percentage">
+            {{ roadmapService.sseProgress().progress }}%
+          </span>
+        </div>
+      </div>
+
+      <p class="sse-message-text" data-testid="sse-progress-message">
+        {{ roadmapService.sseProgress().message }}
+      </p>
+
+      <div class="sse-meter-track">
+        <div
+          class="sse-meter-bar"
+          [style.width.%]="roadmapService.sseProgress().progress"
+        ></div>
+      </div>
+    </section>
+  }
+
+  <!-- Alert Banners (Error & Success, aria-live="polite") -->
+  @if (roadmapService.errorMessage()) {
+    <div
+      role="alert"
+      aria-live="polite"
+      data-testid="roadmap-error-alert"
+      class="alert-banner error"
+    >
+      <div class="alert-left">
+        <span class="material-symbols-outlined" aria-hidden="true">error</span>
+        <span>{{ roadmapService.errorMessage() }}</span>
+      </div>
+      <button
+        type="button"
+        (click)="roadmapService.clearMessages()"
+        aria-label="Đóng thông báo lỗi"
+        class="alert-close"
+      >
+        Đóng
+      </button>
+    </div>
+  }
+
+  @if (roadmapService.successMessage()) {
+    <div
+      role="status"
+      aria-live="polite"
+      data-testid="roadmap-success-banner"
+      class="alert-banner success"
+    >
+      <div class="alert-left">
+        <span class="material-symbols-outlined" aria-hidden="true">check_circle</span>
+        <span>{{ roadmapService.successMessage() }}</span>
+      </div>
+      <button
+        type="button"
+        (click)="roadmapService.clearMessages()"
+        aria-label="Đóng thông báo thành công"
+        class="alert-close"
+      >
+        Đóng
+      </button>
+    </div>
+  }
+
+  <!-- Continuous 4-Step Planning Stepper Ribbon -->
+  <nav
+    role="tablist"
+    aria-label="Các bước lập kế hoạch lộ trình học tập"
+    class="stepper-ribbon"
+  >
+    <!-- Step 1 Tab -->
+    <button
+      type="button"
+      role="tab"
+      data-testid="step-tab-1"
+      [attr.aria-selected]="roadmapService.activeStep() === 1"
+      (click)="roadmapService.setActiveStep(1)"
+      class="stepper-tab"
+      [class.active]="roadmapService.activeStep() === 1"
+    >
+      <div class="step-info-cluster">
+        <span class="step-num">01</span>
+        <div class="step-texts">
+          <span class="step-code">Bước 1 &bull; FR-GOAL-002</span>
+          <span class="step-title">Mục tiêu & Phỏng vấn</span>
+        </div>
+      </div>
+      @if (selectedDetail()?.goal?.clarification_context || roadmapService.clarificationContext()) {
+        <span class="step-status-badge diagnosed">DIAGNOSED</span>
+      }
+    </button>
+
+    <!-- Step 2 Tab -->
+    <button
+      type="button"
+      role="tab"
+      data-testid="step-tab-2"
+      [attr.aria-selected]="roadmapService.activeStep() === 2"
+      (click)="roadmapService.setActiveStep(2)"
+      class="stepper-tab"
+      [class.active]="roadmapService.activeStep() === 2"
+    >
+      <div class="step-info-cluster">
+        <span class="step-num">02</span>
+        <div class="step-texts">
+          <span class="step-code">Bước 2 &bull; UC-07 / FR-PLAN-001</span>
+          <span class="step-title">Cột mốc lộ trình</span>
+        </div>
+      </div>
+      @if (roadmapService.areMilestonesApproved()) {
+        <span class="step-status-badge approved">APPROVED</span>
+      }
+    </button>
+
+    <!-- Step 3 Tab -->
+    <button
+      type="button"
+      role="tab"
+      data-testid="step-tab-3"
+      [attr.aria-selected]="roadmapService.activeStep() === 3"
+      (click)="roadmapService.setActiveStep(3)"
+      class="stepper-tab"
+      [class.active]="roadmapService.activeStep() === 3"
+    >
+      <div class="step-info-cluster">
+        <span class="step-num">03</span>
+        <div class="step-texts">
+          <span class="step-code">Bước 3 &bull; FR-PLAN-002</span>
+          <span class="step-title">Phân rã Nhiệm vụ theo Cột mốc & Tài liệu học</span>
+        </div>
+      </div>
+      @if (roadmapService.editableTasks().length > 0) {
+        <span class="step-status-badge draft">{{ roadmapService.editableTasks().length }} TASKS</span>
+      }
+    </button>
+
+    <!-- Step 4 Tab -->
+    <button
+      type="button"
+      role="tab"
+      data-testid="step-tab-4"
+      [attr.aria-selected]="roadmapService.activeStep() === 4"
+      (click)="roadmapService.setActiveStep(4)"
+      class="stepper-tab"
+      [class.active]="roadmapService.activeStep() === 4"
+    >
+      <div class="step-info-cluster">
+        <span class="step-num">04</span>
+        <div class="step-texts">
+          <span class="step-code">Bước 4 &bull; UC-08 / UC-12</span>
+          <span class="step-title">Thời khóa biểu & Kích hoạt lịch</span>
+        </div>
+      </div>
+      @if (selectedDetail()?.official_schedule) {
+        <span class="step-status-badge active">ACTIVE</span>
+      }
+    </button>
+  </nav>
+
+  <!-- =================================================================== -->
+  <!-- STEP 1: MỤC TIÊU & PHỎNG VẤN CHẨN ĐOÁN (FR-GOAL-002)                -->
+  <!-- =================================================================== -->
+  @switch (roadmapService.activeStep()) {
+    @case (1) {
+      <div class="space-y-6" data-testid="step-1-panel">
+        <!-- Create New Goal & Roadmap Card -->
+        @if (showCreateForm()) {
+          <section class="arch-card">
+            <div class="card-header-flex">
+              <div>
+                <h2 class="card-title">
+                  <span class="material-symbols-outlined">flag</span>
+                  <span>Khởi Tạo Mục Tiêu Học Tập Mới (Goal & Roadmap — UC-07)</span>
+                </h2>
+                <p class="card-desc">
+                  Nhập mục tiêu học tập cụ thể và ngày hoàn thành dự kiến để AI phân rã thành 3–7 cột mốc tuần tự.
+                </p>
+              </div>
+            </div>
+
+            <div class="form-grid">
+              <div class="form-full-span form-field">
+                <label for="new-goal-title" class="form-label">
+                  Tiêu đề mục tiêu học tập *
+                </label>
+                <input
+                  id="new-goal-title"
+                  data-testid="new-goal-title-input"
+                  type="text"
+                  placeholder="VD: Chinh phục FastAPI, Hexagonal Architecture & Angular 21"
+                  [ngModel]="newGoalTitle()"
+                  (ngModelChange)="newGoalTitle.set($event)"
+                  class="form-input"
+                />
+              </div>
+
+              <div class="form-full-span form-field">
+                <label for="new-goal-description" class="form-label">
+                  Mô tả chi tiết mục tiêu học tập
+                </label>
+                <textarea
+                  id="new-goal-description"
+                  data-testid="new-goal-description-input"
+                  rows="3"
+                  placeholder="Mô tả kiến thức nền tảng hiện có, tài liệu ưu tiên hoặc mục tiêu đầu ra..."
+                  [ngModel]="newGoalDescription()"
+                  (ngModelChange)="newGoalDescription.set($event)"
+                  class="form-textarea"
+                ></textarea>
+              </div>
+
+              <!-- Trình độ hiện tại (prior_knowledge_level - FR-GOAL-002) -->
+              <div class="form-full-span form-field">
+                <label class="form-label">
+                  Trình độ kiến thức hiện tại (prior_knowledge_level) *
+                </label>
+                <div class="level-selector-grid" data-testid="knowledge-level-selector">
+                  @for (lvl of knowledgeLevels; track lvl.value) {
+                    <button
+                      type="button"
+                      [attr.data-testid]="'knowledge-level-' + lvl.value"
+                      (click)="newPriorKnowledgeLevel.set(lvl.value)"
+                      class="level-card-btn"
+                      [class.selected]="newPriorKnowledgeLevel() === lvl.value"
+                    >
+                      <div class="level-card-header">
+                        <span class="material-symbols-outlined level-icon">
+                          @switch (lvl.value) {
+                            @case ('BEGINNER') { school }
+                            @case ('INTERMEDIATE') { trending_up }
+                            @case ('ADVANCED') { military_tech }
+                          }
+                        </span>
+                        <span class="level-card-title">{{ lvl.label }}</span>
+                      </div>
+                      <p class="level-card-desc">{{ lvl.desc }}</p>
+                    </button>
+                  }
+                </div>
+              </div>
+
+              <div class="form-field">
+                <label for="new-goal-start-date" class="form-label">
+                  Ngày bắt đầu (start_date)
+                </label>
+                <input
+                  id="new-goal-start-date"
+                  data-testid="new-goal-start-date-input"
+                  type="date"
+                  [ngModel]="newStartDate()"
+                  (ngModelChange)="newStartDate.set($event)"
+                  class="form-input font-mono"
+                />
+              </div>
+
+              <div class="form-field">
+                <label for="new-goal-target-date" class="form-label">
+                  Ngày hoàn thành mục tiêu (target_date)
+                </label>
+                <input
+                  id="new-goal-target-date"
+                  data-testid="new-goal-target-date-input"
+                  type="date"
+                  [ngModel]="newTargetDate()"
+                  (ngModelChange)="newTargetDate.set($event)"
+                  class="form-input font-mono"
+                />
+              </div>
+            </div>
+
+            <div class="form-footer-actions">
+              <button
+                type="button"
+                (click)="showCreateForm.set(false)"
+                class="btn-pill-action ghost"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                data-testid="submit-create-roadmap-btn"
+                [disabled]="!newGoalTitle().trim() || roadmapService.saving()"
+                (click)="onCreateRoadmap()"
+                class="btn-pill-action primary"
+              >
+                <span class="material-symbols-outlined">add_task</span>
+                <span>Tạo Mục tiêu & Lộ trình</span>
+              </button>
+            </div>
+          </section>
+        }
+
+        <!-- Empty State when no roadmap is selected and form is closed -->
+        @if (!selectedDetail() && !showCreateForm()) {
+          <section class="arch-card text-center py-12 px-6">
+            <div class="max-w-md mx-auto space-y-4">
+              <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[var(--surface-container-high)] text-[var(--primary)] mb-2">
+                <span class="material-symbols-outlined text-3xl">route</span>
+              </div>
+              <h2 class="text-xl font-semibold font-serif text-[var(--on-surface)]">Chưa có Lộ trình Học tập</h2>
+              <p class="text-sm text-[var(--secondary)]">
+                Bắt đầu bằng cách tạo mục tiêu học tập đầu tiên để AI phân rã thành các cột mốc thích ứng theo mô hình Zimmerman SRL.
+              </p>
+              <div>
+                <button
+                  type="button"
+                  data-testid="empty-create-roadmap-btn"
+                  (click)="toggleCreateForm()"
+                  class="btn-pill-action primary mx-auto inline-flex"
+                >
+                  <span class="material-symbols-outlined">add</span>
+                  <span>Tạo Mục tiêu & Lộ trình mới</span>
+                </button>
+              </div>
+            </div>
+          </section>
+        }
+
+        <!-- Goal Overview & AI Diagnostic Clarification (FR-GOAL-002) -->
+        @if (selectedDetail(); as detail) {
+          <section class="arch-card" data-testid="goal-overview-card">
+            <div class="card-header-flex">
+              <div>
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="item-index-badge">Mục tiêu hiện tại</span>
+                  <span
+                    appBadge
+                    variant="outline"
+                    data-testid="detail-knowledge-level-badge"
+                    class="text-xs"
+                  >
+                    Trình độ: {{ detail.goal?.prior_knowledge_level || 'BEGINNER' }}
+                  </span>
+                </div>
+                <h2 class="card-title text-xl font-semibold">
+                  {{ detail.goal?.title || detail.title }}
+                </h2>
+                @if (detail.goal?.raw_description || detail.description) {
+                  <p class="card-desc mt-1">
+                    {{ detail.goal?.raw_description || detail.description }}
+                  </p>
+                }
+              </div>
+            </div>
+          </section>
+
+          <!-- AI Diagnostic Clarification Section -->
+          @if (roadmapService.isGeneratingQuestions()) {
+            <section class="arch-card text-center py-10" data-testid="clarification-loading-card">
+              <div class="max-w-md mx-auto space-y-3">
+                <div class="inline-flex items-center justify-center w-14 h-14 rounded-full bg-[var(--surface-container-high)] text-[var(--primary)] mb-1">
+                  <span class="material-symbols-outlined text-3xl animate-spin">progress_activity</span>
+                </div>
+                <h3 class="text-lg font-semibold font-serif text-[var(--on-surface)]">
+                  AI đang phân tích mục tiêu & tạo câu hỏi phỏng vấn...
+                </h3>
+                <p class="text-xs text-[var(--secondary)]">
+                  Hệ thống đang chuẩn bị 2–3 câu hỏi chẩn đoán để cá nhân hóa lộ trình học tập.
+                </p>
+              </div>
+            </section>
+          } @else if (roadmapService.clarificationQuestions().length > 0) {
+            <section class="arch-card" data-testid="clarification-questionnaire-card">
+              <div class="card-header-flex border-b border-[var(--outline-variant)] pb-4 mb-4">
+                <div>
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="system-badge">
+                      <span class="material-symbols-outlined text-xs">quiz</span>
+                      <span>AI Clarification (FR-GOAL-002)</span>
+                    </span>
+                  </div>
+                  <h2 class="card-title text-lg font-semibold font-serif">
+                    Bộ Câu Hỏi Phỏng Vấn Chẩn Đoán Mục Tiêu
+                  </h2>
+                  <p class="card-desc">
+                    Trả lời nhanh 2–3 câu hỏi bên dưới giúp AI xác định chính xác năng lực khởi đầu và thiết kế các chặng học phù hợp. Bạn cũng có thể bấm Bỏ qua nếu muốn sang bước Cột mốc ngay.
+                  </p>
+                </div>
+              </div>
+
+              <div class="space-y-6">
+                @for (q of roadmapService.clarificationQuestions(); track q.question_id) {
+                  @let qIdx = $index;
+                  <div class="question-item-card" [attr.data-testid]="'clarification-question-' + qIdx">
+                    <div class="flex items-center gap-2 mb-2">
+                      <span class="item-index-badge">Câu #{{ qIdx + 1 }}</span>
+                      <span class="text-xs text-[var(--secondary)]">
+                        {{ q.question_type === 'single_choice' ? 'Trắc nghiệm chọn nhanh' : 'Tự luận ngắn' }}
+                      </span>
+                    </div>
+                    <p class="question-text text-sm sm:text-base font-medium text-[var(--on-surface)] mb-3">
+                      {{ q.text }}
+                    </p>
+
+                    @if (q.options && q.options.length > 0) {
+                      <div class="options-cluster mb-3">
+                        @for (opt of q.options; track opt) {
+                          <button
+                            type="button"
+                            [attr.data-testid]="'question-' + qIdx + '-opt-' + $index"
+                            (click)="onSelectOption(q.question_id, opt)"
+                            class="option-chip-btn"
+                            [class.selected]="userAnswers()[q.question_id] === opt"
+                          >
+                            <span class="material-symbols-outlined text-xs">
+                              {{ userAnswers()[q.question_id] === opt ? 'check_circle' : 'radio_button_unchecked' }}
+                            </span>
+                            <span>{{ opt }}</span>
+                          </button>
+                        }
+                      </div>
+                    }
+
+                    <div class="answer-custom-input">
+                      <input
+                        type="text"
+                        [attr.data-testid]="'question-answer-input-' + qIdx"
+                        placeholder="Nhập bổ sung hoặc chỉnh sửa câu trả lời..."
+                        [ngModel]="userAnswers()[q.question_id] || ''"
+                        (ngModelChange)="onAnswerTextChange(q.question_id, $event)"
+                        class="form-input text-xs"
+                      />
+                    </div>
+                  </div>
+                }
+              </div>
+
+              <footer class="card-action-footer mt-6 pt-4 border-t border-[var(--outline-variant)]">
+                <button
+                  type="button"
+                  data-testid="skip-clarification-btn"
+                  (click)="onSkipClarification()"
+                  class="btn-pill-action outline"
+                >
+                  <span class="material-symbols-outlined">fast_forward</span>
+                  <span>Bỏ qua phỏng vấn (Skip)</span>
+                </button>
+
+                <button
+                  type="button"
+                  data-testid="submit-clarification-btn"
+                  [disabled]="roadmapService.isSubmittingAnswers()"
+                  (click)="onSubmitClarification(detail.goal_id)"
+                  class="btn-pill-action primary"
+                >
+                  <span class="material-symbols-outlined">check</span>
+                  <span>Xác nhận câu trả lời & Sang bước Cột mốc</span>
+                </button>
+              </footer>
+            </section>
+          } @else if (detail.goal?.clarification_context || roadmapService.clarificationContext()) {
+            <section class="arch-card" data-testid="clarification-context-card">
+              <div class="card-header-flex mb-4">
+                <div>
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="step-status-badge approved">ĐÃ CHẨN ĐOÁN</span>
+                    <span class="text-xs text-[var(--secondary)]">FR-GOAL-002</span>
+                  </div>
+                  <h2 class="card-title text-lg font-semibold font-serif">
+                    Kết Quả Phỏng Vấn Chẩn Đoán (Context)
+                  </h2>
+                  <p class="card-desc">
+                    Bối cảnh này được tự động tích hợp vào các prompt phân rã cột mốc Cấp 1 và sinh lịch Cấp 2.
+                  </p>
+                </div>
+              </div>
+
+              <div class="diagnosed-context-box">
+                <p class="text-sm whitespace-pre-wrap leading-relaxed text-[var(--on-surface)]">
+                  {{ roadmapService.clarificationContext() || detail.goal?.clarification_context }}
+                </p>
+              </div>
+
+              <footer class="card-action-footer mt-4">
+                <button
+                  type="button"
+                  data-testid="retrigger-clarification-btn"
+                  [disabled]="roadmapService.isGeneratingQuestions()"
+                  (click)="onTriggerClarification(detail.goal_id)"
+                  class="btn-pill-action ghost"
+                >
+                  <span class="material-symbols-outlined">refresh</span>
+                  <span>Phỏng vấn lại</span>
+                </button>
+
+                <button
+                  type="button"
+                  data-testid="proceed-to-step-2-btn"
+                  (click)="roadmapService.setActiveStep(2)"
+                  class="btn-pill-action primary"
+                >
+                  <span>Sang Bước 2: Cột mốc kiến thức</span>
+                  <span class="material-symbols-outlined">arrow_forward</span>
+                </button>
+              </footer>
+            </section>
+          } @else {
+            <section class="arch-card" data-testid="clarification-prompt-card">
+              <div class="card-header-flex">
+                <div>
+                  <h2 class="card-title text-lg font-semibold font-serif">
+                    Phỏng Vấn Chẩn Đoán Mục Tiêu Học Tập (FR-GOAL-002)
+                  </h2>
+                  <p class="card-desc">
+                    AI có thể đặt 2–3 câu hỏi nhanh về kinh nghiệm thực tế của bạn để tối ưu hóa lộ trình học tập.
+                  </p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    data-testid="start-clarification-btn"
+                    [disabled]="roadmapService.isGeneratingQuestions()"
+                    (click)="onTriggerClarification(detail.goal_id)"
+                    class="btn-pill-action primary"
+                  >
+                    <span class="material-symbols-outlined">psychology</span>
+                    <span>Bắt đầu phỏng vấn AI</span>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="skip-to-milestones-btn"
+                    (click)="roadmapService.setActiveStep(2)"
+                    class="btn-pill-action outline"
+                  >
+                    <span>Bỏ qua sang Cột mốc</span>
+                    <span class="material-symbols-outlined">arrow_forward</span>
+                  </button>
+                </div>
+              </div>
+            </section>
+          }
+        }
+      </div>
+    }
+
+    <!-- =================================================================== -->
+    <!-- STEP 2: CỘT MỐC KIẾN THỨC (Milestones Cấp 1 — UC-07 / FR-PLAN-001)   -->
+    <!-- =================================================================== -->
+    @case (2) {
+      <div class="space-y-6" data-testid="step-2-panel">
+        <!-- Level-1 Milestone Generation & Interactive Editor -->
+        @if (selectedDetail(); as detail) {
+          <section class="arch-card">
+            <div class="card-header-flex">
+              <div>
+                <h2 class="card-title">
+                  <span class="material-symbols-outlined">timeline</span>
+                  <span>Cột Mốc Học Tập Cấp 1 (Milestones — FR-PLAN-001)</span>
+                </h2>
+                <p class="card-desc">
+                  Sinh tự động 3–7 cột mốc bằng AI hoặc tự thêm/chỉnh sửa/sắp xếp trước khi bấm Phê duyệt Cột mốc.
+                </p>
+              </div>
+
+              <div class="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  data-testid="generate-milestones-ai-btn"
+                  [disabled]="
+                    roadmapService.isReadOnlyRoadmap() ||
+                    roadmapService.sseProgress().isStreaming ||
+                    roadmapService.saving()
+                  "
+                  (click)="roadmapService.generateMilestonesWithAi(detail.id)"
+                  class="btn-pill-action primary"
+                >
+                  <span class="material-symbols-outlined">auto_awesome</span>
+                  <span>Sinh Cột Mốc bằng AI</span>
+                </button>
+
+                <button
+                  type="button"
+                  data-testid="add-milestone-btn"
+                  [disabled]="roadmapService.isReadOnlyRoadmap()"
+                  (click)="roadmapService.addEditableMilestone()"
+                  class="btn-pill-action outline"
+                >
+                  <span class="material-symbols-outlined">add</span>
+                  <span>Thêm cột mốc</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Editable Milestones List -->
+            @if (roadmapService.editableMilestones().length === 0) {
+              <div
+                data-testid="empty-milestones-state"
+                class="empty-state-box"
+              >
+                <span class="material-symbols-outlined">format_list_bulleted</span>
+                <p>Chưa có cột mốc nào cho lộ trình này.</p>
+                <p>
+                  Hãy nhấn <strong>"Sinh Cột Mốc bằng AI"</strong> hoặc
+                  <strong>"+ Thêm cột mốc"</strong> để bắt đầu.
+                </p>
+              </div>
+            } @else {
+              <div class="milestones-list">
+                @for (ms of roadmapService.editableMilestones(); track $index) {
+                  @let idx = $index;
+                  @let savedMs = roadmapService.milestones()[idx];
+                  <div
+                    [attr.data-testid]="'milestone-item-' + idx"
+                    class="milestone-card"
+                  >
+                    <div class="item-top-row">
+                      <div class="item-badge-cluster">
+                        <span class="item-index-badge">
+                          Chặng #{{ ms.sequence_order }}
+                        </span>
+                        @if (savedMs) {
+                          <span
+                            class="step-status-badge"
+                            [class.approved]="savedMs.status === 'APPROVED'"
+                            [class.draft]="savedMs.status !== 'APPROVED'"
+                          >
+                            {{ savedMs.status }}
+                          </span>
+                        }
+                      </div>
+
+                      <div class="item-actions-cluster">
+                        <button
+                          type="button"
+                          [attr.data-testid]="'move-milestone-up-' + idx"
+                          [attr.aria-label]="'Di chuyển lên cột mốc ' + (idx + 1)"
+                          [disabled]="idx === 0 || roadmapService.isReadOnlyRoadmap()"
+                          (click)="roadmapService.moveEditableMilestone(idx, 'UP')"
+                          class="btn-icon-tiny"
+                          title="Di chuyển lên"
+                        >
+                          <span class="material-symbols-outlined">arrow_upward</span>
+                        </button>
+                        <button
+                          type="button"
+                          [attr.data-testid]="'move-milestone-down-' + idx"
+                          [attr.aria-label]="'Di chuyển xuống cột mốc ' + (idx + 1)"
+                          [disabled]="
+                            idx === roadmapService.editableMilestones().length - 1 ||
+                            roadmapService.isReadOnlyRoadmap()
+                          "
+                          (click)="roadmapService.moveEditableMilestone(idx, 'DOWN')"
+                          class="btn-icon-tiny"
+                          title="Di chuyển xuống"
+                        >
+                          <span class="material-symbols-outlined">arrow_downward</span>
+                        </button>
+                        <button
+                          type="button"
+                          [attr.data-testid]="'delete-milestone-' + idx"
+                          [attr.aria-label]="'Xóa cột mốc ' + (idx + 1)"
+                          [disabled]="roadmapService.isReadOnlyRoadmap()"
+                          (click)="roadmapService.removeEditableMilestone(idx)"
+                          class="btn-icon-tiny delete"
+                          title="Xóa cột mốc"
+                        >
+                          <span class="material-symbols-outlined">delete</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="form-grid">
+                      <div class="form-field">
+                        <label
+                          [attr.for]="'ms-title-' + idx"
+                          class="form-label"
+                        >
+                          Tên cột mốc
+                        </label>
+                        <input
+                          [id]="'ms-title-' + idx"
+                          [attr.data-testid]="'milestone-title-input-' + idx"
+                          type="text"
+                          [disabled]="roadmapService.isReadOnlyRoadmap()"
+                          [ngModel]="ms.title"
+                          (ngModelChange)="roadmapService.updateEditableMilestone(idx, { title: $event })"
+                          class="form-input"
+                        />
+                      </div>
+
+                      <div class="form-field">
+                        <label
+                          [attr.for]="'ms-desc-' + idx"
+                          class="form-label"
+                        >
+                          Mô tả mục tiêu chặng
+                        </label>
+                        <input
+                          [id]="'ms-desc-' + idx"
+                          [attr.data-testid]="'milestone-desc-input-' + idx"
+                          type="text"
+                          [disabled]="roadmapService.isReadOnlyRoadmap()"
+                          [ngModel]="ms.description"
+                          (ngModelChange)="roadmapService.updateEditableMilestone(idx, { description: $event })"
+                          class="form-input"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                }
+              </div>
+
+              <!-- Milestone Action Footer -->
+              <footer class="card-action-footer">
+                <button
+                  type="button"
+                  data-testid="manual-planning-fallback-btn"
+                  [disabled]="roadmapService.isReadOnlyRoadmap()"
+                  (click)="roadmapService.enableManualPlanningMode()"
+                  class="btn-pill-action outline"
+                >
+                  <span class="material-symbols-outlined">engineering</span>
+                  <span>Lập kế hoạch thủ công (Không tốn Quota AI — UC-09)</span>
+                </button>
+
+                <div class="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    data-testid="save-milestones-btn"
+                    [disabled]="
+                      roadmapService.isReadOnlyRoadmap() ||
+                      roadmapService.saving() ||
+                      roadmapService.editableMilestones().length === 0
+                    "
+                    (click)="roadmapService.saveMilestones(detail.id)"
+                    class="btn-pill-action outline"
+                  >
+                    <span class="material-symbols-outlined">save</span>
+                    <span>Lưu chỉnh sửa cột mốc</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    data-testid="approve-milestones-btn"
+                    [disabled]="
+                      roadmapService.isReadOnlyRoadmap() ||
+                      roadmapService.saving() ||
+                      roadmapService.editableMilestones().length === 0
+                    "
+                    (click)="roadmapService.approveMilestones(detail.id)"
+                    class="btn-pill-action primary"
+                  >
+                    <span class="material-symbols-outlined">verified</span>
+                    <span>Phê duyệt Cột mốc (Approve Milestones)</span>
+                  </button>
+
+                  @if (roadmapService.areMilestonesApproved()) {
+                    <button
+                      type="button"
+                      data-testid="go-to-step-3-btn"
+                      (click)="roadmapService.setActiveStep(3)"
+                      class="btn-pill-action primary"
+                    >
+                      <span>Sang Bước 3: Sinh Nhiệm vụ chi tiết & Nguồn học</span>
+                      <span class="material-symbols-outlined">arrow_forward</span>
+                    </button>
+                  }
+                </div>
+              </footer>
+            }
+          </section>
+        } @else {
+          <!-- Legacy Fallback View when no backend roadmap is loaded yet -->
+          @if (roadmapService.currentRoadmap(); as legacy) {
+            <div class="space-y-3" data-testid="legacy-milestones-preview">
+              <h2 class="card-title">Các Chặng Kiến Thức Mẫu (Milestones)</h2>
+              @for (milestone of legacy.milestones; track milestone.id) {
+                <section class="arch-card">
+                  <div class="flex items-start justify-between gap-3">
+                    <div>
+                      <span class="text-xs font-mono text-[var(--secondary)]">
+                        Chặng {{ milestone.orderIndex }}
+                      </span>
+                      <h3 class="text-sm font-semibold">{{ milestone.title }}</h3>
+                      <p class="text-xs text-[var(--secondary)]">{{ milestone.description }}</p>
+                    </div>
+                    <span class="system-badge">
+                      {{ milestone.completedPomodoros }} / {{ milestone.totalPomodoros }} Pomodoro
+                    </span>
+                  </div>
+                </section>
+              }
+            </div>
+          }
+        }
+      </div>
+    }
+
+    <!-- =================================================================== -->
+    <!-- STEP 3: ĐỀ XUẤT LỊCH HỌC & KIỂM ĐỊNH (UC-08, UC-09, UC-12)          -->
+    <!-- =================================================================== -->
+    @case (3) {
+      <div class="space-y-6" data-testid="step-3-panel">
+        @if (selectedDetail(); as detail) {
+          <!-- FR-PLAN-001 Gate Warning if Milestones not yet APPROVED -->
+          @if (!roadmapService.areMilestonesApproved() && !roadmapService.manualPlanningMode()) {
+            <div
+              role="alert"
+              data-testid="unapproved-milestones-guard"
+              class="gate-warning-card"
+            >
+              <div>
+                <h3 class="gate-title">
+                  <span class="material-symbols-outlined">warning</span>
+                  <span>Chốt chặn FR-PLAN-001: Cột mốc Cấp 1 chưa được phê duyệt (APPROVED)</span>
+                </h3>
+                <p class="gate-text">
+                  Để sinh Đề xuất Lịch học bằng AI (Cấp 2), bạn cần phê duyệt danh sách Cột mốc ở Bước 2 trước, hoặc chuyển sang chế độ Lập kế hoạch thủ công (UC-09).
+                </p>
+              </div>
+              <div class="flex flex-wrap items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  (click)="roadmapService.setActiveStep(2)"
+                  class="btn-pill-action primary"
+                >
+                  <span class="material-symbols-outlined">arrow_back</span>
+                  <span>Quay lại Bước 2 để Phê duyệt Cột mốc</span>
+                </button>
+                <button
+                  type="button"
+                  data-testid="guard-manual-plan-btn"
+                  (click)="roadmapService.enableManualPlanningMode()"
+                  class="btn-pill-action outline"
+                >
+                  <span class="material-symbols-outlined">engineering</span>
+                  <span>Lập kế hoạch thủ công (Không tốn Quota AI)</span>
+                </button>
+              </div>
+            </div>
+          }
+
+          <!-- Header Toolbar for Step 3 (FR-PLAN-002) -->
+          <section class="arch-card">
+            <div class="card-header-flex">
+              <div>
+                <h2 class="card-title">
+                  <span class="material-symbols-outlined">checklist</span>
+                  <span>Phân Rã Nhiệm Vụ Theo Cột Mốc & Nguồn Học Tập (FR-PLAN-002)</span>
+                </h2>
+                <p class="card-desc">
+                  AI phân rã từng cột mốc đã duyệt thành các nhiệm vụ nguyên tử (30–120 phút), cân bằng Lý thuyết - Thực hành và đính kèm tài liệu học tập chính thống từ Knowledge Base.
+                </p>
+              </div>
+
+              <div class="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  data-testid="generate-tasks-ai-btn"
+                  [disabled]="
+                    !roadmapService.areMilestonesApproved() ||
+                    roadmapService.isReadOnlyRoadmap() ||
+                    roadmapService.sseProgress().isStreaming ||
+                    roadmapService.saving()
+                  "
+                  (click)="roadmapService.generateScheduleProposalWithAi(detail.id)"
+                  class="btn-pill-action primary"
+                >
+                  <span class="material-symbols-outlined">auto_awesome</span>
+                  <span>Sinh Nhiệm Vụ bằng AI</span>
+                </button>
+
+                <!-- Hidden fallback testid for backward compatibility -->
+                <button
+                  type="button"
+                  data-testid="generate-proposal-ai-btn"
+                  class="sr-only"
+                  aria-hidden="true"
+                  tabindex="-1"
+                  [disabled]="
+                    !roadmapService.areMilestonesApproved() ||
+                    roadmapService.isReadOnlyRoadmap() ||
+                    roadmapService.sseProgress().isStreaming ||
+                    roadmapService.saving()
+                  "
+                  (click)="roadmapService.generateScheduleProposalWithAi(detail.id)"
+                >
+                  Sinh Nhiệm vụ
+                </button>
+
+                <button
+                  type="button"
+                  data-testid="enable-manual-plan-btn"
+                  [disabled]="roadmapService.isReadOnlyRoadmap()"
+                  (click)="roadmapService.enableManualPlanningMode()"
+                  class="btn-pill-action outline"
+                >
+                  <span class="material-symbols-outlined">engineering</span>
+                  <span>Lập kế hoạch thủ công</span>
+                </button>
+
+                <button
+                  type="button"
+                  data-testid="add-proposal-task-btn"
+                  [disabled]="roadmapService.isReadOnlyRoadmap()"
+                  (click)="roadmapService.addEditableTask()"
+                  class="btn-pill-action outline"
+                >
+                  <span class="material-symbols-outlined">add</span>
+                  <span>Thêm nhiệm vụ</span>
+                </button>
+
+                <button
+                  type="button"
+                  data-testid="confirm-tasks-to-step-4-btn"
+                  [disabled]="roadmapService.editableTasks().length === 0"
+                  (click)="onConfirmTasksToStep4(detail.id)"
+                  class="btn-pill-action primary"
+                >
+                  <span>Chốt Nhiệm vụ & Sang Bước 4: Xếp Lịch</span>
+                  <span class="material-symbols-outlined">arrow_forward</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Empty Tasks State -->
+            @if (roadmapService.editableTasks().length === 0) {
+              <div
+                data-testid="empty-proposal-tasks-state"
+                class="empty-state-box"
+              >
+                <span class="material-symbols-outlined">checklist</span>
+                <p>Chưa có nhiệm vụ học tập nào được phân rã.</p>
+                <p>
+                  Nhấn <strong>"Sinh Nhiệm Vụ bằng AI"</strong> để AI tự động phân rã các cột mốc đã duyệt hoặc
+                  <strong>"Lập kế hoạch thủ công"</strong>.
+                </p>
+                <div class="pt-2">
+                  <button
+                    type="button"
+                    data-testid="empty-generate-tasks-btn"
+                    [disabled]="!roadmapService.areMilestonesApproved() || roadmapService.saving()"
+                    (click)="roadmapService.generateScheduleProposalWithAi(detail.id)"
+                    class="btn-pill-action primary inline-flex"
+                  >
+                    <span class="material-symbols-outlined">auto_awesome</span>
+                    <span>Sinh Nhiệm Vụ bằng AI ngay</span>
+                  </button>
+                </div>
+              </div>
+            } @else {
+              <!-- Grouped Tasks by Milestone (Step 3 Requirement) -->
+              <div class="space-y-6 mt-4">
+                @for (group of roadmapService.tasksByMilestone(); track group.milestoneIndex) {
+                  @let mIdx = group.milestoneIndex;
+                  <div
+                    class="milestone-task-group"
+                    [attr.data-testid]="'milestone-task-group-' + mIdx"
+                  >
+                    <div class="group-header-row">
+                      <div class="group-info-left">
+                        <div class="flex items-center gap-2">
+                          <span class="item-index-badge">
+                            Chặng #{{ ('sequence_order' in group.milestone ? group.milestone.sequence_order : mIdx + 1) }}
+                          </span>
+                          <h3 class="group-title">
+                            {{ group.milestone.title }}
+                          </h3>
+                        </div>
+                        @if (group.milestone.description) {
+                          <p class="group-subtitle">{{ group.milestone.description }}</p>
+                        }
+                      </div>
+
+                      <div class="flex items-center gap-2">
+                        <span class="system-badge">
+                          {{ group.tasks.length }} nhiệm vụ
+                        </span>
+                        <button
+                          type="button"
+                          [attr.data-testid]="'add-task-to-milestone-' + mIdx"
+                          [disabled]="roadmapService.isReadOnlyRoadmap()"
+                          (click)="onAddTaskToMilestone('id' in group.milestone ? group.milestone.id : group.milestone.milestone_id, ('sequence_order' in group.milestone ? group.milestone.sequence_order : mIdx + 1))"
+                          class="btn-icon-tiny"
+                          title="Thêm nhiệm vụ vào chặng này"
+                        >
+                          <span class="material-symbols-outlined">add</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <!-- Tasks inside this Milestone Group -->
+                    <div class="space-y-4">
+                      @for (task of group.tasks; track task.task_id || $index) {
+                        @let tIdx = getTaskGlobalIndex(task);
+                        <div
+                          [attr.data-testid]="'proposal-task-row-' + tIdx"
+                          class="task-card"
+                        >
+                          <div class="item-top-row">
+                            <div class="flex items-center gap-2">
+                              <span class="item-index-badge">
+                                Nhiệm vụ #{{ tIdx + 1 }}
+                              </span>
+                              <span
+                                appBadge
+                                variant="outline"
+                                class="text-xs font-mono"
+                              >
+                                {{ getTaskTypeLabel(task.task_type) }}
+                              </span>
+                            </div>
+
+                            <button
+                              type="button"
+                              [attr.data-testid]="'remove-proposal-task-' + tIdx"
+                              [attr.aria-label]="'Xóa nhiệm vụ ' + (tIdx + 1)"
+                              [disabled]="roadmapService.isReadOnlyRoadmap()"
+                              (click)="roadmapService.removeEditableTask(tIdx)"
+                              class="btn-icon-tiny delete"
+                              title="Xóa nhiệm vụ"
+                            >
+                              <span class="material-symbols-outlined">delete</span>
+                            </button>
+                          </div>
+
+                          <div class="form-grid">
+                            <div class="form-field form-full-span">
+                              <label [attr.for]="'task-title-' + tIdx" class="form-label">
+                                Tiêu đề nhiệm vụ *
+                              </label>
+                              <input
+                                [id]="'task-title-' + tIdx"
+                                [attr.data-testid]="'task-title-input-' + tIdx"
+                                type="text"
+                                [disabled]="roadmapService.isReadOnlyRoadmap()"
+                                [ngModel]="task.title"
+                                (ngModelChange)="roadmapService.updateEditableTask(tIdx, { title: $event })"
+                                class="form-input font-medium"
+                              />
+                            </div>
+
+                            <div class="form-field">
+                              <label [attr.for]="'task-type-' + tIdx" class="form-label">
+                                Loại nhiệm vụ (Pedagogical Balance)
+                              </label>
+                              <select
+                                [id]="'task-type-' + tIdx"
+                                [attr.data-testid]="'task-type-select-' + tIdx"
+                                [disabled]="roadmapService.isReadOnlyRoadmap()"
+                                [ngModel]="task.task_type || 'PRACTICE'"
+                                (ngModelChange)="roadmapService.updateEditableTask(tIdx, { task_type: $event })"
+                                class="portfolio-select w-full"
+                              >
+                                <option value="THEORY">Lý thuyết (THEORY)</option>
+                                <option value="PRACTICE">Thực hành (PRACTICE)</option>
+                                <option value="REVIEW">Ôn tập (REVIEW)</option>
+                                <option value="PROJECT">Dự án (PROJECT)</option>
+                              </select>
+                            </div>
+
+                            <div class="form-field">
+                              <label [attr.for]="'task-minutes-' + tIdx" class="form-label">
+                                Thời lượng ước tính (30–120 phút)
+                              </label>
+                              <input
+                                [id]="'task-minutes-' + tIdx"
+                                [attr.data-testid]="'task-minutes-input-' + tIdx"
+                                type="number"
+                                min="30"
+                                max="120"
+                                step="5"
+                                [disabled]="roadmapService.isReadOnlyRoadmap()"
+                                [ngModel]="task.estimated_minutes"
+                                (ngModelChange)="roadmapService.updateEditableTask(tIdx, { estimated_minutes: Number($event) })"
+                                class="form-input font-mono"
+                              />
+                            </div>
+
+                            <div class="form-field">
+                              <label [attr.for]="'task-objective-' + tIdx" class="form-label">
+                                Mục tiêu đầu ra (Learning Objective)
+                              </label>
+                              <input
+                                [id]="'task-objective-' + tIdx"
+                                [attr.data-testid]="'task-objective-input-' + tIdx"
+                                type="text"
+                                placeholder="VD: Hiểu cơ chế DI và router trong FastAPI"
+                                [disabled]="roadmapService.isReadOnlyRoadmap()"
+                                [ngModel]="task.learning_objective || ''"
+                                (ngModelChange)="roadmapService.updateEditableTask(tIdx, { learning_objective: $event })"
+                                class="form-input"
+                              />
+                            </div>
+
+                            <div class="form-field">
+                              <label [attr.for]="'task-criteria-' + tIdx" class="form-label">
+                                Tiêu chí hoàn thành (Completion Criteria)
+                              </label>
+                              <input
+                                [id]="'task-criteria-' + tIdx"
+                                [attr.data-testid]="'task-criteria-input-' + tIdx"
+                                type="text"
+                                placeholder="VD: Viết được 3 endpoint CRUD và chạy test pass"
+                                [disabled]="roadmapService.isReadOnlyRoadmap()"
+                                [ngModel]="task.completion_criteria || ''"
+                                (ngModelChange)="roadmapService.updateEditableTask(tIdx, { completion_criteria: $event })"
+                                class="form-input"
+                              />
+                            </div>
+
+                            <!-- Hidden milestone selector for binding consistency -->
+                            <input
+                              type="hidden"
+                              [id]="'task-milestone-' + tIdx"
+                              [attr.data-testid]="'task-milestone-select-' + tIdx"
+                              [value]="task.milestone_id || ''"
+                            />
+                            <!-- Date & Time hidden bindings for step 3 -->
+                            <input type="hidden" [attr.data-testid]="'task-date-input-' + tIdx" [value]="task.scheduled_date || ''" />
+                            <input type="hidden" [attr.data-testid]="'task-start-input-' + tIdx" [value]="task.scheduled_start || ''" />
+                            <input type="hidden" [attr.data-testid]="'task-end-input-' + tIdx" [value]="task.scheduled_end || ''" />
+                          </div>
+
+                          <!-- Attached Learning Resources Box (FR-PLAN-002) -->
+                          <div
+                            class="learning-resources-box"
+                            data-testid="task-learning-resources"
+                          >
+                            <div class="resources-header">
+                              <span class="resources-label">
+                                <span class="material-symbols-outlined text-sm">menu_book</span>
+                                <span>Nguồn học tập & Hướng dẫn (Learning Resources)</span>
+                              </span>
+                              <button
+                                type="button"
+                                [attr.data-testid]="'add-resource-btn-' + tIdx"
+                                [disabled]="roadmapService.isReadOnlyRoadmap()"
+                                (click)="onAddQuickResource(tIdx)"
+                                class="btn-icon-tiny"
+                                title="Thêm nguồn học tập"
+                              >
+                                <span class="material-symbols-outlined">add</span>
+                              </button>
+                            </div>
+
+                            @if (!task.learning_resources || task.learning_resources.length === 0) {
+                              <p class="text-xs text-[var(--secondary)] italic m-0">
+                                Chưa đính kèm tài liệu học tập. Bấm dấu + để thêm nguồn học gợi ý từ Knowledge Base.
+                              </p>
+                            } @else {
+                              <div
+                                class="resources-grid"
+                                [attr.data-testid]="'task-learning-resources-' + tIdx"
+                              >
+                                @for (res of task.learning_resources; track $index) {
+                                  @let rIdx = $index;
+                                  <div
+                                    class="resource-item-row"
+                                    [attr.data-testid]="'task-resource-item-' + tIdx + '-' + rIdx"
+                                  >
+                                    <div class="resource-left">
+                                      <span
+                                        appBadge
+                                        [variant]="getResourceTypeBadgeVariant(res.type)"
+                                        class="resource-type-tag"
+                                      >
+                                        {{ res.type }}
+                                      </span>
+                                      <div>
+                                        <a
+                                          [href]="res.url"
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          class="resource-title-link"
+                                          title="Mở tài liệu học tập trong tab mới"
+                                        >
+                                          <span>{{ res.title }}</span>
+                                          <span class="material-symbols-outlined">open_in_new</span>
+                                        </a>
+                                        @if (res.description) {
+                                          <p class="resource-desc">{{ res.description }}</p>
+                                        }
+                                      </div>
+                                    </div>
+
+                                    <button
+                                      type="button"
+                                      [attr.data-testid]="'remove-resource-btn-' + tIdx + '-' + rIdx"
+                                      [disabled]="roadmapService.isReadOnlyRoadmap()"
+                                      (click)="onRemoveResource(tIdx, rIdx)"
+                                      class="btn-icon-tiny delete"
+                                      title="Xóa nguồn học"
+                                    >
+                                      <span class="material-symbols-outlined">close</span>
+                                    </button>
+                                  </div>
+                                }
+                              </div>
+                            }
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+
+              <!-- Footer Actions for Step 3 -->
+              <footer class="card-action-footer mt-6 pt-4 border-t border-[var(--outline-variant)]">
+                <button
+                  type="button"
+                  data-testid="validate-and-save-draft-btn"
+                  [disabled]="roadmapService.isReadOnlyRoadmap() || roadmapService.saving()"
+                  (click)="onSaveAndValidateDraft(detail.id)"
+                  class="btn-pill-action outline"
+                >
+                  <span class="material-symbols-outlined">search_check</span>
+                  <span>Kiểm định & Lưu Bản nháp (UC-12)</span>
+                </button>
+
+                <button
+                  type="button"
+                  data-testid="confirm-tasks-to-step-4-btn"
+                  [disabled]="roadmapService.editableTasks().length === 0"
+                  (click)="onConfirmTasksToStep4(detail.id)"
+                  class="btn-pill-action primary"
+                >
+                  <span>Chốt Nhiệm vụ & Sang Bước 4: Xếp Lịch</span>
+                  <span class="material-symbols-outlined">arrow_forward</span>
+                </button>
+              </footer>
+            }
+          </section>
+
+        }
+      </div>
+    }
+
+    <!-- =================================================================== -->
+    <!-- STEP 4: THỜI KHÓA BIỂU & KÍCH HOẠT LỊCH (UC-08 / UC-12)             -->
+    <!-- =================================================================== -->
+    @case (4) {
+      <div class="space-y-6" data-testid="step-4-panel">
+        @if (selectedDetail(); as detail) {
+          <!-- Section 1: SpatioTemporal Allocation Timetable -->
+          <section class="arch-card" data-testid="spatiotemporal-schedule-panel">
+            <div class="card-header-flex">
+              <div>
+                <h2 class="card-title">
+                  <span class="material-symbols-outlined">calendar_month</span>
+                  <span>Thời Khóa Biểu Chi Tiết (SpatioTemporal Allocation Engine)</span>
+                </h2>
+                <p class="card-desc">
+                  Phân bổ các nhiệm vụ vào lịch rảnh khả dụng theo Mode A (Quỹ giờ) hoặc Mode B (Khung giờ cố định). Người học có thể tinh chỉnh ngày giờ trước khi kích hoạt Lịch Chính thức.
+                </p>
+              </div>
+
+              <div class="flex items-center gap-2">
+                <button
+                  type="button"
+                  (click)="roadmapService.setActiveStep(3)"
+                  class="btn-pill-action outline"
+                >
+                  <span class="material-symbols-outlined">arrow_back</span>
+                  <span>Quay lại Bước 3 để Sửa Nhiệm vụ</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Timetable List / Grid -->
+            @if (roadmapService.editableTasks().length === 0) {
+              <div class="empty-state-box">
+                <span class="material-symbols-outlined">event_busy</span>
+                <p>Chưa có danh sách nhiệm vụ được phân bổ.</p>
+                <button
+                  type="button"
+                  (click)="roadmapService.setActiveStep(3)"
+                  class="btn-pill-action primary mt-2"
+                >
+                  <span>Sang Bước 3 để Phân rã Nhiệm vụ</span>
+                </button>
+              </div>
+            } @else {
+              <div class="overflow-x-auto" data-testid="spatiotemporal-timetable">
+                <table
+                  class="spatiotemporal-timetable"
+                  data-testid="spatiotemporal-table"
+                >
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Nhiệm vụ học tập</th>
+                      <th>Loại</th>
+                      <th>Ngày học (Date)</th>
+                      <th>Khung giờ (Slot)</th>
+                      <th>Thời lượng</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (task of roadmapService.editableTasks(); track task.task_id || $index) {
+                      @let sIdx = $index;
+                      <tr [attr.data-testid]="'schedule-slot-row-' + sIdx">
+                        <td class="font-mono text-xs font-semibold">#{{ sIdx + 1 }}</td>
+                        <td>
+                          <div class="font-medium text-[var(--on-surface)]">{{ task.title }}</div>
+                          @if (task.learning_objective) {
+                            <div class="text-xs text-[var(--secondary)]">{{ task.learning_objective }}</div>
+                          }
+                        </td>
+                        <td>
+                          <span appBadge variant="outline" class="text-xs">
+                            {{ task.task_type || 'PRACTICE' }}
+                          </span>
+                        </td>
+                        <td>
+                          <input
+                            [id]="'sched-date-' + sIdx"
+                            [attr.data-testid]="'task-date-input-' + sIdx"
+                            type="date"
+                            [disabled]="roadmapService.isReadOnlyRoadmap()"
+                            [ngModel]="task.scheduled_date"
+                            (ngModelChange)="roadmapService.updateEditableTask(sIdx, { scheduled_date: $event })"
+                            class="form-input font-mono text-xs py-1"
+                          />
+                        </td>
+                        <td>
+                          <div class="flex items-center gap-1">
+                            <input
+                              [id]="'sched-start-' + sIdx"
+                              [attr.data-testid]="'task-start-input-' + sIdx"
+                              type="time"
+                              [disabled]="roadmapService.isReadOnlyRoadmap()"
+                              [ngModel]="task.scheduled_start"
+                              (ngModelChange)="roadmapService.updateEditableTask(sIdx, { scheduled_start: $event })"
+                              class="form-input font-mono text-xs py-1 w-24"
+                            />
+                            <span>–</span>
+                            <input
+                              [id]="'sched-end-' + sIdx"
+                              [attr.data-testid]="'task-end-input-' + sIdx"
+                              type="time"
+                              [disabled]="roadmapService.isReadOnlyRoadmap()"
+                              [ngModel]="task.scheduled_end"
+                              (ngModelChange)="roadmapService.updateEditableTask(sIdx, { scheduled_end: $event })"
+                              class="form-input font-mono text-xs py-1 w-24"
+                            />
+                          </div>
+                        </td>
+                        <td class="font-mono text-xs font-semibold">
+                          {{ task.estimated_minutes }} phút
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
+          </section>
+
+          <!-- Section 2: Validation, Diff Summary & Soft Overflow Gate Panel -->
+          @if (roadmapService.currentProposal(); as proposal) {
+            <section class="arch-card" data-testid="validation-and-diff-panel">
+              <div class="card-header-flex">
+                <div>
+                  <h3 class="card-title">
+                    <span class="material-symbols-outlined">compare_arrows</span>
+                    <span>Bảng Đối Chiếu Thay Đổi (OS-03 Merge) & Cổng Kiểm Định UC-12</span>
+                  </h3>
+                  <p class="card-desc">
+                    Kiểm tra tóm tắt thay đổi lịch học, các vi phạm ràng buộc cứng và xác nhận cảnh báo Tràn mềm trước khi Apply.
+                  </p>
+                </div>
+              </div>
+
+              <!-- OS-03 Diff Summary Metrics -->
+              <div class="diff-metrics-grid">
+                <div class="diff-metric-card">
+                  <span class="metric-label">Phiên hoàn thành giữ nguyên (OS-03)</span>
+                  <div
+                    data-testid="diff-preserved-count"
+                    class="metric-count preserved"
+                  >
+                    {{ roadmapService.diffSummary().preserved_completed_tasks_count }} nhiệm vụ
+                  </div>
+                </div>
+
+                <div class="diff-metric-card">
+                  <span class="metric-label">Phiên chưa hoàn thành được thay thế</span>
+                  <div
+                    data-testid="diff-replaced-count"
+                    class="metric-count replaced"
+                  >
+                    {{ roadmapService.diffSummary().replaced_tasks_count }} nhiệm vụ
+                  </div>
+                </div>
+
+                <div class="diff-metric-card">
+                  <span class="metric-label">Tổng số nhiệm vụ mới trong đề xuất</span>
+                  <div
+                    data-testid="diff-inserted-count"
+                    class="metric-count inserted"
+                  >
+                    {{ roadmapService.diffSummary().inserted_tasks_count }} nhiệm vụ
+                  </div>
+                </div>
+              </div>
+
+              <!-- Hard Violations Alert (Tier 1 / Tier 2) -->
+              @if (roadmapService.proposalViolations().length > 0) {
+                <div
+                  role="alert"
+                  aria-live="polite"
+                  data-testid="hard-violations-panel"
+                  class="hard-violations-box"
+                >
+                  <div class="violations-title">
+                    <span class="material-symbols-outlined">cancel</span>
+                    <span>Phát hiện {{ roadmapService.proposalViolations().length }} vi phạm ràng buộc cứng (Không thể Apply):</span>
+                  </div>
+                  <ul class="violations-list">
+                    @for (v of roadmapService.proposalViolations(); track $index) {
+                      <li [attr.data-testid]="'violation-item-' + $index">
+                        <span class="font-mono font-semibold">[{{ v.rule_code }}]</span>
+                        @if (v.task_index !== null && v.task_index !== undefined) {
+                          <span> (Nhiệm vụ #{{ v.task_index + 1 }}) </span>
+                        }
+                        <span>— {{ v.suggested_fix }}</span>
+                        <span class="opacity-80">
+                          (Kỳ vọng: {{ v.expected_bound }}, Thực tế: {{ v.actual_value }})
+                        </span>
+                      </li>
+                    }
+                  </ul>
+                </div>
+              }
+
+              <!-- Soft Overflow Warning & Mandatory Confirmation Checkbox (BUSR-04) -->
+              @if (roadmapService.hasSoftOverflow()) {
+                <div
+                  role="alert"
+                  aria-live="polite"
+                  data-testid="soft-overflow-warning-panel"
+                  class="soft-overflow-box"
+                >
+                  <div>
+                    <div class="overflow-title">
+                      <span class="material-symbols-outlined">warning</span>
+                      <span>Cảnh báo Tràn mềm (Soft Overflow ≤ 30 phút cuối ngày Mode B — BUSR-04)</span>
+                    </div>
+                    <ul class="overflow-list">
+                      @for (w of roadmapService.softOverflowWarnings(); track $index) {
+                        <li>
+                          <strong>{{ w.task_title }}</strong> ({{ w.scheduled_date }}):
+                          tràn <strong>+{{ w.overflow_minutes }} phút</strong> — {{ w.message }}
+                        </li>
+                      }
+                    </ul>
+                  </div>
+
+                  <label
+                    for="confirm-soft-overflow-checkbox"
+                    class="overflow-checkbox-label"
+                  >
+                    <input
+                      id="confirm-soft-overflow-checkbox"
+                      data-testid="confirm-soft-overflow-checkbox"
+                      type="checkbox"
+                      [checked]="roadmapService.confirmSoftOverflow()"
+                      (change)="onToggleSoftOverflow($event)"
+                    />
+                    <span>
+                      Tôi xác nhận đồng ý học lố thời gian cho phép (≤ 30 phút) cho các nhiệm vụ cuối ngày trên.
+                    </span>
+                  </label>
+                </div>
+              }
+
+              <!-- Explicit Human-in-the-Loop Apply Button (BUSR-02) -->
+              <footer class="card-action-footer">
+                <div class="text-xs text-[var(--secondary)]">
+                  @if (roadmapService.canApplyProposal()) {
+                    <span class="text-[var(--primary)] font-semibold flex items-center gap-1">
+                      <span class="material-symbols-outlined text-sm">verified</span>
+                      <span>Bản nháp đã đạt chuẩn kiểm định. Sẵn sàng kích hoạt Lịch học Chính thức.</span>
+                    </span>
+                  } @else if (roadmapService.hasHardViolations()) {
+                    <span class="text-[var(--error)] font-medium flex items-center gap-1">
+                      <span class="material-symbols-outlined text-sm">error</span>
+                      <span>Vui lòng sửa các vi phạm ràng buộc cứng và bấm "Kiểm định & Lưu Bản nháp" trước khi Apply.</span>
+                    </span>
+                  } @else if (roadmapService.hasSoftOverflow() && !roadmapService.confirmSoftOverflow()) {
+                    <span class="text-amber-700 font-medium flex items-center gap-1">
+                      <span class="material-symbols-outlined text-sm">warning</span>
+                      <span>Vui lòng tích chọn xác nhận Cảnh báo Tràn mềm (Soft Overflow) để mở khóa nút Apply.</span>
+                    </span>
+                  }
+                </div>
+
+                <button
+                  type="button"
+                  data-testid="apply-proposal-btn"
+                  [disabled]="!roadmapService.canApplyProposal()"
+                  (click)="roadmapService.applyProposal(detail.id, proposal.id)"
+                  class="btn-pill-action primary"
+                >
+                  <span class="material-symbols-outlined">rocket_launch</span>
+                  <span>Gắn Lịch vào Hệ thống (Apply)</span>
+                </button>
+              </footer>
+            </section>
+          }
+
+          <!-- Section 3: Official Schedule after Activation (OS-03 Active State) -->
+          @if (detail.official_schedule || detail.status === 'ACTIVE') {
+            <section class="arch-card" data-testid="official-schedule-card">
+              <div class="card-header-flex border-b border-[var(--outline-variant)] pb-4 mb-4">
+                <div>
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="step-status-badge approved">LỊCH HỌC ĐÃ KÍCH HOẠT</span>
+                    <span class="text-xs text-[var(--secondary)]">OfficialSchedule ACTIVE</span>
+                  </div>
+                  <h3 class="card-title text-xl font-semibold">
+                    Thời Khóa Biểu Chính Thức Đã Kích Hoạt
+                  </h3>
+                  <p class="card-desc">
+                    Lịch học chính thức đã được gắn kết vào hệ thống. Bạn có thể bắt đầu các phiên học tập trung ngay bây giờ.
+                  </p>
+                </div>
+
+                <a
+                  routerLink="/workspace"
+                  data-testid="go-to-workspace-btn"
+                  class="btn-pill-action primary"
+                >
+                  <span class="material-symbols-outlined">timer</span>
+                  <span>Vào không gian phiên học (/workspace)</span>
+                </a>
+              </div>
+
+              <!-- Official Schedule Summary Metrics -->
+              <div class="official-metrics-grid mb-6">
+                <div class="official-metric-card">
+                  <span class="metric-label">Trạng thái Lộ trình</span>
+                  <div
+                    data-testid="official-roadmap-status"
+                    class="metric-value flex items-center gap-2"
+                  >
+                    <span>{{ detail.status }}</span>
+                    <span appBadge [variant]="getStatusBadgeVariant(detail.status)">
+                      {{ getStatusLabel(detail.status) }}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="official-metric-card">
+                  <span class="metric-label">Tổng số phiên học chính thức</span>
+                  <div
+                    data-testid="official-total-sessions"
+                    class="metric-value primary"
+                  >
+                    {{ detail.official_schedule?.total_sessions ?? (detail.scheduled_tasks?.length || 0) }} phiên học
+                  </div>
+                </div>
+
+                <div class="official-metric-card">
+                  <span class="metric-label">Tổng số phút hoạch định</span>
+                  <div
+                    data-testid="official-total-minutes"
+                    class="metric-value"
+                  >
+                    {{ detail.official_schedule?.total_planned_minutes ?? totalOfficialMinutes() }} phút
+                  </div>
+                </div>
+              </div>
+
+              <!-- Official Scheduled Tasks List Grouped by Milestone -->
+              @if ((detail.scheduled_tasks?.length ?? 0) === 0) {
+                <div class="empty-state-box" data-testid="empty-official-schedule">
+                  <span class="material-symbols-outlined">event_busy</span>
+                  <p>Lộ trình đang chuyển trạng thái kích hoạt phiên học.</p>
+                </div>
+              } @else {
+                <div class="space-y-4">
+                  @for (group of roadmapService.officialTasksGroupedByMilestone(); track group.milestone.id) {
+                    <div
+                      class="official-milestone-group"
+                      [attr.data-testid]="'official-milestone-group-' + group.milestone.sequence_order"
+                    >
+                      <div class="group-header">
+                        <div>
+                          <span class="text-xs font-mono text-[var(--secondary)]">
+                            Chặng #{{ group.milestone.sequence_order }}
+                          </span>
+                          <h4 class="text-sm sm:text-base font-semibold m-0">
+                            {{ group.milestone.title }}
+                          </h4>
+                        </div>
+                        <span class="system-badge">
+                          {{ group.tasks.length }} nhiệm vụ
+                        </span>
+                      </div>
+
+                      <div class="space-y-2 mt-2">
+                        @for (t of group.tasks; track t.task_id) {
+                          <div
+                            [attr.data-testid]="'official-task-item-' + t.task_id"
+                            class="official-task-row"
+                          >
+                            <div>
+                              <div class="task-title-text">{{ t.title }}</div>
+                              <div class="task-meta-text">
+                                Ngày: {{ t.scheduled_date || 'Chưa xếp lịch' }} &bull; Thời lượng: {{ t.estimated_minutes }} phút
+                              </div>
+                            </div>
+
+                            <span
+                              appBadge
+                              [variant]="t.status === 'COMPLETED' ? 'success' : t.status === 'OVERDUE' ? 'destructive' : 'secondary'"
+                            >
+                              {{ t.status }}
+                            </span>
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+              }
+            </section>
+          }
+        }
+      </div>
+    }
+  }
+
+  <!-- Availability Onboarding Modal (FR-PLAN-001 Hybrid Preset & Google Calendar) -->
+  @if (showOnboardingModal()) {
+    <div
+      class="modal-backdrop"
+      (click)="closeOnboardingModal()"
+      aria-hidden="true"
+    ></div>
+
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="onboarding-modal-title"
+      data-testid="availability-onboarding-modal"
+      class="onboarding-modal-container"
+    >
+      <!-- Modal Header -->
+      <div class="modal-header">
+        <div class="header-icon-badge">
+          <span class="material-symbols-outlined">tune</span>
+        </div>
+        <div class="pr-8">
+          <h2 id="onboarding-modal-title" class="modal-title font-serif">
+            Thiết lập Nguồn Thời gian Rảnh cho AI
+          </h2>
+          <p class="modal-subtitle">
+            Để AI có thể tối ưu và phân bổ lộ trình học tập chính xác không trùng lịch, hãy chọn cách FocusFlow đọc thời gian rảnh của bạn:
+          </p>
+        </div>
+        <button
+          type="button"
+          data-testid="close-onboarding-modal-btn"
+          (click)="closeOnboardingModal()"
+          class="modal-close-btn"
+          aria-label="Đóng popup cấu hình rảnh"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="modal-body space-y-6">
+        <!-- Khối 1: Liên kết Google Calendar -->
+        <div class="onboard-card highlight-card">
+          <div class="card-left-content">
+            <div class="calendar-icon-box">
+              <span class="material-symbols-outlined">calendar_month</span>
+            </div>
+            <div class="card-texts">
+              <h3 class="card-action-title">Liên kết Google Calendar</h3>
+              <p class="card-action-desc">
+                Tự động đọc các khung giờ bận (Free/Busy) từ lịch Google của bạn để AI tránh trùng lịch học.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            data-testid="onboard-connect-google-btn"
+            [disabled]="availabilityService.saving()"
+            (click)="onConnectGoogleCalendar()"
+            class="btn-connect-google"
+          >
+            <span class="material-symbols-outlined">sync</span>
+            <span>Liên kết ngay</span>
+          </button>
+        </div>
+
+        <!-- Hairline divider with text -->
+        <div class="modal-divider">
+          <div class="divider-line"></div>
+          <span class="divider-text">Hoặc chọn nhanh quỹ giờ mẫu (Preset):</span>
+          <div class="divider-line"></div>
+        </div>
+
+        <!-- Khối 2: Tự thiết lập thời gian rảnh (Hybrid Preset & Custom) -->
+        <div class="presets-grid">
+          <button
+            type="button"
+            data-testid="onboard-preset-busy-pro"
+            [disabled]="availabilityService.saving()"
+            (click)="onSelectPreset('BUSY_PRO')"
+            class="preset-chip-btn"
+          >
+            <div class="chip-icon-title">
+              <span class="material-symbols-outlined">work</span>
+              <span class="chip-title">Người đi làm bận rộn</span>
+            </div>
+            <span class="chip-hours-badge">13.5h/tuần</span>
+          </button>
+
+          <button
+            type="button"
+            data-testid="onboard-preset-uni-student"
+            [disabled]="availabilityService.saving()"
+            (click)="onSelectPreset('UNI_STUDENT')"
+            class="preset-chip-btn"
+          >
+            <div class="chip-icon-title">
+              <span class="material-symbols-outlined">school</span>
+              <span class="chip-title">Sinh viên đại học</span>
+            </div>
+            <span class="chip-hours-badge">15.5h/tuần</span>
+          </button>
+
+          <button
+            type="button"
+            data-testid="onboard-preset-bootcamper"
+            [disabled]="availabilityService.saving()"
+            (click)="onSelectPreset('BOOTCAMPER')"
+            class="preset-chip-btn"
+          >
+            <div class="chip-icon-title">
+              <span class="material-symbols-outlined">rocket_launch</span>
+              <span class="chip-title">Học tập trung toàn thời gian</span>
+            </div>
+            <span class="chip-hours-badge">36h/tuần</span>
+          </button>
+        </div>
+
+        <!-- Custom Config Link with notice -->
+        <div class="custom-link-box">
+          <a
+            routerLink="/availability"
+            data-testid="onboard-custom-config-link"
+            (click)="closeOnboardingModal()"
+            class="custom-config-link"
+          >
+            <span>Tùy chỉnh chi tiết lịch 7 ngày →</span>
+          </a>
+          <p class="custom-link-hint">
+            Lưu ý: Sau khi tùy chỉnh tại trang Thời gian rảnh, bạn hãy quay lại trang Lộ trình để AI tạo kế hoạch.
+          </p>
+        </div>
+      </div>
+    </div>
+  }
+</div>

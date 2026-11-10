@@ -1,0 +1,86 @@
+@startuml uc-mod-05-system-administration
+' ========================================================
+' Chuẩn hóa 8 Tác nhân (ACT-00..ACT-07): 4 Human/Role Actors + 4 External System Actors
+' Tuân thủ nghiêm ngặt OMG UML 2.5.1 Clause 18: Các thành phần nội bộ (Taskiq, Redis, DB,
+' AI Harness) và bộ định thời nội bộ (internal clock triggers) nằm bên trong Ranh giới Hệ thống.
+' ========================================================
+title FocusFlow — Phân hệ 5: Quản trị Hệ thống (7 Use Cases)
+
+left to right direction
+skinparam packageStyle rectangle
+skinparam roundcorner 8
+skinparam monochrome false
+skinparam shadowing false
+skinparam defaultFontName "Helvetica", "Arial", sans-serif
+skinparam nodesep 40
+skinparam ranksep 75
+
+skinparam actor {
+    BackgroundColor #FEFCBF
+    BorderColor #B7791F
+    FontColor #1A202C
+    FontStyle bold
+}
+
+skinparam usecase {
+    BackgroundColor #FFFFFF
+    BorderColor #2B6CB0
+    ArrowColor #4A5568
+    FontColor #1A202C
+}
+
+skinparam package {
+    BackgroundColor #F7FAFC
+    BorderColor #CBD5E0
+    FontColor #2D3748
+    FontStyle bold
+}
+
+skinparam rectangle<<system>> {
+    BackgroundColor #EDF2F7
+    BorderColor #4A5568
+    FontColor #1A202C
+}
+
+' ========================================================
+' 1. TÁC NHÂN CON NGƯỜI / VAI TRÒ (HUMAN / ROLE ACTOR - BÊN TRÁI)
+' ========================================================
+actor "ACT-03: Quản trị viên hệ thống\n(Administrator)" as Admin #FEFCBF
+
+' ========================================================
+' 2. RANH GIỚI HỆ THỐNG (SYSTEM BOUNDARY)
+' ========================================================
+rectangle "Hệ thống FocusFlow — Phân hệ 5: Quản trị Hệ thống" as Mod5Boundary {
+    usecase "UC-ADM-01\nKhóa hoặc mở khóa\ntài khoản người dùng" as UC_ADM_01
+    usecase "UC-ADM-02\nĐổi gói dịch vụ\ncủa người dùng" as UC_ADM_02
+    usecase "UC-ADM-03\nĐiều chỉnh hạn ngạch\nAI người dùng" as UC_ADM_03
+    usecase "UC-ADM-04\nĐối soát đơn thanh toán" as UC_ADM_04
+    usecase "UC-ADM-05\nGiám sát vận hành hệ thống\nvà dịch vụ AI" as UC_ADM_05
+    usecase "UC-ADM-06\nXem nhật ký kiểm toán\nquản trị" as UC_ADM_06
+    usecase "UC-ADM-07\nQuản lý kho khái niệm\ntri thức" as UC_ADM_07
+
+    note as N1
+      <b>Tiền điều kiện chung (Precondition):</b>
+      Đã xác thực qua UC-ACC-02 với vai trò Quản trị viên (Administrator)
+    end note
+}
+
+' ========================================================
+' 3. TÁC NHÂN HỆ THỐNG NGOẠI VI (EXTERNAL SYSTEM ACTOR - BÊN PHẢI)
+' ========================================================
+rectangle "ACT-05: Cổng thanh toán\n(Payment Gateway)" as PayGateway <<system>>
+
+' ========================================================
+' 4. QUAN HỆ GIAO TIẾP (ASSOCIATIONS)
+' ========================================================
+Admin -- UC_ADM_01
+Admin -- UC_ADM_02
+Admin -- UC_ADM_03
+Admin -- UC_ADM_04
+Admin -- UC_ADM_05
+Admin -- UC_ADM_06
+Admin -- UC_ADM_07
+
+UC_ADM_04 -- PayGateway
+
+@enduml

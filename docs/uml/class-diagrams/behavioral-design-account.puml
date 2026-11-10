@@ -1,0 +1,73 @@
+@startuml FocusFlow_Behavioral_Design_Account
+title FocusFlow — Behavioral Design Class Diagram: Account
+
+hide empty members
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+
+class User <<AggregateRoot>> {
+  +changePassword(newPasswordHash : String) : void
+  +lock() : void
+  +unlock() : void
+  +deactivate() : void
+}
+class LearnerProfile <<Entity>> {
+  +updateHabitMetrics(metrics : HabitMetrics) : void
+}
+class LearnerMemoryItem <<Entity>> {
+  +confirm() : void
+  +supersede() : void
+}
+class AvailabilityProfile <<AggregateRoot>> {
+  +setDailyQuota(quota : DailyHoursQuota) : void
+  +replaceSlots(slots : AvailabilitySlot [0..*]) : void
+  +validateConfiguration() : void
+}
+class DailyHoursQuota <<ValueObject>> {
+  +validateRange() : void
+}
+class AvailabilitySlot <<Entity>> {
+  +validateMinimumDuration() : void
+  +overlaps(other : AvailabilitySlot) : Boolean
+}
+class CalendarConnection <<Entity>> {
+  +markConnected() : void
+  +recordSyncSucceeded() : void
+  +recordSyncFailed() : void
+  +revoke() : void
+}
+class WebCalLink <<Entity>> {
+  +activate() : void
+  +deactivate() : void
+  +rotateToken() : void
+}
+class AIQuota <<AggregateRoot>> {
+  +reserve(expiresAt : Timestamp) : QuotaReservation
+  +commit(reservation : QuotaReservation) : void
+  +release(reservation : QuotaReservation) : void
+  +renew(monthlyLimit : Integer) : void
+}
+class QuotaReservation <<Entity>> {
+  +commit() : void
+  +release() : void
+  +expire() : void
+}
+class PaymentTransaction <<AggregateRoot>> {
+  +markPaid() : void
+  +expire() : void
+  +reconcile(bankTransactionCode : String, reason : String) : void
+}
+class PasswordResetToken <<Entity>> {
+  +isUsableAt(now : Timestamp) : Boolean
+  +consume() : void
+}
+class ConceptMastery <<Entity>> {
+  +recordEvidence(score : Decimal) : void
+  +scheduleNextReview(at : Timestamp) : void
+}
+note bottom
+  Operations are behavioral responsibilities, not persistence/API methods.
+  Authentication, OAuth exchange, email delivery, and scheduled-job orchestration
+  remain application/infrastructure responsibilities.
+end note
+@enduml

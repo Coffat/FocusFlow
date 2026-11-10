@@ -112,15 +112,23 @@ export class GoogleSsoService {
     }
 
     if (this.hasTokenClient) {
-      this.tokenClient.requestAccessToken();
+      try {
+        this.tokenClient.requestAccessToken();
+      } catch (err) {
+        this.errorSubject.next('Không thể khởi tạo phiên đăng nhập Google. Vui lòng thử lại.');
+      }
       return;
     }
 
     if (this.hasGoogleSdk()) {
-      const google = this.getGoogle();
-      google.accounts.id.prompt();
+      try {
+        const google = this.getGoogle();
+        google.accounts.id.prompt();
+      } catch (err) {
+        this.errorSubject.next('Không thể mở hộp thoại Google SSO.');
+      }
     } else {
-      this.errorSubject.next('Google Identity Services SDK is not loaded.');
+      this.errorSubject.next('Thư viện Google Identity Services chưa tải xong. Vui lòng tải lại trang.');
     }
   }
 }

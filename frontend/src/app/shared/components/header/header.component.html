@@ -1,7 +1,7 @@
 <header class="app-header-bar">
-  <div class="header-container" [class.with-brand]="showBrand">
-    @if (showBrand) {
-      <div class="brand-cluster">
+  <div class="header-container with-brand">
+    <div class="brand-cluster">
+      @if (showBrand()) {
         <a routerLink="/" class="brand-link">
           <img
             src="assets/logo.svg"
@@ -10,29 +10,53 @@
           />
           <span class="brand-name">FocusFlow</span>
         </a>
-      </div>
-    }
+      } @else {
+        <a
+          routerLink="/"
+          class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-outline-variant/60 bg-surface-container-lowest hover:bg-surface-container-low text-secondary hover:text-on-surface font-sans text-xs font-medium transition-all duration-150 group no-underline"
+        >
+          <span class="material-symbols-outlined text-[16px] transition-transform duration-150 group-hover:-translate-x-0.5">arrow_back</span>
+          <span>{{ 'header.backToHome' | translate }}</span>
+        </a>
+      }
+    </div>
 
     <!-- Language Switcher Bar -->
     <div class="lang-switcher">
       <button
         pButton
         type="button"
-        class="lang-button"
+        class="lang-button inline-flex items-center gap-1.5"
         [class.active]="translationService.currentLang() === 'vi'"
+        [attr.aria-label]="'header.switchToVietnamese' | translate"
         (click)="switchLanguage('vi')"
       >
-        VI
+        <svg aria-hidden="true" class="w-4 h-3 rounded-[2px] shrink-0" viewBox="0 0 24 16">
+          <rect width="24" height="16" fill="#DA251D" />
+          <polygon
+            points="12,3.2 13.18,6.83 17,6.83 13.91,9.08 15.09,12.71 12,10.46 8.91,12.71 10.09,9.08 7,6.83 10.82,6.83"
+            fill="#FFFF00"
+          />
+        </svg>
+        <span>VI</span>
       </button>
       <span class="lang-divider">|</span>
       <button
         pButton
         type="button"
-        class="lang-button"
+        class="lang-button inline-flex items-center gap-1.5"
         [class.active]="translationService.currentLang() === 'en'"
+        [attr.aria-label]="'header.switchToEnglish' | translate"
         (click)="switchLanguage('en')"
       >
-        EN
+        <svg aria-hidden="true" class="w-4 h-3 rounded-[2px] shrink-0" viewBox="0 0 60 40">
+          <rect width="60" height="40" fill="#012169" />
+          <path d="M0,0 L60,40 M60,0 L0,40" stroke="#FFFFFF" stroke-width="8" />
+          <path d="M0,0 L60,40 M60,0 L0,40" stroke="#C8102E" stroke-width="4" />
+          <path d="M30,0 V40 M0,20 H60" stroke="#FFFFFF" stroke-width="12" />
+          <path d="M30,0 V40 M0,20 H60" stroke="#C8102E" stroke-width="7" />
+        </svg>
+        <span>EN</span>
       </button>
     </div>
   </div>

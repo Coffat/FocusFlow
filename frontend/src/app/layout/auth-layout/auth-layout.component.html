@@ -1,7 +1,88 @@
-<div class="auth-viewport">
-  <app-header />
-  <div class="auth-content">
+<div class="min-h-screen w-full flex flex-col justify-between bg-surface px-4 sm:px-8 py-6 relative">
+  <!-- Minimal Top Header Bar -->
+  <header class="w-full max-w-6xl mx-auto flex items-center justify-between">
+    <!-- Top Left: Back to Home Button -->
+    <a
+      routerLink="/"
+      class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-outline-variant/60 bg-surface-container-lowest hover:bg-surface-container-low text-secondary hover:text-on-surface font-sans text-xs font-medium transition-all duration-150 group"
+    >
+      <span class="material-symbols-outlined text-[16px] transition-transform duration-150 group-hover:-translate-x-0.5">arrow_back</span>
+      <span>{{ 'header.backToHome' | translate }}</span>
+    </a>
+
+    <!-- Top Right: Language Switcher (VI / EN Flags) -->
+    <div
+      class="inline-flex items-center gap-1 p-1 rounded-full border border-outline-variant/60 bg-surface-container-low/70"
+      role="group"
+      [attr.aria-label]="'common.language' | translate"
+    >
+      <button
+        type="button"
+        (click)="switchLanguage('vi')"
+        [attr.aria-label]="'header.switchToVietnamese' | translate"
+        [attr.aria-pressed]="translationService.currentLang() === 'vi'"
+        class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-sans text-xs transition-all duration-150 cursor-pointer"
+        [class.bg-surface-container-lowest]="translationService.currentLang() === 'vi'"
+        [class.text-on-surface]="translationService.currentLang() === 'vi'"
+        [class.font-semibold]="translationService.currentLang() === 'vi'"
+        [class.shadow-xs]="translationService.currentLang() === 'vi'"
+        [class.text-secondary]="translationService.currentLang() !== 'vi'"
+        [class.opacity-70]="translationService.currentLang() !== 'vi'"
+        [class.hover:opacity-100]="translationService.currentLang() !== 'vi'"
+      >
+        <svg aria-hidden="true" class="w-4 h-3 rounded-[2px] shadow-[0_0_0_0.5px_rgba(0,0,0,0.12)] shrink-0" viewBox="0 0 24 16">
+          <rect width="24" height="16" fill="#DA251D" />
+          <polygon
+            points="12,3.2 13.18,6.83 17,6.83 13.91,9.08 15.09,12.71 12,10.46 8.91,12.71 10.09,9.08 7,6.83 10.82,6.83"
+            fill="#FFFF00"
+          />
+        </svg>
+        <span>VI</span>
+      </button>
+
+      <button
+        type="button"
+        (click)="switchLanguage('en')"
+        [attr.aria-label]="'header.switchToEnglish' | translate"
+        [attr.aria-pressed]="translationService.currentLang() === 'en'"
+        class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-sans text-xs transition-all duration-150 cursor-pointer"
+        [class.bg-surface-container-lowest]="translationService.currentLang() === 'en'"
+        [class.text-on-surface]="translationService.currentLang() === 'en'"
+        [class.font-semibold]="translationService.currentLang() === 'en'"
+        [class.shadow-xs]="translationService.currentLang() === 'en'"
+        [class.text-secondary]="translationService.currentLang() !== 'en'"
+        [class.opacity-70]="translationService.currentLang() !== 'en'"
+        [class.hover:opacity-100]="translationService.currentLang() !== 'en'"
+      >
+        <svg aria-hidden="true" class="w-4 h-3 rounded-[2px] shadow-[0_0_0_0.5px_rgba(0,0,0,0.12)] shrink-0" viewBox="0 0 60 40">
+          <rect width="60" height="40" fill="#012169" />
+          <path d="M0,0 L60,40 M60,0 L0,40" stroke="#FFFFFF" stroke-width="8" />
+          <path d="M0,0 L60,40 M60,0 L0,40" stroke="#C8102E" stroke-width="4" />
+          <path d="M30,0 V40 M0,20 H60" stroke="#FFFFFF" stroke-width="12" />
+          <path d="M30,0 V40 M0,20 H60" stroke="#C8102E" stroke-width="7" />
+        </svg>
+        <span>EN</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Central Work Area for Auth Forms -->
+  <main class="my-auto py-8 sm:py-12 w-full flex items-center justify-center">
     <router-outlet />
-  </div>
-  <app-footer />
+  </main>
+
+  <!-- Minimal Systems Operational Footer -->
+  <footer class="w-full max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-outline-variant/40 text-secondary font-sans text-xs">
+    <div class="flex items-center gap-4 sm:gap-5 flex-wrap justify-center sm:justify-start">
+      <a class="hover:text-on-surface transition-colors" href="#">{{ 'footer.privacyPolicy' | translate }}</a>
+      <span class="text-outline-variant">•</span>
+      <a class="hover:text-on-surface transition-colors" href="#">{{ 'footer.termsOfService' | translate }}</a>
+      <span class="text-outline-variant">•</span>
+      <a class="hover:text-on-surface transition-colors" href="#">{{ 'footer.securityWhitepaper' | translate }}</a>
+    </div>
+    <div class="flex items-center gap-2">
+      <span class="w-2 h-2 rounded-full bg-primary inline-block animate-pulse"></span>
+      <span class="text-on-surface font-medium">{{ 'footer.systemsOperational' | translate }}</span>
+    </div>
+  </footer>
 </div>

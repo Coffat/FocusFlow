@@ -1,0 +1,93 @@
+@startuml uc-mod-02-roadmap-planning
+' ========================================================
+' Chuẩn hóa 8 Tác nhân (ACT-00..ACT-07): 4 Human/Role Actors + 4 External System Actors
+' Tuân thủ nghiêm ngặt OMG UML 2.5.1 Clause 18: Các thành phần nội bộ (Taskiq, Redis, DB,
+' AI Harness) và bộ định thời nội bộ (internal clock triggers) nằm bên trong Ranh giới Hệ thống.
+' ========================================================
+title FocusFlow — Phân hệ 2: Khởi tạo & Lập kế hoạch Lộ trình (10 Use Cases)
+
+left to right direction
+skinparam packageStyle rectangle
+skinparam roundcorner 8
+skinparam monochrome false
+skinparam shadowing false
+skinparam defaultFontName "Helvetica", "Arial", sans-serif
+skinparam nodesep 35
+skinparam ranksep 70
+
+skinparam actor {
+    BackgroundColor #EBF8FF
+    BorderColor #2B6CB0
+    FontColor #1A202C
+    FontStyle bold
+}
+
+skinparam usecase {
+    BackgroundColor #FFFFFF
+    BorderColor #2B6CB0
+    ArrowColor #4A5568
+    FontColor #1A202C
+}
+
+skinparam package {
+    BackgroundColor #F7FAFC
+    BorderColor #CBD5E0
+    FontColor #2D3748
+    FontStyle bold
+}
+
+skinparam rectangle<<system>> {
+    BackgroundColor #EDF2F7
+    BorderColor #4A5568
+    FontColor #1A202C
+}
+
+' ========================================================
+' 1. TÁC NHÂN CON NGƯỜI / VAI TRÒ (HUMAN / ROLE ACTOR - BÊN TRÁI)
+' ========================================================
+actor "ACT-02: Người học\n(Learner)" as Learner #EBF8FF
+
+' ========================================================
+' 2. RANH GIỚI HỆ THỐNG (SYSTEM BOUNDARY)
+' ========================================================
+rectangle "Hệ thống FocusFlow — Phân hệ 2: Khởi tạo & Lập kế hoạch Lộ trình" as Mod2Boundary {
+    usecase "UC-PLAN-01\nTạo khung lộ trình\nbằng AI" as UC_PLAN_01
+    usecase "UC-PLAN-02\nTạo danh sách bài học\nbằng AI" as UC_PLAN_02
+    usecase "UC-PLAN-03\nXếp lịch học bằng AI\nvà áp dụng" as UC_PLAN_03
+    usecase "UC-PLAN-04\nTạo lộ trình thủ công" as UC_PLAN_04
+    usecase "UC-PLAN-05\nCập nhật thông tin\nlộ trình" as UC_PLAN_05
+    usecase "UC-PLAN-06\nLưu trữ lộ trình" as UC_PLAN_06
+    usecase "UC-PLAN-07\nQuản lý công việc và\nquan hệ tiên quyết" as UC_PLAN_07
+    usecase "UC-PLAN-08\nQuản lý cột mốc" as UC_PLAN_08
+    usecase "UC-PLAN-09\nKiểm định tính hợp lệ\ncủa lịch học" as UC_PLAN_09 <<subfunction>> #F7FAFC
+    usecase "UC-PLAN-10\nMô phỏng kịch bản giả định\n(What-if Simulation)" as UC_PLAN_10
+}
+
+' ========================================================
+' 3. TÁC NHÂN HỆ THỐNG NGOẠI VI (EXTERNAL SYSTEM ACTOR - BÊN PHẢI)
+' ========================================================
+rectangle "ACT-04: Nhà cung cấp dịch vụ LLM\n(External LLM Provider)" as LLM <<system>>
+
+' ========================================================
+' 4. QUAN HỆ GIAO TIẾP (ASSOCIATIONS & INCLUDE)
+' ========================================================
+Learner -- UC_PLAN_01
+Learner -- UC_PLAN_02
+Learner -- UC_PLAN_03
+Learner -- UC_PLAN_04
+Learner -- UC_PLAN_05
+Learner -- UC_PLAN_06
+Learner -- UC_PLAN_07
+Learner -- UC_PLAN_08
+Learner -- UC_PLAN_10
+
+UC_PLAN_03 ..> UC_PLAN_09 : <<include>>
+UC_PLAN_04 ..> UC_PLAN_09 : <<include>>
+UC_PLAN_07 ..> UC_PLAN_09 : <<include>>
+UC_PLAN_10 ..> UC_PLAN_09 : <<include>>
+
+UC_PLAN_01 -- LLM
+UC_PLAN_02 -- LLM
+UC_PLAN_03 -- LLM
+
+@enduml

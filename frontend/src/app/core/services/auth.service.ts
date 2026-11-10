@@ -1,6 +1,7 @@
-import { Injectable } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, BehaviorSubject, map, tap, catchError, of } from 'rxjs';
+import { Router } from '@angular/router';
+import { Observable, catchError, map, of, tap } from 'rxjs';
 import {
   LoginRequest,
   LoginResponse,
@@ -21,63 +22,121 @@ import {
 } from '../../models/auth.interface';
 import { AUTH_ENDPOINTS } from '../../constant/api.constant';
 
+export type User = UserProfile;
+
 @Injectable({
   providedIn: 'root'
 })
 export class AuthService {
-  http: HttpClient;
+  private readonly http = inject(HttpClient);
+  private readonly router = inject(Router);
 
-  currentUserSubject = new BehaviorSubject<UserProfile>({
-    id: '',
-    email: '',
-    fullName: '',
-    role: '',
-    tier: '',
-    createdAt: ''
-  });
-  currentUser$ = this.currentUserSubject.asObservable();
+  // Angular Signals state with strict encapsulation
+  private readonly _currentUser = signal<User | null>(null);
+  readonly currentUser = this._currentUser.asReadonly();
+  readonly isAuthenticated = computed(() => this._currentUser() !== null);
+  private readonly _isLoading = signal<boolean>(false);
+  readonly isLoading = this._isLoading.asReadonly();
 
-  isAuthenticatedSubject = new BehaviorSubject<boolean>(false);
-  isAuthenticated$ = this.isAuthenticatedSubject.asObservable();
+  private sessionCheck$: Observable<boolean> | null = null;
 
-  constructor(http: HttpClient) {
-    this.http = http;
+  constructor() {
     this.initAuth();
   }
 
-  initAuth() {
-    const token = localStorage.getItem('access_token') || '';
-    if (token.length > 0) {
-      this.http.get<BackendUserPayload>(AUTH_ENDPOINTS.ME).subscribe({
-        next: (user: BackendUserPayload) => {
-          const mappedUser: UserProfile = {
-            id: user.id,
-            email: user.email,
-            fullName: user.full_name,
-            role: user.role,
-            tier: user.tier,
-            createdAt: user.created_at
-          };
-          this.currentUserSubject.next(mappedUser);
-          this.isAuthenticatedSubject.next(true);
-        },
-        error: (_err: Error) => {
-          localStorage.removeItem('access_token');
-          this.isAuthenticatedSubject.next(false);
-        },
-        complete: () => {}
-      });
+  setUser(user: UserProfile, accessToken?: string): void {
+    if (accessToken) {
+      // Retain token in localStorage as optional fallback for dev inspection,
+      // but primary authentication relies on HttpOnly cookies (ADR-008)
+      localStorage.setItem('access_token', accessToken);
     }
+    this._currentUser.set(user);
+  }
+
+  clearUser(): void {
+    this.clearSession();
+  }
+
+  private clearSession(): void {
+    localStorage.removeItem('access_token');
+    this._currentUser.set(null);
+  }
+
+  checkSession(): Observable<boolean> {
+    if (this._currentUser() !== null) {
+      return of(true);
+    }
+    if (this.sessionCheck$) {
+      return this.sessionCheck$;
+    }
+
+    this.sessionCheck$ = this.http.get<BackendUserPayload>(AUTH_ENDPOINTS.ME, { withCredentials: true }).pipe(
+      map((user: BackendUserPayload) => {
+        const mappedUser: UserProfile = {
+          id: user.id,
+          email: user.email,
+          fullName: user.full_name,
+          role: user.role,
+          tier: user.tier,
+          createdAt: user.created_at
+        };
+        this.setUser(mappedUser);
+        this.sessionCheck$ = null;
+        return true;
+      }),
+      catchError(() => {
+        this.clearSession();
+        this.sessionCheck$ = null;
+        return of(false);
+      })
+    );
+
+    return this.sessionCheck$;
+  }
+
+  initAuth(): void {
+    this.checkSession().subscribe();
+  }
+
+  login(credentials: { email: string; password: string }): Observable<User> {
+    this._isLoading.set(true);
+    const payload = {
+      email: credentials.email,
+      password: credentials.password
+    };
+
+    return this.http.post<BackendAuthResponse>(AUTH_ENDPOINTS.LOGIN, payload, { withCredentials: true }).pipe(
+      map((response: BackendAuthResponse): User => {
+        return {
+          id: response.user.id,
+          email: response.user.email,
+          fullName: response.user.full_name,
+          role: response.user.role,
+          tier: response.user.tier,
+          createdAt: response.user.created_at
+        };
+      }),
+      tap({
+        next: (user: User) => {
+          this.setUser(user);
+          this._isLoading.set(false);
+        },
+        error: () => {
+          this._isLoading.set(false);
+        }
+      })
+    );
   }
 
   signIn(credentials: LoginRequest): Observable<LoginResponse> {
+    this._isLoading.set(true);
     const payload = {
       email: credentials.email,
       password: credentials.password,
       remember_me: credentials.rememberMe
     };
 
-    return this.http.post<BackendAuthResponse>(AUTH_ENDPOINTS.LOGIN, payload).pipe(
+    return this.http.post<BackendAuthResponse>(AUTH_ENDPOINTS.LOGIN, payload, { withCredentials: true }).pipe(
       map((response: BackendAuthResponse): LoginResponse => {
         const mappedUser: UserProfile = {
           id: response.user.id,
@@ -96,25 +155,25 @@ export class AuthService {
       }),
       tap({
         next: (response: LoginResponse) => {
-          localStorage.setItem('access_token', response.accessToken);
-          this.currentUserSubject.next(response.user);
-          this.isAuthenticatedSubject.next(true);
+          this.setUser(response.user, response.accessToken);
+          this._isLoading.set(false);
         },
         error: (_err: Error) => {
-          this.isAuthenticatedSubject.next(false);
+          this._isLoading.set(false);
         }
       })
     );
   }
 
   signUp(data: RegisterRequest): Observable<RegisterResponse> {
+    this._isLoading.set(true);
     const payload = {
       full_name: data.fullName,
       email: data.email,
       password: data.password
     };
 
-    return this.http.post<BackendAuthResponse>(AUTH_ENDPOINTS.REGISTER, payload).pipe(
+    return this.http.post<BackendAuthResponse>(AUTH_ENDPOINTS.REGISTER, payload, { withCredentials: true }).pipe(
       map((response: BackendAuthResponse): RegisterResponse => {
         const mappedUser: UserProfile = {
           id: response.user.id,
@@ -132,9 +191,11 @@ export class AuthService {
       }),
       tap({
         next: (response: RegisterResponse) => {
-          localStorage.setItem('access_token', response.accessToken);
-          this.currentUserSubject.next(response.user);
-          this.isAuthenticatedSubject.next(true);
+          this.setUser(response.user, response.accessToken);
+          this._isLoading.set(false);
+        },
+        error: () => {
+          this._isLoading.set(false);
         }
       })
     );
@@ -161,7 +222,7 @@ export class AuthService {
       otp_code: data.otpCode
     };
 
-    return this.http.post<BackendAuthResponse>(AUTH_ENDPOINTS.REGISTER_VERIFY_OTP, payload).pipe(
+    return this.http.post<BackendAuthResponse>(AUTH_ENDPOINTS.REGISTER_VERIFY_OTP, payload, { withCredentials: true }).pipe(
       map((response: BackendAuthResponse): LoginResponse => {
         const mappedUser: UserProfile = {
           id: response.user.id,
@@ -180,9 +241,7 @@ export class AuthService {
       }),
       tap({
         next: (response: LoginResponse) => {
-          localStorage.setItem('access_token', response.accessToken);
-          this.currentUserSubject.next(response.user);
-          this.isAuthenticatedSubject.next(true);
+          this.setUser(response.user, response.accessToken);
         }
       })
     );
@@ -224,7 +283,7 @@ export class AuthService {
       payload['access_token'] = data.accessToken;
     }
 
-    return this.http.post<BackendAuthResponse>(AUTH_ENDPOINTS.GOOGLE, payload).pipe(
+    return this.http.post<BackendAuthResponse>(AUTH_ENDPOINTS.GOOGLE, payload, { withCredentials: true }).pipe(
       map((response: BackendAuthResponse): LoginResponse => {
         const mappedUser: UserProfile = {
           id: response.user.id,
@@ -243,12 +302,7 @@ export class AuthService {
       }),
       tap({
         next: (response: LoginResponse) => {
-          localStorage.setItem('access_token', response.accessToken);
-          this.currentUserSubject.next(response.user);
-          this.isAuthenticatedSubject.next(true);
-        },
-        error: (_err: Error) => {
-          this.isAuthenticatedSubject.next(false);
+          this.setUser(response.user, response.accessToken);
         }
       })
     );
@@ -257,7 +311,7 @@ export class AuthService {
   refreshToken(token?: string): Observable<LoginResponse> {
     const payload = token && token.length > 0 ? { refresh_token: token } : {};
 
-    return this.http.post<BackendAuthResponse>(AUTH_ENDPOINTS.REFRESH_TOKEN, payload).pipe(
+    return this.http.post<BackendAuthResponse>(AUTH_ENDPOINTS.REFRESH_TOKEN, payload, { withCredentials: true }).pipe(
       map((response: BackendAuthResponse): LoginResponse => {
         const mappedUser: UserProfile = {
           id: response.user.id,
@@ -276,9 +330,7 @@ export class AuthService {
       }),
       tap({
         next: (response: LoginResponse) => {
-          localStorage.setItem('access_token', response.accessToken);
-          this.currentUserSubject.next(response.user);
-          this.isAuthenticatedSubject.next(true);
+          this.setUser(response.user, response.accessToken);
         },
         error: (_err: Error) => {
           this.signOut();
@@ -287,24 +339,20 @@ export class AuthService {
     );
   }
 
-  signOut() {
+  signOut(): void {
     localStorage.removeItem('access_token');
-    this.http.post(AUTH_ENDPOINTS.LOGOUT, {}).pipe(
+    this.http.post(AUTH_ENDPOINTS.LOGOUT, {}, { withCredentials: true }).pipe(
       catchError(() => of({}))
-    ).subscribe({
-      next: () => {},
-      error: () => {},
-      complete: () => {}
-    });
+    ).subscribe();
+    this.clearSession();
+  }
 
-    this.currentUserSubject.next({
-      id: '',
-      email: '',
-      fullName: '',
-      role: '',
-      tier: '',
-      createdAt: ''
-    });
-    this.isAuthenticatedSubject.next(false);
+  logout(): void {
+    this.signOut();
+  }
+
+  handleSessionExpired(): void {
+    this.clearSession();
+    this.router.navigate(['/sign-in'], { queryParams: { expired: '1' } });
   }
 }

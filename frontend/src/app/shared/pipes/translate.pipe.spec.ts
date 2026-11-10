@@ -1,3 +1,4 @@
+import { TestBed } from '@angular/core/testing';
 import { TranslatePipe } from './translate.pipe';
 import { TranslationService } from '../../core/services/translation.service';
 
@@ -12,7 +13,13 @@ describe('TranslatePipe', () => {
         return key;
       })
     };
-    pipe = new TranslatePipe(mockTranslationService as unknown as TranslationService);
+    TestBed.configureTestingModule({
+      providers: [
+        TranslatePipe,
+        { provide: TranslationService, useValue: mockTranslationService }
+      ]
+    });
+    pipe = TestBed.inject(TranslatePipe);
   });
 
   it('should transform translation key into translated string', () => {
