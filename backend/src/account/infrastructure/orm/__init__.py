@@ -2,6 +2,7 @@ from src.account.infrastructure.orm.availability_orm import (
     AvailabilityORM,
     AvailabilitySlotORM,
 )
+from src.account.infrastructure.orm.calendar_connection_orm import CalendarConnectionORM
 from src.account.infrastructure.orm.user_orm import (
     AiQuotaModel,
     AIQuotaORM,
@@ -26,6 +27,7 @@ __all__ = [
     "AiUsageLogModel",
     "AvailabilityORM",
     "AvailabilitySlotORM",
+    "CalendarConnectionORM",
     "LearnerProfileModel",
     "LearnerProfileORM",
     "PaymentTransactionORM",
