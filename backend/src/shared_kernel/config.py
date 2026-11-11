@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables (.env)."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env", "backend/.env"),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -36,7 +36,9 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 7
     fernet_key: str = ""
-    google_client_id: str = ""
+    google_client_id: str = (
+        "408847171120-dldrof0cc90f3nn19qsl7amrl7fpc9jc.apps.googleusercontent.com"
+    )
 
     # Mail & OTP Configuration (ADR-008, Mailpit on localhost:1025 in dev/test)
     email_backend: str = "smtp"
@@ -65,6 +67,10 @@ class Settings(BaseSettings):
     # External Providers (Sandbox / Mock fallback for offline thesis defense)
     payment_provider: str = "mock"
     calendar_provider: str = "mock"
+    calendar_encryption_key: str = ""
+    google_client_secret: str = ""
+    google_redirect_uri: str = "http://localhost:3000/api/v1/account/calendar/google/callback"
+    calendar_webhook_base_url: str = "http://localhost:3000"
 
 
 @lru_cache

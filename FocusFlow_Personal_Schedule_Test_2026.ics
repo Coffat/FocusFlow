@@ -1,0 +1,109 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//FocusFlow//Personal Schedule Test Dataset//VI
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:Lịch Cá Nhân (Test Sinh Viên FocusFlow)
+X-WR-TIMEZONE:Asia/Ho_Chi_Minh
+X-WR-CALDESC:Bộ dữ liệu lịch mẫu mô phỏng sinh viên đi học và làm thêm để kiểm thử FreeBusy và Đồng bộ FocusFlow
+
+BEGIN:VTIMEZONE
+TZID:Asia/Ho_Chi_Minh
+X-LIC-LOCATION:Asia/Ho_Chi_Minh
+BEGIN:STANDARD
+TZOFFSETFROM:+0700
+TZOFFSETTO:+0700
+TZNAME:ICT
+DTSTART:19700101T000000
+END:STANDARD
+END:VTIMEZONE
+
+BEGIN:VEVENT
+UID:ff-school-mwf-20261110@focusflow.vn
+DTSTAMP:20261110T020000Z
+SUMMARY:Học trên trường: Kiến trúc PM & CSDL Nâng cao
+DESCRIPTION:Lịch học chính khóa tại giảng đường đại học (Thứ 2, 4, 6)
+LOCATION:Giảng đường B1, Đại học Bách Khoa
+DTSTART;TZID=Asia/Ho_Chi_Minh:20261111T080000
+DTEND;TZID=Asia/Ho_Chi_Minh:20261111T113000
+RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR;UNTIL=20261208T170000Z
+STATUS:CONFIRMED
+TRANSP:OPAQUE
+END:VEVENT
+
+BEGIN:VEVENT
+UID:ff-work-tts-20261110@focusflow.vn
+DTSTAMP:20261110T020000Z
+SUMMARY:Đi làm Part-time: Tech Lab & Dự án Outsourcing
+DESCRIPTION:Ca làm việc bán thời gian tại văn phòng công ty
+LOCATION:Tòa nhà Innovation Hub, Tầng 5
+DTSTART;TZID=Asia/Ho_Chi_Minh:20261110T133000
+DTEND;TZID=Asia/Ho_Chi_Minh:20261110T173000
+RRULE:FREQ=WEEKLY;BYDAY=TU,TH,SA;UNTIL=20261208T170000Z
+STATUS:CONFIRMED
+TRANSP:OPAQUE
+END:VEVENT
+
+BEGIN:VEVENT
+UID:ff-gym-mwf-20261110@focusflow.vn
+DTSTAMP:20261110T020000Z
+SUMMARY:Tập Gym & Thể lực
+DESCRIPTION:Khung giờ rèn luyện sức khỏe cá nhân
+LOCATION:California Fitness & Yoga
+DTSTART;TZID=Asia/Ho_Chi_Minh:20261111T180000
+DTEND;TZID=Asia/Ho_Chi_Minh:20261111T191500
+RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR;UNTIL=20261208T170000Z
+STATUS:CONFIRMED
+TRANSP:OPAQUE
+END:VEVENT
+
+BEGIN:VEVENT
+UID:ff-capstone-sat-20261110@focusflow.vn
+DTSTAMP:20261110T020000Z
+SUMMARY:Họp nhóm Đồ án Tốt nghiệp (Review Sprint)
+DESCRIPTION:Thảo luận tiến độ và phân chia công việc tuần
+LOCATION:The Coffee House / Google Meet
+DTSTART;TZID=Asia/Ho_Chi_Minh:20261114T090000
+DTEND;TZID=Asia/Ho_Chi_Minh:20261114T110000
+RRULE:FREQ=WEEKLY;BYDAY=SA;UNTIL=20261208T170000Z
+STATUS:CONFIRMED
+TRANSP:OPAQUE
+END:VEVENT
+
+BEGIN:VEVENT
+UID:ff-family-sun-20261110@focusflow.vn
+DTSTAMP:20261110T020000Z
+SUMMARY:Việc gia đình, Dọn dẹp phòng & Mua sắm
+DESCRIPTION:Thời gian dành cho gia đình và chuẩn bị thực phẩm tuần mới
+DTSTART;TZID=Asia/Ho_Chi_Minh:20261115T083000
+DTEND;TZID=Asia/Ho_Chi_Minh:20261115T113000
+RRULE:FREQ=WEEKLY;BYDAY=SU;UNTIL=20261208T170000Z
+STATUS:CONFIRMED
+TRANSP:OPAQUE
+END:VEVENT
+
+BEGIN:VEVENT
+UID:ff-emergency-client-meeting-20261118@focusflow.vn
+DTSTAMP:20261110T020000Z
+SUMMARY:🚨 Họp khẩn cấp với Khách hàng (Dự án Part-time)
+DESCRIPTION:Sự kiện đột xuất buổi tối - Dùng để kiểm thử phát hiện xung đột lịch học của FocusFlow!
+LOCATION:Zoom Meeting Online
+DTSTART;TZID=Asia/Ho_Chi_Minh:20261118T193000
+DTEND;TZID=Asia/Ho_Chi_Minh:20261118T210000
+STATUS:CONFIRMED
+TRANSP:OPAQUE
+END:VEVENT
+
+BEGIN:VEVENT
+UID:ff-midterm-exam-distributed-20261126@focusflow.vn
+DTSTAMP:20261110T020000Z
+SUMMARY:📝 Thi Giữa kỳ: Hệ thống Phân tán (Phòng Lab)
+DESCRIPTION:Kiểm tra thực hành giữa kỳ tại trường - Khung giờ tối cản trở lịch học
+LOCATION:Phòng Lab 302 - Nhà C6
+DTSTART;TZID=Asia/Ho_Chi_Minh:20261126T190000
+DTEND;TZID=Asia/Ho_Chi_Minh:20261126T213000
+STATUS:CONFIRMED
+TRANSP:OPAQUE
+END:VEVENT
+
+END:VCALENDAR

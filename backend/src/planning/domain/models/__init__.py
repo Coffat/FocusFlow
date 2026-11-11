@@ -25,6 +25,7 @@ from src.planning.domain.models.schedule import (
     ScheduleProposal,
     ScheduleProposalStatus,
 )
+from src.planning.domain.models.schedule_block import ScheduleBlock
 
 __all__ = [
     "AI_MILESTONE_MAX_COUNT",
@@ -43,6 +44,7 @@ __all__ = [
     "PrerequisiteRelationType",
     "Roadmap",
     "RoadmapStatus",
+    "ScheduleBlock",
     "ScheduleProposal",
     "ScheduleProposalStatus",
     "get_max_active_roadmaps_for_tier",

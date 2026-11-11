@@ -7,12 +7,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from uuid6 import uuid7
 
 from src.account.presentation.auth_router import router as auth_router
+from src.account.presentation.calendar_router import router as calendar_router
 from src.account.presentation.routers import (
     availabilities_router,
 )
 from src.account.presentation.routers import (
     router as account_router,
 )
+from src.account.presentation.webhook_router import router as webhook_router
 from src.evaluation.presentation.routers import router as evaluation_router
 from src.execution.presentation.routers import router as execution_router
 from src.planning.presentation.routers import (
@@ -84,6 +86,8 @@ def create_app() -> FastAPI:
     app.include_router(account_router)
     app.include_router(availabilities_router)
     app.include_router(auth_router)
+    app.include_router(calendar_router)
+    app.include_router(webhook_router)
     app.include_router(planning_router)
     app.include_router(roadmaps_router)
     app.include_router(execution_router)

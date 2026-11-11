@@ -11,6 +11,10 @@ __all__ = [
     "AvailabilityQueryPort",
     "AvailabilitySnapshotDTO",
     "AvailabilityUpdatedEvent",
+    "CalendarBusyIntervalDTO",
+    "CalendarConnectionQueryPort",
+    "CalendarConnectionSnapshotDTO",
+    "CalendarSyncFacadePort",
     "InsufficientQuotaError",
     "LearnerProfileDTO",
     "LearnerProfileQueryPort",
@@ -24,6 +28,8 @@ __all__ = [
     "UserSnapshotDTO",
     "UserUpgradedToPremiumEvent",
     "create_availability_query_port",
+    "create_calendar_connection_query_port",
+    "create_calendar_sync_facade",
     "create_learner_profile_query_port",
     "create_quota_facade",
     "create_user_query_port",
@@ -207,10 +213,61 @@ class UserQueryPort(Protocol):
     async def get_user_by_email(self, email: str) -> UserSnapshotDTO | None: ...
 
 
+@dataclass(frozen=True)
+class CalendarConnectionSnapshotDTO:
+    """Read-only external calendar connection DTO exposed to Planning context (UC-17)."""
+
+    user_id: UUID
+    provider: str
+    sync_status: str
+    external_calendar_id: str
+    source_calendars: tuple[str, ...]
+    last_synced_at: str | None = None
+    is_active: bool = True
+
+
+@dataclass(frozen=True)
+class CalendarBusyIntervalDTO:
+    """External calendar busy interval passed to Planning for conflict-free scheduling."""
+
+    start_time: datetime
+    end_time: datetime
+
+
+class CalendarConnectionQueryPort(Protocol):
+    """Cross-context read-only query port for Google/Outlook Calendar connection state."""
+
+    async def get_connection_snapshot(
+        self,
+        user_id: UUID,
+        provider: str = "GOOGLE",
+    ) -> CalendarConnectionSnapshotDTO | None: ...
+
+    async def get_free_busy_intervals(
+        self,
+        user_id: UUID,
+        time_min: datetime,
+        time_max: datetime,
+        provider: str = "GOOGLE",
+    ) -> list[CalendarBusyIntervalDTO]: ...
+
+
+class CalendarSyncFacadePort(Protocol):
+    """Cross-context facade port for calendar synchronization operations (UC-17)."""
+
+    async def sync_schedule_blocks_to_google(
+        self,
+        schedule_id: UUID,
+        user_id: UUID,
+    ) -> None: ...
+
+
 _quota_factory: Any = None
 _availability_factory: Any = None
 _learner_profile_factory: Any = None
 _user_query_factory: Any = None
+_calendar_connection_query_factory: Any = None
+_calendar_sync_facade_factory: Any = None
 
 
 def register_account_port_factories(
@@ -219,8 +276,16 @@ def register_account_port_factories(
     availability_factory: Any = None,
     learner_profile_factory: Any = None,
     user_query_factory: Any = None,
+    calendar_connection_query_factory: Any = None,
+    calendar_sync_facade_factory: Any = None,
 ) -> None:
-    global _quota_factory, _availability_factory, _learner_profile_factory, _user_query_factory
+    global \
+        _quota_factory, \
+        _availability_factory, \
+        _learner_profile_factory, \
+        _user_query_factory, \
+        _calendar_connection_query_factory, \
+        _calendar_sync_facade_factory
     if quota_factory is not None:
         _quota_factory = quota_factory
     if availability_factory is not None:
@@ -229,6 +294,10 @@ def register_account_port_factories(
         _learner_profile_factory = learner_profile_factory
     if user_query_factory is not None:
         _user_query_factory = user_query_factory
+    if calendar_connection_query_factory is not None:
+        _calendar_connection_query_factory = calendar_connection_query_factory
+    if calendar_sync_facade_factory is not None:
+        _calendar_sync_facade_factory = calendar_sync_facade_factory
 
 
 def _ensure_account_factories_loaded() -> None:
@@ -259,4 +328,26 @@ def create_learner_profile_query_port(session: Any) -> LearnerProfileQueryPort:
 def create_user_query_port(session: Any) -> UserQueryPort:
     _ensure_account_factories_loaded()
     res: UserQueryPort = _user_query_factory(session)
+    return res
+
+
+def create_calendar_connection_query_port(
+    session: Any,
+    calendar_provider: Any = None,
+) -> CalendarConnectionQueryPort:
+    _ensure_account_factories_loaded()
+    res: CalendarConnectionQueryPort = _calendar_connection_query_factory(
+        session, calendar_provider=calendar_provider
+    )
+    return res
+
+
+def create_calendar_sync_facade(session: Any) -> CalendarSyncFacadePort:
+    _ensure_account_factories_loaded()
+    if _calendar_sync_facade_factory is None:
+        import importlib
+
+        importlib.import_module("src.account.infrastructure.adapters.calendar_sync_facade_adapter")
+    assert callable(_calendar_sync_facade_factory)
+    res: CalendarSyncFacadePort = _calendar_sync_facade_factory(session)
     return res

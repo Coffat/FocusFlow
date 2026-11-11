@@ -68,7 +68,12 @@ services:
       - LLM_API_KEY=${LLM_API_KEY:-${GEMINI_API_KEY:-mock-key}}
       - LLM_BASE_URL=${LLM_BASE_URL:-}
       - PAYMENT_PROVIDER=${PAYMENT_PROVIDER:-mock}
-      - CALENDAR_PROVIDER=${CALENDAR_PROVIDER:-mock}
+      - CALENDAR_PROVIDER=${CALENDAR_PROVIDER:-google}
+      - CALENDAR_ENCRYPTION_KEY=${CALENDAR_ENCRYPTION_KEY:-hOS_brn4ckcgaKn4-wP1cQ048RRb21roVkYFG5PmfhU=}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-227549369009-v57ekq00ntij7ni9or1k6k30mani1ojt.apps.googleusercontent.com}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI:-http://localhost:3000/api/v1/account/calendar/google/callback}
+      - CALENDAR_WEBHOOK_BASE_URL=${CALENDAR_WEBHOOK_BASE_URL:-http://localhost:3000}
     depends_on:
       postgres:
         condition: service_healthy
