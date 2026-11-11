@@ -3,15 +3,9 @@ import {
   OnInit,
   DestroyRef,
   inject,
-  ElementRef,
-  viewChildren,
   signal,
-  computed,
-  ChangeDetectionStrategy,
-  NgZone
+  ChangeDetectionStrategy
 } from '@angular/core';
-import { ButtonModule } from 'primeng/button';
-import { FormsModule } from '@angular/forms';
 import { Router, RouterLink, ActivatedRoute } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -20,11 +14,17 @@ import { AuthService } from '../../../core/services/auth.service';
 import { TranslationService } from '../../../core/services/translation.service';
 import { TranslatePipe } from '../../../shared/pipes/translate.pipe';
 import { LoginResponse, MessageResponse } from '../../../models/auth.interface';
+import { OtpInputComponent } from '../shared/otp-input/otp-input.component';
 
 @Component({
   selector: 'app-otp-validation',
+  standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, RouterLink, ButtonModule, TranslatePipe],
+  imports: [
+    RouterLink,
+    TranslatePipe,
+    OtpInputComponent
+  ],
   templateUrl: './otp-validation.component.html',
   styleUrl: './otp-validation.component.scss'
 })
@@ -33,41 +33,18 @@ export class OtpValidationComponent implements OnInit {
   readonly translationService = inject(TranslationService);
   readonly router = inject(Router);
   readonly activatedRoute = inject(ActivatedRoute);
-  readonly ngZone = inject(NgZone);
   readonly destroyRef = inject(DestroyRef);
-
-  readonly digitInputs = viewChildren<ElementRef<HTMLInputElement>>('digitInput');
 
   readonly email = signal<string>('');
   readonly flow = signal<string>('register');
-  readonly otpDigits = signal<string[]>(['', '', '', '', '', '']);
-  readonly fullOtp = computed<string>(() => this.otpDigits().join(''));
-  readonly isAutoFilled = signal<boolean>(false);
+  readonly currentOtp = signal<string>('');
   readonly isLoading = signal<boolean>(false);
   readonly errorMessage = signal<string>('');
   readonly successMessage = signal<string>('');
-  readonly cooldownSeconds = signal<number>(60);
-  private timerIntervalId: number = 0;
-
-  readonly formattedCooldown = computed<string>(() => {
-    const total = this.cooldownSeconds();
-    const mins = Math.floor(total / 60);
-    const secs = total % 60;
-    const minsStr = mins < 10 ? '0' + mins : String(mins);
-    const secsStr = secs < 10 ? '0' + secs : String(secs);
-    return minsStr + ':' + secsStr;
-  });
 
   ngOnInit() {
     this.errorMessage.set('');
     this.successMessage.set('');
-
-    this.destroyRef.onDestroy(() => {
-      if (this.timerIntervalId !== 0) {
-        window.clearInterval(this.timerIntervalId);
-        this.timerIntervalId = 0;
-      }
-    });
 
     this.activatedRoute.queryParams
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -90,113 +67,30 @@ export class OtpValidationComponent implements OnInit {
         error: (_err: Error) => {},
         complete: () => {}
       });
-
-    this.startCooldownTimer(60);
   }
 
-  startCooldownTimer(seconds: number) {
-    if (this.timerIntervalId !== 0) {
-      window.clearInterval(this.timerIntervalId);
-      this.timerIntervalId = 0;
-    }
-
-    this.cooldownSeconds.set(seconds);
-
-    this.timerIntervalId = window.setInterval(() => {
-      this.ngZone.run(() => {
-        const current = this.cooldownSeconds();
-        if (current <= 1) {
-          this.cooldownSeconds.set(0);
-          window.clearInterval(this.timerIntervalId);
-          this.timerIntervalId = 0;
-        } else {
-          this.cooldownSeconds.set(current - 1);
-        }
-      });
-    }, 1000);
-  }
-
-  onDigitInput(event: Event, index: number) {
-    const target = event.target as HTMLInputElement;
-    const sanitized = target.value.replace(/[^0-9]/g, '');
-    const char = sanitized.length > 0 ? sanitized.slice(-1) : '';
-
-    const newDigits = [...this.otpDigits()];
-    newDigits[index] = char;
-    this.otpDigits.set(newDigits);
-    target.value = char;
-
-    if (char.length > 0 && index < 5) {
-      this.focusInput(index + 1);
-    }
-
-    if (this.fullOtp().length === 6) {
+  onOtpChange(code: string) {
+    this.currentOtp.set(code);
+    if (code.length === 6) {
       this.errorMessage.set('');
     }
   }
 
-  onDigitKeyDown(event: KeyboardEvent, index: number) {
-    if (event.key === 'Backspace') {
-      const currentVal = this.otpDigits()[index];
-      const newDigits = [...this.otpDigits()];
-      if (currentVal.length === 0 && index > 0) {
-        newDigits[index - 1] = '';
-        this.otpDigits.set(newDigits);
-        this.focusInput(index - 1);
-      } else {
-        newDigits[index] = '';
-        this.otpDigits.set(newDigits);
-      }
-    } else if (event.key === 'ArrowLeft' && index > 0) {
-      this.focusInput(index - 1);
-    } else if (event.key === 'ArrowRight' && index < 5) {
-      this.focusInput(index + 1);
-    }
-  }
-
-  onDigitPaste(event: ClipboardEvent) {
-    event.preventDefault();
-    const pastedData = event.clipboardData?.getData('text') || '';
-    const digitsOnly = pastedData.replace(/[^0-9]/g, '').slice(0, 6);
-
-    if (digitsOnly.length === 0) {
-      return;
-    }
-
-    const inputsArray = this.digitInputs();
-    const newDigits = [...this.otpDigits()];
-    for (let i = 0; i < 6; i++) {
-      const d = digitsOnly[i] || '';
-      newDigits[i] = d;
-      if (inputsArray[i]) {
-        inputsArray[i].nativeElement.value = d;
-      }
-    }
-
-    this.isAutoFilled.set(true);
-    this.otpDigits.set(newDigits);
-
-    const targetFocusIndex = Math.min(digitsOnly.length, 5);
-    this.focusInput(targetFocusIndex);
-  }
-
-  focusInput(index: number) {
-    const inputsArray = this.digitInputs();
-    if (inputsArray[index]) {
-      inputsArray[index].nativeElement.focus();
-      inputsArray[index].nativeElement.select();
-    }
+  onOtpCompleted(code: string) {
+    this.currentOtp.set(code);
+    this.verifyOtp();
   }
 
   verifyOtp() {
-    if (this.fullOtp().length !== 6) {
-      this.errorMessage.set(this.translationService.get('auth.otp.otpRequiredError') || 'Vui lòng nhập đủ 6 chữ số OTP.');
+    const code = this.currentOtp();
+    if (code.length !== 6) {
+      this.errorMessage.set(this.translationService.get('auth.otp.otpRequiredError'));
       return;
     }
 
     const emailVal = this.email();
     if (!emailVal) {
-      this.errorMessage.set('Không xác định được địa chỉ email cần xác thực. Vui lòng quay lại trang Đăng ký.');
+      this.errorMessage.set(this.translationService.get('auth.otp.sessionExpiredError'));
       return;
     }
 
@@ -207,23 +101,23 @@ export class OtpValidationComponent implements OnInit {
     this.authService
       .verifyRegisterOtp({
         email: emailVal.trim().toLowerCase(),
-        otpCode: this.fullOtp().trim()
+        otpCode: code.trim()
       })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (_response: LoginResponse) => {
           this.isLoading.set(false);
-          this.successMessage.set('Xác thực OTP thành công! Đang chuyển hướng vào hệ thống...');
+          this.successMessage.set(this.translationService.get('auth.otp.verifySuccessRedirect'));
           sessionStorage.removeItem('pending_register_email');
           setTimeout(() => {
             this.router.navigate(['/dashboard']);
-          }, 300);
+          }, 350);
         },
         error: (err: HttpErrorResponse) => {
           this.isLoading.set(false);
           this.errorMessage.set(parseHttpErrorMessage(
             err,
-            this.translationService.get('auth.otp.verificationFailed') || 'Xác thực OTP thất bại. Vui lòng thử lại.'
+            this.translationService.get('auth.otp.verificationFailed')
           ));
         },
         complete: () => {
@@ -233,13 +127,9 @@ export class OtpValidationComponent implements OnInit {
   }
 
   resendOtp() {
-    if (this.cooldownSeconds() > 0 || this.isLoading()) {
-      return;
-    }
-
     const emailVal = this.email();
     if (!emailVal) {
-      this.errorMessage.set('Email không hợp lệ. Vui lòng quay lại trang Đăng ký.');
+      this.errorMessage.set(this.translationService.get('auth.otp.sessionExpiredError'));
       return;
     }
 
@@ -260,11 +150,12 @@ export class OtpValidationComponent implements OnInit {
           this.successMessage.set(
             response.message || this.translationService.get('auth.otp.codeSentSuccess')
           );
-          this.startCooldownTimer(60);
         },
         error: (err: HttpErrorResponse) => {
           this.isLoading.set(false);
-          this.errorMessage.set(parseHttpErrorMessage(err, 'Resend request failed. Please try again.'));
+          this.errorMessage.set(
+            parseHttpErrorMessage(err, this.translationService.get('auth.otp.resendFailedError'))
+          );
         },
         complete: () => {
           this.isLoading.set(false);

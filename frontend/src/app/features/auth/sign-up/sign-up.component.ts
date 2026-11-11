@@ -2,8 +2,6 @@ import { Component, OnInit, DestroyRef, inject, ChangeDetectionStrategy, signal,
 import { FormBuilder, Validators, ReactiveFormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { ButtonModule } from 'primeng/button';
-import { CheckboxModule } from 'primeng/checkbox';
 import { HttpErrorResponse } from '@angular/common/http';
 import { parseHttpErrorMessage } from '../../../core/utils/error-parser.util';
 import { AuthService } from '../../../core/services/auth.service';
@@ -26,11 +24,20 @@ import {
   MessageResponse,
   RequestRegisterOtpRequest
 } from '../../../models/auth.interface';
+import { AuthHeaderComponent } from '../shared/auth-header/auth-header.component';
+import { SocialAuthComponent } from '../shared/social-auth/social-auth.component';
 
 @Component({
   selector: 'app-sign-up',
+  standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, RouterLink, ButtonModule, CheckboxModule, TranslatePipe],
+  imports: [
+    ReactiveFormsModule,
+    RouterLink,
+    TranslatePipe,
+    AuthHeaderComponent,
+    SocialAuthComponent
+  ],
   templateUrl: './sign-up.component.html',
   styleUrl: './sign-up.component.scss'
 })
@@ -54,6 +61,7 @@ export class SignUpComponent implements OnInit {
   readonly isConfirmPasswordVisible = signal<boolean>(false);
   readonly isLoading = signal<boolean>(false);
   readonly errorMessage = signal<string>('');
+  readonly infoMessage = signal<string>('');
   readonly successMessage = signal<string>('');
   readonly passwordStrength = signal<number>(0);
 
@@ -70,6 +78,7 @@ export class SignUpComponent implements OnInit {
 
   ngOnInit() {
     this.errorMessage.set('');
+    this.infoMessage.set('');
     this.successMessage.set('');
 
     this.signUpForm.get('password')?.valueChanges
@@ -126,6 +135,7 @@ export class SignUpComponent implements OnInit {
 
   signInWithGoogle() {
     this.errorMessage.set('');
+    this.infoMessage.set('');
     this.isLoading.set(true);
     this.googleSsoService.requestGoogleSignIn();
   }
@@ -207,6 +217,7 @@ export class SignUpComponent implements OnInit {
 
     this.isLoading.set(true);
     this.errorMessage.set('');
+    this.infoMessage.set('');
     this.successMessage.set('');
 
     const cleanEmail = String(this.signUpForm.get('email')?.value || '').trim().toLowerCase();
@@ -230,7 +241,7 @@ export class SignUpComponent implements OnInit {
         },
         error: (err: HttpErrorResponse) => {
           this.isLoading.set(false);
-          this.errorMessage.set(parseHttpErrorMessage(err, 'Registration failed. Please check form inputs.'));
+          this.errorMessage.set(parseHttpErrorMessage(err, this.translationService.get('auth.signUp.registrationFailedError')));
         },
         complete: () => {
           this.isLoading.set(false);

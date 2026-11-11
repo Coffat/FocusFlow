@@ -14,6 +14,7 @@ from src.account.application.use_cases.availability.update_availability_use_case
     UpdateAvailabilityUseCase,
 )
 from src.account.domain.exceptions.availability import AvailabilityDomainException
+from src.account.presentation.calendar_router import router as calendar_router
 from src.account.presentation.deps import (
     get_current_learner_id,
     get_get_availability_use_case,
@@ -21,7 +22,10 @@ from src.account.presentation.deps import (
 )
 
 router = APIRouter(prefix="/api/v1/account", tags=["Account & Quota"])
+account_router = router
 availabilities_router = APIRouter(prefix="/api/v1/availabilities", tags=["Availabilities"])
+
+__all__ = ["account_router", "availabilities_router", "calendar_router", "router"]
 
 
 @router.get("/status")

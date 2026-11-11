@@ -9,6 +9,10 @@ export function parseHttpErrorMessage(
   }
 
   if (err instanceof HttpErrorResponse) {
+    // 0. Status 0: Network error / Server unreachable
+    if (err.status === 0 || err.message?.includes('Failed to fetch')) {
+      return 'Không thể kết nối đến máy chủ API. Vui lòng kiểm tra dịch vụ backend.';
+    }
     // 1. FastAPI 422 validation array [{ loc: [...], msg: "...", type: "..." }]
     if (Array.isArray(err.error?.detail) && err.error.detail.length > 0) {
       const firstError = err.error.detail[0];
