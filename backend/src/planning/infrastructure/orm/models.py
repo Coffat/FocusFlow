@@ -5,6 +5,7 @@ from src.planning.infrastructure.orm.planning_orm import (
     MilestoneORM,
     OfficialScheduleORM,
     RoadmapORM,
+    ScheduleBlockORM,
     ScheduleProposalORM,
 )
 
@@ -15,5 +16,6 @@ __all__ = [
     "MilestoneORM",
     "OfficialScheduleORM",
     "RoadmapORM",
+    "ScheduleBlockORM",
     "ScheduleProposalORM",
 ]

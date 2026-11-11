@@ -3,15 +3,18 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     Date,
     DateTime,
     ForeignKey,
     Index,
     Integer,
+    SmallInteger,
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
@@ -307,4 +310,81 @@ class ConceptPrerequisiteORM(Base):
     rationale: Mapped[str] = mapped_column(Text, nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )
+
+
+class ScheduleBlockORM(Base):
+    """Planning Schedule Blocks table (`schedule_blocks`) matching 0006_calendar_connections_and_schedule_blocks.py."""
+
+    __tablename__ = "schedule_blocks"
+    __table_args__ = (
+        CheckConstraint("sequence_in_task >= 1", name="chk_schedule_blocks_seq"),
+        CheckConstraint(
+            "block_type IN ('STUDY', 'BUFFER', 'REVISION', 'RECOVERY')",
+            name="chk_schedule_blocks_type",
+        ),
+        CheckConstraint(
+            "scheduled_duration_minutes BETWEEN 10 AND 240",
+            name="chk_schedule_blocks_duration",
+        ),
+        CheckConstraint(
+            "status IN ('PLANNED', 'COMPLETED', 'MISSED', 'RESCHEDULED', 'CANCELLED')",
+            name="chk_schedule_blocks_status",
+        ),
+        CheckConstraint("end_time > start_time", name="chk_schedule_blocks_time_order"),
+        Index("idx_schedule_blocks_roadmap_date", "roadmap_id", "block_date", "start_time"),
+        Index("idx_schedule_blocks_schedule_id", "official_schedule_id"),
+        Index(
+            "idx_schedule_blocks_task_id",
+            "task_id",
+            postgresql_where=text("task_id IS NOT NULL"),
+        ),
+        Index(
+            "idx_schedule_blocks_external_event",
+            "external_calendar_event_id",
+            postgresql_where=text("external_calendar_event_id IS NOT NULL"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid7)
+    roadmap_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("roadmaps.id", ondelete="CASCADE", name="fk_schedule_blocks_roadmap"),
+        nullable=False,
+    )
+    official_schedule_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey(
+            "official_schedules.id",
+            ondelete="CASCADE",
+            name="fk_schedule_blocks_schedule",
+        ),
+        nullable=False,
+    )
+    task_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("tasks.id", ondelete="CASCADE", name="fk_schedule_blocks_task"),
+        nullable=True,
+    )
+    sequence_in_task: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=1)
+    block_type: Mapped[str] = mapped_column(String(20), nullable=False, default="STUDY")
+    block_date: Mapped[date] = mapped_column(Date, nullable=False)
+    start_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    end_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    scheduled_duration_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
+    is_protected: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="PLANNED")
+    external_calendar_event_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    etag: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    sync_status: Mapped[str] = mapped_column(String(30), nullable=False, default="SYNCED")
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    placement_rationale: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
     )
