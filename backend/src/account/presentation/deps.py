@@ -15,6 +15,9 @@ from src.account.application.ports.auth_ports import (
 from src.account.application.ports.availability_repository_port import (
     AvailabilityRepositoryPort,
 )
+from src.account.application.ports.calendar_connection_repository_port import (
+    CalendarConnectionRepositoryPort,
+)
 from src.account.application.ports.user_repository_port import (
     UserRepositoryPort,
 )
@@ -46,12 +49,29 @@ from src.account.application.use_cases.availability.get_availability_use_case im
 from src.account.application.use_cases.availability.update_availability_use_case import (
     UpdateAvailabilityUseCase,
 )
+from src.account.application.use_cases.calendar import (
+    DisconnectGoogleCalendarUseCase,
+    GetCalendarConnectionStatusUseCase,
+    HandleGoogleCalendarOAuthCallbackUseCase,
+    InitiateGoogleCalendarAuthUseCase,
+    ProcessGoogleCalendarWebhookUseCase,
+    ReconcileCalendarConnectionsUseCase,
+    RenewExpiringCalendarWebhooksUseCase,
+    SyncScheduleBlocksToGoogleUseCase,
+)
 from src.account.domain.exceptions.auth_exceptions import (
     InvalidTokenError,
     TokenExpiredError,
 )
+from src.account.domain.ports.calendar_provider_port import CalendarProviderPort
+from src.account.infrastructure.adapters.google_calendar_adapter import (
+    GoogleCalendarAdapter,
+)
 from src.account.infrastructure.adapters.learner_profile_query_adapter import (
     LearnerProfileQueryAdapter,
+)
+from src.account.infrastructure.adapters.mock_calendar_adapter import (
+    MockCalendarAdapter,
 )
 from src.account.infrastructure.adapters.quota_facade_adapter import (
     QuotaFacadeAdapter,
@@ -61,6 +81,9 @@ from src.account.infrastructure.caching.redis_client import RefreshTokenReposito
 from src.account.infrastructure.orm.user_orm import UserORM
 from src.account.infrastructure.repositories.availability_repository import (
     SqlAlchemyAvailabilityRepository,
+)
+from src.account.infrastructure.repositories.calendar_connection_repository import (
+    SqlAlchemyCalendarConnectionRepository,
 )
 from src.account.infrastructure.repositories.user_repository import (
     SqlAlchemyUserRepository,
@@ -73,7 +96,9 @@ from src.account.infrastructure.security.jwt_token_provider import (
 )
 from src.account.presentation.tasks import dispatch_otp_email
 from src.account.public_api import LearnerProfileQueryPort, QuotaFacadePort
+from src.planning.public_api import ScheduleBlockSyncPort, create_schedule_block_sync_port
 from src.shared_kernel.application.uow import AsyncUnitOfWork
+from src.shared_kernel.config import get_settings
 from src.shared_kernel.infrastructure.database.session import get_async_session
 from src.shared_kernel.infrastructure.database.sqlalchemy_uow import (
     SqlAlchemyUnitOfWork,
@@ -356,3 +381,122 @@ def get_learner_profile_query_port(
     session: AsyncSession = Depends(get_account_db_session),
 ) -> LearnerProfileQueryPort:
     return LearnerProfileQueryAdapter(session=session)
+
+
+# --- Calendar Integration Dependencies (UC-17) ---
+_mock_calendar_adapter_instance: MockCalendarAdapter | None = None
+
+
+def get_calendar_connection_repository(
+    session: AsyncSession = Depends(get_account_db_session),
+) -> CalendarConnectionRepositoryPort:
+    return SqlAlchemyCalendarConnectionRepository(session)
+
+
+def get_calendar_provider() -> CalendarProviderPort:
+    global _mock_calendar_adapter_instance
+    settings = get_settings()
+    provider_name = settings.calendar_provider.strip().lower()
+    if provider_name in ("mock", "local_mock"):
+        if _mock_calendar_adapter_instance is None:
+            _mock_calendar_adapter_instance = MockCalendarAdapter()
+        return _mock_calendar_adapter_instance
+    return GoogleCalendarAdapter(settings=settings)
+
+
+def get_initiate_google_calendar_auth_use_case() -> InitiateGoogleCalendarAuthUseCase:
+    return InitiateGoogleCalendarAuthUseCase()
+
+
+def get_handle_google_calendar_oauth_callback_use_case(
+    repo: CalendarConnectionRepositoryPort = Depends(get_calendar_connection_repository),
+    provider: CalendarProviderPort = Depends(get_calendar_provider),
+    uow: AsyncUnitOfWork = Depends(get_account_uow),
+) -> HandleGoogleCalendarOAuthCallbackUseCase:
+    return HandleGoogleCalendarOAuthCallbackUseCase(
+        repository=repo,
+        calendar_provider=provider,
+        uow=uow,
+    )
+
+
+def get_get_calendar_connection_status_use_case(
+    repo: CalendarConnectionRepositoryPort = Depends(get_calendar_connection_repository),
+) -> GetCalendarConnectionStatusUseCase:
+    return GetCalendarConnectionStatusUseCase(repository=repo)
+
+
+def get_disconnect_google_calendar_use_case(
+    repo: CalendarConnectionRepositoryPort = Depends(get_calendar_connection_repository),
+    provider: CalendarProviderPort = Depends(get_calendar_provider),
+    uow: AsyncUnitOfWork = Depends(get_account_uow),
+) -> DisconnectGoogleCalendarUseCase:
+    return DisconnectGoogleCalendarUseCase(
+        repository=repo,
+        calendar_provider=provider,
+        uow=uow,
+    )
+
+
+def get_schedule_block_sync_port_dep(
+    session: AsyncSession = Depends(get_async_session),
+) -> ScheduleBlockSyncPort:
+    return create_schedule_block_sync_port(session)
+
+
+def get_sync_schedule_blocks_use_case(
+    repo: CalendarConnectionRepositoryPort = Depends(get_calendar_connection_repository),
+    provider: CalendarProviderPort = Depends(get_calendar_provider),
+    block_port: ScheduleBlockSyncPort = Depends(get_schedule_block_sync_port_dep),
+    uow: AsyncUnitOfWork = Depends(get_account_uow),
+) -> SyncScheduleBlocksToGoogleUseCase:
+    return SyncScheduleBlocksToGoogleUseCase(
+        repository=repo,
+        calendar_provider=provider,
+        schedule_block_port=block_port,
+        uow=uow,
+    )
+
+
+def get_process_google_calendar_webhook_use_case(
+    repo: CalendarConnectionRepositoryPort = Depends(get_calendar_connection_repository),
+    provider: CalendarProviderPort = Depends(get_calendar_provider),
+    block_port: ScheduleBlockSyncPort = Depends(get_schedule_block_sync_port_dep),
+    uow: AsyncUnitOfWork = Depends(get_account_uow),
+) -> ProcessGoogleCalendarWebhookUseCase:
+    return ProcessGoogleCalendarWebhookUseCase(
+        repository=repo,
+        calendar_provider=provider,
+        schedule_block_port=block_port,
+        uow=uow,
+    )
+
+
+def get_renew_expiring_calendar_webhooks_use_case(
+    repo: CalendarConnectionRepositoryPort = Depends(get_calendar_connection_repository),
+    provider: CalendarProviderPort = Depends(get_calendar_provider),
+    uow: AsyncUnitOfWork = Depends(get_account_uow),
+) -> RenewExpiringCalendarWebhooksUseCase:
+    return RenewExpiringCalendarWebhooksUseCase(
+        repository=repo,
+        calendar_provider=provider,
+        uow=uow,
+    )
+
+
+def get_reconcile_calendar_connections_use_case(
+    repo: CalendarConnectionRepositoryPort = Depends(get_calendar_connection_repository),
+    process_webhook_uc: ProcessGoogleCalendarWebhookUseCase = Depends(
+        get_process_google_calendar_webhook_use_case
+    ),
+    renew_webhooks_uc: RenewExpiringCalendarWebhooksUseCase = Depends(
+        get_renew_expiring_calendar_webhooks_use_case
+    ),
+    uow: AsyncUnitOfWork = Depends(get_account_uow),
+) -> ReconcileCalendarConnectionsUseCase:
+    return ReconcileCalendarConnectionsUseCase(
+        repository=repo,
+        process_webhook_use_case=process_webhook_uc,
+        renew_webhooks_use_case=renew_webhooks_uc,
+        uow=uow,
+    )

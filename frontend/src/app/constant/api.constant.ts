@@ -15,4 +15,4 @@ export const AUTH_ENDPOINTS = {
   LOGOUT: `${API_BASE_URL}/auth/logout`
 };
 
-export const GOOGLE_CLIENT_ID = '408847171120-dldrof0cc90f3nn19qsl7amrl7fpc9jc.apps.googleusercontent.com';
+export const GOOGLE_CLIENT_ID = '227549369009-v57ekq00ntij7ni9or1k6k30mani1ojt.apps.googleusercontent.com';
