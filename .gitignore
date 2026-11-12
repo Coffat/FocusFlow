@@ -75,6 +75,7 @@ outputs/
 .coverage
 htmlcov/
 artifacts/quality/
+.playwright-mcp/
 
 # Celery
 celerybeat-schedule*
