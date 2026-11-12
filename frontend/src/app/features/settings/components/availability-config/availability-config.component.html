@@ -9,7 +9,7 @@
             Thời Gian Học & Lập Lịch Thích Ứng
           </span>
           <h1 class="text-3xl sm:text-4xl font-serif font-bold text-[#1B1C1C] tracking-tight mt-1">
-            Cấu Hình Thời Gian Rảnh
+            Cấu Hình Thời Gian Rảnh Lai
           </h1>
           <p class="text-sm text-[#656464] mt-1.5 max-w-2xl font-sans leading-relaxed">
             Thiết lập quỹ thời gian học tập theo tuần. FocusFlow sẽ phân bổ các bài học và phiên Pomodoro vào những khung giờ bạn rảnh rỗi nhất mà không gây quá tải.
@@ -429,7 +429,7 @@
                         <div class="flex items-center gap-2">
                           <span class="text-xs font-semibold text-[#1B1C1C] font-mono">Quỹ giờ học:</span>
                           <span class="text-lg font-serif font-bold text-[#246B4A]">
-                            {{ dayData.quota_hours }} giờ
+                            {{ dayData.quota_hours }} giờ / ngày
                           </span>
                         </div>
 
@@ -497,6 +497,22 @@
                           <span>8h</span>
                           <span>14h</span>
                         </div>
+                      </div>
+
+                      <!-- Quick Quota Chips (1h, 1.5h, 2h, 3.5h, 4h) -->
+                      <div class="flex items-center gap-1.5 flex-wrap">
+                        <span class="text-[11px] font-mono text-[#656464] mr-0.5">Nhanh:</span>
+                        @for (q of [1.0, 1.5, 2.0, 3.5, 4.0]; track q) {
+                          <button
+                            type="button"
+                            [attr.aria-pressed]="dayData.quota_hours === q"
+                            (click)="updateDayQuota(day, q)"
+                            class="px-2.5 py-0.5 rounded-md text-xs font-mono font-medium border transition-colors cursor-pointer"
+                            [ngClass]="dayData.quota_hours === q ? 'bg-[#246B4A] text-white border-[#246B4A]' : 'bg-white text-[#1B1C1C] border-[#EAE8E7] hover:border-neutral-400'"
+                          >
+                            {{ q === 1.0 || q === 2.0 || q === 4.0 ? q.toFixed(0) : q }}h
+                          </button>
+                        }
                       </div>
 
                       <!-- Preferred Period Chips -->
