@@ -1,9 +1,10 @@
 import base64
 import json
+import urllib.parse
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
-from fastapi.responses import HTMLResponse
+from fastapi.responses import RedirectResponse
 
 from src.account.application.dtos.calendar import (
     CalendarConnectionResponseDTO,
@@ -28,6 +29,7 @@ from src.account.presentation.deps import (
     get_handle_google_calendar_oauth_callback_use_case,
     get_initiate_google_calendar_auth_use_case,
 )
+from src.shared_kernel.config import get_settings
 
 router = APIRouter(prefix="/api/v1/account/calendar", tags=["Calendar Integration (UC-17)"])
 
@@ -60,11 +62,18 @@ async def handle_google_calendar_callback_get(
         get_handle_google_calendar_oauth_callback_use_case
     ),
 ) -> Response:
-    # Extract user_id from state
+    settings = get_settings()
+    frontend_url = (settings.frontend_url or "http://localhost:4200").rstrip("/")
+    return_to = "/settings"
+
+    # Extract user_id and return_to from state
     try:
         decoded_bytes = base64.urlsafe_b64decode(state.encode("utf-8"))
         state_data = json.loads(decoded_bytes.decode("utf-8"))
         user_id = UUID(state_data["user_id"])
+        return_to = str(state_data.get("return_to") or "/settings")
+        if not return_to.startswith("/"):
+            return_to = f"/{return_to}"
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -73,54 +82,14 @@ async def handle_google_calendar_callback_get(
 
     try:
         dto = CalendarOAuthCallbackRequestDTO(code=code, state=state)
-        result = await use_case.execute(user_id=user_id, request=dto)
+        await use_case.execute(user_id=user_id, request=dto)
 
-        accept_header = request.headers.get("accept", "")
-        if "text/html" in accept_header:
-            html_content = """
-            <!DOCTYPE html>
-            <html lang="vi">
-            <head>
-                <meta charset="utf-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1">
-                <title>FocusFlow — Kết nối Google Calendar thành công</title>
-                <style>
-                    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: #0f172a; color: #f8fafc; }
-                    .card { background: #1e293b; padding: 2.5rem; border-radius: 1.25rem; box-shadow: 0 20px 40px rgba(0,0,0,0.5); text-align: center; max-width: 480px; width: 90%; border: 1px solid #334155; }
-                    .icon { font-size: 3.5rem; margin-bottom: 1rem; }
-                    h1 { font-size: 1.5rem; margin-bottom: 0.75rem; color: #38bdf8; }
-                    p { color: #94a3b8; font-size: 0.95rem; line-height: 1.6; margin-bottom: 1.75rem; }
-                    .badge { display: inline-block; background: #0369a1; color: #e0f2fe; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.85rem; font-weight: 500; margin-bottom: 1rem; }
-                    .btn { display: inline-block; background: #0284c7; color: white; text-decoration: none; padding: 0.85rem 1.75rem; border-radius: 0.625rem; font-weight: 600; font-size: 0.95rem; transition: background 0.2s, transform 0.1s; }
-                    .btn:hover { background: #0369a1; transform: translateY(-1px); }
-                </style>
-            </head>
-            <body>
-                <div class="card">
-                    <div class="icon">🎉</div>
-                    <div class="badge">Trạng thái: ACTIVE</div>
-                    <h1>Kết nối Google Calendar thành công!</h1>
-                    <p>Lịch <strong>FocusFlow (Lịch học thông minh)</strong> đã được liên kết với tài khoản của bạn. Mọi khối lịch học sẽ được đồng bộ tự động hai chiều.</p>
-                    <a href="http://localhost:3000" class="btn">Quay lại FocusFlow Dashboard</a>
-                </div>
-            </body>
-            </html>
-            """
-            return HTMLResponse(content=html_content, status_code=status.HTTP_200_OK)
-
-        from fastapi.responses import JSONResponse
-
-        return JSONResponse(content=result.__dict__, status_code=status.HTTP_200_OK)
-    except CalendarAuthError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=exc.message,
-        ) from exc
-    except CalendarProviderError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=exc.message,
-        ) from exc
+        redirect_url = f"{frontend_url}{return_to}?calendar_connected=success"
+        return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
+    except (CalendarAuthError, CalendarProviderError, Exception) as exc:
+        error_msg = getattr(exc, "message", str(exc))
+        redirect_url = f"{frontend_url}{return_to}?calendar_connected=error&error_detail={urllib.parse.quote(str(error_msg))}"
+        return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
 
 
 @router.post(

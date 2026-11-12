@@ -8,6 +8,7 @@ class InitiateCalendarAuthRequestDTO:
 
     sync_type: str = "two_way"  # "inbound" | "two_way"
     redirect_uri: str | None = None
+    return_to: str = "/settings"
 
 
 @dataclass(frozen=True)
