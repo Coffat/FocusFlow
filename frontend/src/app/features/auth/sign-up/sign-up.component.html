@@ -1,25 +1,24 @@
-<div class="w-full max-w-md mx-auto my-auto py-6">
+<app-auth-card>
   <!-- Brand Header -->
   <app-auth-header
     [title]="'auth.signUp.beginJourney' | translate"
     [subtitle]="'auth.signUp.subtitle' | translate"
-    [showLogo]="true"
+    [showLogo]="false"
   />
 
   <!-- Error Banner -->
   @if (errorMessage()) {
-    <div class="mb-5 p-3.5 rounded-lg bg-[#ffdad6] text-[#93000a] text-xs font-sans flex items-start gap-2.5 border border-[#ba1a1a]/20">
-      <span class="material-symbols-outlined text-[18px] text-[#ba1a1a] shrink-0">error</span>
-      <span class="leading-relaxed">{{ errorMessage() }}</span>
-    </div>
+    <app-auth-notice-banner type="error" [message]="errorMessage()" />
   }
 
   <!-- Info Banner -->
   @if (infoMessage()) {
-    <div class="mb-5 p-3.5 rounded-lg bg-[#f0dbff] text-[#583878] text-xs font-sans flex items-start gap-2.5 border border-[#715091]/20">
-      <span class="material-symbols-outlined text-[18px] text-[#583878] shrink-0">info</span>
-      <span class="leading-relaxed">{{ infoMessage() }}</span>
-    </div>
+    <app-auth-notice-banner type="info" [message]="infoMessage()" />
+  }
+
+  <!-- Success Banner -->
+  @if (successMessage()) {
+    <app-auth-notice-banner type="success" [message]="successMessage()" />
   }
 
   <!-- Social Auth Cluster (Google Only) -->
@@ -31,154 +30,91 @@
   />
 
   <!-- Registration Form -->
-  <form [formGroup]="signUpForm" (ngSubmit)="requestOtp()" class="space-y-4">
+  <form [formGroup]="signUpForm" (ngSubmit)="requestOtp()" class="space-y-5">
     <!-- Full Name Input Group -->
-    <div class="space-y-1.5">
-      <label for="fullname" class="block font-sans text-xs font-medium text-on-surface">
-        {{ 'auth.signUp.fullNameLabel' | translate }}
-      </label>
-      <div class="relative">
-        <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-secondary">
-          <span class="material-symbols-outlined text-[18px]">person</span>
-        </div>
-        <input
-          id="fullname"
-          type="text"
-          formControlName="fullName"
-          [placeholder]="'auth.signUp.fullNamePlaceholder' | translate"
-          autocomplete="name"
-          class="w-full h-11 pl-10 pr-3.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface placeholder:text-secondary focus:border-on-surface focus:outline-none transition-colors font-sans text-sm"
-        />
-      </div>
-      @if (signUpForm.get('fullName')?.touched && signUpForm.get('fullName')?.errors?.['required']) {
-        <span class="text-xs text-error font-sans block mt-1">{{ 'auth.signUp.fullNameRequiredError' | translate }}</span>
-      }
-    </div>
+    <app-auth-form-field
+      [label]="'auth.signUp.fullNameLabel' | translate"
+      forId="fullname"
+      prefixIcon="person"
+      [errorMessage]="signUpForm.get('fullName')?.touched && signUpForm.get('fullName')?.errors?.['required'] ? ('auth.signUp.fullNameRequiredError' | translate) : ''"
+    >
+      <input
+        id="fullname"
+        type="text"
+        formControlName="fullName"
+        [placeholder]="'auth.signUp.fullNamePlaceholder' | translate"
+        autocomplete="name"
+        class="w-full h-12 pl-11 pr-4 rounded-xl border border-outline-variant/80 bg-surface-container-lowest text-on-surface placeholder:text-secondary focus:border-on-surface focus:outline-none transition-colors font-sans text-base"
+      />
+    </app-auth-form-field>
 
     <!-- Work Email Input Group -->
-    <div class="space-y-1.5">
-      <div class="flex items-center justify-between">
-        <label for="email" class="block font-sans text-xs font-medium text-on-surface">
-          {{ 'auth.signUp.workEmailLabel' | translate }}
-        </label>
-        <span class="font-sans text-[11px] text-secondary">
-          {{ 'auth.signUp.institutionalPreferred' | translate }}
-        </span>
-      </div>
-      <div class="relative">
-        <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-secondary">
-          <span class="material-symbols-outlined text-[18px]">alternate_email</span>
-        </div>
-        <input
-          id="email"
-          type="email"
-          formControlName="email"
-          [placeholder]="'auth.signUp.emailPlaceholder' | translate"
-          autocomplete="email"
-          class="w-full h-11 pl-10 pr-3.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface placeholder:text-secondary focus:border-on-surface focus:outline-none transition-colors font-sans text-sm"
-        />
-      </div>
-      @if (signUpForm.get('email')?.touched && signUpForm.get('email')?.errors?.['required']) {
-        <span class="text-xs text-error font-sans block mt-1">{{ 'auth.signUp.emailRequiredError' | translate }}</span>
-      }
-      @if (signUpForm.get('email')?.touched && signUpForm.get('email')?.errors?.['email']) {
-        <span class="text-xs text-error font-sans block mt-1">{{ 'auth.signUp.emailInvalidError' | translate }}</span>
-      }
-    </div>
+    <app-auth-form-field
+      [label]="'auth.signUp.workEmailLabel' | translate"
+      forId="email"
+      [hint]="'auth.signUp.institutionalPreferred' | translate"
+      prefixIcon="alternate_email"
+      [errorMessage]="signUpForm.get('email')?.touched && signUpForm.get('email')?.errors ? (signUpForm.get('email')?.errors?.['required'] ? ('auth.signUp.emailRequiredError' | translate) : ('auth.signUp.emailInvalidError' | translate)) : ''"
+    >
+      <input
+        id="email"
+        type="email"
+        formControlName="email"
+        [placeholder]="'auth.signUp.emailPlaceholder' | translate"
+        autocomplete="email"
+        class="w-full h-12 pl-11 pr-4 rounded-xl border border-outline-variant/80 bg-surface-container-lowest text-on-surface placeholder:text-secondary focus:border-on-surface focus:outline-none transition-colors font-sans text-base"
+      />
+    </app-auth-form-field>
 
     <!-- Password Input Group -->
-    <div class="space-y-1.5">
-      <div class="flex items-center justify-between">
-        <label for="password" class="block font-sans text-xs font-medium text-on-surface">
-          {{ 'auth.signUp.passwordLabel' | translate }}
-        </label>
-        <span class="font-sans text-[11px] text-secondary">
-          {{ 'auth.signUp.ruleMinLength' | translate }}
-        </span>
-      </div>
-      <div class="relative">
-        <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-secondary">
-          <span class="material-symbols-outlined text-[18px]">lock_open</span>
-        </div>
-        <input
-          id="password"
-          [type]="isPasswordVisible() ? 'text' : 'password'"
-          formControlName="password"
-          [placeholder]="'auth.signUp.passwordPlaceholder' | translate"
-          autocomplete="new-password"
-          class="w-full h-11 pl-10 pr-10 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface placeholder:text-secondary focus:border-on-surface focus:outline-none transition-colors font-sans text-sm"
-        />
-        <button
-          type="button"
-          (click)="togglePasswordVisibility()"
-          [attr.aria-label]="'auth.signIn.togglePasswordVisibility' | translate"
-          class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-secondary hover:text-on-surface transition-colors cursor-pointer"
-        >
-          <span class="material-symbols-outlined text-[18px]">{{ isPasswordVisible() ? 'visibility_off' : 'visibility' }}</span>
-        </button>
-      </div>
+    <app-auth-form-field
+      [label]="'auth.signUp.passwordLabel' | translate"
+      forId="password"
+      [hint]="'auth.signUp.ruleMinLength' | translate"
+      prefixIcon="lock_open"
+      [suffixIcon]="isPasswordVisible() ? 'visibility_off' : 'visibility'"
+      [showSuffix]="true"
+      [suffixAriaLabel]="'auth.signUp.togglePasswordVisibility' | translate"
+      (suffixClick)="togglePasswordVisibility()"
+      [errorMessage]="signUpForm.get('password')?.touched && signUpForm.get('password')?.errors ? (signUpForm.get('password')?.errors?.['required'] ? ('auth.signUp.passwordRequiredError' | translate) : ('auth.signUp.passwordComplexityError' | translate)) : ''"
+    >
+      <input
+        id="password"
+        [type]="isPasswordVisible() ? 'text' : 'password'"
+        formControlName="password"
+        [placeholder]="'auth.signUp.passwordPlaceholder' | translate"
+        autocomplete="new-password"
+        class="w-full h-12 pl-11 pr-11 rounded-xl border border-outline-variant/80 bg-surface-container-lowest text-on-surface placeholder:text-secondary focus:border-on-surface focus:outline-none transition-colors font-sans text-base"
+      />
+    </app-auth-form-field>
 
-      <!-- Password Strength Meter -->
-      <div class="pt-1">
-        <div class="flex items-center gap-1.5 h-1">
-          <div
-            class="flex-1 h-full rounded-full transition-colors duration-200"
-            [class.bg-primary]="passwordStrength() >= 1"
-            [class.bg-outline-variant]="passwordStrength() < 1"
-          ></div>
-          <div
-            class="flex-1 h-full rounded-full transition-colors duration-200"
-            [class.bg-primary]="passwordStrength() >= 2"
-            [class.bg-outline-variant]="passwordStrength() < 2"
-          ></div>
-          <div
-            class="flex-1 h-full rounded-full transition-colors duration-200"
-            [class.bg-primary]="passwordStrength() >= 3"
-            [class.bg-outline-variant]="passwordStrength() < 3"
-          ></div>
-          <div
-            class="flex-1 h-full rounded-full transition-colors duration-200"
-            [class.bg-primary]="passwordStrength() >= 4"
-            [class.bg-outline-variant]="passwordStrength() < 4"
-          ></div>
-        </div>
-        <div class="flex items-center justify-between mt-1 text-secondary font-sans text-[11px]">
-          <span>{{ 'auth.signUp.securityLevel' | translate }}</span>
-          <span class="text-primary font-medium">{{ strengthLabelKey() | translate }}</span>
-        </div>
-      </div>
-    </div>
+    <!-- Password Strength Meter -->
+    <app-password-strength-meter
+      [strength]="passwordStrength()"
+      [securityLabel]="'auth.signUp.securityLevel' | translate"
+      [strengthText]="strengthLabelKey() | translate"
+    />
 
     <!-- Confirm Password Input Group -->
-    <div class="space-y-1.5">
-      <label for="confirm-password" class="block font-sans text-xs font-medium text-on-surface">
-        {{ 'auth.signUp.confirmPasswordLabel' | translate }}
-      </label>
-      <div class="relative">
-        <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-secondary">
-          <span class="material-symbols-outlined text-[18px]">lock_open</span>
-        </div>
-        <input
-          id="confirm-password"
-          [type]="isConfirmPasswordVisible() ? 'text' : 'password'"
-          formControlName="confirmPassword"
-          [placeholder]="'auth.signUp.confirmPasswordPlaceholder' | translate"
-          autocomplete="new-password"
-          class="w-full h-11 pl-10 pr-10 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface placeholder:text-secondary focus:border-on-surface focus:outline-none transition-colors font-sans text-sm"
-        />
-        <button
-          type="button"
-          (click)="toggleConfirmPasswordVisibility()"
-          [attr.aria-label]="'auth.signIn.togglePasswordVisibility' | translate"
-          class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-secondary hover:text-on-surface transition-colors cursor-pointer"
-        >
-          <span class="material-symbols-outlined text-[18px]">{{ isConfirmPasswordVisible() ? 'visibility_off' : 'visibility' }}</span>
-        </button>
-      </div>
-      @if (signUpForm.get('confirmPassword')?.touched && isPasswordMismatch) {
-        <span class="text-xs text-error font-sans block mt-1">{{ 'auth.signUp.passwordMismatchError' | translate }}</span>
-      }
-    </div>
+    <app-auth-form-field
+      [label]="'auth.signUp.confirmPasswordLabel' | translate"
+      forId="confirm-password"
+      prefixIcon="lock_open"
+      [suffixIcon]="isConfirmPasswordVisible() ? 'visibility_off' : 'visibility'"
+      [showSuffix]="true"
+      [suffixAriaLabel]="'auth.signUp.toggleConfirmPasswordVisibility' | translate"
+      (suffixClick)="toggleConfirmPasswordVisibility()"
+      [errorMessage]="signUpForm.get('confirmPassword')?.touched ? (signUpForm.get('confirmPassword')?.errors?.['required'] ? ('auth.signUp.confirmPasswordRequiredError' | translate) : (isPasswordMismatch ? ('auth.signUp.passwordMismatchError' | translate) : '')) : ''"
+    >
+      <input
+        id="confirm-password"
+        [type]="isConfirmPasswordVisible() ? 'text' : 'password'"
+        formControlName="confirmPassword"
+        [placeholder]="'auth.signUp.confirmPasswordPlaceholder' | translate"
+        autocomplete="new-password"
+        class="w-full h-12 pl-11 pr-11 rounded-xl border border-outline-variant/80 bg-surface-container-lowest text-on-surface placeholder:text-secondary focus:border-on-surface focus:outline-none transition-colors font-sans text-base"
+      />
+    </app-auth-form-field>
 
     <!-- Terms Agreement Checkbox -->
     <div class="flex items-start pt-1">
@@ -186,9 +122,9 @@
         <input
           type="checkbox"
           formControlName="termsAccepted"
-          class="w-4 h-4 mt-0.5 rounded border-outline-variant text-on-surface focus:ring-0 focus:ring-offset-0 bg-surface-container-lowest transition-colors cursor-pointer shrink-0 accent-[#111111]"
+          class="w-4 h-4 mt-0.5 rounded border-outline-variant text-on-surface focus:ring-0 focus:ring-offset-0 bg-surface-container-lowest transition-colors cursor-pointer shrink-0 accent-[#111111] dark:accent-primary"
         />
-        <span class="font-sans text-xs text-secondary hover:text-on-surface transition-colors leading-snug">
+        <span class="font-sans text-[13px] sm:text-sm text-secondary hover:text-on-surface transition-colors leading-snug">
           {{ 'auth.signUp.termsAgreement' | translate }}
         </span>
       </label>
@@ -199,7 +135,7 @@
       <button
         type="submit"
         [disabled]="isLoading() || signUpForm.invalid || !isPasswordValid || isPasswordMismatch"
-        class="w-full h-12 rounded-full bg-[#111111] hover:bg-primary-container text-surface-container-lowest font-sans text-sm font-medium flex items-center justify-center gap-2 transition-all duration-150 ease-out active:scale-[0.99] cursor-pointer shadow-none disabled:opacity-50 disabled:cursor-not-allowed group"
+        class="w-full h-12 sm:h-[50px] rounded-full bg-[#111111] hover:bg-primary-container text-surface-container-lowest font-sans text-base font-medium flex items-center justify-center gap-2.5 transition-all duration-150 active:scale-[0.99] cursor-pointer shadow-none disabled:opacity-50 group"
       >
         <span>{{ isLoading() ? ('auth.signUp.sendingCode' | translate) : ('auth.signUp.createFreeAccount' | translate) }}</span>
         <span class="transition-transform duration-150 group-hover:translate-x-0.5">→</span>
@@ -208,12 +144,12 @@
   </form>
 
   <!-- Alternate Flow Link -->
-  <div class="text-center pt-6 border-t border-outline-variant mt-6">
-    <p class="font-sans text-xs text-secondary">
+  <div class="text-center pt-6 border-t border-outline-variant/80 mt-8">
+    <p class="font-sans text-[13px] sm:text-sm text-secondary">
       {{ 'auth.signUp.alreadyHaveAccount' | translate }}
       <a routerLink="/sign-in" class="font-medium text-on-surface hover:text-primary transition-colors underline-offset-4 hover:underline ml-1">
         {{ 'auth.signUp.signIn' | translate }}
       </a>
     </p>
   </div>
-</div>
+</app-auth-card>

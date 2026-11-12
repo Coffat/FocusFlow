@@ -1,35 +1,30 @@
-<div class="w-full max-w-md mx-auto my-auto py-6">
+<app-auth-card>
   <!-- Brand Header -->
-  <div class="text-center mb-8">
-    <div class="flex items-center justify-center mb-4">
-      <img src="assets/logo.svg" [alt]="'auth.otp.logoAlt' | translate" class="h-12 w-12 object-contain" />
-    </div>
-    <h1 class="font-serif text-2xl sm:text-[32px] sm:leading-[40px] font-medium tracking-tight text-on-surface inline-flex items-center justify-center gap-2">
-      <span class="material-symbols-outlined text-2xl text-primary">verified_user</span>
-      <span>{{ 'auth.otp.enterCodeTitle' | translate }}</span>
-    </h1>
-    <p class="mt-2.5 text-sm font-sans text-secondary leading-relaxed">
-      {{ 'auth.otp.dispatchedSubtitle' | translate }}
-      <strong class="text-on-surface font-medium">{{ email() || ('auth.otp.yourEmail' | translate) }}</strong>.
-      {{ 'auth.otp.enterBelowToVerify' | translate }}
-      <a routerLink="/sign-up" class="ml-1 text-primary hover:underline underline-offset-4 font-medium text-xs">{{ 'auth.otp.changeEmail' | translate }}</a>
-    </p>
-  </div>
+  <app-auth-header
+    [title]="'auth.otp.enterCodeTitle' | translate"
+    icon="verified_user"
+    iconStyle="inline"
+    [showLogo]="false"
+  />
+
+  <!-- Subtitle Paragraph -->
+  <p class="font-sans text-neutral-500 dark:text-secondary text-sm sm:text-[15px] -mt-3 mb-6 text-center leading-relaxed">
+    {{ 'auth.otp.dispatchedSubtitle' | translate }}
+    <strong class="text-neutral-900 dark:text-on-surface font-medium">{{ email() || ('auth.otp.yourEmail' | translate) }}</strong>.
+    {{ 'auth.otp.enterBelowToVerify' | translate }}
+    <a routerLink="/sign-up" class="ml-1 text-primary hover:underline underline-offset-4 font-medium text-xs sm:text-sm">
+      {{ 'auth.otp.changeEmail' | translate }}
+    </a>
+  </p>
 
   <!-- Error Banner -->
   @if (errorMessage()) {
-    <div class="mb-5 p-3.5 rounded-lg bg-[#ffdad6] text-[#93000a] text-xs font-sans flex items-start gap-2.5 border border-[#ba1a1a]/20">
-      <span class="material-symbols-outlined text-[18px] text-[#ba1a1a] shrink-0">error</span>
-      <span class="leading-relaxed">{{ errorMessage() }}</span>
-    </div>
+    <app-auth-notice-banner type="error" [message]="errorMessage()" />
   }
 
   <!-- Success Banner -->
   @if (successMessage()) {
-    <div class="mb-5 p-3.5 rounded-lg bg-[#aaf2c8]/30 text-[#005234] text-xs font-sans flex items-start gap-2.5 border border-[#005234]/20">
-      <span class="material-symbols-outlined text-[18px] text-[#005234] shrink-0">check_circle</span>
-      <span class="leading-relaxed">{{ successMessage() }}</span>
-    </div>
+    <app-auth-notice-banner type="success" [message]="successMessage()" />
   }
 
   <!-- OTP Verification Form -->
@@ -46,10 +41,10 @@
     <button
       type="submit"
       [disabled]="isLoading() || currentOtp().length !== 6"
-      class="w-full h-12 rounded-full bg-[#111111] hover:bg-primary-container text-surface-container-lowest font-sans text-sm font-medium tracking-tight transition-colors duration-150 flex items-center justify-center gap-2 group shadow-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+      class="w-full h-12 sm:h-[50px] rounded-full bg-[#111111] hover:bg-primary-container text-surface-container-lowest font-sans text-base font-medium tracking-tight transition-colors duration-150 flex items-center justify-center gap-2.5 group shadow-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
     >
       <span>{{ isLoading() ? ('auth.otp.verifying' | translate) : ('auth.otp.verifyAndProceed' | translate) }}</span>
-      <span class="material-symbols-outlined text-lg transition-transform duration-150 group-hover:translate-x-0.5">arrow_forward</span>
+      <span class="material-symbols-outlined text-[18px] transition-transform duration-150 group-hover:translate-x-0.5">arrow_forward</span>
     </button>
 
     <!-- Alternative Links -->
@@ -73,11 +68,11 @@
   </form>
 
   <!-- Cryptographic Session Lock Info Box -->
-  <div class="mt-8 p-3.5 rounded-lg border border-outline-variant bg-surface flex items-start gap-3">
-    <span class="material-symbols-outlined text-primary text-base mt-0.5">shield</span>
-    <div class="font-sans text-xs text-secondary leading-snug">
-      <span class="font-semibold text-on-surface">{{ 'auth.otp.sessionLockTitle' | translate }}:</span>
-      {{ 'auth.otp.sessionLockText' | translate }}
-    </div>
+  <div class="mt-8">
+    <app-auth-notice-banner
+      type="session-lock"
+      [title]="'auth.otp.sessionLockTitle' | translate"
+      [message]="'auth.otp.sessionLockText' | translate"
+    />
   </div>
-</div>
+</app-auth-card>

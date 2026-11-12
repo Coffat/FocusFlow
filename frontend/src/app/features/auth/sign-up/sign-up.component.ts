@@ -24,8 +24,14 @@ import {
   MessageResponse,
   RequestRegisterOtpRequest
 } from '../../../models/auth.interface';
-import { AuthHeaderComponent } from '../shared/auth-header/auth-header.component';
-import { SocialAuthComponent } from '../shared/social-auth/social-auth.component';
+import {
+  AuthCardComponent,
+  AuthHeaderComponent,
+  SocialAuthComponent,
+  AuthFormFieldComponent,
+  PasswordStrengthMeterComponent,
+  AuthNoticeBannerComponent
+} from '../shared';
 
 @Component({
   selector: 'app-sign-up',
@@ -35,8 +41,12 @@ import { SocialAuthComponent } from '../shared/social-auth/social-auth.component
     ReactiveFormsModule,
     RouterLink,
     TranslatePipe,
+    AuthCardComponent,
     AuthHeaderComponent,
-    SocialAuthComponent
+    SocialAuthComponent,
+    AuthFormFieldComponent,
+    PasswordStrengthMeterComponent,
+    AuthNoticeBannerComponent
   ],
   templateUrl: './sign-up.component.html',
   styleUrl: './sign-up.component.scss'
