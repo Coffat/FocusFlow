@@ -1,93 +1,217 @@
-<header class="app-navbar h-16 border-b border-neutral-200/70 bg-white/90 backdrop-blur-md px-4 sm:px-6 lg:px-8 flex items-center justify-between sticky top-0 z-40 select-none">
-  <!-- Left: Brand Logo & Title -->
-  <div class="flex items-center gap-3 shrink-0">
-    <a routerLink="/dashboard" class="flex items-center gap-2.5 no-underline group" aria-label="FocusFlow Home">
-      <svg class="w-8 h-8 shrink-0 transition-transform group-hover:scale-105" fill="none" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="18" cy="18" fill="#10B981" r="4"></circle>
-        <path d="M6 18C6 11.3726 11.3726 6 18 6C23 6 27.5 9 29.5 13.5C28 12.5 25.5 12 23 13C19.5 14.5 17 18 13.5 21.5C11 24 8 23 6 18Z" fill="#0F172A"></path>
-        <path d="M30 18C30 24.6274 24.6274 30 18 30C13 30 8.5 27 6.5 22.5C8 23.5 10.5 24 13 23C16.5 21.5 19 18 22.5 14.5C25 12 28 13 30 18Z" fill="url(#emerald-grad-nav)"></path>
-        <defs>
-          <linearGradient id="emerald-grad-nav" x1="18" y1="14" x2="30" y2="30" gradientUnits="userSpaceOnUse">
-            <stop stop-color="#246B4A"></stop>
-            <stop offset="1" stop-color="#10B981"></stop>
-          </linearGradient>
-        </defs>
-      </svg>
-      <div>
-        <div class="flex items-center text-lg font-bold tracking-tight leading-none brand-title">
-          <span class="text-neutral-900">Focus</span><span class="text-emerald-700">Flow</span>
+<header class="app-navbar sticky top-3 sm:top-4 z-40 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full select-none">
+  <!-- Floating Rounded Card Container -->
+  <div class="bg-white/95 backdrop-blur-md border border-neutral-200/80 rounded-2xl sm:rounded-3xl shadow-[0_4px_20px_-4px_rgba(0,0,0,0.06)] px-4 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between">
+    <!-- Left: Brand Logo & Title -->
+    <div class="flex items-center gap-3 shrink-0">
+      <a routerLink="/dashboard" class="flex items-center gap-2.5 no-underline group" aria-label="FocusFlow Home">
+        <div class="bg-neutral-50/80 border border-neutral-200/60 rounded-xl p-1.5 flex items-center justify-center shrink-0 shadow-2xs group-hover:border-neutral-300 transition-colors">
+          <svg class="w-6 h-6 sm:w-7 sm:h-7 shrink-0 transition-transform group-hover:scale-105" fill="none" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="18" cy="18" fill="#10B981" r="4"></circle>
+            <path d="M6 18C6 11.3726 11.3726 6 18 6C23 6 27.5 9 29.5 13.5C28 12.5 25.5 12 23 13C19.5 14.5 17 18 13.5 21.5C11 24 8 23 6 18Z" fill="#0F172A"></path>
+            <path d="M30 18C30 24.6274 24.6274 30 18 30C13 30 8.5 27 6.5 22.5C8 23.5 10.5 24 13 23C16.5 21.5 19 18 22.5 14.5C25 12 28 13 30 18Z" fill="url(#emerald-grad-nav)"></path>
+            <defs>
+              <linearGradient id="emerald-grad-nav" x1="18" y1="14" x2="30" y2="30" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#246B4A"></stop>
+                <stop offset="1" stop-color="#10B981"></stop>
+              </linearGradient>
+            </defs>
+          </svg>
         </div>
-        <span class="text-[10px] text-neutral-400 font-medium tracking-wide uppercase leading-tight block mt-0.5">Plan Smarter • Do Better</span>
-      </div>
-    </a>
-  </div>
-
-  <!-- Center: Primary Navigation Links -->
-  <nav class="hidden md:flex items-center gap-1.5 text-xs font-medium" aria-label="Điều hướng chính">
-    @for (item of navItems; track item.path) {
-      <a
-        [routerLink]="item.path"
-        routerLinkActive="bg-neutral-900 text-white font-semibold shadow-xs"
-        [routerLinkActiveOptions]="{ exact: item.path === '/dashboard' }"
-        class="text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 px-3.5 py-1.5 rounded-full transition no-underline"
-      >
-        {{ item.label }}
+        <div>
+          <div class="flex items-center text-base sm:text-lg font-bold tracking-tight leading-none brand-title">
+            <span class="text-neutral-900">Focus</span><span class="text-[#246B4A]">Flow</span>
+          </div>
+          <span class="text-[9px] text-neutral-400 font-medium tracking-widest uppercase leading-tight block mt-0.5">Plan Smarter • Do Better</span>
+        </div>
       </a>
-    }
-  </nav>
+    </div>
 
-  <!-- Right: Utility Cluster -->
-  <div class="flex items-center gap-2.5 sm:gap-3">
-    <!-- Quick Action "Vào học" (SRL Performance phase entry) -->
-    <a
-      routerLink="/workspace"
-      class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-800 text-white text-xs font-semibold hover:bg-emerald-900 transition-all shadow-xs no-underline"
-      title="Bắt đầu phiên học với Pomodoro Timer"
-    >
-      <span class="material-symbols-outlined text-[15px]" aria-hidden="true">play_arrow</span>
-      <span class="hidden sm:inline">Vào học</span>
-    </a>
+    <!-- Center: Primary Navigation Links (Desktop) -->
+    <nav class="hidden md:flex items-center gap-1 lg:gap-1.5 text-xs font-medium" aria-label="Điều hướng chính">
+      @for (item of navItems; track item.path) {
+        <a
+          [routerLink]="item.path"
+          routerLinkActive="text-[#246B4A] font-semibold bg-[#246B4A]/10 shadow-2xs"
+          [routerLinkActiveOptions]="{ exact: item.path === '/dashboard' }"
+          class="text-neutral-600 hover:text-[#246B4A] hover:bg-neutral-100/70 px-3 py-1.5 rounded-full transition-colors no-underline text-center whitespace-nowrap"
+        >
+          {{ item.label }}
+        </a>
+      }
+    </nav>
 
-    <!-- Quick Search Pill (⌘K) -->
-    <button
-      type="button"
-      (click)="onSearchTrigger()"
-      class="hidden lg:flex items-center gap-2 bg-neutral-100 hover:bg-neutral-200/80 text-neutral-500 px-3 py-1.5 rounded-full text-xs border border-neutral-200/60 transition cursor-pointer"
-      title="Tìm kiếm nhanh (⌘K)"
-    >
-      <span class="material-symbols-outlined text-[15px]" aria-hidden="true">search</span>
-      <span>Tìm nhanh</span>
-      <kbd class="font-mono text-[10px] bg-white text-neutral-600 px-1.5 py-0.5 rounded border border-neutral-200/80 shadow-2xs">⌘K</kbd>
-    </button>
+    <!-- Right: Utility Cluster -->
+    <div class="flex items-center gap-2 sm:gap-2.5 shrink-0">
+      <!-- Quick Action "Vào học" (Obsidian Black Pill) -->
+      <a
+        routerLink="/workspace"
+        class="hidden sm:inline-flex items-center gap-1.5 bg-[#111111] hover:bg-[#246B4A] text-white px-4 py-2 rounded-full text-xs font-semibold shadow-xs transition active:scale-95 no-underline shrink-0"
+        title="Bắt đầu phiên học với Pomodoro Timer"
+      >
+        <lucide-icon name="play" [size]="13" class="shrink-0 fill-current" aria-hidden="true"></lucide-icon>
+        <span>Vào học</span>
+      </a>
 
-    <!-- Notification Bell -->
-    <button
-      type="button"
-      aria-label="Thông báo"
-      class="relative p-2 text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 rounded-full transition cursor-pointer"
-      title="Thông báo"
-    >
-      <span class="material-symbols-outlined text-[20px]" aria-hidden="true">notifications</span>
-      <span class="absolute top-1.5 right-1.5 w-2 h-2 bg-emerald-500 rounded-full ring-2 ring-white"></span>
-    </button>
+      <!-- Quick Search Pill (⌘K) -->
+      <button
+        type="button"
+        (click)="onSearchTrigger()"
+        class="hidden lg:flex items-center gap-2 bg-neutral-100/80 hover:bg-neutral-200/70 text-neutral-500 px-3 py-1.5 rounded-full text-xs border border-neutral-200/60 transition cursor-pointer"
+        title="Tìm kiếm nhanh (⌘K)"
+      >
+        <lucide-icon name="search" [size]="14" class="shrink-0" aria-hidden="true"></lucide-icon>
+        <span>Tìm nhanh</span>
+        <kbd class="font-mono text-[10px] bg-white text-neutral-600 px-1.5 py-0.5 rounded border border-neutral-200/80 shadow-2xs">⌘K</kbd>
+      </button>
 
-    <!-- User Profile Pill -->
-    <a
-      routerLink="/settings"
-      class="flex items-center gap-2.5 pl-1.5 pr-3 py-1 rounded-full border border-neutral-200/80 bg-neutral-50/70 hover:bg-white hover:border-neutral-300 transition group no-underline"
-      title="Hồ sơ người dùng & Cài đặt"
-    >
-      <div class="w-7 h-7 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300/60 flex items-center justify-center font-bold text-xs shrink-0">
-        {{ userInitials() }}
+      <!-- Notification Bell -->
+      <button
+        type="button"
+        aria-label="Thông báo"
+        class="relative p-2 text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/80 rounded-full transition cursor-pointer flex items-center justify-center shrink-0"
+        title="Thông báo"
+      >
+        <lucide-icon name="bell" [size]="17" class="shrink-0" aria-hidden="true"></lucide-icon>
+      </button>
+
+      <!-- User Profile Pill & Dropdown -->
+      <div class="relative user-dropdown-container">
+        <button
+          type="button"
+          (click)="toggleUserMenu()"
+          [attr.aria-expanded]="isUserMenuOpen()"
+          aria-haspopup="true"
+          aria-label="Menu tài khoản người dùng"
+          class="user-profile-button flex items-center gap-2 pl-1.5 pr-2.5 py-1 rounded-full border border-neutral-200/80 bg-neutral-50/70 hover:bg-white hover:border-neutral-300 transition cursor-pointer select-none"
+          title="Tài khoản & Cài đặt"
+        >
+          <div class="w-7 h-7 rounded-full bg-[#246B4A]/10 text-[#246B4A] border border-[#246B4A]/20 flex items-center justify-center font-bold text-xs shrink-0">
+            {{ userInitials() }}
+          </div>
+          <span class="hidden xl:inline-block text-xs font-semibold text-neutral-800 truncate max-w-[120px]">
+            {{ userDisplayName() }}
+          </span>
+          <lucide-icon
+            name="chevron-down"
+            [size]="13"
+            class="text-neutral-500 shrink-0 transition-transform duration-200"
+            [class.rotate-180]="isUserMenuOpen()"
+            aria-hidden="true"
+          ></lucide-icon>
+        </button>
+
+        <!-- User Dropdown Menu Panel -->
+        @if (isUserMenuOpen()) {
+          <div
+            class="user-dropdown-panel absolute right-0 mt-2 w-64 rounded-2xl bg-white border border-neutral-200/90 shadow-[0_10px_30px_-5px_rgba(0,0,0,0.1)] p-2 z-50"
+            role="menu"
+            aria-orientation="vertical"
+          >
+            <!-- User Info Header -->
+            <div class="px-3 py-2.5 bg-neutral-50/70 rounded-xl mb-1.5 border border-neutral-100 flex items-center gap-3">
+              <div class="w-10 h-10 rounded-full bg-[#246B4A]/10 text-[#246B4A] border border-[#246B4A]/25 flex items-center justify-center font-bold text-sm shrink-0">
+                {{ userInitials() }}
+              </div>
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center justify-between gap-1">
+                  <span class="text-xs font-semibold text-neutral-900 truncate">
+                    {{ userDisplayName() }}
+                  </span>
+                  <span
+                    class="px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wide uppercase shrink-0"
+                    [ngClass]="{
+                      'bg-purple-100 text-purple-700': userRole() === 'admin',
+                      'bg-amber-100 text-amber-800': userRole() !== 'admin' && (userTier() === 'PRO' || userTier() === 'PREMIUM'),
+                      'bg-neutral-200/80 text-neutral-700': userRole() !== 'admin' && userTier() !== 'PRO' && userTier() !== 'PREMIUM'
+                    }"
+                  >
+                    {{ userRole() === 'admin' ? 'Admin' : (userTier() === 'PRO' || userTier() === 'PREMIUM' ? 'Pro' : 'Free') }}
+                  </span>
+                </div>
+                <div class="text-[11px] text-neutral-400 truncate mt-0.5">
+                  {{ userEmail() || 'Chưa có email' }}
+                </div>
+              </div>
+            </div>
+
+            <!-- Navigation Links -->
+            <a
+              routerLink="/settings"
+              (click)="closeUserMenu()"
+              class="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-neutral-700 hover:text-neutral-900 hover:bg-neutral-100/80 rounded-xl transition-colors no-underline cursor-pointer"
+              role="menuitem"
+            >
+              <lucide-icon name="settings" [size]="15" class="text-neutral-500 shrink-0" aria-hidden="true"></lucide-icon>
+              <span>Cài đặt & Hồ sơ</span>
+            </a>
+
+            <a
+              routerLink="/settings"
+              (click)="closeUserMenu()"
+              class="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-neutral-700 hover:text-neutral-900 hover:bg-neutral-100/80 rounded-xl transition-colors no-underline cursor-pointer"
+              role="menuitem"
+            >
+              <lucide-icon name="sparkles" [size]="15" class="text-[#246B4A] shrink-0" aria-hidden="true"></lucide-icon>
+              <span>Gói dịch vụ & Quota AI</span>
+            </a>
+
+            <div class="border-t border-neutral-100 my-1"></div>
+
+            <!-- Sign Out Action -->
+            <button
+              type="button"
+              (click)="onLogout()"
+              class="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer text-left"
+              role="menuitem"
+            >
+              <lucide-icon name="log-out" [size]="15" class="text-rose-500 shrink-0" aria-hidden="true"></lucide-icon>
+              <span>Đăng xuất</span>
+            </button>
+          </div>
+        }
       </div>
-      <div class="hidden xl:block text-left leading-none">
-        <div class="text-xs font-semibold text-neutral-900 truncate max-w-[120px]">
-          {{ userDisplayName() }}
-        </div>
-        <div class="text-[10px] text-neutral-400 font-mono mt-0.5">
-          {{ userSubtitle() }}
-        </div>
-      </div>
-    </a>
+
+      <!-- Mobile Hamburger Button -->
+      <button
+        type="button"
+        (click)="toggleMobileMenu()"
+        class="md:hidden p-2 text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/80 rounded-full transition cursor-pointer flex items-center justify-center shrink-0"
+        [attr.aria-expanded]="isMobileMenuOpen()"
+        aria-label="Mở menu điều hướng"
+      >
+        @if (isMobileMenuOpen()) {
+          <lucide-icon name="x" [size]="20" class="shrink-0" aria-hidden="true"></lucide-icon>
+        } @else {
+          <lucide-icon name="menu" [size]="20" class="shrink-0" aria-hidden="true"></lucide-icon>
+        }
+      </button>
+    </div>
   </div>
+
+  <!-- Mobile Slide-Down Menu (screens < 768px) -->
+  @if (isMobileMenuOpen()) {
+    <div class="md:hidden mt-2 bg-white/95 backdrop-blur-md border border-neutral-200/80 rounded-2xl shadow-[0_10px_25px_-5px_rgba(0,0,0,0.08)] p-3 flex flex-col gap-1">
+      @for (item of navItems; track item.path) {
+        <a
+          [routerLink]="item.path"
+          (click)="closeMobileMenu()"
+          routerLinkActive="text-[#246B4A] font-semibold bg-[#246B4A]/10 shadow-2xs"
+          [routerLinkActiveOptions]="{ exact: item.path === '/dashboard' }"
+          class="text-neutral-700 hover:text-[#246B4A] hover:bg-neutral-100/80 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-medium transition-colors no-underline flex items-center justify-between"
+        >
+          <span>{{ item.label }}</span>
+        </a>
+      }
+      <div class="pt-2 mt-1 border-t border-neutral-100 flex items-center">
+        <a
+          routerLink="/workspace"
+          (click)="closeMobileMenu()"
+          class="w-full bg-[#111111] hover:bg-[#246B4A] text-white px-4 py-2.5 rounded-full text-xs font-semibold shadow-xs transition active:scale-95 inline-flex items-center justify-center gap-2 no-underline"
+        >
+          <lucide-icon name="play" [size]="14" class="shrink-0 fill-current" aria-hidden="true"></lucide-icon>
+          <span>Vào học (Pomodoro Timer)</span>
+        </a>
+      </div>
+    </div>
+  }
 </header>

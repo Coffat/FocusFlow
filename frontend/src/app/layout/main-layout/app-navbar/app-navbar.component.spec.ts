@@ -10,12 +10,17 @@ describe('AppNavbarComponent', () => {
   let component: AppNavbarComponent;
   let fixture: ComponentFixture<AppNavbarComponent>;
   let router: Router;
+  let mockAuthService: {
+    currentUser: ReturnType<typeof signal<any>>;
+    logout: ReturnType<typeof vi.fn>;
+  };
 
   const mockUser = {
     id: 'u1',
     email: 'hoang@focusflow.ai',
     fullName: 'Minh Hoàng',
     role: 'learner' as const,
+    tier: 'PRO',
     isActive: true,
     aiCreditsRemaining: 100,
     totalStudyMinutes: 240,
@@ -24,8 +29,9 @@ describe('AppNavbarComponent', () => {
   };
 
   beforeEach(async () => {
-    const mockAuthService = {
+    mockAuthService = {
       currentUser: signal(mockUser),
+      logout: vi.fn(),
     };
 
     await TestBed.configureTestingModule({
@@ -68,10 +74,89 @@ describe('AppNavbarComponent', () => {
   it('hiển thị chữ viết tắt họ tên người dùng chính xác', () => {
     expect(component.userInitials()).toBe('MH');
     expect(component.userDisplayName()).toBe('Minh Hoàng');
+    expect(component.userEmail()).toBe('hoang@focusflow.ai');
+    expect(component.userTier()).toBe('PRO');
+    expect(component.userRole()).toBe('learner');
+  });
+
+  it('xử lý đúng fallback khi người dùng không có fullName hoặc chưa đăng nhập', () => {
+    mockAuthService.currentUser.set({
+      id: 'u2',
+      email: 'alex@example.com',
+      fullName: '',
+      role: 'user',
+      tier: 'free',
+      createdAt: '2026-01-01',
+    });
+    fixture.detectChanges();
+    expect(component.userDisplayName()).toBe('alex');
+    expect(component.userInitials()).toBe('AL');
+    expect(component.userTier()).toBe('FREE');
+
+    mockAuthService.currentUser.set(null);
+    fixture.detectChanges();
+    expect(component.userDisplayName()).toBe('Người học');
+    expect(component.userInitials()).toBe('NH');
+    expect(component.userEmail()).toBe('');
+    expect(component.userTier()).toBe('FREE');
+    expect(component.userRole()).toBe('user');
   });
 
   it('điều hướng khi nhấn tìm kiếm nhanh ⌘K', () => {
     component.onSearchTrigger();
     expect(router.navigate).toHaveBeenCalledWith(['/roadmaps']);
+  });
+
+  it('toggle và đóng User Menu chuẩn xác', () => {
+    expect(component.isUserMenuOpen()).toBe(false);
+
+    component.toggleUserMenu();
+    expect(component.isUserMenuOpen()).toBe(true);
+
+    component.closeUserMenu();
+    expect(component.isUserMenuOpen()).toBe(false);
+  });
+
+  it('toggle và đóng Mobile Menu chuẩn xác', () => {
+    expect(component.isMobileMenuOpen()).toBe(false);
+
+    component.toggleMobileMenu();
+    expect(component.isMobileMenuOpen()).toBe(true);
+
+    component.closeMobileMenu();
+    expect(component.isMobileMenuOpen()).toBe(false);
+  });
+
+  it('đảm bảo đóng menu còn lại khi mở menu khác', () => {
+    component.toggleMobileMenu();
+    expect(component.isMobileMenuOpen()).toBe(true);
+
+    component.toggleUserMenu();
+    expect(component.isUserMenuOpen()).toBe(true);
+    expect(component.isMobileMenuOpen()).toBe(false);
+
+    component.toggleMobileMenu();
+    expect(component.isMobileMenuOpen()).toBe(true);
+    expect(component.isUserMenuOpen()).toBe(false);
+  });
+
+  it('đóng các menu khi bấm phím Escape', () => {
+    component.toggleUserMenu();
+    component.toggleMobileMenu();
+    expect(component.isMobileMenuOpen()).toBe(true);
+
+    component.onEscapePress();
+    expect(component.isUserMenuOpen()).toBe(false);
+    expect(component.isMobileMenuOpen()).toBe(false);
+  });
+
+  it('thực hiện logout đầy đủ và điều hướng về trang sign-in', () => {
+    component.toggleUserMenu();
+    expect(component.isUserMenuOpen()).toBe(true);
+
+    component.onLogout();
+    expect(component.isUserMenuOpen()).toBe(false);
+    expect(mockAuthService.logout).toHaveBeenCalled();
+    expect(router.navigate).toHaveBeenCalledWith(['/sign-in']);
   });
 });
