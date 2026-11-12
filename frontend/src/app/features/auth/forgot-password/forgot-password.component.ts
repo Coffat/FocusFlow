@@ -1,4 +1,4 @@
-import { Component, OnInit, DestroyRef, inject, ChangeDetectionStrategy, signal } from '@angular/core';
+import { Component, OnInit, DestroyRef, inject, ChangeDetectionStrategy, signal, computed } from '@angular/core';
 import { FormBuilder, Validators, ReactiveFormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -17,10 +17,18 @@ import {
 
 import {
   passwordComplexityValidator,
+  evaluatePasswordStrength,
   checkPasswordMismatch
 } from '../../../shared/validators/password.validator';
 import { strictEmailValidator } from '../../../shared/validators/email.validator';
-import { OtpInputComponent } from '../shared/otp-input/otp-input.component';
+import {
+  AuthCardComponent,
+  AuthHeaderComponent,
+  AuthFormFieldComponent,
+  PasswordStrengthMeterComponent,
+  OtpInputComponent,
+  AuthNoticeBannerComponent
+} from '../shared';
 
 @Component({
   selector: 'app-forgot-password',
@@ -30,7 +38,12 @@ import { OtpInputComponent } from '../shared/otp-input/otp-input.component';
     ReactiveFormsModule,
     RouterLink,
     TranslatePipe,
-    OtpInputComponent
+    AuthCardComponent,
+    AuthHeaderComponent,
+    AuthFormFieldComponent,
+    PasswordStrengthMeterComponent,
+    OtpInputComponent,
+    AuthNoticeBannerComponent
   ],
   templateUrl: './forgot-password.component.html',
   styleUrl: './forgot-password.component.scss'
@@ -61,11 +74,33 @@ export class ForgotPasswordComponent implements OnInit {
   readonly successMessage = signal<string>('');
   readonly isPasswordVisible = signal<boolean>(false);
   readonly isConfirmPasswordVisible = signal<boolean>(false);
+  readonly passwordStrength = signal<number>(0);
+
+  readonly strengthLabelKey = computed<string>(() => {
+    const strength = this.passwordStrength();
+    if (strength <= 1) {
+      return 'auth.signUp.weakSecurity';
+    }
+    if (strength <= 3) {
+      return 'auth.signUp.mediumSecurity';
+    }
+    return 'auth.signUp.strongSecurity';
+  });
 
   ngOnInit() {
     this.errorMessage.set('');
     this.successMessage.set('');
     this.isSuccess.set(false);
+
+    this.passwordForm.get('newPassword')?.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (value: string | null) => {
+          this.passwordStrength.set(evaluatePasswordStrength(value || '').score);
+        },
+        error: (_err: Error) => {},
+        complete: () => {}
+      });
   }
 
   get isPasswordMismatch(): boolean {
@@ -73,6 +108,10 @@ export class ForgotPasswordComponent implements OnInit {
       this.passwordForm.get('newPassword')?.value || '',
       this.passwordForm.get('confirmPassword')?.value || ''
     );
+  }
+
+  get isPasswordValid(): boolean {
+    return evaluatePasswordStrength(this.passwordForm.get('newPassword')?.value || '').isValid;
   }
 
   togglePasswordVisibility() {
@@ -162,6 +201,7 @@ export class ForgotPasswordComponent implements OnInit {
           this.resetToken = response.reset_token;
           this.step.set('new_password');
           this.passwordForm.reset();
+          this.passwordStrength.set(0);
           this.successMessage.set(
             response.message || this.translationService.get('auth.forgotPassword.otpVerifiedSuccess')
           );
