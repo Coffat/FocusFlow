@@ -1,0 +1,16 @@
+from typing import Protocol
+from uuid import UUID
+
+from src.account.domain.models.learner_memory import LearnerMemoryItem
+
+
+class LearnerMemoryRepositoryPort(Protocol):
+    async def list_active(self, user_id: UUID) -> list[LearnerMemoryItem]: ...
+
+    async def get_owned(self, memory_id: UUID, user_id: UUID) -> LearnerMemoryItem | None: ...
+
+    async def save(self, item: LearnerMemoryItem) -> LearnerMemoryItem: ...
+
+    async def has_rejected_key(self, user_id: UUID, memory_key: str) -> bool: ...
+
+    async def reset_profile(self, user_id: UUID) -> None: ...

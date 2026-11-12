@@ -109,6 +109,7 @@ async def handle_google_calendar_callback_get(
             return HTMLResponse(content=html_content, status_code=status.HTTP_200_OK)
 
         from fastapi.responses import JSONResponse
+
         return JSONResponse(content=result.__dict__, status_code=status.HTTP_200_OK)
     except CalendarAuthError as exc:
         raise HTTPException(

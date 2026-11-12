@@ -92,6 +92,9 @@ class AvailabilitySlotORM(Base):
     slot_type: Mapped[str] = mapped_column(
         String(20), nullable=False, default="ALLOWED", server_default="ALLOWED"
     )
+    energy_level: Mapped[str] = mapped_column(
+        String(10), nullable=False, default="MEDIUM", server_default="MEDIUM"
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)

@@ -18,6 +18,9 @@ from src.account.application.ports.availability_repository_port import (
 from src.account.application.ports.calendar_connection_repository_port import (
     CalendarConnectionRepositoryPort,
 )
+from src.account.application.ports.learner_memory_repository_port import (
+    LearnerMemoryRepositoryPort,
+)
 from src.account.application.ports.user_repository_port import (
     UserRepositoryPort,
 )
@@ -59,6 +62,11 @@ from src.account.application.use_cases.calendar import (
     RenewExpiringCalendarWebhooksUseCase,
     SyncScheduleBlocksToGoogleUseCase,
 )
+from src.account.application.use_cases.learner_memory import (
+    ListLearnerMemoryUseCase,
+    ResetLearnerMemoryUseCase,
+    UpdateLearnerMemoryUseCase,
+)
 from src.account.domain.exceptions.auth_exceptions import (
     InvalidTokenError,
     TokenExpiredError,
@@ -84,6 +92,9 @@ from src.account.infrastructure.repositories.availability_repository import (
 )
 from src.account.infrastructure.repositories.calendar_connection_repository import (
     SqlAlchemyCalendarConnectionRepository,
+)
+from src.account.infrastructure.repositories.learner_memory_repository import (
+    SqlAlchemyLearnerMemoryRepository,
 )
 from src.account.infrastructure.repositories.user_repository import (
     SqlAlchemyUserRepository,
@@ -368,6 +379,32 @@ def get_update_availability_use_case(
     uow: AsyncUnitOfWork = Depends(get_account_uow),
 ) -> UpdateAvailabilityUseCase:
     return UpdateAvailabilityUseCase(repository=repository, uow=uow)
+
+
+def get_learner_memory_repository(
+    session: AsyncSession = Depends(get_account_db_session),
+) -> LearnerMemoryRepositoryPort:
+    return SqlAlchemyLearnerMemoryRepository(session)
+
+
+def get_list_learner_memory_use_case(
+    repository: LearnerMemoryRepositoryPort = Depends(get_learner_memory_repository),
+) -> ListLearnerMemoryUseCase:
+    return ListLearnerMemoryUseCase(repository)
+
+
+def get_update_learner_memory_use_case(
+    repository: LearnerMemoryRepositoryPort = Depends(get_learner_memory_repository),
+    uow: AsyncUnitOfWork = Depends(get_account_uow),
+) -> UpdateLearnerMemoryUseCase:
+    return UpdateLearnerMemoryUseCase(repository, uow)
+
+
+def get_reset_learner_memory_use_case(
+    repository: LearnerMemoryRepositoryPort = Depends(get_learner_memory_repository),
+    uow: AsyncUnitOfWork = Depends(get_account_uow),
+) -> ResetLearnerMemoryUseCase:
+    return ResetLearnerMemoryUseCase(repository, uow)
 
 
 # --- Cross-Context Port Providers (Quota & Learner Profile) ---

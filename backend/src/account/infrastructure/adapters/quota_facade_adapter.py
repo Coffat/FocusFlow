@@ -82,8 +82,10 @@ class QuotaFacadeAdapter(QuotaFacadePort):
         min_credits: int = 1,
     ) -> bool:
         quota = await self._get_or_init_quota_for_update(user_id)
-        total_available = int(quota.free_credits_remaining or 0) + int(
-            quota.paid_credits_remaining or 0
+        total_available = (
+            int(quota.free_credits_remaining or 0)
+            + int(quota.paid_credits_remaining or 0)
+            - int(quota.reserved_calls or 0)
         )
         return total_available >= min_credits
 
@@ -106,7 +108,11 @@ class QuotaFacadeAdapter(QuotaFacadePort):
             actual_cost = 1
 
         quota = await self._get_or_init_quota_for_update(user_id)
-        total_available = quota.free_credits_remaining + quota.paid_credits_remaining
+        total_available = (
+            quota.free_credits_remaining
+            + quota.paid_credits_remaining
+            - (quota.reserved_calls or 0)
+        )
         if total_available < actual_cost:
             raise QuotaExceededException(
                 message=(

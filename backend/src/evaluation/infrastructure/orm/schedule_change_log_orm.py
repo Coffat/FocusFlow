@@ -3,6 +3,7 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -71,6 +72,8 @@ class ScheduleChangeLogORM(Base):
     affected_tasks_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     total_shifted_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     diff_payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    disruption_category: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    counts_toward_budget: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
