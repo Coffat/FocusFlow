@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { provideRouter } from '@angular/router';
 import { SchedulePageComponent } from './schedule-page.component';
 import { ScheduleService } from '../services/schedule.service';
 
@@ -13,6 +14,7 @@ describe('SchedulePageComponent', () => {
       imports: [SchedulePageComponent],
       providers: [
         ScheduleService,
+        provideRouter([]),
         provideHttpClient(),
         provideHttpClientTesting()
       ]
@@ -64,5 +66,12 @@ describe('SchedulePageComponent', () => {
     expect(component.isDrawerOpen()).toBe(false);
     expect(component.drawerSuccess()).toContain('Đã kích hoạt Domino Shift');
     expect(component.drawerSuccess()).toContain('Bận tăng ca');
+  });
+
+  it('hiển thị empty state khi danh sách weeklySlots rỗng', () => {
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.textContent).toContain('Chưa có buổi học nào trong tuần');
+    expect(el.textContent).toContain('Tạo Lộ trình mới với AI');
+    expect(el.textContent).toContain('Cấu hình Giờ rảnh');
   });
 });

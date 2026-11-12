@@ -1,0 +1,138 @@
+@if (open()) {
+  <div
+    class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-[#111111]/40 backdrop-blur-md overflow-y-auto"
+    role="dialog"
+    aria-modal="true"
+    [attr.aria-label]="title()"
+    data-testid="wizard-dialog-backdrop"
+    (click)="onBackdropClick($event)"
+  >
+    <div
+      class="w-full bg-[#FFFFFF] border border-[#DCDCDC] rounded-xl shadow-[0_24px_48px_-12px_rgba(17,17,17,0.12)] flex flex-col max-h-[92vh] overflow-hidden my-auto"
+      [ngClass]="maxWidthClass()"
+      data-testid="wizard-dialog-container"
+    >
+      <!-- TOP HEADER BAR -->
+      <header class="px-5 sm:px-6 py-3.5 border-b border-[#DCDCDC] bg-[#FFFFFF] flex flex-wrap items-center justify-between gap-3 shrink-0">
+        <!-- Left: FocusFlow Emblem + Title -->
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div
+            class="w-7 h-7 rounded-md bg-[#111111] text-white font-serif italic font-semibold text-base flex items-center justify-center shrink-0"
+            aria-hidden="true"
+          >
+            F
+          </div>
+          <div class="min-w-0">
+            <span class="block text-[10px] font-mono font-semibold uppercase tracking-widest text-[#555555] truncate">
+              {{ title() }}
+            </span>
+          </div>
+        </div>
+
+        <!-- Center: Interactive 4-Step Stepper -->
+        <nav
+          aria-label="Tiến trình khởi tạo lộ trình"
+          class="flex items-center gap-1.5 sm:gap-2 overflow-x-auto py-0.5"
+        >
+          @for (item of steps; track item.step) {
+            <button
+              type="button"
+              (click)="onStepClick(item.step)"
+              [attr.data-testid]="'wizard-step-btn-' + item.step"
+              [attr.aria-current]="activeStep() === item.step ? 'step' : null"
+              class="px-3 py-1 rounded-full text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#246B4A] focus-visible:ring-offset-1"
+              [class.bg-[#EBF3EE]]="item.step < activeStep()"
+              [class.text-[#246B4A]]="item.step < activeStep()"
+              [class.font-semibold]="item.step <= activeStep()"
+              [class.bg-[#111111]]="item.step === activeStep()"
+              [class.text-white]="item.step === activeStep()"
+              [class.bg-[#F3F3F1]]="item.step > activeStep()"
+              [class.text-[#8E8E8A]]="item.step > activeStep()"
+            >
+              @if (item.step < activeStep()) {
+                <span class="font-mono text-[10px] font-bold" aria-hidden="true">✓</span>
+              }
+              <span>{{ item.label }}</span>
+            </button>
+          }
+        </nav>
+
+        <!-- Right: Save Draft & Exit + Close X -->
+        <div class="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            (click)="onSaveDraft()"
+            data-testid="wizard-save-draft-btn"
+            class="text-xs font-medium text-[#555555] hover:text-[#111111] hover:bg-[#F3F3F1] px-3 py-1.5 rounded-full transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#246B4A]"
+          >
+            Lưu nháp &amp; Thoát
+          </button>
+
+          <button
+            type="button"
+            (click)="onClose()"
+            aria-label="Đóng hộp thoại"
+            data-testid="wizard-close-btn"
+            class="w-8 h-8 rounded-full text-[#555555] hover:text-[#111111] hover:bg-[#F3F3F1] flex items-center justify-center transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#246B4A]"
+          >
+            <span class="material-symbols-outlined text-[18px]" aria-hidden="true">close</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- 2-STAGE SSE LIVE TELEMETRY BANNER -->
+      @if (isSseActive() && sseProgress(); as sse) {
+        <div
+          class="bg-[#EBF3EE] border-b border-[#246B4A]/20 px-6 py-3 flex flex-col gap-2 shrink-0"
+          aria-live="polite"
+          data-testid="wizard-sse-banner"
+        >
+          <div class="flex items-center justify-between gap-3 text-xs">
+            <div class="flex items-center gap-2 text-[#246B4A] font-medium min-w-0">
+              <span class="w-2 h-2 rounded-full bg-[#246B4A] animate-ping shrink-0" aria-hidden="true"></span>
+              <span class="truncate">{{ sse.message || 'Đang thực thi tiến trình AI 2-Stage SSE...' }}</span>
+            </div>
+            <div class="flex items-center gap-2 shrink-0 font-mono text-xs font-semibold text-[#246B4A]">
+              @if (sse.stage) {
+                <span class="px-2 py-0.5 rounded bg-white/80 border border-[#246B4A]/20 text-[10px]">
+                  {{ sse.stage }}
+                </span>
+              }
+              <span>{{ sse.progressPercent }}%</span>
+            </div>
+          </div>
+          <div class="w-full h-1.5 bg-white/80 rounded-full overflow-hidden">
+            <div
+              class="h-full bg-[#246B4A] rounded-full transition-all duration-300"
+              [style.width.%]="sse.progressPercent"
+            ></div>
+          </div>
+        </div>
+      }
+
+      <!-- ACCESSIBLE ERROR SUMMARY BANNER -->
+      @if (errorMessage(); as err) {
+        <div
+          role="alert"
+          aria-live="assertive"
+          data-testid="wizard-error-banner"
+          class="bg-[#FBEBEB] border-b border-[#B91C1C]/30 text-[#B91C1C] px-6 py-3.5 flex items-start gap-3 text-xs shrink-0"
+        >
+          <span class="material-symbols-outlined text-[18px] shrink-0 mt-0.5" aria-hidden="true">error</span>
+          <div class="flex-1 leading-relaxed">
+            <span class="font-semibold block">Không thể hoàn tất thao tác máy chủ:</span>
+            <span>{{ err }}</span>
+          </div>
+        </div>
+      }
+
+      <!-- MAIN SCROLLABLE BODY SLOT -->
+      <div class="flex-1 overflow-y-auto">
+        <ng-content />
+      </div>
+
+      <!-- OPTIONAL FOOTER SLOT -->
+      <ng-content select="[wizardFooter]" />
+    </div>
+  </div>
+}

@@ -28,15 +28,15 @@ class DocumentExtractor:
             return [ExtractedSection(text=text)] if text else []
         if source_type is KnowledgeSourceType.PDF:
             reader = PdfReader(io.BytesIO(content))
-            sections: list[ExtractedSection] = []
+            pdf_sections: list[ExtractedSection] = []
             for index, page in enumerate(reader.pages, start=1):
                 text = (page.extract_text() or "").strip()
                 if text:
-                    sections.append(ExtractedSection(text=text, page_number=index))
-            return sections
+                    pdf_sections.append(ExtractedSection(text=text, page_number=index))
+            return pdf_sections
         if source_type is KnowledgeSourceType.DOCX:
             document = Document(io.BytesIO(content))
-            sections: list[ExtractedSection] = []
+            docx_sections: list[ExtractedSection] = []
             heading: str | None = None
             buffer: list[str] = []
             for paragraph in document.paragraphs:
@@ -45,12 +45,12 @@ class DocumentExtractor:
                     continue
                 if paragraph.style and paragraph.style.name.startswith("Heading"):
                     if buffer:
-                        sections.append(ExtractedSection("\n".join(buffer), heading))
+                        docx_sections.append(ExtractedSection("\n".join(buffer), heading))
                         buffer = []
                     heading = text
                 else:
                     buffer.append(text)
             if buffer:
-                sections.append(ExtractedSection("\n".join(buffer), heading))
-            return sections
+                docx_sections.append(ExtractedSection("\n".join(buffer), heading))
+            return docx_sections
         raise ValueError(f"Unsupported document type: {source_type}")

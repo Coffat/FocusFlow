@@ -87,21 +87,27 @@ interface AISystemMetricSummary {
         </div>
 
         <div class="space-y-3 pt-2">
-          @for (user of users(); track user.id) {
-            <div class="flex items-center justify-between p-3 rounded-lg border border-[var(--border)] bg-[var(--background)]">
-              <div class="space-y-0.5">
-                <div class="font-medium text-sm">{{ user.email }}</div>
-                <div class="text-xs text-[var(--muted-foreground)]">
-                  Gói: {{ user.tier }} • Hạn ngạch còn lại: {{ user.remainingCredits }} lượt
+          @if (users().length === 0) {
+            <div class="p-8 text-center text-xs text-[var(--muted-foreground)] border border-dashed border-[var(--border)] rounded-xl">
+              Chưa có người học nào trong danh sách quản trị
+            </div>
+          } @else {
+            @for (user of users(); track user.id) {
+              <div class="flex items-center justify-between p-3 rounded-lg border border-[var(--border)] bg-[var(--background)]">
+                <div class="space-y-0.5">
+                  <div class="font-medium text-sm">{{ user.email }}</div>
+                  <div class="text-xs text-[var(--muted-foreground)]">
+                    Gói: {{ user.tier }} • Hạn ngạch còn lại: {{ user.remainingCredits }} lượt
+                  </div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span appBadge variant="outline">{{ user.status }}</span>
+                  <button appButton variant="secondary" size="sm" type="button" (click)="grantBonusQuota(user.id)">
+                    +5 AI Quota
+                  </button>
                 </div>
               </div>
-              <div class="flex items-center gap-2">
-                <span appBadge variant="outline">{{ user.status }}</span>
-                <button appButton variant="secondary" size="sm" type="button" (click)="grantBonusQuota(user.id)">
-                  +5 AI Quota
-                </button>
-              </div>
-            </div>
+            }
           }
         </div>
       </app-card>
@@ -110,30 +116,13 @@ interface AISystemMetricSummary {
 })
 export class AdminDashboardPageComponent {
   readonly aiMetrics = signal<AISystemMetricSummary>({
-    totalRequests24h: 142,
-    tier123PassRate: 99.3,
-    avgLatencyMs: 1480,
-    totalTokensConsumed: 284500
+    totalRequests24h: 0,
+    tier123PassRate: 0,
+    avgLatencyMs: 0,
+    totalTokensConsumed: 0
   });
 
-  readonly users = signal<readonly AdminUserQuotaRow[]>([
-    {
-      id: '0195f000-0000-7000-8000-000000000001',
-      email: 'learner.pro@focusflow.edu.vn',
-      role: 'LEARNER',
-      tier: 'PRO',
-      status: 'ACTIVE',
-      remainingCredits: 94
-    },
-    {
-      id: '0195f000-0000-7000-8000-000000000002',
-      email: 'learner.free@focusflow.edu.vn',
-      role: 'LEARNER',
-      tier: 'FREE',
-      status: 'ACTIVE',
-      remainingCredits: 3
-    }
-  ]);
+  readonly users = signal<readonly AdminUserQuotaRow[]>([]);
 
   grantBonusQuota(userId: string): void {
     this.users.update(rows =>

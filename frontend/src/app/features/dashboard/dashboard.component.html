@@ -1,160 +1,81 @@
-<div class="dashboard-viewport">
-  <!-- Top Navigation Header -->
-  <header class="dashboard-nav">
-    <div class="nav-left">
-      <a routerLink="/dashboard" class="flex items-center gap-2.5 no-underline">
-        <img src="assets/logo.svg" alt="FocusFlow" class="brand-logo" />
-        <span class="brand-title">FocusFlow</span>
-      </a>
-
-      <!-- Primary Navigation Links -->
-      <nav class="hidden md:flex items-center gap-1 ml-6 text-sm font-medium">
-        <a
-          routerLink="/dashboard"
-          class="px-3 py-1.5 rounded-lg bg-[var(--surface-container-high,#eae8e7)] font-semibold text-[var(--on-surface,#1b1c1c)] no-underline"
-        >
-          Bảng điều khiển
-        </a>
-        <a
-          routerLink="/availability"
-          class="px-3 py-1.5 rounded-lg text-[var(--secondary,#5f5e5e)] hover:text-[var(--on-surface,#1b1c1c)] hover:bg-[var(--surface-container,#efeded)] transition-colors no-underline"
-        >
-          Thời gian rảnh
-        </a>
-        <a
-          routerLink="/roadmaps"
-          class="px-3 py-1.5 rounded-lg text-[var(--secondary,#5f5e5e)] hover:text-[var(--on-surface,#1b1c1c)] hover:bg-[var(--surface-container,#efeded)] transition-colors no-underline"
-        >
-          Lộ trình AI
-        </a>
-        <a
-          routerLink="/schedule"
-          class="px-3 py-1.5 rounded-lg text-[var(--secondary,#5f5e5e)] hover:text-[var(--on-surface,#1b1c1c)] hover:bg-[var(--surface-container,#efeded)] transition-colors no-underline"
-        >
-          Lịch học
-        </a>
-        <a
-          routerLink="/settings"
-          class="px-3 py-1.5 rounded-lg text-[var(--secondary,#5f5e5e)] hover:text-[var(--on-surface,#1b1c1c)] hover:bg-[var(--surface-container,#efeded)] transition-colors no-underline"
-        >
-          Cài đặt
-        </a>
-      </nav>
+<div class="dashboard-page-container max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex flex-col gap-8">
+  <!-- Top Bar: Title & Primary Create Roadmap CTA -->
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div>
+      <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-neutral-900 font-serif">Tổng quan học tập</h1>
+      <p class="text-xs sm:text-sm text-neutral-500 mt-0.5">Theo dõi tiến độ, hiệu suất và điều phối phiên học thông minh</p>
     </div>
 
-    <div class="nav-right">
-      <!-- Quick Action "Vào học" -->
-      <a
-        routerLink="/workspace"
-        class="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[var(--primary,#005234)] text-white text-xs font-semibold hover:bg-[var(--primary-container,#246b4a)] transition-all shadow-xs no-underline"
-      >
-        <span class="material-symbols-outlined text-[16px]">play_arrow</span>
-        <span>Vào học</span>
-      </a>
+    <button
+      type="button"
+      data-testid="dashboard-create-roadmap-btn"
+      (click)="openCreateWizard(1)"
+      class="bg-[#111111] hover:bg-[#246B4A] text-white px-5 py-2.5 rounded-full text-xs sm:text-sm font-semibold shadow-xs inline-flex items-center gap-2 transition active:scale-95 shrink-0 cursor-pointer self-start sm:self-auto"
+    >
+      <lucide-icon name="plus" [size]="18" class="shrink-0" aria-hidden="true"></lucide-icon>
+      <span>Khởi tạo Lộ trình Mới với AI</span>
+      <kbd class="font-mono text-[10px] bg-neutral-700 text-neutral-200 px-1.5 py-0.5 rounded border border-neutral-600">C</kbd>
+    </button>
+  </div>
 
-      <!-- Notifications Bell -->
-      <button
-        type="button"
-        class="w-8 h-8 rounded-full border border-[var(--outline-variant,#bfc9c0)]/70 flex items-center justify-center text-[var(--on-surface-variant,#404942)] hover:bg-[var(--surface-container,#efeded)] transition-colors relative cursor-pointer"
-        title="Thông báo"
-        aria-label="Thông báo"
-      >
-        <span class="material-symbols-outlined text-[18px]">notifications</span>
-        <span class="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-500 border-2 border-white"></span>
-      </button>
-
-      <!-- User Avatar Chip -->
-      @if (currentUser()?.email) {
-        <div class="user-chip">
-          <span class="material-symbols-outlined user-avatar-icon">account_circle</span>
-          <div class="user-meta">
-            <span class="user-name">{{ currentUser()?.fullName || currentUser()?.email }}</span>
-            <span class="user-role-badge">{{ currentUser()?.tier || 'PRO' }} &bull; {{ currentUser()?.role || 'LEARNER' }}</span>
-          </div>
-        </div>
-      }
-
-      <button pButton type="button" class="sign-out-btn" (click)="signOut()">
-        <span class="material-symbols-outlined">logout</span>
-        <span>{{ 'common.signOut' | translate }}</span>
-      </button>
-    </div>
-  </header>
-
-  <!-- Page Content Container -->
-  <main class="max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8 space-y-6 flex-1">
-    <!-- State Switcher Toolbar -->
-    <app-dashboard-state-switcher
-      [activeState]="currentState()"
-      (stateChange)="onStateChange($event)"
+  <!-- When New User / Empty: Render Empty State -->
+  @if (isNewUser()) {
+    <app-dashboard-empty-state
+      (createCustomRoadmap)="openCreateWizard(1)"
+      (selectTemplate)="onSelectStarterTemplate($event)"
     />
+  } @else {
+    @if (summary(); as s) {
+      <!-- KPI Cards Grid -->
+      <app-dashboard-kpi-grid [kpi]="s.kpi" />
 
-    <!-- When New User: Render Empty State -->
-    @if (currentState() === 'new-user') {
-      <app-dashboard-empty-state />
-    } @else {
-      @if (summary(); as s) {
-        <!-- KPI Cards Grid -->
-        <app-dashboard-kpi-grid [kpi]="s.kpi" />
+      <!-- Weekly Time-Grid -->
+      <app-dashboard-weekly-grid
+        [scheduleBlocks]="s.scheduleBlocks"
+        [currentState]="currentState()"
+        [weekOffset]="weekOffset()"
+        [hasDominoShift]="s.adaptationStatus.hasDominoShift"
+        (weekOffsetChange)="onWeekOffsetChange($event)"
+      />
 
-        <!-- Weekly Time-Grid -->
-        <app-dashboard-weekly-grid
-          [scheduleBlocks]="s.scheduleBlocks"
-          [currentState]="currentState()"
-          [weekOffset]="weekOffset()"
-          (weekOffsetChange)="onWeekOffsetChange($event)"
-        />
-
-        <!-- Lower Workspace 2-Column Split (Left: Activity & Active Roadmaps; Right: Today Queue & AI Insights) -->
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          <!-- Left Column (Span 7) -->
-          <div class="lg:col-span-7 space-y-6">
-            <app-dashboard-activity-chart [distribution]="s.studyDistribution" />
-            <app-dashboard-active-roadmaps [roadmaps]="s.activeRoadmaps" />
-          </div>
-
-          <!-- Right Column (Span 5) -->
-          <div class="lg:col-span-5 space-y-6">
-            <app-dashboard-today-queue [tasks]="s.todayQueue" />
-            <app-dashboard-ai-insights
-              [insight]="s.aiInsight"
-              [adaptation]="s.adaptationStatus"
-            />
-          </div>
+      <!-- Lower Workspace 2-Column Split -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
+        <!-- Left Column (Span 7) -->
+        <div class="lg:col-span-7 flex flex-col gap-6 lg:gap-8">
+          <app-dashboard-activity-chart [distribution]="s.studyDistribution" />
+          <app-dashboard-active-roadmaps
+            [roadmaps]="s.activeRoadmaps"
+            (createRoadmap)="openCreateWizard(1)"
+          />
         </div>
-      }
+
+        <!-- Right Column (Span 5) -->
+        <div class="lg:col-span-5 flex flex-col gap-6 lg:gap-8">
+          <app-dashboard-today-queue [tasks]="s.todayQueue" />
+          <app-dashboard-ai-insights
+            [insight]="s.aiInsight"
+            [adaptation]="s.adaptationStatus"
+            (openAdaptation)="openAdaptationModal()"
+          />
+        </div>
+      </div>
     }
-  </main>
-
-  <!-- Footer Dock -->
-  <footer class="w-full border-t border-[var(--outline-variant,#bfc9c0)]/60 bg-[var(--surface-container-lowest,#ffffff)] py-3 px-6 text-xs text-[var(--secondary,#5f5e5e)] flex flex-wrap items-center justify-between gap-3">
-    <!-- Left: WebCal sync status -->
-    <div class="flex items-center gap-2">
-      <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-      <span class="font-medium text-[var(--on-surface,#1b1c1c)]">WebCal trường Đại học:</span>
-      <span class="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 font-semibold text-[11px]">
-        Đã đồng bộ (10 phút trước)
-      </span>
-    </div>
-
-    <!-- Right: Keyboard Shortcuts dock -->
-    <div class="flex items-center flex-wrap gap-4 font-mono text-[11px]">
-      <span class="flex items-center gap-1">
-        <kbd class="px-1.5 py-0.5 rounded bg-[var(--surface-container-high,#eae8e7)] border border-[var(--outline-variant,#bfc9c0)] text-[var(--on-surface,#1b1c1c)] font-bold">⌘K</kbd>
-        <span>Tìm kiếm</span>
-      </span>
-      <span class="flex items-center gap-1">
-        <kbd class="px-1.5 py-0.5 rounded bg-[var(--surface-container-high,#eae8e7)] border border-[var(--outline-variant,#bfc9c0)] text-[var(--on-surface,#1b1c1c)] font-bold">C</kbd>
-        <span>Tạo lộ trình</span>
-      </span>
-      <span class="flex items-center gap-1">
-        <kbd class="px-2 py-0.5 rounded bg-[var(--surface-container-high,#eae8e7)] border border-[var(--outline-variant,#bfc9c0)] text-[var(--on-surface,#1b1c1c)] font-bold">Space</kbd>
-        <span>Bắt đầu phiên học</span>
-      </span>
-      <span class="flex items-center gap-1">
-        <kbd class="px-1.5 py-0.5 rounded bg-[var(--surface-container-high,#eae8e7)] border border-[var(--outline-variant,#bfc9c0)] text-[var(--on-surface,#1b1c1c)] font-bold">Esc</kbd>
-        <span>Đóng</span>
-      </span>
-    </div>
-  </footer>
+  }
 </div>
+
+<!-- 4-STEP ROADMAP CREATION WIZARD DIALOG HOST -->
+<app-roadmap-wizard-host
+  [open]="wizardOpen()"
+  [initialStep]="wizardStep()"
+  [initialTitle]="wizardInitialTitle()"
+  [initialLevel]="wizardInitialLevel()"
+  [initialWeeklyHours]="wizardInitialWeeklyHours()"
+  (closeWizard)="closeCreateWizard()"
+/>
+
+<!-- SCR-08 ADAPTATION MODAL DIALOG -->
+<app-adaptation-modal-dialog
+  [open]="adaptationModalOpen()"
+  (closeModal)="closeAdaptationModal()"
+  (confirmAdaptation)="closeAdaptationModal()"
+/>

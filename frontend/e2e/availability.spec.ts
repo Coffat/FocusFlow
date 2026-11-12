@@ -42,7 +42,7 @@ function buildDefaultWeeklySchedule() {
 }
 
 async function setupLearnerSession(page: Page, request: APIRequestContext): Promise<void> {
-  const uniqueEmail = `e2e.avail.${Date.now()}.${Math.floor(Math.random() * 10000)}@focusflow.test`;
+  const uniqueEmail = `e2e.avail.${Date.now()}.${Math.floor(Math.random() * 10000)}@focusflow.vn`;
   const password = 'Password123!';
   let accessToken = 'e2e-fallback-jwt-token';
   let userProfile = {
@@ -71,6 +71,8 @@ async function setupLearnerSession(page: Page, request: APIRequestContext): Prom
         accessToken = body.access_token;
         userProfile = body.user || userProfile;
         backendAvailable = true;
+        const storageState = await request.storageState();
+        await page.context().addCookies(storageState.cookies);
       }
     }
   } catch {

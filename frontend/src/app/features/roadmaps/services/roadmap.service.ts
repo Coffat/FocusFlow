@@ -686,7 +686,10 @@ export class RoadmapService {
       .subscribe();
   }
 
-  createRoadmap(payload: CreateRoadmapRequest): void {
+  createRoadmap(
+    payload: CreateRoadmapRequest,
+    onSuccess?: (created: RoadmapResponse) => void
+  ): void {
     this.saving.set(true);
     this.errorMessage.set(null);
     this.successMessage.set(null);
@@ -714,6 +717,7 @@ export class RoadmapService {
           if (created.goal_id) {
             this.generateClarificationQuestions(created.goal_id);
           }
+          onSuccess?.(created);
         }),
         catchError((err: HttpErrorResponse) => {
           this.errorMessage.set(
@@ -755,7 +759,11 @@ export class RoadmapService {
       .subscribe();
   }
 
-  submitClarificationAnswers(goalId: string, answers: ClarificationAnswerItem[]): void {
+  submitClarificationAnswers(
+    goalId: string,
+    answers: ClarificationAnswerItem[],
+    onSuccess?: (res: SubmitClarificationAnswersResponse) => void
+  ): void {
     this.isSubmittingAnswers.set(true);
     this.errorMessage.set(null);
     this.successMessage.set(null);
@@ -777,6 +785,7 @@ export class RoadmapService {
           this.clarificationQuestions.set([]);
           this.successMessage.set('Đã lưu chẩn đoán mục tiêu thành công!');
           this.activeStep.set(2);
+          onSuccess?.(res);
         }),
         catchError((err: HttpErrorResponse) => {
           this.errorMessage.set(
@@ -791,16 +800,22 @@ export class RoadmapService {
       .subscribe();
   }
 
-  skipClarification(goalId?: string): void {
+  skipClarification(goalId?: string, onSuccess?: () => void): void {
     const targetGoalId = goalId ?? this.selectedRoadmapDetail()?.goal_id;
     const skippedIds = this.clarificationQuestions().map(q => q.question_id);
 
     if (!targetGoalId) {
+      if (onSuccess) {
+        this.errorMessage.set(
+          'Chưa tìm thấy mục tiêu học tập trên máy chủ. Vui lòng hoàn tất Bước 1 trước.'
+        );
+      }
       this.activeStep.set(2);
       return;
     }
 
     this.isSubmittingAnswers.set(true);
+    this.errorMessage.set(null);
     this.http
       .post<SubmitClarificationAnswersResponse>(
         API_ENDPOINTS.ROADMAPS.CLARIFY_SKIP(targetGoalId),
@@ -812,8 +827,12 @@ export class RoadmapService {
           this.clarificationContext.set(res.clarification_context);
           this.clarificationQuestions.set([]);
           this.activeStep.set(2);
+          onSuccess?.();
         }),
-        catchError(() => {
+        catchError((err: HttpErrorResponse) => {
+          this.errorMessage.set(
+            this.extractErrorMessage(err, 'Không thể bỏ qua bước phỏng vấn chẩn đoán.')
+          );
           this.activeStep.set(2);
           return of(null);
         }),
@@ -930,7 +949,10 @@ export class RoadmapService {
       .subscribe();
   }
 
-  approveMilestones(roadmapId: string): void {
+  approveMilestones(
+    roadmapId: string,
+    onSuccess?: (res: MilestoneListResponse) => void
+  ): void {
     this.saving.set(true);
     this.errorMessage.set(null);
     this.successMessage.set(null);
@@ -951,6 +973,7 @@ export class RoadmapService {
           this.successMessage.set(
             'Đã phê duyệt Cột mốc Cấp 1! Bạn có thể sinh Đề xuất Lịch học Chi tiết (Cấp 2).'
           );
+          onSuccess?.(res);
         }),
         catchError((err: HttpErrorResponse) => {
           this.errorMessage.set(
@@ -1178,7 +1201,8 @@ export class RoadmapService {
   applyProposal(
     roadmapId: string,
     proposalId: string,
-    confirmSoftOverflow: boolean = this.confirmSoftOverflow()
+    confirmSoftOverflow: boolean = this.confirmSoftOverflow(),
+    onSuccess?: (res: ApplyScheduleProposalResponse) => void
   ): void {
     this.saving.set(true);
     this.errorMessage.set(null);
@@ -1204,6 +1228,7 @@ export class RoadmapService {
           );
           this.loadRoadmapDetail(roadmapId);
           this.loadRoadmaps();
+          onSuccess?.(res);
         }),
         catchError((err: HttpErrorResponse) => {
           const body = err.error as Record<string, unknown> | undefined;

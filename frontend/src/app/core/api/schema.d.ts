@@ -807,6 +807,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/evaluation/dashboard-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Dashboard Summary
+         * @description Trả về tổng quan bảng điều khiển Dashboard cá nhân hóa của người học.
+         */
+        get: operations["get_dashboard_summary_api_v1_evaluation_dashboard_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/evaluation/milestones/{milestone_id}/proofs/generate-jobs": {
         parameters: {
             query?: never;
@@ -1169,6 +1189,291 @@ export interface components {
             /** Target Date */
             target_date?: string | null;
         };
+        /** DashboardActiveRoadmapDTO */
+        DashboardActiveRoadmapDTO: {
+            /**
+             * Id
+             * Format: uuid
+             * @description ID của lộ trình học tập
+             */
+            id: string;
+            /**
+             * Code
+             * @description Mã định danh lộ trình
+             */
+            code: string;
+            /**
+             * Title
+             * @description Tên lộ trình học
+             */
+            title: string;
+            /**
+             * Commitment Hours Per Week
+             * @description Cam kết số giờ học mỗi tuần
+             */
+            commitment_hours_per_week: number;
+            /**
+             * Deadline
+             * @description Hạn chót hoàn thành lộ trình
+             */
+            deadline: string;
+            /**
+             * Completed Tasks
+             * @description Số bài học/nhiệm vụ đã hoàn thành
+             */
+            completed_tasks: number;
+            /**
+             * Total Tasks
+             * @description Tổng số bài học/nhiệm vụ
+             */
+            total_tasks: number;
+            /**
+             * Progress Pct
+             * @description Tiến độ hoàn thành lộ trình (%)
+             */
+            progress_pct: number;
+            /**
+             * Next Task Code
+             * @description Mã nhiệm vụ tiếp theo
+             */
+            next_task_code: string;
+            /**
+             * Next Task Title
+             * @description Tiêu đề nhiệm vụ tiếp theo
+             */
+            next_task_title: string;
+        };
+        /** DashboardAdaptationStatusDTO */
+        DashboardAdaptationStatusDTO: {
+            /**
+             * Is Balanced
+             * @description Lịch học có đang cân bằng và không xung đột
+             */
+            is_balanced: boolean;
+            /**
+             * Message
+             * @description Mô tả trạng thái cân bằng hoặc cảnh báo rủi ro
+             */
+            message: string;
+            /**
+             * Domino Shift Ready
+             * @description Sẵn sàng thực hiện dời lịch tự động Domino Shift nếu quá hạn
+             */
+            domino_shift_ready: boolean;
+        };
+        /** DashboardAiInsightDTO */
+        DashboardAiInsightDTO: {
+            /**
+             * Model Version
+             * @description Phiên bản mô hình AI H-SRL
+             */
+            model_version: string;
+            /**
+             * Message
+             * @description Thông điệp nhận xét & khuyến nghị cá nhân hóa
+             */
+            message: string;
+            /**
+             * Peak Hours
+             * @description Khung giờ tập trung cao độ nhất của người học
+             */
+            peak_hours: string;
+            /**
+             * Efficiency Growth Pct
+             * @description Tốc độ tăng trưởng hiệu suất học tập (%)
+             */
+            efficiency_growth_pct: number;
+        };
+        /** DashboardKpiDTO */
+        DashboardKpiDTO: {
+            /**
+             * Monthly Hours
+             * @description Tổng số giờ học trong tháng
+             */
+            monthly_hours: number;
+            /**
+             * Target Hours
+             * @description Mục tiêu số giờ học trong tháng
+             */
+            target_hours: number;
+            /**
+             * Monthly Progress Pct
+             * @description Phần trăm hoàn thành mục tiêu tháng
+             */
+            monthly_progress_pct: number;
+            /**
+             * Streak Days
+             * @description Số ngày chuỗi học tập hiện tại
+             */
+            streak_days: number;
+            /**
+             * Personal Best Streak
+             * @description Kỷ lục chuỗi ngày học tập cao nhất
+             */
+            personal_best_streak: number;
+            /**
+             * Streak History Last 7 Days
+             * @description Lịch sử chuỗi học 7 ngày gần nhất
+             */
+            streak_history_last_7_days: boolean[];
+            /**
+             * Adherence Rate Pct
+             * @description Tỷ lệ tuân thủ lịch học (%)
+             */
+            adherence_rate_pct: number;
+            /**
+             * Adherence Delta Pct
+             * @description Mức tăng trưởng tỷ lệ tuân thủ so với tuần trước (%)
+             */
+            adherence_delta_pct: number;
+            /**
+             * Completed Pomodoro Count
+             * @description Tổng số chu kỳ Pomodoro hoàn thành
+             */
+            completed_pomodoro_count: number;
+            /**
+             * Deep Work Hours
+             * @description Số giờ Deep Work đạt được
+             */
+            deep_work_hours: number;
+        };
+        /** DashboardScheduleBlockDTO */
+        DashboardScheduleBlockDTO: {
+            /**
+             * Id
+             * Format: uuid
+             * @description ID của block lịch học
+             */
+            id: string;
+            /**
+             * Day Of Week
+             * @description Thứ trong tuần (1 = Thứ 2, 7 = Chủ nhật)
+             */
+            day_of_week: number;
+            /**
+             * Day Label
+             * @description Nhãn thứ (Thứ Hai, Thứ Ba...)
+             */
+            day_label: string;
+            /**
+             * Start Time
+             * @description Giờ bắt đầu (HH:MM)
+             */
+            start_time: string;
+            /**
+             * End Time
+             * @description Giờ kết thúc (HH:MM)
+             */
+            end_time: string;
+            /**
+             * Title
+             * @description Tiêu đề khối học
+             */
+            title: string;
+            /**
+             * Category
+             * @description Phân loại môn học / kỹ năng
+             */
+            category: string;
+            /**
+             * Status
+             * @description Trạng thái khối lịch (SCHEDULED, IN_PROGRESS, COMPLETED)
+             */
+            status: string;
+            /**
+             * Pomodoro Count
+             * @description Số phiên Pomodoro
+             */
+            pomodoro_count: number;
+            /**
+             * Duration Minutes
+             * @description Thời lượng khối học theo phút
+             */
+            duration_minutes: number;
+            /**
+             * Roadmap Code
+             * @description Mã lộ trình tương ứng
+             */
+            roadmap_code: string;
+            /**
+             * Description
+             * @description Mô tả tóm tắt phiên học
+             */
+            description?: string | null;
+        };
+        /** DashboardSummaryResponseDTO */
+        DashboardSummaryResponseDTO: {
+            /** @description Chỉ số hiệu suất học tập cốt lõi */
+            kpi: components["schemas"]["DashboardKpiDTO"];
+            /**
+             * Study Distribution
+             * @description Biểu đồ phân bổ giờ học theo tuần
+             */
+            study_distribution: components["schemas"]["DayStudyDistributionDTO"][];
+            /**
+             * Active Roadmaps
+             * @description Danh sách lộ trình đang học tích cực
+             */
+            active_roadmaps: components["schemas"]["DashboardActiveRoadmapDTO"][];
+            /**
+             * Today Queue
+             * @description Hàng đợi nhiệm vụ cần học hôm nay
+             */
+            today_queue: components["schemas"]["DashboardTodayQueueItemDTO"][];
+            /** @description Thông tin chi tiết và khuyến nghị từ AI */
+            ai_insight: components["schemas"]["DashboardAiInsightDTO"];
+            /** @description Trạng thái tự thích ứng và cân bằng lịch học */
+            adaptation_status: components["schemas"]["DashboardAdaptationStatusDTO"];
+            /**
+             * Schedule Blocks
+             * @description Lịch học trực quan phân bổ theo tuần
+             */
+            schedule_blocks: components["schemas"]["DashboardScheduleBlockDTO"][];
+        };
+        /** DashboardTodayQueueItemDTO */
+        DashboardTodayQueueItemDTO: {
+            /**
+             * Id
+             * Format: uuid
+             * @description ID nhiệm vụ trong hàng đợi hôm nay
+             */
+            id: string;
+            /**
+             * Task Code
+             * @description Mã nhiệm vụ
+             */
+            task_code: string;
+            /**
+             * Title
+             * @description Tên nhiệm vụ
+             */
+            title: string;
+            /**
+             * Roadmap Title
+             * @description Lộ trình học trực thuộc
+             */
+            roadmap_title: string;
+            /**
+             * Scheduled Time
+             * @description Khung giờ học dự kiến (VD: 08:30 - 10:00)
+             */
+            scheduled_time: string;
+            /**
+             * Pomodoro Estimate
+             * @description Số block Pomodoro ước tính
+             */
+            pomodoro_estimate: number;
+            /**
+             * Duration Minutes
+             * @description Thời lượng tính bằng phút
+             */
+            duration_minutes: number;
+            /**
+             * Status
+             * @description Trạng thái nhiệm vụ (SCHEDULED, READY, IN_PROGRESS, COMPLETED)
+             */
+            status: string;
+        };
         /** DayScheduleDTO */
         DayScheduleDTO: {
             /** Enabled */
@@ -1188,6 +1493,24 @@ export interface components {
              * @default 30
              */
             min_session_minutes: number;
+        };
+        /** DayStudyDistributionDTO */
+        DayStudyDistributionDTO: {
+            /**
+             * Day Label
+             * @description Nhãn ngày (Mon, Tue, Wed, Thu, Fri, Sat, Sun)
+             */
+            day_label: string;
+            /**
+             * Hours
+             * @description Số giờ học tập trong ngày
+             */
+            hours: number;
+            /**
+             * Is Today
+             * @description Đánh dấu ngày hôm nay
+             */
+            is_today: boolean;
         };
         /** GenerateProofResponseDTO */
         GenerateProofResponseDTO: {
@@ -3605,6 +3928,26 @@ export interface operations {
                     "application/json": {
                         [key: string]: string;
                     };
+                };
+            };
+        };
+    };
+    get_dashboard_summary_api_v1_evaluation_dashboard_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardSummaryResponseDTO"];
                 };
             };
         };

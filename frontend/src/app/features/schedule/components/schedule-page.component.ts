@@ -1,6 +1,8 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import { LucideAngularModule, LUCIDE_ICONS, LucideIconProvider, Zap, Check, Calendar } from 'lucide-angular';
 import { ScheduleService } from '../services/schedule.service';
 import { ButtonDirective } from '../../../shared/ui/button/button.directive';
 import { BadgeDirective } from '../../../shared/ui/badge/badge.directive';
@@ -13,17 +15,26 @@ export type QuickActionType = 'DOMINO_SHIFT' | 'TODAY_OFF' | 'EXTEND_TIME';
   standalone: true,
   imports: [
     CommonModule,
+    RouterLink,
     FormsModule,
+    LucideAngularModule,
     ButtonDirective,
     BadgeDirective,
     CardComponent
+  ],
+  providers: [
+    {
+      provide: LUCIDE_ICONS,
+      multi: true,
+      useValue: new LucideIconProvider({ Zap, Check, Calendar })
+    }
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     '(document:keydown.escape)': 'onEscapeKey()'
   },
   template: `
-    <div class="max-w-5xl mx-auto w-full p-6 space-y-6">
+    <div class="max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8 space-y-6">
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 class="text-2xl font-bold tracking-tight">Thời Khóa Biểu Học Tập</h1>
@@ -41,8 +52,10 @@ export type QuickActionType = 'DOMINO_SHIFT' | 'TODAY_OFF' | 'EXTEND_TIME';
             size="sm"
             data-testid="open-quick-drawer-btn"
             (click)="openQuickDrawer()"
+            class="inline-flex items-center gap-1.5"
           >
-            ⚡ Điều chỉnh lịch hôm nay
+            <lucide-icon name="zap" [size]="14" class="shrink-0" aria-hidden="true"></lucide-icon>
+            <span>Điều chỉnh lịch hôm nay</span>
           </button>
         </div>
       </div>
@@ -55,7 +68,7 @@ export type QuickActionType = 'DOMINO_SHIFT' | 'TODAY_OFF' | 'EXTEND_TIME';
           class="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-700 dark:text-amber-400 font-medium flex items-center justify-between shadow-xs"
         >
           <div class="flex items-center gap-2">
-            <span>✅</span>
+            <lucide-icon name="check" [size]="14" class="shrink-0 text-emerald-600" aria-hidden="true"></lucide-icon>
             <span>{{ drawerSuccess() }}</span>
           </div>
           <button type="button" (click)="drawerSuccess.set(null)" class="text-xs hover:underline">Đóng</button>
@@ -63,41 +76,71 @@ export type QuickActionType = 'DOMINO_SHIFT' | 'TODAY_OFF' | 'EXTEND_TIME';
       }
 
       <!-- WebCal Sync Box -->
-      <app-card class="bg-[var(--accent)]/30 border-dashed">
-        <div class="flex items-center justify-between">
-          <div class="space-y-1">
-            <span class="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Đồng bộ lịch 1 chiều (RFC 5545)</span>
-            <div class="text-xs font-mono select-all bg-[var(--card)] px-3 py-1.5 rounded-md border border-[var(--border)] max-w-lg truncate">
-              {{ scheduleService.webCalInfo().tokenUrl }}
+      @if (scheduleService.webCalInfo().tokenUrl) {
+        <app-card class="bg-[var(--accent)]/30 border-dashed">
+          <div class="flex items-center justify-between">
+            <div class="space-y-1">
+              <span class="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Đồng bộ lịch 1 chiều (RFC 5545)</span>
+              <div class="text-xs font-mono select-all bg-[var(--card)] px-3 py-1.5 rounded-md border border-[var(--border)] max-w-lg truncate">
+                {{ scheduleService.webCalInfo().tokenUrl }}
+              </div>
             </div>
+            <button appButton variant="secondary" size="sm">Sao chép URL</button>
           </div>
-          <button appButton variant="secondary" size="sm">Sao chép URL</button>
-        </div>
-      </app-card>
+        </app-card>
+      }
 
       <!-- Weekly Slots -->
       <div class="space-y-3">
         <h2 class="text-base font-semibold">Các khung giờ học tuần này</h2>
-        @for (slot of scheduleService.weeklySlots(); track slot.id) {
-          <div class="p-4 rounded-xl border border-[var(--border)] bg-[var(--card)] flex items-center justify-between shadow-xs">
-            <div class="flex items-center gap-4">
-              <div class="w-16 text-center py-1 rounded bg-[var(--muted)] font-mono text-xs font-bold">
-                {{ slot.startTime }}
-              </div>
-              <div>
-                <div class="font-medium text-sm">{{ slot.taskTitle }}</div>
-                <div class="text-xs text-[var(--muted-foreground)]">Khung giờ: {{ slot.startTime }} - {{ slot.endTime }}</div>
-              </div>
+        @if (scheduleService.weeklySlots().length === 0) {
+          <div class="p-12 text-center flex flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--border)] bg-[var(--card)]">
+            <div class="w-12 h-12 rounded-2xl bg-neutral-100 text-neutral-500 flex items-center justify-center mb-3">
+              <lucide-icon name="calendar" [size]="24" aria-hidden="true"></lucide-icon>
             </div>
-
-            <div class="flex items-center gap-2">
-              @if (slot.isCompleted) {
-                <span appBadge variant="success">Đã hoàn thành</span>
-              } @else {
-                <span appBadge variant="outline">Chưa bắt đầu</span>
-              }
+            <h3 class="text-base font-semibold text-neutral-900 dark:text-neutral-100 mb-1">
+              Chưa có buổi học nào trong tuần
+            </h3>
+            <p class="text-xs text-[var(--muted-foreground)] max-w-sm mb-5 leading-relaxed">
+              Bạn chưa có lịch học nào được xếp trong tuần này. Hãy tạo một Lộ trình học tập mới với AI hoặc cấu hình khung giờ rảnh để hệ thống tự động điều phối.
+            </p>
+            <div class="flex items-center gap-3">
+              <a
+                routerLink="/roadmaps"
+                class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#005234] text-white text-xs font-semibold hover:bg-[#246B4A] transition-colors shadow-xs no-underline"
+              >
+                Tạo Lộ trình mới với AI
+              </a>
+              <a
+                routerLink="/availability"
+                class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-xs font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors no-underline"
+              >
+                Cấu hình Giờ rảnh
+              </a>
             </div>
           </div>
+        } @else {
+          @for (slot of scheduleService.weeklySlots(); track slot.id) {
+            <div class="p-4 rounded-xl border border-[var(--border)] bg-[var(--card)] flex items-center justify-between shadow-xs">
+              <div class="flex items-center gap-4">
+                <div class="w-16 text-center py-1 rounded bg-[var(--muted)] font-mono text-xs font-bold">
+                  {{ slot.startTime }}
+                </div>
+                <div>
+                  <div class="font-medium text-sm">{{ slot.taskTitle }}</div>
+                  <div class="text-xs text-[var(--muted-foreground)]">Khung giờ: {{ slot.startTime }} - {{ slot.endTime }}</div>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-2">
+                @if (slot.isCompleted) {
+                  <span appBadge variant="success">Đã hoàn thành</span>
+                } @else {
+                  <span appBadge variant="outline">Chưa bắt đầu</span>
+                }
+              </div>
+            </div>
+          }
         }
       </div>
     </div>

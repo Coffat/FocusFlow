@@ -2,8 +2,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideRouter, Router } from '@angular/router';
+import { provideRouter } from '@angular/router';
 import { signal } from '@angular/core';
+import { of } from 'rxjs';
+import { ConfirmationService, MessageService } from 'primeng/api';
 import { RoadmapsHubComponent } from './roadmaps-hub.component';
 import { RoadmapService } from '../../services/roadmap.service';
 import { AuthService } from '../../../../core/services/auth.service';
@@ -12,7 +14,14 @@ import { RoadmapResponse } from '../../models/roadmap.model';
 describe('RoadmapsHubComponent', () => {
   let component: RoadmapsHubComponent;
   let fixture: ComponentFixture<RoadmapsHubComponent>;
-  let router: Router;
+  let mockRoadmapService: {
+    roadmaps: ReturnType<typeof signal<RoadmapResponse[]>>;
+    loading: ReturnType<typeof signal<boolean>>;
+    loadRoadmaps: ReturnType<typeof vi.fn>;
+    pauseRoadmap: ReturnType<typeof vi.fn>;
+    resumeRoadmap: ReturnType<typeof vi.fn>;
+    archiveRoadmap: ReturnType<typeof vi.fn>;
+  };
 
   const mockRoadmaps: RoadmapResponse[] = [
     {
@@ -60,10 +69,13 @@ describe('RoadmapsHubComponent', () => {
     roadmapsSignal = signal<RoadmapResponse[]>(mockRoadmaps);
     loadingSignal = signal<boolean>(false);
 
-    const mockRoadmapService = {
+    mockRoadmapService = {
       roadmaps: roadmapsSignal,
       loading: loadingSignal,
       loadRoadmaps: vi.fn(),
+      pauseRoadmap: vi.fn().mockReturnValue(of({ id: 'rm-1', status: 'PAUSED' })),
+      resumeRoadmap: vi.fn().mockReturnValue(of({ id: 'rm-2', status: 'ACTIVE' })),
+      archiveRoadmap: vi.fn(),
     };
 
     const mockAuthService = {
@@ -83,13 +95,12 @@ describe('RoadmapsHubComponent', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         provideRouter([]),
+        ConfirmationService,
+        MessageService,
         { provide: RoadmapService, useValue: mockRoadmapService },
         { provide: AuthService, useValue: mockAuthService },
       ],
     }).compileComponents();
-
-    router = TestBed.inject(Router);
-    vi.spyOn(router, 'navigate').mockResolvedValue(true);
 
     fixture = TestBed.createComponent(RoadmapsHubComponent);
     component = fixture.componentInstance;
@@ -158,24 +169,67 @@ describe('RoadmapsHubComponent', () => {
     expect(compiled.textContent).toContain('IELTS Academic Band 7.5');
   });
 
-  it('nên điều hướng tới /roadmaps/new khi nhấn phím tắt C', () => {
+  it('nên mở RoadmapWizardHostComponent ở Bước 1 khi nhấn phím tắt C hoặc bấm nút Khởi tạo Lộ trình Mới với AI', () => {
+    expect(component.wizardOpen()).toBe(false);
     const event = new KeyboardEvent('keydown', { key: 'c' });
     component.onGlobalKeydown(event);
-    expect(router.navigate).toHaveBeenCalledWith(['/roadmaps/new']);
+    expect(component.wizardOpen()).toBe(true);
+    expect(component.wizardStep()).toBe(1);
   });
 
-  it('không điều hướng khi gõ phím C bên trong trường input', () => {
+  it('nên mở RoadmapWizardHostComponent điền sẵn dữ liệu khi chọn Starter Template', () => {
+    component.onSelectTemplate({
+      id: 'aws-solutions-architect',
+      title: 'AWS Solutions Architect',
+      subtitle: 'Cloud',
+      categoryTag: 'Cloud Arch',
+      weeksCount: 8,
+      tasksCount: 56,
+      knowledgeLevel: 'BEGINNER',
+      hoursPerWeek: 8,
+      tags: ['AWS'],
+    });
+
+    expect(component.wizardOpen()).toBe(true);
+    expect(component.wizardInitialTitle()).toBe('AWS Solutions Architect');
+    expect(component.wizardInitialLevel()).toBe('BEGINNER');
+    expect(component.wizardInitialWeeklyHours()).toBe(8);
+  });
+
+  it('không mở wizard khi gõ phím C bên trong trường input', () => {
     const inputElement = document.createElement('input');
     const event = new KeyboardEvent('keydown', { key: 'c' });
     Object.defineProperty(event, 'target', { value: inputElement });
 
     component.onGlobalKeydown(event);
-    expect(router.navigate).not.toHaveBeenCalled();
+    expect(component.wizardOpen()).toBe(false);
   });
 
   it('nên trích xuất tags phù hợp từ tiêu đề lộ trình', () => {
     const tags = component.getTags(mockRoadmaps[0]);
     expect(tags).toContain('Backend');
     expect(tags).toContain('Python');
+  });
+
+  it('nên kích hoạt ConfirmationService khi tạm dừng lộ trình', () => {
+    const confirmationService = TestBed.inject(ConfirmationService);
+    const confirmSpy = vi.spyOn(confirmationService, 'confirm');
+    component.onPauseRoadmap('rm-1');
+    expect(confirmSpy).toHaveBeenCalled();
+  });
+
+  it('nên mở AdaptationModalDialogComponent (SCR-08) khi bấm kích hoạt lại / tái cân bằng Domino Shift', () => {
+    expect(component.adaptationModalOpen()).toBe(false);
+    component.onResumeRoadmap('rm-2');
+    expect(component.adaptationModalOpen()).toBe(true);
+    expect(component.adaptationRoadmapId()).toBe('rm-2');
+    expect(component.adaptationRoadmapTitle()).toBe('AWS Certified Solutions Architect');
+  });
+
+  it('nên kích hoạt ConfirmationService khi lưu trữ lộ trình', () => {
+    const confirmationService = TestBed.inject(ConfirmationService);
+    const confirmSpy = vi.spyOn(confirmationService, 'confirm');
+    component.onArchiveRoadmap('rm-1');
+    expect(confirmSpy).toHaveBeenCalled();
   });
 });

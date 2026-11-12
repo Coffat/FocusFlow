@@ -1,0 +1,127 @@
+<div class="blueprint-empty-state-container w-full max-w-5xl mx-auto py-10 px-4 sm:px-6 flex flex-col items-center text-center">
+  <!-- Architectural Drafting Blueprint SVG Illustration -->
+  <div class="relative w-72 h-52 sm:w-84 sm:h-60 mb-6 flex items-center justify-center">
+    <svg class="w-full h-full text-emerald-900" viewBox="0 0 320 220" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <!-- Blueprint Grid Background Pattern -->
+      <defs>
+        <pattern id="blueprint-shared-grid" width="20" height="20" patternUnits="userSpaceOnUse">
+          <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#246B4A" stroke-opacity="0.12" stroke-width="0.8" />
+        </pattern>
+      </defs>
+      <rect width="320" height="220" rx="12" fill="#F7FBF9" />
+      <rect width="320" height="220" rx="12" fill="url(#blueprint-shared-grid)" />
+      <rect x="8" y="8" width="304" height="204" rx="8" stroke="#246B4A" stroke-opacity="0.3" stroke-dasharray="4 4" stroke-width="1.2" />
+
+      <!-- Concentric Drafting Circles -->
+      <circle cx="160" cy="110" r="70" stroke="#246B4A" stroke-width="1" stroke-dasharray="4 4" stroke-opacity="0.25" />
+      <circle cx="160" cy="110" r="45" stroke="#10B981" stroke-width="1.2" stroke-opacity="0.35" />
+      <circle cx="160" cy="110" r="22" fill="#ECFDF5" stroke="#059669" stroke-width="1.5" />
+
+      <!-- Crosshairs -->
+      <line x1="40" y1="110" x2="280" y2="110" stroke="#246B4A" stroke-width="0.8" stroke-opacity="0.25" stroke-dasharray="6 3" />
+      <line x1="160" y1="20" x2="160" y2="200" stroke="#246B4A" stroke-width="0.8" stroke-opacity="0.25" stroke-dasharray="6 3" />
+
+      <!-- Milestone Nodes connected along an adaptive bezier curve -->
+      <path d="M 60 150 Q 110 70 160 110 T 260 70" fill="none" stroke="#246B4A" stroke-width="2.5" stroke-linecap="round" />
+
+      <!-- Node 1: Origin -->
+      <circle cx="60" cy="150" r="6" fill="#FFFFFF" stroke="#246B4A" stroke-width="2.5" />
+      <circle cx="60" cy="150" r="2.5" fill="#246B4A" />
+
+      <!-- Node 2: Adaptive Center Compass -->
+      <circle cx="160" cy="110" r="7" fill="#10B981" stroke="#FFFFFF" stroke-width="2" />
+      <path d="M160 104L163 110L160 116L157 110Z" fill="#FFFFFF" />
+
+      <!-- Node 3: Target Finish -->
+      <circle cx="260" cy="70" r="6" fill="#FFFFFF" stroke="#059669" stroke-width="2.5" />
+      <path d="M 256 70 L 259 73 L 265 67" stroke="#059669" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+
+      <!-- Technical Annotations -->
+      <text x="18" y="26" font-family="monospace" font-size="8.5" fill="#047857" letter-spacing="1">ARCHITECTURAL BLUEPRINT // SPEC v1.3</text>
+      <text x="18" y="38" font-family="monospace" font-size="7.5" fill="#718096">2-STAGE ADAPTIVE REASONING HARNESS</text>
+      <text x="302" y="206" font-family="monospace" font-size="7.5" fill="#718096" text-anchor="end">DETERMINISTIC SCHEDULE</text>
+    </svg>
+  </div>
+
+  <!-- Headline & Subtitle -->
+  <h2 class="text-2xl sm:text-3xl font-bold text-neutral-900 tracking-tight font-serif mb-2.5">
+    {{ title() }}
+  </h2>
+  <p class="text-xs sm:text-sm text-neutral-500 max-w-xl mx-auto mb-6 leading-relaxed">
+    {{ description() }}
+  </p>
+
+  <!-- Primary CTA button + Keyboard shortcut -->
+  <div class="flex flex-col sm:flex-row items-center justify-center gap-3 mb-10">
+    <button
+      type="button"
+      data-testid="empty-state-cta-btn"
+      (click)="onCreateCustom()"
+      class="bg-neutral-900 hover:bg-neutral-800 text-white px-6 py-2.5 rounded-full text-xs sm:text-sm font-semibold shadow-sm inline-flex items-center gap-2 transition active:scale-95 no-underline cursor-pointer"
+    >
+      <span class="material-symbols-outlined text-[18px]" aria-hidden="true">add</span>
+      <span>{{ ctaLabel() }}</span>
+    </button>
+
+    @if (shortcutKey()) {
+      <span class="text-xs text-neutral-400 flex items-center gap-1.5 font-mono">
+        <span>hoặc nhấn</span>
+        <kbd class="px-2 py-0.5 rounded bg-neutral-100 border border-neutral-300 font-semibold text-neutral-700 shadow-2xs">{{ shortcutKey() }}</kbd>
+      </span>
+    }
+  </div>
+
+  <!-- Starter Templates Grid -->
+  @if (showTemplates() && templates().length > 0) {
+    <div class="w-full border-t border-neutral-200/60 pt-8">
+      <div class="text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-4 text-center">
+        Hoặc khởi động nhanh từ các bộ lộ trình mẫu chuẩn hóa
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
+        @for (tpl of templates(); track tpl.id) {
+          <div
+            [attr.data-testid]="'starter-template-card-' + tpl.id"
+            (click)="onSelectTemplate(tpl)"
+            class="bg-white hover:bg-neutral-50/80 rounded-2xl border border-neutral-200/80 p-5 flex flex-col justify-between hover:border-emerald-500/50 hover:shadow-md transition group cursor-pointer"
+          >
+            <div>
+              <div class="flex items-center justify-between gap-2 mb-2.5">
+                <span class="bg-emerald-50 text-emerald-800 border border-emerald-200/80 text-[10px] font-bold px-2 py-0.5 rounded-md">
+                  {{ tpl.categoryTag }} • {{ tpl.weeksCount }} tuần • {{ tpl.tasksCount }} tasks
+                </span>
+                <span class="material-symbols-outlined text-[16px] text-neutral-400 group-hover:text-emerald-600 transition" aria-hidden="true">auto_stories</span>
+              </div>
+
+              <h3 class="font-bold text-sm sm:text-base text-neutral-900 tracking-tight group-hover:text-emerald-900 transition">
+                {{ tpl.title }}
+              </h3>
+              <p class="text-xs text-neutral-500 mt-1.5 leading-relaxed line-clamp-3">
+                {{ tpl.subtitle }}
+              </p>
+
+              <div class="flex flex-wrap gap-1.5 mt-3">
+                @for (tag of tpl.tags; track tag) {
+                  <span class="bg-neutral-50 border border-neutral-200 text-neutral-600 text-[10px] px-2 py-0.5 rounded">
+                    {{ tag }}
+                  </span>
+                }
+              </div>
+            </div>
+
+            <div class="mt-5 pt-3 border-t border-neutral-100">
+              <button
+                type="button"
+                (click)="$event.stopPropagation(); onSelectTemplate(tpl)"
+                class="w-full bg-white hover:bg-neutral-900 text-neutral-800 hover:text-white border border-neutral-300 hover:border-neutral-900 rounded-full py-1.5 text-xs font-semibold text-center flex items-center justify-center gap-1.5 transition no-underline cursor-pointer"
+              >
+                <span>Dùng mẫu này</span>
+                <span class="material-symbols-outlined text-[13px]" aria-hidden="true">arrow_forward</span>
+              </button>
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+  }
+</div>

@@ -1,0 +1,78 @@
+- generic [ref=f1e4]:
+  - banner [ref=f1e5]:
+    - link "arrow_back Về trang chủ" [ref=f1e6] [cursor=pointer]:
+      - /url: /
+      - generic [ref=f1e7]: arrow_back
+      - generic [ref=f1e8]: Về trang chủ
+    - group "Ngôn ngữ" [ref=f1e9]:
+      - button "Chuyển sang Tiếng Việt" [pressed] [ref=f1e10] [cursor=pointer]:
+        - generic [ref=f1e14]: VI
+      - button "Chuyển sang Tiếng Anh" [ref=f1e15] [cursor=pointer]:
+        - generic [ref=f1e22]: EN
+  - main [ref=f1e23]:
+    - generic [ref=f1e26]:
+      - img "FocusFlow" [ref=f1e28]
+      - generic [ref=f1e29]:
+        - generic [ref=f1e31]:
+          - heading "Khởi đầu lộ trình" [level=1] [ref=f1e32]
+          - paragraph [ref=f1e34]: Nhập thông tin để thiết lập không gian học tập trung của bạn.
+        - generic [ref=f1e35]:
+          - button "Google" [ref=f1e37] [cursor=pointer]
+          - generic [ref=f1e44]: hoặc đăng ký bằng email
+        - generic [ref=f1e47]:
+          - generic [ref=f1e49]:
+            - generic [ref=f1e50]: Họ và tên
+            - generic [ref=f1e52]:
+              - generic: person
+              - textbox "Họ và tên" [ref=f1e53]:
+                - /placeholder: Elena Rostova
+          - generic [ref=f1e55]:
+            - generic [ref=f1e56]:
+              - generic [ref=f1e57]: Email học tập / làm việc
+              - generic [ref=f1e58]: Khuyến nghị email trường / tổ chức
+            - generic [ref=f1e59]:
+              - generic: alternate_email
+              - textbox "Email học tập / làm việc" [ref=f1e60]:
+                - /placeholder: elena@institute.ac.uk
+          - generic [ref=f1e62]:
+            - generic [ref=f1e63]:
+              - generic [ref=f1e64]: Mật khẩu
+              - generic [ref=f1e65]: Tối thiểu 8 ký tự
+            - generic [ref=f1e66]:
+              - generic: lock_open
+              - textbox "Mật khẩu" [ref=f1e67]:
+                - /placeholder: ••••••••••••
+              - button "Ẩn/Hiện mật khẩu" [ref=f1e68] [cursor=pointer]:
+                - generic [ref=f1e69]: visibility
+          - generic [ref=f1e77]:
+            - generic [ref=f1e78]: Mức độ bảo mật lưu trữ
+            - generic [ref=f1e79]: Yếu
+          - generic [ref=f1e81]:
+            - generic [ref=f1e82]: Xác nhận mật khẩu
+            - generic [ref=f1e84]:
+              - generic: lock_open
+              - textbox "Xác nhận mật khẩu" [ref=f1e85]:
+                - /placeholder: ••••••••••••
+              - button "Ẩn/Hiện mật khẩu xác nhận" [ref=f1e86] [cursor=pointer]:
+                - generic [ref=f1e87]: visibility
+          - generic [ref=f1e89] [cursor=pointer]:
+            - checkbox "Tôi đồng ý với Điều khoản dịch vụ và Chính sách quyền riêng tư, đồng thuận phân tích tập trung có chủ đích." [checked] [ref=f1e90]
+            - generic [ref=f1e91]: Tôi đồng ý với Điều khoản dịch vụ và Chính sách quyền riêng tư, đồng thuận phân tích tập trung có chủ đích.
+          - button "Tiếp tục xác thực OTP →" [disabled] [ref=f1e93] [cursor=pointer]:
+            - generic [ref=f1e94]: Tiếp tục xác thực OTP
+            - generic [ref=f1e95]: →
+        - paragraph [ref=f1e97]:
+          - text: Đã có tài khoản?
+          - link "Đăng nhập" [ref=f1e98] [cursor=pointer]:
+            - /url: /sign-in
+  - contentinfo [ref=f1e99]:
+    - generic [ref=f1e100]:
+      - link "Chính sách quyền riêng tư" [ref=f1e101] [cursor=pointer]:
+        - /url: "#"
+      - generic [ref=f1e102]: •
+      - link "Điều khoản dịch vụ" [ref=f1e103] [cursor=pointer]:
+        - /url: "#"
+      - generic [ref=f1e104]: •
+      - link "Báo cáo bảo mật" [ref=f1e105] [cursor=pointer]:
+        - /url: "#"
+    - generic [ref=f1e106]: Hệ thống hoạt động bình thường
