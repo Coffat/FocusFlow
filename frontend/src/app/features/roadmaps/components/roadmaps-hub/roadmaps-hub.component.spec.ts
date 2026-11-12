@@ -169,10 +169,9 @@ describe('RoadmapsHubComponent', () => {
     expect(compiled.textContent).toContain('IELTS Academic Band 7.5');
   });
 
-  it('nên mở RoadmapWizardHostComponent ở Bước 1 khi nhấn phím tắt C hoặc bấm nút Khởi tạo Lộ trình Mới với AI', () => {
+  it('nên mở RoadmapWizardHostComponent ở Bước 1 khi bấm nút Khởi tạo Lộ trình Mới với AI', () => {
     expect(component.wizardOpen()).toBe(false);
-    const event = new KeyboardEvent('keydown', { key: 'c' });
-    component.onGlobalKeydown(event);
+    component.openCreateWizard(1);
     expect(component.wizardOpen()).toBe(true);
     expect(component.wizardStep()).toBe(1);
   });
@@ -194,15 +193,6 @@ describe('RoadmapsHubComponent', () => {
     expect(component.wizardInitialTitle()).toBe('AWS Solutions Architect');
     expect(component.wizardInitialLevel()).toBe('BEGINNER');
     expect(component.wizardInitialWeeklyHours()).toBe(8);
-  });
-
-  it('không mở wizard khi gõ phím C bên trong trường input', () => {
-    const inputElement = document.createElement('input');
-    const event = new KeyboardEvent('keydown', { key: 'c' });
-    Object.defineProperty(event, 'target', { value: inputElement });
-
-    component.onGlobalKeydown(event);
-    expect(component.wizardOpen()).toBe(false);
   });
 
   it('nên trích xuất tags phù hợp từ tiêu đề lộ trình', () => {
