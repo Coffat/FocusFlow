@@ -1,6 +1,7 @@
 import { Component, ChangeDetectionStrategy, inject, signal } from '@angular/core';
 import { DecimalPipe, JsonPipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
+import { LucideAngularModule, LUCIDE_ICONS, LucideIconProvider, Clock } from 'lucide-angular';
 import { SettingsService } from '../services/settings.service';
 import {
   CardComponent,
@@ -20,6 +21,7 @@ import { AvailabilityConfigComponent } from './availability-config/availability-
     RouterLink,
     DecimalPipe,
     JsonPipe,
+    LucideAngularModule,
     CardComponent,
     CardHeaderDirective,
     CardTitleDirective,
@@ -28,8 +30,15 @@ import { AvailabilityConfigComponent } from './availability-config/availability-
     BadgeDirective,
     AvailabilityConfigComponent,
   ],
+  providers: [
+    {
+      provide: LUCIDE_ICONS,
+      multi: true,
+      useValue: new LucideIconProvider({ Clock }),
+    },
+  ],
   template: `
-    <div class="max-w-4xl mx-auto w-full p-6 space-y-8">
+    <div class="max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8 space-y-6">
       <div class="flex items-center justify-between">
         <div>
           <h1 class="text-2xl font-bold tracking-tight">Cài Đặt Hệ Thống</h1>
@@ -37,7 +46,10 @@ import { AvailabilityConfigComponent } from './availability-config/availability-
             Quản lý tùy chọn cá nhân, hạn ngạch AI và phiên bảo mật
           </p>
         </div>
-        <a routerLink="/availability" appButton variant="outline"> ⏰ Quản lý Thời Gian Rảnh </a>
+        <a routerLink="/availability" appButton variant="outline" class="inline-flex items-center gap-1.5">
+          <lucide-icon name="clock" [size]="14" class="shrink-0" aria-hidden="true"></lucide-icon>
+          <span>Quản lý Thời Gian Rảnh</span>
+        </a>
       </div>
 
       <!-- Quick Link to Availability -->
