@@ -32,7 +32,7 @@ describe('DashboardComponent', () => {
   it('khởi tạo thành công và hiển thị giao diện dashboard', () => {
     expect(component).toBeTruthy();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('.brand-title')?.textContent).toContain('FocusFlow');
+    expect(compiled.querySelector('.dashboard-viewport')).toBeTruthy();
     expect(compiled.querySelector('app-dashboard-state-switcher')).toBeTruthy();
   });
 

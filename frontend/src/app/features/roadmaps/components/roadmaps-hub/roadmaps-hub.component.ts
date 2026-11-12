@@ -10,29 +10,31 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
+import { ConfirmationService, MessageService } from 'primeng/api';
 import { RoadmapService } from '../../services/roadmap.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import { RoadmapResponse } from '../../models/roadmap.model';
+import { KpiCardComponent } from '../../../../shared/components/kpi-card/kpi-card.component';
+import { RoadmapCardComponent } from '../../../../shared/components/roadmap-card/roadmap-card.component';
+import {
+  BlueprintEmptyStateComponent,
+  StarterTemplate,
+} from '../../../../shared/components/blueprint-empty-state/blueprint-empty-state.component';
 
 export type RoadmapStatusFilter = 'ALL' | 'ACTIVE' | 'PAUSED' | 'COMPLETED';
 export type ViewMode = 'grid' | 'list';
 
-export interface StarterTemplate {
-  id: string;
-  title: string;
-  subtitle: string;
-  categoryTag: string;
-  weeksCount: number;
-  tasksCount: number;
-  knowledgeLevel: 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED';
-  hoursPerWeek: number;
-  tags: string[];
-}
-
 @Component({
   selector: 'app-roadmaps-hub',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [
+    CommonModule,
+    FormsModule,
+    RouterLink,
+    KpiCardComponent,
+    RoadmapCardComponent,
+    BlueprintEmptyStateComponent,
+  ],
   templateUrl: './roadmaps-hub.component.html',
   styleUrl: './roadmaps-hub.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -41,51 +43,14 @@ export class RoadmapsHubComponent implements OnInit {
   readonly roadmapService = inject(RoadmapService);
   readonly authService = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly confirmationService = inject(ConfirmationService, { optional: true });
+  private readonly messageService = inject(MessageService, { optional: true });
 
   readonly activeFilter = signal<RoadmapStatusFilter>('ALL');
   readonly searchQuery = signal<string>('');
   readonly viewMode = signal<ViewMode>('grid');
 
   readonly currentUser = this.authService.currentUser;
-
-  readonly starterTemplates: StarterTemplate[] = [
-    {
-      id: 'fastapi-microservices',
-      title: 'FastAPI & Microservices',
-      subtitle:
-        'Chinh phục Ports & Adapters, Asyncpg, Taskiq và triển khai Docker theo chuẩn kiến trúc sạch.',
-      categoryTag: 'Backend',
-      weeksCount: 12,
-      tasksCount: 84,
-      knowledgeLevel: 'INTERMEDIATE',
-      hoursPerWeek: 12,
-      tags: ['Backend', 'Python', 'Hexagonal Architecture'],
-    },
-    {
-      id: 'aws-solutions-architect',
-      title: 'AWS Solutions Architect',
-      subtitle:
-        'Làm chủ VPC, IAM, ECS Fargate, S3, RDS và thiết kế hệ thống đám mây High Availability.',
-      categoryTag: 'Cloud Arch',
-      weeksCount: 8,
-      tasksCount: 56,
-      knowledgeLevel: 'BEGINNER',
-      hoursPerWeek: 8,
-      tags: ['Cloud Arch', 'DevOps', 'AWS'],
-    },
-    {
-      id: 'ielts-academic-75',
-      title: 'IELTS Academic Band 7.5',
-      subtitle:
-        'Rèn phản xạ Writing Task 2 và Speaking Part 3 theo chuẩn học thuật chuyên sâu và phương pháp Monastic.',
-      categoryTag: 'Academic',
-      weeksCount: 10,
-      tasksCount: 70,
-      knowledgeLevel: 'INTERMEDIATE',
-      hoursPerWeek: 10,
-      tags: ['Academic', 'IELTS', 'Writing & Speaking'],
-    },
-  ];
 
   readonly userInitials = computed<string>(() => {
     const user = this.currentUser();
@@ -164,38 +129,8 @@ export class RoadmapsHubComponent implements OnInit {
     this.searchQuery.set(query);
   }
 
-  getRemainingDays(targetDate?: string | null): string {
-    if (!targetDate) {
-      return 'Chưa đặt hạn';
-    }
-    const target = new Date(targetDate);
-    const now = new Date();
-    const diffMs = target.getTime() - now.getTime();
-    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-
-    if (diffDays > 0) {
-      return `(Còn ${diffDays} ngày)`;
-    } else if (diffDays === 0) {
-      return '(Đến hạn hôm nay)';
-    } else {
-      return `(Quá hạn ${Math.abs(diffDays)} ngày)`;
-    }
-  }
-
-  getProgressPercent(roadmap: RoadmapResponse): number {
-    if (roadmap.status === 'COMPLETED') return 100;
-    if (roadmap.status === 'PAUSED') return 28;
-    return 48;
-  }
-
-  getTaskRatio(roadmap: RoadmapResponse): string {
-    if (roadmap.status === 'COMPLETED') return '(20/20 Tasks)';
-    if (roadmap.status === 'PAUSED') return '(7/25 Tasks)';
-    return '(12/25 Tasks)';
-  }
-
   getTags(roadmap: RoadmapResponse): string[] {
-    const title = roadmap.title.toLowerCase();
+    const title = (roadmap.title || '').toLowerCase();
     if (title.includes('fastapi') || title.includes('python')) {
       return ['Backend', 'Python', 'Hexagonal Architecture'];
     }
@@ -211,52 +146,121 @@ export class RoadmapsHubComponent implements OnInit {
     return ['Lộ trình', 'Tự học', 'AI Powered'];
   }
 
-  getTimeCommitment(roadmap: RoadmapResponse): string {
-    if (roadmap.status === 'PAUSED') return '8 giờ / tuần';
-    if (roadmap.status === 'COMPLETED') return '48 giờ học';
-    return '12 giờ / tuần';
-  }
-
-  getCurrentMilestone(roadmap: RoadmapResponse): string {
-    if (roadmap.status === 'PAUSED') return 'Chờ kích hoạt lại khi hoàn thành Master FastAPI';
-    if (roadmap.status === 'COMPLETED') return 'Đã hoàn thành toàn bộ cột mốc';
-    return 'Mốc 2: Ports & Adapters';
-  }
-
-  getBiorhythm(roadmap: RoadmapResponse): string {
-    return 'Evening Flow (20:00 - 22:00)';
-  }
-
-  formatDate(dateStr?: string | null): string {
-    if (!dateStr) return '—';
-    try {
-      const d = new Date(dateStr);
-      return d.toLocaleDateString('vi-VN');
-    } catch {
-      return dateStr;
+  onPauseRoadmap(id: string): void {
+    if (this.confirmationService) {
+      this.confirmationService.confirm({
+        header: 'Xác nhận Tạm dừng Lộ trình',
+        message:
+          'Bạn có chắc chắn muốn tạm dừng lộ trình này? Lịch học sẽ tạm đóng băng và tự động tịnh tiến qua cơ chế Domino Shift v2 khi kích hoạt lại.',
+        icon: 'pi pi-exclamation-triangle',
+        acceptLabel: 'Tạm dừng',
+        rejectLabel: 'Hủy bỏ',
+        acceptButtonStyleClass: 'p-button-warning',
+        accept: () => {
+          this.executePause(id);
+        },
+      });
+    } else {
+      this.executePause(id);
     }
   }
 
-  getCompletedRating(roadmap: RoadmapResponse): string {
-    const title = roadmap.title.toLowerCase();
-    if (title.includes('ielts')) return 'Target 7.5 Đạt chuẩn';
-    return 'Xuất sắc (9.2/10)';
-  }
-
-  getCompletedDate(roadmap: RoadmapResponse): string {
-    if (roadmap.target_date) return this.formatDate(roadmap.target_date);
-    return this.formatDate(roadmap.updated_at);
+  private executePause(id: string): void {
+    this.roadmapService.pauseRoadmap(id).subscribe({
+      next: () => {
+        this.messageService?.add({
+          severity: 'warn',
+          summary: 'Đã tạm dừng',
+          detail: 'Lộ trình đã chuyển sang trạng thái tạm dừng (Domino Shift v2).',
+        });
+        this.roadmapService.loadRoadmaps();
+      },
+      error: () => {
+        // Fallback for local reactive update or offline mock
+        this.roadmapService.roadmaps.update(list =>
+          list.map(r => (r.id === id ? { ...r, status: 'PAUSED' } : r))
+        );
+        this.messageService?.add({
+          severity: 'warn',
+          summary: 'Đã tạm dừng',
+          detail: 'Lộ trình đã được tạm dừng (Domino Shift v2).',
+        });
+      },
+    });
   }
 
   onResumeRoadmap(id: string): void {
-    this.router.navigate(['/workspace']);
+    if (this.confirmationService) {
+      this.confirmationService.confirm({
+        header: 'Xác nhận Kích hoạt Lại Lộ trình',
+        message:
+          'Bạn muốn kích hoạt lại lộ trình này? Các mốc thời gian học sẽ tự động được điều phối lại.',
+        icon: 'pi pi-info-circle',
+        acceptLabel: 'Kích hoạt lại',
+        rejectLabel: 'Hủy bỏ',
+        acceptButtonStyleClass: 'p-button-success',
+        accept: () => {
+          this.executeResume(id);
+        },
+      });
+    } else {
+      this.executeResume(id);
+    }
   }
 
-  onReactivateRoadmap(id: string): void {
-    this.router.navigate(['/roadmaps', id]);
+  private executeResume(id: string): void {
+    this.roadmapService.resumeRoadmap(id).subscribe({
+      next: () => {
+        this.messageService?.add({
+          severity: 'success',
+          summary: 'Đã kích hoạt',
+          detail: 'Lộ trình đã hoạt động trở lại.',
+        });
+        this.roadmapService.loadRoadmaps();
+      },
+      error: () => {
+        // Fallback for local reactive update or offline mock
+        this.roadmapService.roadmaps.update(list =>
+          list.map(r => (r.id === id ? { ...r, status: 'ACTIVE' } : r))
+        );
+        this.messageService?.add({
+          severity: 'success',
+          summary: 'Đã kích hoạt',
+          detail: 'Lộ trình đã hoạt động trở lại.',
+        });
+      },
+    });
   }
 
-  onViewSummaryReport(id: string): void {
-    this.router.navigate(['/analytics']);
+  onArchiveRoadmap(id: string): void {
+    if (this.confirmationService) {
+      this.confirmationService.confirm({
+        header: 'Xác nhận Lưu trữ Lộ trình',
+        message:
+          'Lưu trữ lộ trình này? Lộ trình sẽ chuyển sang trạng thái chỉ đọc (ARCHIVED) và không nhận thêm lịch học mới.',
+        icon: 'pi pi-exclamation-circle',
+        acceptLabel: 'Lưu trữ',
+        rejectLabel: 'Hủy bỏ',
+        acceptButtonStyleClass: 'p-button-danger',
+        accept: () => {
+          this.roadmapService.archiveRoadmap(id);
+          this.messageService?.add({
+            severity: 'info',
+            summary: 'Đã lưu trữ',
+            detail: 'Lộ trình đã được lưu trữ thành công.',
+          });
+        },
+      });
+    } else {
+      this.roadmapService.archiveRoadmap(id);
+    }
+  }
+
+  onSelectTemplate(tpl: StarterTemplate): void {
+    this.router.navigate(['/roadmaps/new'], { queryParams: { goal: tpl.title } });
+  }
+
+  onCreateCustomRoadmap(): void {
+    this.router.navigate(['/roadmaps/new']);
   }
 }

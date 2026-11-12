@@ -1,9 +1,7 @@
 import { Component, OnInit, inject, ChangeDetectionStrategy, HostListener } from '@angular/core';
-import { Router, RouterLink } from '@angular/router';
-import { ButtonModule } from 'primeng/button';
+import { Router } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
 import { TranslationService } from '../../core/services/translation.service';
-import { TranslatePipe } from '../../shared/pipes/translate.pipe';
 import { DashboardService } from './services/dashboard.service';
 import { DashboardDataState } from './models/dashboard.model';
 import { DashboardStateSwitcherComponent } from './ui/dashboard-state-switcher.component';
@@ -20,9 +18,6 @@ import { DashboardAiInsightsComponent } from './ui/dashboard-ai-insights.compone
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    RouterLink,
-    ButtonModule,
-    TranslatePipe,
     DashboardStateSwitcherComponent,
     DashboardKpiGridComponent,
     DashboardWeeklyGridComponent,
@@ -30,10 +25,10 @@ import { DashboardAiInsightsComponent } from './ui/dashboard-ai-insights.compone
     DashboardActivityChartComponent,
     DashboardActiveRoadmapsComponent,
     DashboardTodayQueueComponent,
-    DashboardAiInsightsComponent
+    DashboardAiInsightsComponent,
   ],
   templateUrl: './dashboard.component.html',
-  styleUrl: './dashboard.component.scss'
+  styleUrl: './dashboard.component.scss',
 })
 export class DashboardComponent implements OnInit {
   readonly authService = inject(AuthService);

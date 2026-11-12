@@ -4,6 +4,8 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter, Router } from '@angular/router';
 import { signal } from '@angular/core';
+import { of } from 'rxjs';
+import { ConfirmationService, MessageService } from 'primeng/api';
 import { RoadmapsHubComponent } from './roadmaps-hub.component';
 import { RoadmapService } from '../../services/roadmap.service';
 import { AuthService } from '../../../../core/services/auth.service';
@@ -13,6 +15,14 @@ describe('RoadmapsHubComponent', () => {
   let component: RoadmapsHubComponent;
   let fixture: ComponentFixture<RoadmapsHubComponent>;
   let router: Router;
+  let mockRoadmapService: {
+    roadmaps: ReturnType<typeof signal<RoadmapResponse[]>>;
+    loading: ReturnType<typeof signal<boolean>>;
+    loadRoadmaps: ReturnType<typeof vi.fn>;
+    pauseRoadmap: ReturnType<typeof vi.fn>;
+    resumeRoadmap: ReturnType<typeof vi.fn>;
+    archiveRoadmap: ReturnType<typeof vi.fn>;
+  };
 
   const mockRoadmaps: RoadmapResponse[] = [
     {
@@ -60,10 +70,13 @@ describe('RoadmapsHubComponent', () => {
     roadmapsSignal = signal<RoadmapResponse[]>(mockRoadmaps);
     loadingSignal = signal<boolean>(false);
 
-    const mockRoadmapService = {
+    mockRoadmapService = {
       roadmaps: roadmapsSignal,
       loading: loadingSignal,
       loadRoadmaps: vi.fn(),
+      pauseRoadmap: vi.fn().mockReturnValue(of({ id: 'rm-1', status: 'PAUSED' })),
+      resumeRoadmap: vi.fn().mockReturnValue(of({ id: 'rm-2', status: 'ACTIVE' })),
+      archiveRoadmap: vi.fn(),
     };
 
     const mockAuthService = {
@@ -83,6 +96,8 @@ describe('RoadmapsHubComponent', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         provideRouter([]),
+        ConfirmationService,
+        MessageService,
         { provide: RoadmapService, useValue: mockRoadmapService },
         { provide: AuthService, useValue: mockAuthService },
       ],
@@ -177,5 +192,26 @@ describe('RoadmapsHubComponent', () => {
     const tags = component.getTags(mockRoadmaps[0]);
     expect(tags).toContain('Backend');
     expect(tags).toContain('Python');
+  });
+
+  it('nên kích hoạt ConfirmationService khi tạm dừng lộ trình', () => {
+    const confirmationService = TestBed.inject(ConfirmationService);
+    const confirmSpy = vi.spyOn(confirmationService, 'confirm');
+    component.onPauseRoadmap('rm-1');
+    expect(confirmSpy).toHaveBeenCalled();
+  });
+
+  it('nên kích hoạt ConfirmationService khi kích hoạt lại lộ trình', () => {
+    const confirmationService = TestBed.inject(ConfirmationService);
+    const confirmSpy = vi.spyOn(confirmationService, 'confirm');
+    component.onResumeRoadmap('rm-2');
+    expect(confirmSpy).toHaveBeenCalled();
+  });
+
+  it('nên kích hoạt ConfirmationService khi lưu trữ lộ trình', () => {
+    const confirmationService = TestBed.inject(ConfirmationService);
+    const confirmSpy = vi.spyOn(confirmationService, 'confirm');
+    component.onArchiveRoadmap('rm-1');
+    expect(confirmSpy).toHaveBeenCalled();
   });
 });

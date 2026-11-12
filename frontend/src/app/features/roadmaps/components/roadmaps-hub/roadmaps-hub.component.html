@@ -1,766 +1,256 @@
-<div class="roadmaps-hub-container min-h-screen flex flex-col bg-[#FBFBF9] text-neutral-900 selection:bg-emerald-100 selection:text-emerald-900">
-  <!-- TOP APP BAR / NAVIGATION (SYNCHRONIZED WITH FOCUSFLOW BRAND) -->
-  <header class="h-16 border-b border-neutral-200/70 bg-white/80 backdrop-blur-md px-6 lg:px-8 flex items-center justify-between sticky top-0 z-40">
-    <!-- Left: Brand Logo -->
-    <div class="flex items-center gap-3">
-      <a routerLink="/" class="flex items-center gap-2.5 no-underline group" aria-label="FocusFlow Home">
-        <svg class="w-8 h-8 shrink-0 transition-transform group-hover:scale-105" fill="none" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="18" cy="18" fill="#10B981" r="4"></circle>
-          <path d="M6 18C6 11.3726 11.3726 6 18 6C23 6 27.5 9 29.5 13.5C28 12.5 25.5 12 23 13C19.5 14.5 17 18 13.5 21.5C11 24 8 23 6 18Z" fill="#0F172A"></path>
-          <path d="M30 18C30 24.6274 24.6274 30 18 30C13 30 8.5 27 6.5 22.5C8 23.5 10.5 24 13 23C16.5 21.5 19 18 22.5 14.5C25 12 28 13 30 18Z" fill="url(#emerald-grad-hub)"></path>
-          <defs>
-            <linearGradient id="emerald-grad-hub" x1="18" y1="14" x2="30" y2="30" gradientUnits="userSpaceOnUse">
-              <stop stop-color="#246B4A"></stop>
-              <stop offset="1" stop-color="#10B981"></stop>
-            </linearGradient>
-          </defs>
-        </svg>
-        <div>
-          <div class="flex items-center text-lg font-bold tracking-tight leading-none">
-            <span class="text-neutral-900">Focus</span><span class="text-emerald-700">Flow</span>
-          </div>
-          <span class="text-[10px] text-neutral-400 font-medium tracking-wide uppercase leading-tight block mt-0.5">Plan Smarter • Do Better</span>
-        </div>
-      </a>
-    </div>
-
-    <!-- Center Navigation Links -->
-    <nav class="hidden md:flex items-center gap-1 text-sm font-medium">
-      <a
-        routerLink="/dashboard"
-        class="text-neutral-500 hover:text-neutral-900 px-3 py-1.5 rounded-lg hover:bg-neutral-100 transition no-underline"
-      >
-        Tổng quan
-      </a>
-      <a
-        routerLink="/roadmaps"
-        class="text-neutral-900 font-semibold px-3 py-1.5 border-b-2 border-neutral-900 no-underline"
-        aria-current="page"
-      >
-        Lộ trình
-      </a>
-      <a
-        routerLink="/schedule"
-        class="text-neutral-500 hover:text-neutral-900 px-3 py-1.5 rounded-lg hover:bg-neutral-100 transition no-underline"
-      >
-        Thời khóa biểu
-      </a>
-      <a
-        routerLink="/tasks"
-        class="text-neutral-500 hover:text-neutral-900 px-3 py-1.5 rounded-lg hover:bg-neutral-100 transition no-underline"
-      >
-        Hàng đợi Task
-      </a>
-      <a
-        routerLink="/analytics"
-        class="text-neutral-500 hover:text-neutral-900 px-3 py-1.5 rounded-lg hover:bg-neutral-100 transition no-underline"
-      >
-        Báo cáo
-      </a>
-    </nav>
-
-    <!-- Right Utility Cluster -->
-    <div class="flex items-center gap-3">
-      <!-- Search Trigger Pill -->
-      <div class="hidden sm:flex items-center gap-2 bg-neutral-100 text-neutral-500 px-3 py-1.5 rounded-full text-xs border border-neutral-200/50">
-        <span class="material-symbols-outlined text-[15px]" aria-hidden="true">search</span>
-        <span>Tìm nhanh</span>
-        <kbd class="font-mono text-[10px] bg-white text-neutral-500 px-1.5 py-0.5 rounded border border-neutral-200/80 shadow-xs">⌘K</kbd>
-      </div>
-
-      <!-- Notification Bell -->
-      <button
-        type="button"
-        aria-label="Thông báo"
-        class="relative p-2 text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 rounded-full transition"
-        title="Thông báo"
-      >
-        <span class="material-symbols-outlined text-[20px]" aria-hidden="true">notifications</span>
-        <span class="absolute top-1.5 right-1.5 w-2 h-2 bg-emerald-500 rounded-full ring-2 ring-white"></span>
-      </button>
-
-      <!-- User Avatar / Profile -->
-      <div class="flex items-center gap-2.5 pl-1 pr-2 py-1 rounded-full hover:bg-neutral-100 transition cursor-pointer">
-        <div class="w-8 h-8 rounded-full bg-neutral-900 text-white font-medium text-xs flex items-center justify-center ring-2 ring-emerald-500 ring-offset-2">
-          {{ userInitials() }}
-        </div>
-        <div class="text-left hidden lg:block">
-          <div class="text-xs font-semibold text-neutral-900 leading-tight">
-            {{ currentUser()?.fullName || 'Người học' }}
-          </div>
-          <div class="text-[10px] text-neutral-400 font-mono">
-            {{ currentUser()?.role || 'Học viên' }} • {{ currentUser()?.tier || 'FREE' }}
-          </div>
-        </div>
-      </div>
-    </div>
-  </header>
-
-  <!-- MAIN CANVAS -->
-  <main class="flex-1 w-full max-w-7xl mx-auto px-6 lg:px-8 pt-8 pb-20">
-    <!-- HERO & PRIMARY ACTION ROW -->
-    <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-2">
-      <div>
-        <div class="flex items-center gap-2 text-emerald-800 text-xs font-semibold tracking-wide uppercase mb-1.5">
-          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span>SCR-04 • Roadmaps Hub</span>
-        </div>
-        <h1 class="text-3xl font-bold tracking-tight text-neutral-900 font-serif">
+<div class="roadmaps-hub-viewport max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8 space-y-6">
+  <!-- PAGE HEADER -->
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div>
+      <div class="flex items-center gap-2">
+        <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-neutral-900 font-serif">
           Lộ trình Tự học
         </h1>
-        <p class="text-sm text-neutral-500 mt-1.5 max-w-2xl leading-relaxed">
-          Quản trị mục tiêu dài hạn, theo dõi tiến độ phân cấp và duy trì nhịp độ học tập bền vững.
-        </p>
+        <span class="bg-emerald-50 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded border border-emerald-200">
+          AI HARNESS
+        </span>
       </div>
+      <p class="text-xs sm:text-sm text-neutral-500 mt-1 leading-relaxed">
+        Quản lý các mục tiêu học tập dài hạn, cột mốc thích ứng (Milestones) và tối ưu hóa thời khóa biểu tự động.
+      </p>
+    </div>
 
-      <a
-        routerLink="/roadmaps/new"
-        class="self-start md:self-auto bg-neutral-900 hover:bg-neutral-800 text-white px-5 py-2.5 rounded-full text-sm font-medium shadow-sm flex items-center gap-2 transition active:scale-95 group no-underline"
+    <!-- Primary Action: Obsidian Black Button -->
+    <a
+      routerLink="/roadmaps/new"
+      class="bg-neutral-900 hover:bg-neutral-800 text-white px-5 py-2.5 rounded-full text-xs sm:text-sm font-semibold shadow-xs inline-flex items-center gap-2 transition active:scale-95 shrink-0 no-underline cursor-pointer group"
+    >
+      <span class="material-symbols-outlined text-[18px] group-hover:rotate-90 transition-transform duration-200" aria-hidden="true">add</span>
+      <span>Khởi tạo Lộ trình Mới với AI</span>
+      <kbd class="font-mono text-[10px] bg-neutral-700 text-neutral-200 px-1.5 py-0.2 rounded border border-neutral-600">C</kbd>
+    </a>
+  </div>
+
+  <!-- KPI SUMMARY STRIP (4 CARDS) -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    <!-- Card 1: Tổng lộ trình -->
+    <app-kpi-card
+      label="Tổng lộ trình"
+      [value]="totalCount()"
+      icon="alt_route"
+      tone="moss"
+      subtitle="Tất cả lộ trình học tập"
+      footerText="Zimmerman SRL"
+    />
+
+    <!-- Card 2: Đang hoạt động -->
+    <app-kpi-card
+      label="Đang hoạt động"
+      [value]="activeCount()"
+      icon="play_circle"
+      tone="emerald"
+      subtitle="Đạt giới hạn BR-001"
+      footerText="Thời khóa biểu tự động"
+    />
+
+    <!-- Card 3: Tạm dừng -->
+    <app-kpi-card
+      label="Tạm dừng"
+      [value]="pausedCount()"
+      icon="pause_circle"
+      tone="amber"
+      subtitle="Domino Shift v2"
+      footerText="Tự động đóng băng"
+    />
+
+    <!-- Card 4: Hoàn thành -->
+    <app-kpi-card
+      label="Hoàn thành"
+      [value]="completedCount()"
+      icon="task_alt"
+      tone="slate"
+      subtitle="Đã hoàn tất toàn bộ"
+      footerText="Lưu trữ chỉ đọc"
+    />
+  </div>
+
+  <!-- FILTER, SEARCH & VIEW SWITCHER STRIP -->
+  <div class="flex flex-wrap items-center justify-between gap-4 border-b border-neutral-200/60 pb-4 pt-2">
+    <!-- Status Segmented Filter Pills -->
+    <div class="flex items-center gap-2 overflow-x-auto py-1">
+      <button
+        type="button"
+        (click)="setFilter('ALL')"
+        class="rounded-full px-4 py-1.5 text-xs font-semibold shadow-xs transition cursor-pointer"
+        [class.bg-neutral-900]="activeFilter() === 'ALL'"
+        [class.text-white]="activeFilter() === 'ALL'"
+        [class.bg-neutral-100]="activeFilter() !== 'ALL'"
+        [class.text-neutral-600]="activeFilter() !== 'ALL'"
+        [class.hover:bg-neutral-200]="activeFilter() !== 'ALL'"
       >
-        <span class="material-symbols-outlined text-[18px] group-hover:rotate-90 transition-transform duration-200" aria-hidden="true">add</span>
-        <span>+ Tạo Lộ trình Mới</span>
-      </a>
+        Tất cả ({{ totalCount() }})
+      </button>
+
+      <button
+        type="button"
+        (click)="setFilter('ACTIVE')"
+        class="rounded-full px-3.5 py-1.5 text-xs font-medium cursor-pointer transition flex items-center gap-1.5"
+        [class.bg-neutral-900]="activeFilter() === 'ACTIVE'"
+        [class.text-white]="activeFilter() === 'ACTIVE'"
+        [class.bg-neutral-100]="activeFilter() !== 'ACTIVE'"
+        [class.text-neutral-600]="activeFilter() !== 'ACTIVE'"
+        [class.hover:bg-neutral-200]="activeFilter() !== 'ACTIVE'"
+      >
+        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+        <span>Đang kích hoạt ({{ activeCount() }})</span>
+      </button>
+
+      <button
+        type="button"
+        (click)="setFilter('PAUSED')"
+        class="rounded-full px-3.5 py-1.5 text-xs font-medium cursor-pointer transition flex items-center gap-1.5"
+        [class.bg-neutral-900]="activeFilter() === 'PAUSED'"
+        [class.text-white]="activeFilter() === 'PAUSED'"
+        [class.bg-neutral-100]="activeFilter() !== 'PAUSED'"
+        [class.text-neutral-600]="activeFilter() !== 'PAUSED'"
+        [class.hover:bg-neutral-200]="activeFilter() !== 'PAUSED'"
+      >
+        <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+        <span>Tạm dừng ({{ pausedCount() }})</span>
+      </button>
+
+      <button
+        type="button"
+        (click)="setFilter('COMPLETED')"
+        class="rounded-full px-3.5 py-1.5 text-xs font-medium cursor-pointer transition flex items-center gap-1.5"
+        [class.bg-neutral-900]="activeFilter() === 'COMPLETED'"
+        [class.text-white]="activeFilter() === 'COMPLETED'"
+        [class.bg-neutral-100]="activeFilter() !== 'COMPLETED'"
+        [class.text-neutral-600]="activeFilter() !== 'COMPLETED'"
+        [class.hover:bg-neutral-200]="activeFilter() !== 'COMPLETED'"
+      >
+        <span class="w-2 h-2 rounded-full bg-slate-400"></span>
+        <span>Đã hoàn thành ({{ completedCount() }})</span>
+      </button>
     </div>
 
-    <!-- FILTER, SEARCH & VIEW SWITCHER STRIP -->
-    <div class="mt-6 flex flex-wrap items-center justify-between gap-4 border-b border-neutral-200/60 pb-4">
-      <!-- Status Segmented Filter Pills -->
-      <div class="flex items-center gap-2 overflow-x-auto py-1">
-        <button
-          type="button"
-          (click)="setFilter('ALL')"
-          class="rounded-full px-4 py-1.5 text-xs font-semibold shadow-xs transition cursor-pointer"
-          [class.bg-neutral-900]="activeFilter() === 'ALL'"
-          [class.text-white]="activeFilter() === 'ALL'"
-          [class.bg-neutral-100]="activeFilter() !== 'ALL'"
-          [class.text-neutral-600]="activeFilter() !== 'ALL'"
-          [class.hover:bg-neutral-200]="activeFilter() !== 'ALL'"
-        >
-          Tất cả ({{ totalCount() }})
-        </button>
-
-        <button
-          type="button"
-          (click)="setFilter('ACTIVE')"
-          class="rounded-full px-3 py-1.5 text-xs font-medium cursor-pointer transition flex items-center gap-1.5"
-          [class.bg-neutral-900]="activeFilter() === 'ACTIVE'"
-          [class.text-white]="activeFilter() === 'ACTIVE'"
-          [class.bg-neutral-100]="activeFilter() !== 'ACTIVE'"
-          [class.text-neutral-600]="activeFilter() !== 'ACTIVE'"
-          [class.hover:bg-neutral-200]="activeFilter() !== 'ACTIVE'"
-        >
-          <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-          <span>Đang kích hoạt ({{ activeCount() }})</span>
-        </button>
-
-        <button
-          type="button"
-          (click)="setFilter('PAUSED')"
-          class="rounded-full px-3 py-1.5 text-xs font-medium cursor-pointer transition flex items-center gap-1.5"
-          [class.bg-neutral-900]="activeFilter() === 'PAUSED'"
-          [class.text-white]="activeFilter() === 'PAUSED'"
-          [class.bg-neutral-100]="activeFilter() !== 'PAUSED'"
-          [class.text-neutral-600]="activeFilter() !== 'PAUSED'"
-          [class.hover:bg-neutral-200]="activeFilter() !== 'PAUSED'"
-        >
-          <span class="w-2 h-2 rounded-full bg-amber-500"></span>
-          <span>Tạm dừng ({{ pausedCount() }})</span>
-        </button>
-
-        <button
-          type="button"
-          (click)="setFilter('COMPLETED')"
-          class="rounded-full px-3 py-1.5 text-xs font-medium cursor-pointer transition flex items-center gap-1.5"
-          [class.bg-neutral-900]="activeFilter() === 'COMPLETED'"
-          [class.text-white]="activeFilter() === 'COMPLETED'"
-          [class.bg-neutral-100]="activeFilter() !== 'COMPLETED'"
-          [class.text-neutral-600]="activeFilter() !== 'COMPLETED'"
-          [class.hover:bg-neutral-200]="activeFilter() !== 'COMPLETED'"
-        >
-          <span class="w-2 h-2 rounded-full bg-slate-400"></span>
-          <span>Đã hoàn thành ({{ completedCount() }})</span>
-        </button>
-      </div>
-
-      <!-- Right Controls: Search Box & View Switcher -->
-      <div class="flex items-center gap-3">
-        <div class="relative w-64">
-          <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 text-[16px]" aria-hidden="true">search</span>
-          <input
-            type="text"
-            [ngModel]="searchQuery()"
-            (ngModelChange)="onSearchChange($event)"
-            placeholder="Tìm kiếm lộ trình..."
-            class="bg-white border border-neutral-200 rounded-xl pl-9 pr-3.5 py-1.5 text-xs w-full focus:outline-none focus:border-neutral-900 focus:ring-0 transition placeholder:text-neutral-400"
-          />
-        </div>
-
-        <div class="flex items-center bg-white border border-neutral-200 rounded-xl p-0.5 shadow-2xs">
-          <button
-            type="button"
-            (click)="setViewMode('grid')"
-            aria-label="Grid View"
-            class="p-1.5 rounded-lg transition"
-            [class.bg-neutral-100]="viewMode() === 'grid'"
-            [class.text-neutral-900]="viewMode() === 'grid'"
-            [class.text-neutral-400]="viewMode() !== 'grid'"
-            title="Dạng lưới"
-          >
-            <span class="material-symbols-outlined text-[18px]" aria-hidden="true">grid_view</span>
-          </button>
-          <button
-            type="button"
-            (click)="setViewMode('list')"
-            aria-label="List View"
-            class="p-1.5 rounded-lg transition"
-            [class.bg-neutral-100]="viewMode() === 'list'"
-            [class.text-neutral-900]="viewMode() === 'list'"
-            [class.text-neutral-400]="viewMode() !== 'list'"
-            title="Dạng danh sách"
-          >
-            <span class="material-symbols-outlined text-[18px]" aria-hidden="true">format_list_bulleted</span>
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- CONTENT SECTION -->
-    <!-- Case 1: Roadmaps list is completely empty (0 roadmaps in database) -->
-    @if (totalCount() === 0 && !roadmapService.loading()) {
-      <div class="mt-8 rounded-3xl bg-white border border-neutral-200/80 p-8 md:p-12 shadow-sm text-center">
-        <!-- Architectural Blueprint SVG Illustration -->
-        <div class="max-w-md mx-auto mb-6 flex justify-center">
-          <svg class="w-64 h-48" viewBox="0 0 320 200" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <!-- Blueprint grid pattern background -->
-            <defs>
-              <pattern id="blueprint-grid" width="20" height="20" patternUnits="userSpaceOnUse">
-                <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#246B4A" stroke-width="0.5" stroke-opacity="0.1" />
-              </pattern>
-            </defs>
-            <rect width="320" height="200" rx="16" fill="#F7FBF9" />
-            <rect width="320" height="200" rx="16" fill="url(#blueprint-grid)" />
-            
-            <!-- Technical concentric coordinate rings -->
-            <circle cx="160" cy="100" r="75" stroke="#246B4A" stroke-width="1" stroke-dasharray="4 4" stroke-opacity="0.3" />
-            <circle cx="160" cy="100" r="50" stroke="#10B981" stroke-width="1.2" stroke-opacity="0.4" />
-            <circle cx="160" cy="100" r="26" fill="#ECFDF5" stroke="#059669" stroke-width="1.5" />
-            
-            <!-- Crosshairs -->
-            <line x1="60" y1="100" x2="260" y2="100" stroke="#246B4A" stroke-width="0.8" stroke-opacity="0.25" stroke-dasharray="6 3" />
-            <line x1="160" y1="20" x2="160" y2="180" stroke="#246B4A" stroke-width="0.8" stroke-opacity="0.25" stroke-dasharray="6 3" />
-
-            <!-- Milestone Nodes connected along an adaptive path -->
-            <path d="M 85 130 Q 120 70 160 100 T 235 70" fill="none" stroke="#246B4A" stroke-width="2.5" stroke-linecap="round" />
-            
-            <!-- Nodes -->
-            <circle cx="85" cy="130" r="6" fill="#FFFFFF" stroke="#246B4A" stroke-width="2.5" />
-            <circle cx="160" cy="100" r="8" fill="#10B981" stroke="#FFFFFF" stroke-width="2" />
-            <circle cx="235" cy="70" r="6" fill="#FFFFFF" stroke="#059669" stroke-width="2.5" />
-            
-            <!-- Center Compass / Target Icon -->
-            <path d="M160 92L164 100L160 108L156 100Z" fill="#FFFFFF" />
-            <circle cx="160" cy="100" r="2" fill="#047857" />
-
-            <!-- Technical Annotations -->
-            <text x="24" y="30" font-family="monospace" font-size="9" fill="#047857" letter-spacing="1">ARCHITECTURAL BLUEPRINT // SPEC v1.3</text>
-            <text x="24" y="44" font-family="monospace" font-size="8" fill="#718096">2-STAGE ADAPTIVE REASONING ENGINE</text>
-            <text x="210" y="180" font-family="monospace" font-size="8" fill="#718096">DETERMINISTIC SCHEDULE</text>
-          </svg>
-        </div>
-
-        <h2 class="text-2xl font-bold text-neutral-900 tracking-tight font-serif mb-2">
-          Chưa có lộ trình học tập nào
-        </h2>
-        <p class="text-sm text-neutral-500 max-w-lg mx-auto mb-6 leading-relaxed">
-          Hãy bắt đầu hành trình tự học thích ứng bằng cách mô tả mục tiêu của bạn. FocusFlow sẽ phân rã thành các Milestone và đồng bộ thời khóa biểu tự động.
-        </p>
-
-        <!-- CTA Button with keyboard shortcut C -->
-        <div class="flex items-center justify-center gap-3 mb-10">
-          <a
-            routerLink="/roadmaps/new"
-            class="bg-neutral-900 hover:bg-neutral-800 text-white px-6 py-2.5 rounded-full text-sm font-semibold shadow-sm inline-flex items-center gap-2 transition active:scale-95 no-underline"
-          >
-            <span class="material-symbols-outlined text-[18px]" aria-hidden="true">add</span>
-            <span>Tạo lộ trình học tập</span>
-          </a>
-          <span class="text-xs text-neutral-400 flex items-center gap-1.5 font-mono">
-            <span>hoặc nhấn</span>
-            <kbd class="px-2 py-0.5 rounded bg-neutral-100 border border-neutral-300 font-semibold text-neutral-700 shadow-2xs">C</kbd>
-          </span>
-        </div>
-
-        <!-- 3 Starter Template Cards -->
-        <div class="border-t border-neutral-200/60 pt-8">
-          <div class="text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-4">
-            Hoặc khởi động nhanh từ các bộ lộ trình mẫu chuẩn hóa
-          </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-5 text-left max-w-5xl mx-auto">
-            @for (tpl of starterTemplates; track tpl.id) {
-              <div class="bg-neutral-50/70 hover:bg-white rounded-2xl border border-neutral-200/80 p-5 flex flex-col justify-between hover:border-emerald-500/50 hover:shadow-md transition group">
-                <div>
-                  <div class="flex items-center justify-between gap-2 mb-2.5">
-                    <span class="bg-emerald-50 text-emerald-800 border border-emerald-200/80 text-[10px] font-bold px-2.5 py-0.5 rounded-md">
-                      {{ tpl.categoryTag }} • {{ tpl.weeksCount }} tuần • {{ tpl.tasksCount }} tasks
-                    </span>
-                    <span class="material-symbols-outlined text-[16px] text-neutral-400 group-hover:text-emerald-600 transition" aria-hidden="true">auto_stories</span>
-                  </div>
-
-                  <h3 class="font-bold text-base text-neutral-900 tracking-tight group-hover:text-emerald-900 transition">
-                    {{ tpl.title }}
-                  </h3>
-                  <p class="text-xs text-neutral-500 mt-1.5 leading-relaxed">
-                    {{ tpl.subtitle }}
-                  </p>
-
-                  <div class="flex flex-wrap gap-1.5 mt-3">
-                    @for (tag of tpl.tags; track tag) {
-                      <span class="bg-white border border-neutral-200 text-neutral-600 text-[10px] px-2 py-0.5 rounded">
-                        {{ tag }}
-                      </span>
-                    }
-                  </div>
-                </div>
-
-                <div class="mt-5 pt-3 border-t border-neutral-200/50">
-                  <a
-                    routerLink="/roadmaps/new"
-                    [queryParams]="{ goal: tpl.title }"
-                    class="w-full bg-white hover:bg-neutral-900 text-neutral-800 hover:text-white border border-neutral-300 hover:border-neutral-900 rounded-full py-2 text-xs font-semibold text-center flex items-center justify-center gap-1.5 transition no-underline"
-                  >
-                    <span>Dùng mẫu này</span>
-                    <span class="material-symbols-outlined text-[14px]" aria-hidden="true">arrow_forward</span>
-                  </a>
-                </div>
-              </div>
-            }
-          </div>
-        </div>
-      </div>
-    }
-
-    <!-- Case 2: Roadmaps list has items -->
-    @if (totalCount() > 0) {
-      <!-- Empty Filter State (items exist, but filter returned 0) -->
-      @if (filteredRoadmaps().length === 0) {
-        <div class="mt-12 text-center py-12 bg-white rounded-2xl border border-neutral-200">
-          <span class="material-symbols-outlined text-4xl text-neutral-400 mb-2" aria-hidden="true">search_off</span>
-          <h3 class="font-bold text-base text-neutral-900">Không tìm thấy lộ trình phù hợp</h3>
-          <p class="text-xs text-neutral-500 mt-1">
-            Không có lộ trình nào khớp với bộ lọc hoặc từ khóa tìm kiếm "{{ searchQuery() }}".
-          </p>
-          <button
-            type="button"
-            (click)="setFilter('ALL'); onSearchChange('')"
-            class="mt-4 px-4 py-1.5 rounded-full bg-neutral-100 hover:bg-neutral-200 text-xs font-medium text-neutral-800 transition"
-          >
-            Xóa bộ lọc
-          </button>
-        </div>
-      }
-
-      <!-- Grid View (3 columns on desktop) -->
-      @if (viewMode() === 'grid') {
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
-          @for (roadmap of filteredRoadmaps(); track roadmap.id) {
-            <!-- 1. ACTIVE ROADMAP CARD -->
-            @if (roadmap.status === 'ACTIVE' || roadmap.status === 'INITIALIZED') {
-              <div class="bg-white rounded-2xl border-2 border-emerald-500/40 p-6 flex flex-col justify-between relative shadow-[0_1px_3px_rgba(0,0,0,0.02)] hover:border-emerald-500/70 transition group">
-                <div>
-                  <!-- Header Status & Action Menu -->
-                  <div class="flex items-center justify-between gap-2 mb-4">
-                    <span class="bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5">
-                      <span class="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span>
-                      <span>ĐANG KÍCH HOẠT</span>
-                    </span>
-                    <a
-                      [routerLink]="['/roadmaps', roadmap.id]"
-                      aria-label="Cài đặt lộ trình"
-                      class="p-1 text-neutral-400 hover:text-neutral-700 rounded-md transition"
-                      title="Chi tiết & Thiết lập"
-                    >
-                      <span class="material-symbols-outlined text-[18px]" aria-hidden="true">more_horiz</span>
-                    </a>
-                  </div>
-
-                  <!-- Tags -->
-                  <div class="flex flex-wrap gap-1.5 mb-3">
-                    @for (tag of getTags(roadmap); track tag) {
-                      <span class="bg-neutral-100 text-neutral-600 text-[11px] font-medium px-2.5 py-0.5 rounded-md">
-                        {{ tag }}
-                      </span>
-                    }
-                  </div>
-
-                  <!-- Title & Description -->
-                  <h2 class="text-lg font-bold text-neutral-900 tracking-tight leading-snug">
-                    {{ roadmap.title }}
-                  </h2>
-                  <p class="text-xs text-neutral-500 mt-2 leading-relaxed line-clamp-2">
-                    {{ roadmap.description || 'Chinh phục kiến trúc phân lớp Ports & Adapters, Domain-Driven Design, Repository Pattern và xử lý nền với Taskiq.' }}
-                  </p>
-
-                  <!-- Progress Bar -->
-                  <div class="mt-5">
-                    <div class="flex items-center justify-between text-xs mb-1.5">
-                      <span class="text-neutral-500 font-medium">Tiến độ hoàn thành:</span>
-                      <span class="font-mono text-neutral-900 font-bold text-[13px]">
-                        {{ getProgressPercent(roadmap) }}%
-                        <span class="text-neutral-400 font-normal text-xs">{{ getTaskRatio(roadmap) }}</span>
-                      </span>
-                    </div>
-                    <div class="w-full bg-neutral-100 h-2 rounded-full overflow-hidden">
-                      <div
-                        class="bg-emerald-600 h-full rounded-full transition-all duration-500"
-                        [style.width.%]="getProgressPercent(roadmap)"
-                      ></div>
-                    </div>
-                  </div>
-
-                  <!-- Metadata 2-column Grid -->
-                  <div class="grid grid-cols-2 gap-2.5 mt-5 bg-neutral-50/70 rounded-xl p-3 border border-neutral-100 text-[11px]">
-                    <div>
-                      <div class="text-neutral-400">Hạn chót:</div>
-                      <div class="font-medium text-neutral-800 mt-0.5">
-                        {{ formatDate(roadmap.target_date) }}
-                        <span class="text-emerald-700 font-mono font-semibold">{{ getRemainingDays(roadmap.target_date) }}</span>
-                      </div>
-                    </div>
-                    <div>
-                      <div class="text-neutral-400">Quỹ thời gian:</div>
-                      <div class="font-mono font-medium text-neutral-800 mt-0.5">
-                        {{ getTimeCommitment(roadmap) }}
-                      </div>
-                    </div>
-                    <div class="col-span-2 pt-1 border-t border-neutral-200/50">
-                      <div class="text-neutral-400">Mốc hiện tại:</div>
-                      <div class="font-medium text-neutral-800 truncate mt-0.5">
-                        {{ getCurrentMilestone(roadmap) }}
-                      </div>
-                    </div>
-                    <div class="col-span-2">
-                      <div class="text-neutral-400">Nhịp sinh học:</div>
-                      <div class="font-medium text-neutral-800 flex items-center gap-1.5 mt-0.5">
-                        <span class="material-symbols-outlined text-[14px] text-amber-600" aria-hidden="true">dark_mode</span>
-                        <span>{{ getBiorhythm(roadmap) }}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Footer Actions -->
-                <div class="mt-6 pt-2">
-                  <a
-                    routerLink="/workspace"
-                    class="w-full bg-neutral-900 text-white hover:bg-neutral-800 rounded-full py-2.5 text-xs font-semibold text-center flex items-center justify-center gap-1.5 transition active:scale-95 shadow-sm no-underline"
-                  >
-                    <span>Tiếp tục học</span>
-                    <span class="material-symbols-outlined text-[14px]" aria-hidden="true">arrow_forward</span>
-                  </a>
-                  <a
-                    [routerLink]="['/roadmaps', roadmap.id]"
-                    class="text-xs text-neutral-500 hover:text-neutral-900 text-center block mt-2.5 transition no-underline"
-                  >
-                    Xem Timeline & Milestones
-                  </a>
-                </div>
-              </div>
-            }
-
-            <!-- 2. PAUSED ROADMAP CARD (DOMINO SHIFT) -->
-            @if (roadmap.status === 'PAUSED') {
-              <div class="bg-white rounded-2xl border border-neutral-200/80 p-6 flex flex-col justify-between shadow-[0_1px_3px_rgba(0,0,0,0.02)] opacity-95 hover:opacity-100 transition">
-                <div>
-                  <!-- Header Status & Action Menu -->
-                  <div class="flex items-center justify-between gap-2 mb-4">
-                    <span class="bg-amber-50 text-amber-800 border border-amber-200 px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5">
-                      <span class="material-symbols-outlined text-[13px] text-amber-700" aria-hidden="true">pause</span>
-                      <span>TẠM DỪNG (DOMINO SHIFT)</span>
-                    </span>
-                    <a
-                      [routerLink]="['/roadmaps', roadmap.id]"
-                      aria-label="Cài đặt lộ trình"
-                      class="p-1 text-neutral-400 hover:text-neutral-700 rounded-md transition"
-                    >
-                      <span class="material-symbols-outlined text-[18px]" aria-hidden="true">more_horiz</span>
-                    </a>
-                  </div>
-
-                  <!-- Tags -->
-                  <div class="flex flex-wrap gap-1.5 mb-3">
-                    @for (tag of getTags(roadmap); track tag) {
-                      <span class="bg-neutral-100 text-neutral-600 text-[11px] font-medium px-2.5 py-0.5 rounded-md">
-                        {{ tag }}
-                      </span>
-                    }
-                  </div>
-
-                  <!-- Title & Description -->
-                  <h2 class="text-lg font-bold text-neutral-900 tracking-tight leading-snug">
-                    {{ roadmap.title }}
-                  </h2>
-                  <p class="text-xs text-neutral-500 mt-2 leading-relaxed line-clamp-2">
-                    {{ roadmap.description || 'Nắm vững VPC, IAM, EC2, S3, RDS, và thiết kế hệ thống High Availability trên nền tảng đám mây.' }}
-                  </p>
-
-                  <!-- Progress Bar -->
-                  <div class="mt-5">
-                    <div class="flex items-center justify-between text-xs mb-1.5">
-                      <span class="text-neutral-500 font-medium">Tiến độ hiện tại:</span>
-                      <span class="font-mono text-neutral-900 font-bold text-[13px]">
-                        {{ getProgressPercent(roadmap) }}%
-                        <span class="text-neutral-400 font-normal text-xs">{{ getTaskRatio(roadmap) }}</span>
-                      </span>
-                    </div>
-                    <div class="w-full bg-neutral-100 h-2 rounded-full overflow-hidden">
-                      <div
-                        class="bg-amber-600 h-full rounded-full transition-all duration-500"
-                        [style.width.%]="getProgressPercent(roadmap)"
-                      ></div>
-                    </div>
-                  </div>
-
-                  <!-- Metadata 2-column Grid -->
-                  <div class="grid grid-cols-2 gap-2.5 mt-5 bg-neutral-50/70 rounded-xl p-3 border border-neutral-100 text-[11px]">
-                    <div>
-                      <div class="text-neutral-400">Hạn chót:</div>
-                      <div class="font-medium text-amber-800 flex items-center gap-1 mt-0.5">
-                        <span class="material-symbols-outlined text-[12px]" aria-hidden="true">ac_unit</span>
-                        <span>Tự động đóng băng</span>
-                      </div>
-                    </div>
-                    <div>
-                      <div class="text-neutral-400">Cam kết:</div>
-                      <div class="font-mono font-medium text-neutral-800 mt-0.5">
-                        {{ getTimeCommitment(roadmap) }}
-                      </div>
-                    </div>
-                    <div class="col-span-2 pt-1 border-t border-neutral-200/50">
-                      <div class="text-neutral-400">Trạng thái:</div>
-                      <div class="font-medium text-neutral-800 mt-0.5 truncate">
-                        {{ getCurrentMilestone(roadmap) }}
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- Domino Shift Policy Alert Note -->
-                  <div class="mt-3.5 p-2.5 rounded-lg bg-amber-50/60 border border-amber-200/60 text-[11px] text-amber-900 leading-relaxed flex items-start gap-2">
-                    <span class="material-symbols-outlined text-[15px] text-amber-700 shrink-0 mt-0.5" aria-hidden="true">info</span>
-                    <span>Lịch học tạm đóng băng. Khi kích hoạt lại, hạn chót sẽ tự động tịnh tiến (Domino Shift v2).</span>
-                  </div>
-                </div>
-
-                <!-- Footer Actions -->
-                <div class="mt-6 pt-2">
-                  <button
-                    type="button"
-                    (click)="onReactivateRoadmap(roadmap.id)"
-                    class="w-full bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-full py-2.5 text-xs font-semibold text-center block transition active:scale-95 border border-amber-200/60 cursor-pointer"
-                  >
-                    Kích hoạt lại lộ trình
-                  </button>
-                </div>
-              </div>
-            }
-
-            <!-- 3. COMPLETED ROADMAP CARD -->
-            @if (roadmap.status === 'COMPLETED' || roadmap.status === 'ARCHIVED') {
-              <div class="bg-white rounded-2xl border border-neutral-200/70 p-6 flex flex-col justify-between shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
-                <div>
-                  <!-- Header Status & Action Menu -->
-                  <div class="flex items-center justify-between gap-2 mb-4">
-                    <span class="bg-slate-100 text-slate-700 border border-slate-200 px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5">
-                      <span class="material-symbols-outlined text-[14px] text-slate-600" aria-hidden="true">check</span>
-                      <span>HOÀN THÀNH</span>
-                    </span>
-                    <a
-                      [routerLink]="['/roadmaps', roadmap.id]"
-                      aria-label="Cài đặt lộ trình"
-                      class="p-1 text-neutral-400 hover:text-neutral-700 rounded-md transition"
-                    >
-                      <span class="material-symbols-outlined text-[18px]" aria-hidden="true">more_horiz</span>
-                    </a>
-                  </div>
-
-                  <!-- Tags -->
-                  <div class="flex flex-wrap gap-1.5 mb-3">
-                    @for (tag of getTags(roadmap); track tag) {
-                      <span class="bg-neutral-100 text-neutral-600 text-[11px] font-medium px-2.5 py-0.5 rounded-md">
-                        {{ tag }}
-                      </span>
-                    }
-                  </div>
-
-                  <!-- Title & Description -->
-                  <h2 class="text-lg font-bold text-neutral-900 tracking-tight leading-snug">
-                    {{ roadmap.title }}
-                  </h2>
-                  <p class="text-xs text-neutral-500 mt-2 leading-relaxed line-clamp-2">
-                    {{ roadmap.description || 'Hoàn thành trọn vẹn lộ trình học tập với độ chính xác cao và duy trì nhịp độ học liên tục.' }}
-                  </p>
-
-                  <!-- Progress Bar -->
-                  <div class="mt-5">
-                    <div class="flex items-center justify-between text-xs mb-1.5">
-                      <span class="text-neutral-500 font-medium">Tiến độ hoàn thành:</span>
-                      <span class="font-mono text-neutral-900 font-bold text-[13px]">
-                        100%
-                        <span class="text-emerald-700 font-normal text-xs">{{ getTaskRatio(roadmap) }}</span>
-                      </span>
-                    </div>
-                    <div class="w-full bg-neutral-100 h-2 rounded-full overflow-hidden">
-                      <div class="w-full bg-slate-500 h-full rounded-full"></div>
-                    </div>
-                  </div>
-
-                  <!-- Metadata 2-column Grid -->
-                  <div class="grid grid-cols-2 gap-2.5 mt-5 bg-neutral-50/70 rounded-xl p-3 border border-neutral-100 text-[11px]">
-                    <div>
-                      <div class="text-neutral-400">Hoàn thành ngày:</div>
-                      <div class="font-medium text-neutral-800 mt-0.5">
-                        {{ getCompletedDate(roadmap) }}
-                      </div>
-                    </div>
-                    <div>
-                      <div class="text-neutral-400">Tổng tích lũy:</div>
-                      <div class="font-mono font-medium text-neutral-800 mt-0.5">
-                        {{ getTimeCommitment(roadmap) }}
-                      </div>
-                    </div>
-                    <div class="col-span-2 pt-1 border-t border-neutral-200/50">
-                      <div class="text-neutral-400">Đánh giá:</div>
-                      <div class="font-medium text-emerald-800 flex items-center gap-1 mt-0.5">
-                        <span class="material-symbols-outlined text-[14px] text-amber-500" aria-hidden="true" style="font-variation-settings: 'FILL' 1;">star</span>
-                        <span>{{ getCompletedRating(roadmap) }}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Footer Actions -->
-                <div class="mt-6 pt-2">
-                  <button
-                    type="button"
-                    (click)="onViewSummaryReport(roadmap.id)"
-                    class="w-full border border-neutral-200 hover:bg-neutral-50 text-neutral-800 rounded-full py-2 text-xs font-semibold text-center block transition cursor-pointer"
-                  >
-                    Xem Báo cáo Tổng kết
-                  </button>
-                </div>
-              </div>
-            }
-          }
-
-          <!-- 4. DASHED "KHỞI TẠO LỘ TRÌNH MỚI VỚI AI" CARD -->
-          <a
-            routerLink="/roadmaps/new"
-            class="border-2 border-dashed border-neutral-300 hover:border-neutral-500 bg-neutral-50/50 hover:bg-neutral-100/60 rounded-2xl p-8 flex flex-col items-center justify-center text-center transition cursor-pointer min-h-[340px] group no-underline"
-          >
-            <!-- Center Ring Icon -->
-            <div class="w-12 h-12 rounded-full border border-neutral-300 flex items-center justify-center text-neutral-600 mb-4 bg-white shadow-xs group-hover:scale-110 group-hover:border-neutral-700 group-hover:text-neutral-900 transition-all duration-200">
-              <span class="material-symbols-outlined text-[24px]" aria-hidden="true">add</span>
-            </div>
-            <!-- Typography -->
-            <h3 class="font-bold text-neutral-900 text-base mb-1 tracking-tight">Khởi tạo Lộ trình Mới với AI</h3>
-            <p class="text-xs text-neutral-500 max-w-xs leading-relaxed">
-              Nhập mục tiêu học tập bất kỳ và để AI phân rã thành các Milestone và Task phù hợp với quỹ giờ của bạn.
-            </p>
-            <!-- Compliance Badge -->
-            <div class="bg-neutral-200/60 text-neutral-700 text-[10px] px-2.5 py-1 rounded-full mt-4 font-medium flex items-center gap-1.5">
-              <span class="material-symbols-outlined text-[13px] text-neutral-500" aria-hidden="true">auto_awesome</span>
-              <span>Hỗ trợ quy tắc BR-001 • Bản thảo nháp</span>
-            </div>
-          </a>
-        </div>
-      }
-
-      <!-- List View -->
-      @if (viewMode() === 'list') {
-        <div class="mt-6 flex flex-col gap-3">
-          @for (roadmap of filteredRoadmaps(); track roadmap.id) {
-            <div class="bg-white rounded-xl border border-neutral-200/80 p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:border-neutral-300 transition">
-              <div class="flex items-center gap-4 flex-1 min-w-0">
-                <span
-                  class="px-2.5 py-1 rounded-full text-[10px] font-bold shrink-0 flex items-center gap-1.5"
-                  [class.bg-emerald-50]="roadmap.status === 'ACTIVE' || roadmap.status === 'INITIALIZED'"
-                  [class.text-emerald-800]="roadmap.status === 'ACTIVE' || roadmap.status === 'INITIALIZED'"
-                  [class.border]="true"
-                  [class.border-emerald-200]="roadmap.status === 'ACTIVE' || roadmap.status === 'INITIALIZED'"
-                  [class.bg-amber-50]="roadmap.status === 'PAUSED'"
-                  [class.text-amber-800]="roadmap.status === 'PAUSED'"
-                  [class.border-amber-200]="roadmap.status === 'PAUSED'"
-                  [class.bg-slate-100]="roadmap.status === 'COMPLETED' || roadmap.status === 'ARCHIVED'"
-                  [class.text-slate-700]="roadmap.status === 'COMPLETED' || roadmap.status === 'ARCHIVED'"
-                  [class.border-slate-200]="roadmap.status === 'COMPLETED' || roadmap.status === 'ARCHIVED'"
-                >
-                  @if (roadmap.status === 'ACTIVE' || roadmap.status === 'INITIALIZED') {
-                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
-                    <span>ACTIVE</span>
-                  } @else if (roadmap.status === 'PAUSED') {
-                    <span class="material-symbols-outlined text-[12px]">pause</span>
-                    <span>PAUSED</span>
-                  } @else {
-                    <span class="material-symbols-outlined text-[12px]">check</span>
-                    <span>DONE</span>
-                  }
-                </span>
-
-                <div class="min-w-0 flex-1">
-                  <h3 class="text-sm font-bold text-neutral-900 truncate">{{ roadmap.title }}</h3>
-                  <div class="text-[11px] text-neutral-500 flex items-center gap-3 mt-0.5">
-                    <span>Hạn chót: {{ formatDate(roadmap.target_date) }}</span>
-                    <span>•</span>
-                    <span>Tiến độ: {{ getProgressPercent(roadmap) }}%</span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- List View Actions -->
-              <div class="flex items-center gap-2 self-end md:self-auto shrink-0">
-                <a
-                  [routerLink]="['/roadmaps', roadmap.id]"
-                  class="px-3 py-1.5 rounded-full border border-neutral-200 hover:bg-neutral-50 text-xs font-semibold text-neutral-700 no-underline transition"
-                >
-                  Chi tiết
-                </a>
-                <a
-                  routerLink="/workspace"
-                  class="px-3.5 py-1.5 rounded-full bg-neutral-900 hover:bg-neutral-800 text-xs font-semibold text-white no-underline transition flex items-center gap-1"
-                >
-                  <span>Học ngay</span>
-                  <span class="material-symbols-outlined text-[13px]">arrow_forward</span>
-                </a>
-              </div>
-            </div>
-          }
-        </div>
-      }
-    }
-  </main>
-
-  <!-- BOTTOM SUBTLE STATUS BAR -->
-  <footer class="h-8 bg-white border-t border-neutral-200/60 px-6 lg:px-8 py-2 text-[11px] text-neutral-400 flex items-center justify-between fixed bottom-0 left-0 right-0 z-30 select-none">
+    <!-- Right Controls: Search Box & View Switcher -->
     <div class="flex items-center gap-3">
-      <span class="flex items-center gap-1.5 font-medium text-neutral-600">
-        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-        <span>Trạng thái: Hoạt động</span>
-      </span>
-      <span class="text-neutral-300">•</span>
-      <span class="text-neutral-500">{{ activeCount() }} Lộ trình Active (Đạt giới hạn BR-001)</span>
-      <span class="text-neutral-300">•</span>
-      <span class="text-neutral-500 flex items-center gap-1">
-        <span class="material-symbols-outlined text-[13px] text-neutral-400" aria-hidden="true">sync</span>
-        <span>Tự động đồng bộ WebCal</span>
-      </span>
-    </div>
+      <div class="relative w-64">
+        <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 text-[16px]" aria-hidden="true">search</span>
+        <input
+          type="text"
+          [ngModel]="searchQuery()"
+          (ngModelChange)="onSearchChange($event)"
+          placeholder="Tìm kiếm lộ trình..."
+          class="bg-white border border-neutral-200 rounded-xl pl-9 pr-3.5 py-1.5 text-xs w-full focus:outline-none focus:border-neutral-900 focus:ring-0 transition placeholder:text-neutral-400"
+        />
+      </div>
 
-    <div class="hidden sm:flex items-center gap-3 font-mono text-[10px] text-neutral-400">
-      <span>FocusFlow v1.0.4</span>
-      <span class="text-neutral-300">•</span>
-      <span>Đại học Bách Khoa</span>
-      <span class="text-neutral-300">•</span>
-      <span class="text-neutral-500 font-sans font-medium">Chuẩn WCAG 2.2 AA</span>
+      <div class="flex items-center bg-white border border-neutral-200 rounded-xl p-0.5 shadow-2xs">
+        <button
+          type="button"
+          (click)="setViewMode('grid')"
+          aria-label="Grid View"
+          class="p-1.5 rounded-lg transition cursor-pointer"
+          [class.bg-neutral-100]="viewMode() === 'grid'"
+          [class.text-neutral-900]="viewMode() === 'grid'"
+          [class.text-neutral-400]="viewMode() !== 'grid'"
+          title="Dạng lưới"
+        >
+          <span class="material-symbols-outlined text-[18px]" aria-hidden="true">grid_view</span>
+        </button>
+        <button
+          type="button"
+          (click)="setViewMode('list')"
+          aria-label="List View"
+          class="p-1.5 rounded-lg transition cursor-pointer"
+          [class.bg-neutral-100]="viewMode() === 'list'"
+          [class.text-neutral-900]="viewMode() === 'list'"
+          [class.text-neutral-400]="viewMode() !== 'list'"
+          title="Dạng danh sách"
+        >
+          <span class="material-symbols-outlined text-[18px]" aria-hidden="true">format_list_bulleted</span>
+        </button>
+      </div>
     </div>
-  </footer>
+  </div>
+
+  <!-- CONTENT SECTION -->
+  <!-- Case 1: Roadmaps list is completely empty -->
+  @if (totalCount() === 0 && !roadmapService.loading()) {
+    <div class="rounded-3xl bg-white border border-neutral-200/80 p-6 md:p-8 shadow-xs">
+      <app-blueprint-empty-state
+        title="Chưa có lộ trình học tập nào"
+        description="Hãy bắt đầu hành trình tự học thích ứng bằng cách mô tả mục tiêu của bạn. FocusFlow sẽ phân rã thành các Milestone và đồng bộ thời khóa biểu tự động."
+        ctaLabel="Tạo lộ trình học tập"
+        ctaRoute="/roadmaps/new"
+        shortcutKey="C"
+        (selectTemplate)="onSelectTemplate($event)"
+        (createCustomRoadmap)="onCreateCustomRoadmap()"
+      />
+    </div>
+  }
+
+  <!-- Case 2: Roadmaps exist -->
+  @if (totalCount() > 0) {
+    <!-- Empty Filter State (items exist, but filter returned 0) -->
+    @if (filteredRoadmaps().length === 0) {
+      <div class="text-center py-12 bg-white rounded-2xl border border-neutral-200">
+        <span class="material-symbols-outlined text-4xl text-neutral-400 mb-2" aria-hidden="true">search_off</span>
+        <h3 class="font-bold text-base text-neutral-900">Không tìm thấy lộ trình phù hợp</h3>
+        <p class="text-xs text-neutral-500 mt-1">
+          Không có lộ trình nào khớp với bộ lọc hoặc từ khóa tìm kiếm "{{ searchQuery() }}".
+        </p>
+        <button
+          type="button"
+          (click)="setFilter('ALL'); onSearchChange('')"
+          class="mt-4 px-4 py-1.5 rounded-full bg-neutral-100 hover:bg-neutral-200 text-xs font-medium text-neutral-800 transition cursor-pointer"
+        >
+          Xóa bộ lọc
+        </button>
+      </div>
+    }
+
+    <!-- Grid View (3 columns on desktop) -->
+    @if (viewMode() === 'grid') {
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        @for (roadmap of filteredRoadmaps(); track roadmap.id) {
+          <app-roadmap-card
+            [roadmap]="roadmap"
+            variant="full"
+            (pause)="onPauseRoadmap($event)"
+            (resume)="onResumeRoadmap($event)"
+            (archive)="onArchiveRoadmap($event)"
+          />
+        }
+
+        <!-- Dashed "Khởi tạo Lộ trình Mới với AI" Card -->
+        <a
+          routerLink="/roadmaps/new"
+          class="border-2 border-dashed border-neutral-300 hover:border-neutral-500 bg-neutral-50/50 hover:bg-neutral-100/60 rounded-2xl p-8 flex flex-col items-center justify-center text-center transition cursor-pointer min-h-[340px] group no-underline"
+        >
+          <!-- Center Ring Icon -->
+          <div class="w-12 h-12 rounded-full border border-neutral-300 flex items-center justify-center text-neutral-600 mb-4 bg-white shadow-xs group-hover:scale-110 group-hover:border-neutral-700 group-hover:text-neutral-900 transition-all duration-200">
+            <span class="material-symbols-outlined text-[24px]" aria-hidden="true">add</span>
+          </div>
+          <h3 class="font-bold text-neutral-900 text-base mb-1 tracking-tight">Khởi tạo Lộ trình Mới với AI</h3>
+          <p class="text-xs text-neutral-500 max-w-xs leading-relaxed">
+            Nhập mục tiêu học tập bất kỳ và để AI phân rã thành các Milestone và Task phù hợp với quỹ giờ của bạn.
+          </p>
+          <div class="bg-neutral-200/60 text-neutral-700 text-[10px] px-2.5 py-1 rounded-full mt-4 font-medium flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[13px] text-neutral-500" aria-hidden="true">auto_awesome</span>
+            <span>Hỗ trợ quy tắc BR-001 • Bản thảo nháp</span>
+          </div>
+        </a>
+      </div>
+    }
+
+    <!-- List View -->
+    @if (viewMode() === 'list') {
+      <div class="flex flex-col gap-3">
+        @for (roadmap of filteredRoadmaps(); track roadmap.id) {
+          <app-roadmap-card
+            [roadmap]="roadmap"
+            variant="compact"
+          />
+        }
+      </div>
+    }
+  }
 </div>
