@@ -14,7 +14,12 @@ import { AuthService } from '../../../core/services/auth.service';
 import { TranslationService } from '../../../core/services/translation.service';
 import { TranslatePipe } from '../../../shared/pipes/translate.pipe';
 import { LoginResponse, MessageResponse } from '../../../models/auth.interface';
-import { OtpInputComponent } from '../shared/otp-input/otp-input.component';
+import {
+  AuthCardComponent,
+  AuthHeaderComponent,
+  OtpInputComponent,
+  AuthNoticeBannerComponent
+} from '../shared';
 
 @Component({
   selector: 'app-otp-validation',
@@ -23,7 +28,10 @@ import { OtpInputComponent } from '../shared/otp-input/otp-input.component';
   imports: [
     RouterLink,
     TranslatePipe,
-    OtpInputComponent
+    AuthCardComponent,
+    AuthHeaderComponent,
+    OtpInputComponent,
+    AuthNoticeBannerComponent
   ],
   templateUrl: './otp-validation.component.html',
   styleUrl: './otp-validation.component.scss'

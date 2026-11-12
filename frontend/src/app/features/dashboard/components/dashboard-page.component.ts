@@ -1,5 +1,6 @@
 import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { LucideAngularModule, LUCIDE_ICONS, LucideIconProvider, Flame } from 'lucide-angular';
 import { DashboardService } from '../services/dashboard.service';
 import { ButtonDirective } from '../../../shared/ui/button/button.directive';
 import { BadgeDirective } from '../../../shared/ui/badge/badge.directive';
@@ -11,6 +12,7 @@ import { CardComponent, CardHeaderDirective, CardTitleDirective, CardDescription
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     RouterLink,
+    LucideAngularModule,
     ButtonDirective,
     BadgeDirective,
     CardComponent,
@@ -18,8 +20,15 @@ import { CardComponent, CardHeaderDirective, CardTitleDirective, CardDescription
     CardTitleDirective,
     CardDescriptionDirective
   ],
+  providers: [
+    {
+      provide: LUCIDE_ICONS,
+      multi: true,
+      useValue: new LucideIconProvider({ Flame })
+    }
+  ],
   template: `
-    <div class="max-w-6xl mx-auto w-full p-6 space-y-6">
+    <div class="max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8 space-y-6">
       <!-- Welcome Header -->
       <div class="flex items-center justify-between">
         <div>
@@ -42,7 +51,8 @@ import { CardComponent, CardHeaderDirective, CardTitleDirective, CardDescription
           <div class="space-y-1">
             <span class="text-xs text-[var(--muted-foreground)] font-medium">Chuỗi ngày học liên tục</span>
             <div class="text-3xl font-bold flex items-center gap-2">
-              🔥 {{ dashboardService.summary()?.streakDays }} ngày
+              <lucide-icon name="flame" [size]="24" class="text-amber-500 shrink-0" aria-hidden="true"></lucide-icon>
+              <span>{{ dashboardService.summary().streakDays }} ngày</span>
             </div>
           </div>
         </app-card>
@@ -51,7 +61,7 @@ import { CardComponent, CardHeaderDirective, CardTitleDirective, CardDescription
           <div class="space-y-1">
             <span class="text-xs text-[var(--muted-foreground)] font-medium">Tổng số giờ đã học</span>
             <div class="text-3xl font-bold">
-              {{ dashboardService.summary()?.totalStudyHours }}h
+              {{ dashboardService.summary().totalStudyHours }}h
             </div>
           </div>
         </app-card>
@@ -60,7 +70,7 @@ import { CardComponent, CardHeaderDirective, CardTitleDirective, CardDescription
           <div class="space-y-1">
             <span class="text-xs text-[var(--muted-foreground)] font-medium">Tiến độ Mốc kiến thức</span>
             <div class="text-3xl font-bold">
-              {{ dashboardService.summary()?.completedMilestones }} / {{ dashboardService.summary()?.totalMilestones }}
+              {{ dashboardService.summary().completedMilestones }} / {{ dashboardService.summary().totalMilestones }}
             </div>
           </div>
         </app-card>
@@ -69,7 +79,7 @@ import { CardComponent, CardHeaderDirective, CardTitleDirective, CardDescription
           <div class="space-y-1">
             <span class="text-xs text-[var(--muted-foreground)] font-medium">Mục tiêu tuần này</span>
             <div class="text-3xl font-bold text-emerald-600">
-              {{ dashboardService.summary()?.weeklyTargetHours }}h
+              {{ dashboardService.summary().weeklyTargetHours }}h
             </div>
           </div>
         </app-card>
@@ -83,7 +93,7 @@ import { CardComponent, CardHeaderDirective, CardTitleDirective, CardDescription
               <span appBadge variant="default">Lộ trình Đang chạy</span>
               <span class="text-xs text-[var(--muted-foreground)]">Cập nhật 2 giờ trước</span>
             </div>
-            <h2 class="text-lg font-semibold">{{ dashboardService.summary()?.activeRoadmapTitle }}</h2>
+            <h2 class="text-lg font-semibold">{{ dashboardService.summary().activeRoadmapTitle }}</h2>
           </div>
           <a routerLink="/roadmaps" appButton variant="secondary" size="sm">
             Xem chi tiết lộ trình
@@ -99,7 +109,7 @@ import { CardComponent, CardHeaderDirective, CardTitleDirective, CardDescription
         </div>
 
         <div class="space-y-3 pt-2">
-          @for (task of dashboardService.summary()?.upcomingTasks; track task.id) {
+          @for (task of dashboardService.summary().upcomingTasks; track task.id) {
             <div class="flex items-center justify-between p-3 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--muted)]/50 transition-colors">
               <div class="space-y-0.5">
                 <div class="font-medium text-sm">{{ task.title }}</div>

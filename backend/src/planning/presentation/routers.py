@@ -2,7 +2,7 @@ from collections.abc import AsyncGenerator
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Header, Query, status
+from fastapi import APIRouter, File, Form, Header, HTTPException, Query, UploadFile, status
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from src.account.public_api import QuotaExceededError
@@ -23,6 +23,7 @@ from src.planning.domain.exceptions.planning_exceptions import (
     UnapprovedMilestonesError,
 )
 from src.planning.domain.models.goal import Goal
+from src.planning.domain.models.knowledge_source import KnowledgeSource
 from src.planning.domain.models.milestone import Milestone
 from src.planning.domain.models.roadmap import Roadmap
 from src.planning.domain.models.schedule import OfficialSchedule, ScheduleProposal
@@ -31,12 +32,14 @@ from src.planning.presentation.deps import (
     ApproveMilestonesUseCaseDep,
     ArchiveRoadmapUseCaseDep,
     CreateGoalAndRoadmapUseCaseDep,
+    CreateKnowledgeSourceUseCaseDep,
     CurrentLearnerIdDep,
     GenerateClarificationQuestionsUseCaseDep,
     GetCurrentProposalUseCaseDep,
     GetRoadmapDetailUseCaseDep,
     InitiateMilestoneGenUseCaseDep,
     InitiateProposalGenUseCaseDep,
+    KnowledgeSourceRepositoryDep,
     ListRoadmapsUseCaseDep,
     SaveManualPlanUseCaseDep,
     SseJobStoreDep,
@@ -50,9 +53,11 @@ from src.planning.presentation.schemas.planning_schemas import (
     ApplyScheduleProposalResponse,
     ClarificationQuestionsResponse,
     ConstraintViolationSchema,
+    CreateKnowledgeUrlRequest,
     CreateManualRoadmapPlanRequest,
     CreateRoadmapRequest,
     GoalResponse,
+    KnowledgeSourceResponse,
     MilestoneListResponse,
     MilestoneResponse,
     OfficialScheduleResponse,
@@ -69,6 +74,8 @@ from src.planning.presentation.schemas.planning_schemas import (
     UpdateRoadmapRequest,
     UpdateScheduleProposalRequest,
 )
+from src.planning.presentation.tasks import ingest_knowledge_source
+from src.shared_kernel.config import get_settings
 from src.shared_kernel.domain.exceptions import DomainError
 
 router = APIRouter(prefix="/api/v1/planning", tags=["Planning & Roadmaps"])
@@ -138,6 +145,21 @@ def _to_goal_response(goal: Goal) -> GoalResponse:
         clarification_context=goal.clarification_context,
         created_at=goal.created_at,
         updated_at=goal.updated_at,
+    )
+
+
+def _to_knowledge_source_response(source: KnowledgeSource) -> KnowledgeSourceResponse:
+    return KnowledgeSourceResponse(
+        id=source.id,
+        goal_id=source.goal_id,
+        source_type=source.source_type.value,
+        title=source.title,
+        ingestion_status=source.ingestion_status.value,
+        chunk_count=source.chunk_count,
+        provenance_metadata=dict(source.provenance_metadata),
+        error_detail=source.error_detail,
+        created_at=source.created_at,
+        updated_at=source.updated_at,
     )
 
 
@@ -214,6 +236,7 @@ def _to_proposal_response_from_domain(proposal: ScheduleProposal) -> SchedulePro
         is_valid=len(violations) == 0,
         has_soft_overflow=len(warnings) > 0,
         tasks=raw_tasks,
+        schedule_blocks=list(proposal.proposal_data.get("schedule_blocks", [])),
         dependencies=raw_deps,
         violations=violations,
         soft_overflow_warnings=warnings,
@@ -243,6 +266,89 @@ def _to_proposal_response(view: ScheduleProposalViewDTO) -> ScheduleProposalResp
 async def get_planning_context_status() -> dict[str, str]:
     """Bounded Context 2 health/status endpoint (UC-07..UC-10, UC-12)."""
     return {"context": "planning", "status": "ready"}
+
+
+@router.post(
+    "/goals/{goal_id}/knowledge-sources/files",
+    response_model=KnowledgeSourceResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def upload_knowledge_source_file(
+    goal_id: UUID,
+    current_user_id: CurrentLearnerIdDep,
+    use_case: CreateKnowledgeSourceUseCaseDep,
+    file: UploadFile = File(...),
+    title: str = Form(default=""),
+) -> KnowledgeSourceResponse:
+    if not get_settings().knowledge_rag_enabled:
+        raise HTTPException(status_code=404, detail="Knowledge RAG is not enabled")
+    content = await file.read(get_settings().knowledge_file_max_bytes + 1)
+    try:
+        source = await use_case.create_file(
+            user_id=current_user_id,
+            goal_id=goal_id,
+            title=title,
+            filename=file.filename or "knowledge.txt",
+            content=content,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail="Goal not found") from exc
+    await ingest_knowledge_source.kiq(str(source.id), str(current_user_id))
+    return _to_knowledge_source_response(source)
+
+
+@router.post(
+    "/goals/{goal_id}/knowledge-sources/urls",
+    response_model=KnowledgeSourceResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def add_knowledge_source_url(
+    goal_id: UUID,
+    request: CreateKnowledgeUrlRequest,
+    current_user_id: CurrentLearnerIdDep,
+    use_case: CreateKnowledgeSourceUseCaseDep,
+) -> KnowledgeSourceResponse:
+    if not get_settings().knowledge_rag_enabled:
+        raise HTTPException(status_code=404, detail="Knowledge RAG is not enabled")
+    try:
+        source = await use_case.create_url(
+            user_id=current_user_id,
+            goal_id=goal_id,
+            title=request.title,
+            url=request.url,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail="Goal not found") from exc
+    await ingest_knowledge_source.kiq(str(source.id), str(current_user_id))
+    return _to_knowledge_source_response(source)
+
+
+@router.get(
+    "/goals/{goal_id}/knowledge-sources",
+    response_model=list[KnowledgeSourceResponse],
+)
+async def list_knowledge_sources(
+    goal_id: UUID,
+    current_user_id: CurrentLearnerIdDep,
+    repository: KnowledgeSourceRepositoryDep,
+) -> list[KnowledgeSourceResponse]:
+    sources = await repository.list_sources_for_goal(goal_id, current_user_id)
+    return [_to_knowledge_source_response(source) for source in sources]
+
+
+@router.get(
+    "/knowledge-sources/{source_id}",
+    response_model=KnowledgeSourceResponse,
+)
+async def get_knowledge_source(
+    source_id: UUID,
+    current_user_id: CurrentLearnerIdDep,
+    repository: KnowledgeSourceRepositoryDep,
+) -> KnowledgeSourceResponse:
+    source = await repository.get_source_for_user(source_id, current_user_id)
+    if source is None:
+        raise HTTPException(status_code=404, detail="Knowledge source not found")
+    return _to_knowledge_source_response(source)
 
 
 # =============================================================================

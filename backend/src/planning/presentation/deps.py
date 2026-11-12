@@ -4,6 +4,7 @@ from typing import Annotated
 from uuid import UUID
 
 import jwt
+import redis.asyncio as redis
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt.exceptions import ExpiredSignatureError, PyJWTError
@@ -27,13 +28,20 @@ from src.execution.public_api import (
     ExecutionScheduleSyncPort,
     create_execution_schedule_sync_port,
 )
+from src.planning.application.knowledge import DocumentExtractor, SafeUrlFetcher, SemanticChunker
 from src.planning.application.ports.knowledge_base_port import KnowledgeBasePort
+from src.planning.application.ports.knowledge_source_repository_port import (
+    KnowledgeSourceRepositoryPort,
+)
 from src.planning.application.ports.planning_repository_ports import (
     GoalRepositoryPort,
     MilestoneRepositoryPort,
     OfficialScheduleRepositoryPort,
     RoadmapRepositoryPort,
     ScheduleProposalRepositoryPort,
+)
+from src.planning.application.ports.schedule_block_repository_port import (
+    ScheduleBlockRepositoryPort,
 )
 from src.planning.application.ports.sse_job_port import SseJobPort
 from src.planning.application.use_cases import (
@@ -55,12 +63,23 @@ from src.planning.application.use_cases import (
     UpdateRoadmapUseCase,
     UpdateScheduleProposalUseCase,
 )
+from src.planning.application.use_cases.knowledge_source_use_cases import (
+    CreateKnowledgeSourceUseCase,
+    IngestKnowledgeSourceUseCase,
+)
+from src.planning.infrastructure.knowledge import LocalKnowledgeFileStore
+from src.planning.infrastructure.repositories.knowledge_source_repository import (
+    SqlAlchemyKnowledgeSourceRepository,
+)
 from src.planning.infrastructure.repositories.planning_repositories import (
     SqlAlchemyGoalRepository,
     SqlAlchemyMilestoneRepository,
     SqlAlchemyOfficialScheduleRepository,
     SqlAlchemyRoadmapRepository,
     SqlAlchemyScheduleProposalRepository,
+)
+from src.planning.infrastructure.repositories.schedule_block_repository import (
+    SqlAlchemyScheduleBlockRepository,
 )
 from src.planning.infrastructure.repositories.sqlalchemy_knowledge_base_repository import (
     SqlAlchemyKnowledgeBaseRepository,
@@ -73,11 +92,17 @@ from src.shared_kernel.infrastructure.database.session import get_async_session
 from src.shared_kernel.infrastructure.database.sqlalchemy_uow import (
     SqlAlchemyUnitOfWork,
 )
+from src.shared_kernel.infrastructure.external_ai.circuit_breaker import (
+    CircuitBreakingLLMProvider,
+    RedisCircuitStateStore,
+)
+from src.shared_kernel.infrastructure.external_ai.embedding_adapter import MockEmbeddingAdapter
 from src.shared_kernel.infrastructure.external_ai.litellm_adapter import (
     LiteLLMAdapter,
 )
 
 security_bearer = HTTPBearer(auto_error=False)
+_ai_redis_client: redis.Redis | None = None
 
 
 # --- Database & Unit of Work Dependencies ---
@@ -124,10 +149,61 @@ def get_official_schedule_repository(
     return SqlAlchemyOfficialScheduleRepository(session)
 
 
+def get_schedule_block_repository(
+    session: AsyncSession = Depends(get_planning_db_session),
+) -> ScheduleBlockRepositoryPort:
+    return SqlAlchemyScheduleBlockRepository(session)
+
+
 def get_knowledge_base_repository(
     session: AsyncSession = Depends(get_planning_db_session),
 ) -> KnowledgeBasePort:
     return SqlAlchemyKnowledgeBaseRepository(session)
+
+
+def get_knowledge_source_repository(
+    session: AsyncSession = Depends(get_planning_db_session),
+) -> KnowledgeSourceRepositoryPort:
+    return SqlAlchemyKnowledgeSourceRepository(session)
+
+
+def get_knowledge_file_store() -> LocalKnowledgeFileStore:
+    return LocalKnowledgeFileStore(get_settings().knowledge_upload_dir)
+
+
+def get_create_knowledge_source_use_case(
+    goal_repository: GoalRepositoryPort = Depends(get_goal_repository),
+    source_repository: KnowledgeSourceRepositoryPort = Depends(get_knowledge_source_repository),
+    file_store: LocalKnowledgeFileStore = Depends(get_knowledge_file_store),
+    uow: AsyncUnitOfWork = Depends(get_planning_uow),
+) -> CreateKnowledgeSourceUseCase:
+    return CreateKnowledgeSourceUseCase(
+        goal_repository=goal_repository,
+        source_repository=source_repository,
+        file_store=file_store,
+        uow=uow,
+        max_file_bytes=get_settings().knowledge_file_max_bytes,
+    )
+
+
+def get_ingest_knowledge_source_use_case(
+    source_repository: KnowledgeSourceRepositoryPort = Depends(get_knowledge_source_repository),
+    file_store: LocalKnowledgeFileStore = Depends(get_knowledge_file_store),
+    uow: AsyncUnitOfWork = Depends(get_planning_uow),
+) -> IngestKnowledgeSourceUseCase:
+    settings = get_settings()
+    return IngestKnowledgeSourceUseCase(
+        source_repository=source_repository,
+        file_store=file_store,
+        embedding_provider=MockEmbeddingAdapter(),
+        url_fetcher=SafeUrlFetcher(
+            max_bytes=settings.knowledge_url_max_bytes,
+            timeout_seconds=settings.knowledge_url_timeout_seconds,
+        ),
+        extractor=DocumentExtractor(),
+        chunker=SemanticChunker(),
+        uow=uow,
+    )
 
 
 # --- Cross-Context & Shared Kernel Port Dependencies ---
@@ -168,7 +244,23 @@ def get_planning_schedule_change_log_port(
 
 
 def get_llm_provider() -> LLMProviderPort:
-    return LiteLLMAdapter()
+    provider: LLMProviderPort = LiteLLMAdapter()
+    settings = get_settings()
+    if not settings.ai_harness_v2_enabled:
+        return provider
+    global _ai_redis_client
+    if _ai_redis_client is None:
+        _ai_redis_client = redis.from_url(settings.redis_url, decode_responses=True)
+    state = RedisCircuitStateStore(
+        _ai_redis_client,
+        window_seconds=settings.ai_circuit_window_seconds,
+        open_seconds=settings.ai_circuit_open_seconds,
+    )
+    return CircuitBreakingLLMProvider(
+        provider,
+        state,
+        failure_threshold=settings.ai_circuit_failure_threshold,
+    )
 
 
 def get_sse_job_store() -> SseJobPort:
@@ -370,6 +462,8 @@ def get_execute_schedule_proposal_generation_use_case(
     sse_job_store: SseJobPort = Depends(get_sse_job_store),
     uow: AsyncUnitOfWork = Depends(get_planning_uow),
     knowledge_base: KnowledgeBasePort | None = Depends(get_knowledge_base_repository),
+    user_query_port: UserQueryPort = Depends(get_planning_user_query_port),
+    block_repo: ScheduleBlockRepositoryPort = Depends(get_schedule_block_repository),
 ) -> ExecuteScheduleProposalGenerationUseCase:
     effective_kb = knowledge_base if isinstance(knowledge_base, KnowledgeBasePort) else None
     return ExecuteScheduleProposalGenerationUseCase(
@@ -386,6 +480,8 @@ def get_execute_schedule_proposal_generation_use_case(
         uow=uow,
         enable_tier3_judge=get_settings().enable_tier3_judge,
         knowledge_base=effective_kb,
+        user_query_port=user_query_port,
+        block_repo=block_repo,
     )
 
 
@@ -428,6 +524,8 @@ def get_update_schedule_proposal_use_case(
     availability_query_port: AvailabilityQueryPort = Depends(get_planning_availability_query_port),
     execution_sync_port: ExecutionScheduleSyncPort = Depends(get_planning_execution_sync_port),
     uow: AsyncUnitOfWork = Depends(get_planning_uow),
+    user_query_port: UserQueryPort = Depends(get_planning_user_query_port),
+    block_repo: ScheduleBlockRepositoryPort = Depends(get_schedule_block_repository),
 ) -> UpdateScheduleProposalUseCase:
     return UpdateScheduleProposalUseCase(
         roadmap_repo=roadmap_repo,
@@ -436,6 +534,8 @@ def get_update_schedule_proposal_use_case(
         availability_query_port=availability_query_port,
         execution_sync_port=execution_sync_port,
         uow=uow,
+        user_query_port=user_query_port,
+        block_repo=block_repo,
     )
 
 
@@ -444,6 +544,7 @@ def get_apply_schedule_proposal_use_case(
     milestone_repo: MilestoneRepositoryPort = Depends(get_milestone_repository),
     proposal_repo: ScheduleProposalRepositoryPort = Depends(get_schedule_proposal_repository),
     schedule_repo: OfficialScheduleRepositoryPort = Depends(get_official_schedule_repository),
+    block_repo: ScheduleBlockRepositoryPort = Depends(get_schedule_block_repository),
     availability_query_port: AvailabilityQueryPort = Depends(get_planning_availability_query_port),
     execution_sync_port: ExecutionScheduleSyncPort = Depends(get_planning_execution_sync_port),
     schedule_change_log_port: ScheduleChangeLogPort = Depends(
@@ -457,6 +558,7 @@ def get_apply_schedule_proposal_use_case(
         milestone_repo=milestone_repo,
         proposal_repo=proposal_repo,
         schedule_repo=schedule_repo,
+        block_repo=block_repo,
         availability_query_port=availability_query_port,
         execution_sync_port=execution_sync_port,
         schedule_change_log_port=schedule_change_log_port,
@@ -473,6 +575,8 @@ def get_save_manual_roadmap_plan_use_case(
     availability_query_port: AvailabilityQueryPort = Depends(get_planning_availability_query_port),
     execution_sync_port: ExecutionScheduleSyncPort = Depends(get_planning_execution_sync_port),
     uow: AsyncUnitOfWork = Depends(get_planning_uow),
+    user_query_port: UserQueryPort = Depends(get_planning_user_query_port),
+    block_repo: ScheduleBlockRepositoryPort = Depends(get_schedule_block_repository),
 ) -> SaveManualRoadmapPlanUseCase:
     return SaveManualRoadmapPlanUseCase(
         goal_repo=goal_repo,
@@ -482,6 +586,8 @@ def get_save_manual_roadmap_plan_use_case(
         availability_query_port=availability_query_port,
         execution_sync_port=execution_sync_port,
         uow=uow,
+        user_query_port=user_query_port,
+        block_repo=block_repo,
     )
 
 
@@ -581,4 +687,10 @@ GenerateClarificationQuestionsUseCaseDep = Annotated[
 SubmitClarificationAnswersUseCaseDep = Annotated[
     SubmitClarificationAnswersUseCase,
     Depends(get_submit_clarification_answers_use_case),
+]
+CreateKnowledgeSourceUseCaseDep = Annotated[
+    CreateKnowledgeSourceUseCase, Depends(get_create_knowledge_source_use_case)
+]
+KnowledgeSourceRepositoryDep = Annotated[
+    KnowledgeSourceRepositoryPort, Depends(get_knowledge_source_repository)
 ]

@@ -63,7 +63,8 @@ function buildIsoDateTime(dateStr: string | null | undefined, timeOrIso: string 
   if (trimmed.includes('T')) {
     return trimmed;
   }
-  const effDate = dateStr && dateStr.trim() ? dateStr.trim() : '2026-11-02';
+  if (!dateStr?.trim()) return null;
+  const effDate = dateStr.trim();
   const hhmm = normalizeTimeInput(trimmed, '19:30');
   return `${effDate}T${hhmm}:00Z`;
 }
@@ -79,18 +80,24 @@ export function mapRawTasksToProposedItems(
     const scheduledDate =
       typeof t['scheduled_date'] === 'string' && t['scheduled_date']
         ? t['scheduled_date']
-        : '2026-11-02';
-    const rawStart = typeof t['scheduled_start'] === 'string' ? t['scheduled_start'] : '19:30';
-    const rawEnd = typeof t['scheduled_end'] === 'string' ? t['scheduled_end'] : '20:30';
+        : null;
+    const rawStart = typeof t['scheduled_start'] === 'string' ? t['scheduled_start'] : null;
+    const rawEnd = typeof t['scheduled_end'] === 'string' ? t['scheduled_end'] : null;
     const prereqs = Array.isArray(t['prerequisite_ids'])
       ? t['prerequisite_ids'].map(p => String(p))
       : [];
     const rawResources = Array.isArray(t['learning_resources']) ? t['learning_resources'] : [];
     const learningResources = rawResources
-      .filter((r): r is Record<string, unknown> => typeof r === 'object' && r !== null)
+      .filter((r): r is Record<string, unknown> =>
+        typeof r === 'object' && r !== null &&
+        typeof (r as Record<string, unknown>)['title'] === 'string' &&
+        typeof (r as Record<string, unknown>)['url'] === 'string' &&
+        Boolean((r as Record<string, unknown>)['title']) &&
+        Boolean((r as Record<string, unknown>)['url'])
+      )
       .map(r => ({
-        title: typeof r['title'] === 'string' && r['title'] ? r['title'] : 'Tài liệu hướng dẫn học tập',
-        url: typeof r['url'] === 'string' && r['url'] ? r['url'] : 'https://docs.python.org/3/',
+        title: String(r['title']),
+        url: String(r['url']),
         type: typeof r['type'] === 'string' && r['type'] ? r['type'] : 'DOCS',
         description: typeof r['description'] === 'string' ? r['description'] : null,
       }));
@@ -117,8 +124,8 @@ export function mapRawTasksToProposedItems(
           ? t['estimated_minutes']
           : 60,
       scheduled_date: scheduledDate,
-      scheduled_start: normalizeTimeInput(rawStart, '19:30'),
-      scheduled_end: normalizeTimeInput(rawEnd, '20:30'),
+      scheduled_start: rawStart ? normalizeTimeInput(rawStart, '') : null,
+      scheduled_end: rawEnd ? normalizeTimeInput(rawEnd, '') : null,
       prerequisite_ids: prereqs,
     };
   });
@@ -154,6 +161,7 @@ export class RoadmapService {
   readonly milestones = signal<MilestoneResponse[]>([]);
   readonly editableMilestones = signal<MilestoneUpsertItemSchema[]>([]);
   readonly currentProposal = signal<ScheduleProposalResponse | null>(null);
+  readonly proposalDirty = signal(false);
   readonly editableTasks = signal<ProposedTaskItemSchema[]>([]);
   readonly editableDependencies = signal<ProposedDependencyItemSchema[]>([]);
 
@@ -400,7 +408,7 @@ export class RoadmapService {
           concept_ids: [],
           learning_resources: [],
           estimated_minutes: 60,
-          scheduled_date: this.selectedRoadmapDetail()?.start_date ?? '2026-11-02',
+          scheduled_date: this.selectedRoadmapDetail()?.start_date ?? null,
           scheduled_start: '19:30',
           scheduled_end: '20:30',
           prerequisite_ids: [],
@@ -481,8 +489,9 @@ export class RoadmapService {
 
   // Interactive Task Edits (Step 3)
   addEditableTask(partial?: Partial<ProposedTaskItemSchema>): void {
+    this.proposalDirty.set(true);
     const defaultMid = this.milestones()[0]?.id ?? null;
-    const defaultDate = this.selectedRoadmapDetail()?.start_date ?? '2026-11-02';
+    const defaultDate = this.selectedRoadmapDetail()?.start_date ?? null;
     this.editableTasks.update(list => [
       ...list,
       {
@@ -495,14 +504,7 @@ export class RoadmapService {
         learning_objective: partial?.learning_objective ?? null,
         completion_criteria: partial?.completion_criteria ?? null,
         concept_ids: partial?.concept_ids ?? [],
-        learning_resources: partial?.learning_resources ?? [
-          {
-            title: 'Tài liệu hướng dẫn học tập',
-            url: 'https://docs.python.org/3/',
-            type: 'DOCS',
-            description: 'Tài liệu học tập chính thức từ hệ thống.',
-          },
-        ],
+        learning_resources: partial?.learning_resources ?? [],
         estimated_minutes: partial?.estimated_minutes ?? 60,
         scheduled_date: partial?.scheduled_date ?? defaultDate,
         scheduled_start: partial?.scheduled_start ?? '19:30',
@@ -513,16 +515,19 @@ export class RoadmapService {
   }
 
   updateEditableTask(index: number, patch: Partial<ProposedTaskItemSchema>): void {
+    this.proposalDirty.set(true);
     this.editableTasks.update(list =>
       list.map((item, idx) => (idx === index ? { ...item, ...patch } : item))
     );
   }
 
   removeEditableTask(index: number): void {
+    this.proposalDirty.set(true);
     this.editableTasks.update(list => list.filter((_, idx) => idx !== index));
   }
 
   addResourceToTask(taskIndex: number, resource: { title: string; url: string; type: string; description?: string | null }): void {
+    this.proposalDirty.set(true);
     this.editableTasks.update(list =>
       list.map((task, idx) => {
         if (idx !== taskIndex) return task;
@@ -544,6 +549,7 @@ export class RoadmapService {
   }
 
   removeResourceFromTask(taskIndex: number, resourceIndex: number): void {
+    this.proposalDirty.set(true);
     this.editableTasks.update(list =>
       list.map((task, idx) => {
         if (idx !== taskIndex) return task;
@@ -571,6 +577,7 @@ export class RoadmapService {
   }
 
   private syncProposalState(proposal: ScheduleProposalResponse | null): void {
+    this.proposalDirty.set(false);
     const previousId = this.currentProposal()?.id;
     this.currentProposal.set(proposal);
     if (!proposal) {
@@ -679,7 +686,10 @@ export class RoadmapService {
       .subscribe();
   }
 
-  createRoadmap(payload: CreateRoadmapRequest): void {
+  createRoadmap(
+    payload: CreateRoadmapRequest,
+    onSuccess?: (created: RoadmapResponse) => void
+  ): void {
     this.saving.set(true);
     this.errorMessage.set(null);
     this.successMessage.set(null);
@@ -707,6 +717,7 @@ export class RoadmapService {
           if (created.goal_id) {
             this.generateClarificationQuestions(created.goal_id);
           }
+          onSuccess?.(created);
         }),
         catchError((err: HttpErrorResponse) => {
           this.errorMessage.set(
@@ -748,7 +759,11 @@ export class RoadmapService {
       .subscribe();
   }
 
-  submitClarificationAnswers(goalId: string, answers: ClarificationAnswerItem[]): void {
+  submitClarificationAnswers(
+    goalId: string,
+    answers: ClarificationAnswerItem[],
+    onSuccess?: (res: SubmitClarificationAnswersResponse) => void
+  ): void {
     this.isSubmittingAnswers.set(true);
     this.errorMessage.set(null);
     this.successMessage.set(null);
@@ -770,6 +785,7 @@ export class RoadmapService {
           this.clarificationQuestions.set([]);
           this.successMessage.set('Đã lưu chẩn đoán mục tiêu thành công!');
           this.activeStep.set(2);
+          onSuccess?.(res);
         }),
         catchError((err: HttpErrorResponse) => {
           this.errorMessage.set(
@@ -784,16 +800,22 @@ export class RoadmapService {
       .subscribe();
   }
 
-  skipClarification(goalId?: string): void {
+  skipClarification(goalId?: string, onSuccess?: () => void): void {
     const targetGoalId = goalId ?? this.selectedRoadmapDetail()?.goal_id;
     const skippedIds = this.clarificationQuestions().map(q => q.question_id);
 
     if (!targetGoalId) {
+      if (onSuccess) {
+        this.errorMessage.set(
+          'Chưa tìm thấy mục tiêu học tập trên máy chủ. Vui lòng hoàn tất Bước 1 trước.'
+        );
+      }
       this.activeStep.set(2);
       return;
     }
 
     this.isSubmittingAnswers.set(true);
+    this.errorMessage.set(null);
     this.http
       .post<SubmitClarificationAnswersResponse>(
         API_ENDPOINTS.ROADMAPS.CLARIFY_SKIP(targetGoalId),
@@ -805,8 +827,12 @@ export class RoadmapService {
           this.clarificationContext.set(res.clarification_context);
           this.clarificationQuestions.set([]);
           this.activeStep.set(2);
+          onSuccess?.();
         }),
-        catchError(() => {
+        catchError((err: HttpErrorResponse) => {
+          this.errorMessage.set(
+            this.extractErrorMessage(err, 'Không thể bỏ qua bước phỏng vấn chẩn đoán.')
+          );
           this.activeStep.set(2);
           return of(null);
         }),
@@ -923,7 +949,10 @@ export class RoadmapService {
       .subscribe();
   }
 
-  approveMilestones(roadmapId: string): void {
+  approveMilestones(
+    roadmapId: string,
+    onSuccess?: (res: MilestoneListResponse) => void
+  ): void {
     this.saving.set(true);
     this.errorMessage.set(null);
     this.successMessage.set(null);
@@ -944,6 +973,7 @@ export class RoadmapService {
           this.successMessage.set(
             'Đã phê duyệt Cột mốc Cấp 1! Bạn có thể sinh Đề xuất Lịch học Chi tiết (Cấp 2).'
           );
+          onSuccess?.(res);
         }),
         catchError((err: HttpErrorResponse) => {
           this.errorMessage.set(
@@ -1047,13 +1077,24 @@ export class RoadmapService {
   }
 
   private normalizeTasksForRequest(tasks: ProposedTaskItemSchema[]): ProposedTaskItemSchema[] {
-    return tasks.map(t => ({
-      ...t,
-      title: t.title.trim(),
-      estimated_minutes: Number(t.estimated_minutes),
-      scheduled_start: buildIsoDateTime(t.scheduled_date, t.scheduled_start),
-      scheduled_end: buildIsoDateTime(t.scheduled_date, t.scheduled_end),
-    }));
+    const originalTasks = this.currentProposal()?.tasks ?? [];
+    return tasks.map(t => {
+      const original = originalTasks.find(raw => raw['task_id'] === t.task_id);
+      const rawStart = original?.['scheduled_start'];
+      const rawEnd = original?.['scheduled_end'];
+      const preserveTimes = original?.['scheduled_date'] === t.scheduled_date &&
+        original?.['estimated_minutes'] === Number(t.estimated_minutes) &&
+        typeof rawStart === 'string' && typeof rawEnd === 'string' &&
+        normalizeTimeInput(rawStart, '') === t.scheduled_start &&
+        normalizeTimeInput(rawEnd, '') === t.scheduled_end;
+      return {
+        ...t,
+        title: t.title.trim(),
+        estimated_minutes: Number(t.estimated_minutes),
+        scheduled_start: preserveTimes && typeof rawStart === 'string' ? rawStart : buildIsoDateTime(t.scheduled_date, t.scheduled_start),
+        scheduled_end: preserveTimes && typeof rawEnd === 'string' ? rawEnd : buildIsoDateTime(t.scheduled_date, t.scheduled_end),
+      };
+    });
   }
 
   updateProposal(
@@ -1061,6 +1102,10 @@ export class RoadmapService {
     proposalId: string,
     payload?: UpdateScheduleProposalRequest
   ): void {
+    if (!payload && !this.proposalDirty() && this.currentProposal()?.is_valid) {
+      this.successMessage.set('Bản nháp đã đạt chuẩn kiểm định.');
+      return;
+    }
     this.saving.set(true);
     this.errorMessage.set(null);
     this.successMessage.set(null);
@@ -1156,7 +1201,8 @@ export class RoadmapService {
   applyProposal(
     roadmapId: string,
     proposalId: string,
-    confirmSoftOverflow: boolean = this.confirmSoftOverflow()
+    confirmSoftOverflow: boolean = this.confirmSoftOverflow(),
+    onSuccess?: (res: ApplyScheduleProposalResponse) => void
   ): void {
     this.saving.set(true);
     this.errorMessage.set(null);
@@ -1182,6 +1228,7 @@ export class RoadmapService {
           );
           this.loadRoadmapDetail(roadmapId);
           this.loadRoadmaps();
+          onSuccess?.(res);
         }),
         catchError((err: HttpErrorResponse) => {
           const body = err.error as Record<string, unknown> | undefined;

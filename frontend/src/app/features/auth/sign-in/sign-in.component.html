@@ -1,25 +1,19 @@
-<div class="w-full max-w-md mx-auto my-auto py-6">
+<app-auth-card>
   <!-- Brand Header -->
   <app-auth-header
     [title]="'auth.signIn.welcomeBack' | translate"
     [subtitle]="'auth.signIn.subtitle' | translate"
-    [showLogo]="true"
+    [showLogo]="false"
   />
 
   <!-- Error Banner -->
   @if (errorMessage()) {
-    <div class="mb-5 p-3.5 rounded-lg bg-[#ffdad6] text-[#93000a] text-xs font-sans flex items-start gap-2.5 border border-[#ba1a1a]/20">
-      <span class="material-symbols-outlined text-[18px] text-[#ba1a1a] shrink-0">error</span>
-      <span class="leading-relaxed">{{ errorMessage() }}</span>
-    </div>
+    <app-auth-notice-banner type="error" [message]="errorMessage()" />
   }
 
   <!-- Info Banner -->
   @if (infoMessage()) {
-    <div class="mb-5 p-3.5 rounded-lg bg-[#f0dbff] text-[#583878] text-xs font-sans flex items-start gap-2.5 border border-[#715091]/20">
-      <span class="material-symbols-outlined text-[18px] text-[#583878] shrink-0">info</span>
-      <span class="leading-relaxed">{{ infoMessage() }}</span>
-    </div>
+    <app-auth-notice-banner type="info" [message]="infoMessage()" />
   }
 
   <!-- Social Auth Cluster (Google Only) -->
@@ -31,73 +25,47 @@
   />
 
   <!-- Credentials Form -->
-  <form [formGroup]="signInForm" (ngSubmit)="signIn()" class="space-y-4">
+  <form [formGroup]="signInForm" (ngSubmit)="signIn()" class="space-y-5">
     <!-- Email Input Group -->
-    <div class="space-y-1.5">
-      <div class="flex items-center justify-between">
-        <label for="work-email" class="block font-sans text-xs font-medium text-on-surface">
-          {{ 'auth.signIn.workEmailLabel' | translate }}
-        </label>
-        <span class="font-sans text-[11px] text-secondary">
-          {{ 'auth.signIn.institutionalPreferred' | translate }}
-        </span>
-      </div>
-      <div class="relative">
-        <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-secondary">
-          <span class="material-symbols-outlined text-[18px]">alternate_email</span>
-        </div>
-        <input
-          id="work-email"
-          type="email"
-          formControlName="email"
-          [placeholder]="'auth.signIn.emailPlaceholder' | translate"
-          autocomplete="email"
-          class="w-full h-11 pl-10 pr-3.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface placeholder:text-secondary focus:border-on-surface focus:outline-none transition-colors font-sans text-sm"
-        />
-      </div>
-      @if (signInForm.get('email')?.touched && signInForm.get('email')?.errors?.['required']) {
-        <span class="text-xs text-error font-sans block mt-1">{{ 'auth.signIn.emailRequiredError' | translate }}</span>
-      }
-      @if (signInForm.get('email')?.touched && signInForm.get('email')?.errors?.['email']) {
-        <span class="text-xs text-error font-sans block mt-1">{{ 'auth.signIn.emailInvalidError' | translate }}</span>
-      }
-    </div>
+    <app-auth-form-field
+      [label]="'auth.signIn.workEmailLabel' | translate"
+      forId="work-email"
+      [hint]="'auth.signIn.institutionalPreferred' | translate"
+      prefixIcon="alternate_email"
+      [errorMessage]="signInForm.get('email')?.touched && signInForm.get('email')?.errors ? (signInForm.get('email')?.errors?.['required'] ? ('auth.signIn.emailRequiredError' | translate) : ('auth.signIn.emailInvalidError' | translate)) : ''"
+    >
+      <input
+        id="work-email"
+        type="email"
+        formControlName="email"
+        [placeholder]="'auth.signIn.emailPlaceholder' | translate"
+        autocomplete="email"
+        class="w-full h-12 pl-11 pr-4 rounded-xl border border-outline-variant/80 bg-surface-container-lowest text-on-surface placeholder:text-secondary focus:border-on-surface focus:outline-none transition-colors font-sans text-base"
+      />
+    </app-auth-form-field>
 
     <!-- Password Input Group -->
-    <div class="space-y-1.5">
-      <div class="flex items-center justify-between">
-        <label for="password" class="block font-sans text-xs font-medium text-on-surface">
-          {{ 'auth.signIn.passwordLabel' | translate }}
-        </label>
-        <a routerLink="/forgot-password" class="font-sans text-[11px] text-secondary hover:text-on-surface hover:underline transition-colors">
-          {{ 'auth.signIn.forgotPasswordLink' | translate }}
-        </a>
-      </div>
-      <div class="relative">
-        <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-secondary">
-          <span class="material-symbols-outlined text-[18px]">lock_open</span>
-        </div>
-        <input
-          id="password"
-          [type]="isPasswordVisible() ? 'text' : 'password'"
-          formControlName="password"
-          [placeholder]="'auth.signIn.passwordPlaceholder' | translate"
-          autocomplete="current-password"
-          class="w-full h-11 pl-10 pr-10 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface placeholder:text-secondary focus:border-on-surface focus:outline-none transition-colors font-sans text-sm"
-        />
-        <button
-          type="button"
-          (click)="togglePasswordVisibility()"
-          [attr.aria-label]="'auth.signIn.togglePasswordVisibility' | translate"
-          class="absolute inset-y-0 right-0 pr-3.5 flex items-center text-secondary hover:text-on-surface transition-colors cursor-pointer"
-        >
-          <span class="material-symbols-outlined text-[18px]">{{ isPasswordVisible() ? 'visibility_off' : 'visibility' }}</span>
-        </button>
-      </div>
-      @if (signInForm.get('password')?.touched && signInForm.get('password')?.errors?.['required']) {
-        <span class="text-xs text-error font-sans block mt-1">{{ 'auth.signIn.passwordRequiredError' | translate }}</span>
-      }
-    </div>
+    <app-auth-form-field
+      [label]="'auth.signIn.passwordLabel' | translate"
+      forId="password"
+      [linkText]="'auth.signIn.forgotPasswordLink' | translate"
+      linkRoute="/forgot-password"
+      prefixIcon="lock_open"
+      [suffixIcon]="isPasswordVisible() ? 'visibility_off' : 'visibility'"
+      [showSuffix]="true"
+      [suffixAriaLabel]="'auth.signIn.togglePasswordVisibility' | translate"
+      (suffixClick)="togglePasswordVisibility()"
+      [errorMessage]="signInForm.get('password')?.touched && signInForm.get('password')?.errors?.['required'] ? ('auth.signIn.passwordRequiredError' | translate) : ''"
+    >
+      <input
+        id="password"
+        [type]="isPasswordVisible() ? 'text' : 'password'"
+        formControlName="password"
+        [placeholder]="'auth.signIn.passwordPlaceholder' | translate"
+        autocomplete="current-password"
+        class="w-full h-12 pl-11 pr-11 rounded-xl border border-outline-variant/80 bg-surface-container-lowest text-on-surface placeholder:text-secondary focus:border-on-surface focus:outline-none transition-colors font-sans text-base"
+      />
+    </app-auth-form-field>
 
     <!-- Remember Credentials Checkbox -->
     <div class="flex items-center pt-1">
@@ -105,9 +73,9 @@
         <input
           type="checkbox"
           formControlName="rememberMe"
-          class="w-4 h-4 rounded border-outline-variant text-on-surface focus:ring-0 focus:ring-offset-0 bg-surface-container-lowest transition-colors cursor-pointer accent-[#111111]"
+          class="w-4 h-4 rounded border-outline-variant text-on-surface bg-surface-container-lowest accent-[#111111] dark:accent-primary cursor-pointer focus:ring-0 focus:ring-offset-0 transition-colors"
         />
-        <span class="font-sans text-xs text-secondary hover:text-on-surface transition-colors">
+        <span class="font-sans text-[13px] sm:text-sm text-secondary hover:text-on-surface transition-colors">
           {{ 'auth.signIn.rememberCredentials' | translate }}
         </span>
       </label>
@@ -118,7 +86,7 @@
       <button
         type="submit"
         [disabled]="isLoading()"
-        class="w-full h-12 rounded-full bg-[#111111] hover:bg-primary-container text-surface-container-lowest font-sans text-sm font-medium flex items-center justify-center gap-2 transition-all duration-150 ease-out active:scale-[0.99] cursor-pointer shadow-none disabled:opacity-50 disabled:cursor-not-allowed group"
+        class="w-full h-12 sm:h-[50px] rounded-full bg-[#111111] hover:bg-primary-container text-surface-container-lowest font-sans text-base font-medium flex items-center justify-center gap-2.5 transition-all duration-150 active:scale-[0.99] cursor-pointer shadow-none disabled:opacity-50 group"
       >
         <span>{{ isLoading() ? ('auth.signIn.signingIn' | translate) : ('auth.signIn.signInToWorkspace' | translate) }}</span>
         <span class="transition-transform duration-150 group-hover:translate-x-0.5">→</span>
@@ -127,12 +95,12 @@
   </form>
 
   <!-- Alternate Flow Link -->
-  <div class="text-center pt-6 border-t border-outline-variant mt-8">
-    <p class="font-sans text-xs text-secondary">
+  <div class="text-center pt-6 border-t border-outline-variant/80 mt-8">
+    <p class="font-sans text-[13px] sm:text-sm text-secondary">
       {{ 'auth.signIn.noAccountPrompt' | translate }}
       <a routerLink="/sign-up" class="font-medium text-on-surface hover:text-primary transition-colors underline-offset-4 hover:underline ml-1">
         {{ 'auth.signIn.signUpFree' | translate }}
       </a>
     </p>
   </div>
-</div>
+</app-auth-card>

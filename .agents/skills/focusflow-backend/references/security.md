@@ -29,7 +29,7 @@
 1. Đọc **raw body**; tính `HMAC-SHA256` bằng `PAYMENT_WEBHOOK_SECRET`; so với chữ ký bằng `hmac.compare_digest` ⇒ sai ⇒ 401/403 + ghi audit.
 2. Kiểm timestamp (chống replay ngoài cửa sổ cho phép).
 3. `SELECT … FOR UPDATE` trên `payment_transactions` theo `transaction_ref` (UNIQUE). Đã `PAID` ⇒ trả 200 không làm gì. Lần đầu ⇒ `PAID`, nâng gói + cộng quota **đúng một lần**, phát `UserUpgradedToPremiumEvent` qua outbox.
-4. Đơn có TTL 15 phút (`expires_at`), trạng thái cuối `PAID/FAILED/CANCELLED/EXPIRED`. Webhook đến cho đơn đã `EXPIRED` ⇒ xử lý theo chính sách đã thống nhất (mặc định: ghi nhận để đối soát UC-24, không tự nâng gói; hỏi người dùng nếu chưa có quy tắc).
+4. Đơn có TTL 15 phút (`expires_at`), trạng thái cuối `PAID/FAILED/CANCELLED/EXPIRED`. Webhook đến cho đơn đã `EXPIRED` ⇒ xử lý theo chính sách đã thống nhất (mặc định: ghi nhận để đối soát UC-27, không tự nâng gói; hỏi người dùng nếu chưa có quy tắc).
 5. Có `LocalMockPaymentAdapter` (sinh QR nội bộ + nút giả lập callback ký đúng HMAC) cho demo offline.
 
 ## 6. Log & bí mật

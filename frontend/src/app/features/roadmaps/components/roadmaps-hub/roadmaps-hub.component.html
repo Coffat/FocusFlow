@@ -1,0 +1,303 @@
+<div class="roadmaps-hub-viewport max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8 space-y-6">
+  <!-- PAGE HEADER -->
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div>
+      <div class="flex items-center gap-2">
+        <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-neutral-900 font-serif">
+          Roadmap Hub
+        </h1>
+        <span class="bg-emerald-50 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded border border-emerald-200">
+          AI HARNESS
+        </span>
+      </div>
+      <p class="text-xs sm:text-sm text-neutral-500 mt-1 leading-relaxed">
+        Quản lý các mục tiêu học tập dài hạn, cột mốc thích ứng (Milestones) và tối ưu hóa thời khóa biểu tự động.
+      </p>
+    </div>
+
+    <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto shrink-0">
+      <!-- Secondary Action: SCR-08 Adaptation & Domino Shift Rebalance -->
+      <button
+        type="button"
+        (click)="openAdaptationModal()"
+        data-testid="hub-open-adaptation-btn"
+        class="w-full sm:w-auto justify-center bg-[#FDF6E7] hover:bg-amber-100/80 text-[#B45309] border border-[#B45309]/30 px-4 py-2.5 rounded-full text-xs font-semibold inline-flex items-center gap-1.5 transition cursor-pointer text-center"
+      >
+        <span class="material-symbols-outlined text-[16px]" aria-hidden="true">swap_horiz</span>
+        <span>Kích hoạt lại / Tái cân bằng Domino Shift</span>
+      </button>
+
+      <!-- Primary Action: Obsidian Black Button -->
+      <button
+        type="button"
+        (click)="openCreateWizard(1)"
+        data-testid="hub-create-roadmap-btn"
+        class="w-full sm:w-auto justify-center bg-[#111111] hover:bg-[#246B4A] text-white px-5 py-2.5 rounded-full text-xs sm:text-sm font-semibold shadow-xs inline-flex items-center gap-2 transition active:scale-95 shrink-0 cursor-pointer group text-center"
+      >
+        <span class="material-symbols-outlined text-[18px] group-hover:rotate-90 transition-transform duration-200" aria-hidden="true">add</span>
+        <span>Khởi tạo Lộ trình Mới với AI</span>
+        <kbd class="font-mono text-[10px] bg-neutral-700 text-neutral-200 px-1.5 py-0.2 rounded border border-neutral-600 hidden sm:inline-block">C</kbd>
+      </button>
+    </div>
+  </div>
+
+  <!-- KPI SUMMARY STRIP (4 CARDS) -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+    <app-kpi-card
+      label="Tổng lộ trình"
+      [value]="totalCount()"
+      icon="alt_route"
+      tone="moss"
+      subtitle="Tất cả lộ trình học tập"
+      footerText="Zimmerman SRL"
+    />
+
+    <app-kpi-card
+      label="Đang hoạt động"
+      [value]="activeCount()"
+      icon="play_circle"
+      tone="emerald"
+      subtitle="Đạt giới hạn BR-001"
+      footerText="Thời khóa biểu tự động"
+    />
+
+    <app-kpi-card
+      label="Tạm dừng"
+      [value]="pausedCount()"
+      icon="pause_circle"
+      tone="amber"
+      subtitle="Domino Shift v2"
+      footerText="Tự động đóng băng"
+    />
+
+    <app-kpi-card
+      label="Hoàn thành"
+      [value]="completedCount()"
+      icon="task_alt"
+      tone="slate"
+      subtitle="Đã hoàn tất toàn bộ"
+      footerText="Lưu trữ chỉ đọc"
+    />
+  </div>
+
+  <!-- QUICK STARTER TEMPLATES STRIP (AWS, IELTS 7.5, FastAPI / System Design) -->
+  @if (totalCount() > 0) {
+    <div class="bg-[#FFFFFF] border border-[#DCDCDC] rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+      <div class="flex items-center gap-2 text-xs text-[#555555]">
+        <span class="material-symbols-outlined text-[16px] text-[#246B4A]" aria-hidden="true">auto_stories</span>
+        <span class="font-semibold text-[#111111]">Khởi tạo nhanh từ mẫu chuẩn:</span>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        @for (tpl of starterTemplates; track tpl.id) {
+          <button
+            type="button"
+            [attr.data-testid]="'hub-starter-template-btn-' + tpl.id"
+            (click)="onSelectTemplate(tpl)"
+            class="px-3 py-1.5 rounded-full text-xs font-medium bg-[#FAFAFA] hover:bg-[#EBF3EE] text-[#111111] hover:text-[#246B4A] border border-[#DCDCDC] hover:border-[#246B4A]/40 transition-colors cursor-pointer inline-flex items-center gap-1.5"
+          >
+            <span>{{ tpl.title }}</span>
+            <span class="font-mono text-[10px] text-[#8E8E8A]">({{ tpl.hoursPerWeek }}h/tuần)</span>
+          </button>
+        }
+      </div>
+    </div>
+  }
+
+  <!-- FILTER, SEARCH & VIEW SWITCHER STRIP -->
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 border-b border-neutral-200/60 pb-4 pt-2">
+    <div class="flex items-center gap-2 overflow-x-auto py-1 max-w-full no-scrollbar">
+      <button
+        type="button"
+        (click)="setFilter('ALL')"
+        class="shrink-0 whitespace-nowrap rounded-full px-4 py-1.5 text-xs font-semibold shadow-xs transition cursor-pointer"
+        [class.bg-neutral-900]="activeFilter() === 'ALL'"
+        [class.text-white]="activeFilter() === 'ALL'"
+        [class.bg-neutral-100]="activeFilter() !== 'ALL'"
+        [class.text-neutral-600]="activeFilter() !== 'ALL'"
+        [class.hover:bg-neutral-200]="activeFilter() !== 'ALL'"
+      >
+        Tất cả ({{ totalCount() }})
+      </button>
+
+      <button
+        type="button"
+        (click)="setFilter('ACTIVE')"
+        class="shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-medium cursor-pointer transition flex items-center gap-1.5"
+        [class.bg-neutral-900]="activeFilter() === 'ACTIVE'"
+        [class.text-white]="activeFilter() === 'ACTIVE'"
+        [class.bg-neutral-100]="activeFilter() !== 'ACTIVE'"
+        [class.text-neutral-600]="activeFilter() !== 'ACTIVE'"
+        [class.hover:bg-neutral-200]="activeFilter() !== 'ACTIVE'"
+      >
+        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+        <span>Đang kích hoạt ({{ activeCount() }})</span>
+      </button>
+
+      <button
+        type="button"
+        (click)="setFilter('PAUSED')"
+        class="shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-medium cursor-pointer transition flex items-center gap-1.5"
+        [class.bg-neutral-900]="activeFilter() === 'PAUSED'"
+        [class.text-white]="activeFilter() === 'PAUSED'"
+        [class.bg-neutral-100]="activeFilter() !== 'PAUSED'"
+        [class.text-neutral-600]="activeFilter() !== 'PAUSED'"
+        [class.hover:bg-neutral-200]="activeFilter() !== 'PAUSED'"
+      >
+        <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+        <span>Tạm dừng ({{ pausedCount() }})</span>
+      </button>
+
+      <button
+        type="button"
+        (click)="setFilter('COMPLETED')"
+        class="shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-medium cursor-pointer transition flex items-center gap-1.5"
+        [class.bg-neutral-900]="activeFilter() === 'COMPLETED'"
+        [class.text-white]="activeFilter() === 'COMPLETED'"
+        [class.bg-neutral-100]="activeFilter() !== 'COMPLETED'"
+        [class.text-neutral-600]="activeFilter() !== 'COMPLETED'"
+        [class.hover:bg-neutral-200]="activeFilter() !== 'COMPLETED'"
+      >
+        <span class="w-2 h-2 rounded-full bg-slate-400"></span>
+        <span>Đã hoàn thành ({{ completedCount() }})</span>
+      </button>
+    </div>
+
+    <div class="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
+      <div class="relative flex-1 sm:w-64 sm:flex-initial">
+        <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 text-[16px]" aria-hidden="true">search</span>
+        <input
+          type="text"
+          [ngModel]="searchQuery()"
+          (ngModelChange)="onSearchChange($event)"
+          placeholder="Tìm kiếm lộ trình..."
+          class="bg-white border border-neutral-200 rounded-xl pl-9 pr-3.5 py-1.5 text-xs w-full focus:outline-none focus:border-neutral-900 focus:ring-0 transition placeholder:text-neutral-400"
+        />
+      </div>
+
+      <div class="flex items-center bg-white border border-neutral-200 rounded-xl p-0.5 shadow-2xs shrink-0">
+        <button
+          type="button"
+          (click)="setViewMode('grid')"
+          aria-label="Grid View"
+          class="p-1.5 rounded-lg transition cursor-pointer"
+          [class.bg-neutral-100]="viewMode() === 'grid'"
+          [class.text-neutral-900]="viewMode() === 'grid'"
+          [class.text-neutral-400]="viewMode() !== 'grid'"
+          title="Dạng lưới"
+        >
+          <span class="material-symbols-outlined text-[18px]" aria-hidden="true">grid_view</span>
+        </button>
+        <button
+          type="button"
+          (click)="setViewMode('list')"
+          aria-label="List View"
+          class="p-1.5 rounded-lg transition cursor-pointer"
+          [class.bg-neutral-100]="viewMode() === 'list'"
+          [class.text-neutral-900]="viewMode() === 'list'"
+          [class.text-neutral-400]="viewMode() !== 'list'"
+          title="Dạng danh sách"
+        >
+          <span class="material-symbols-outlined text-[18px]" aria-hidden="true">format_list_bulleted</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTENT SECTION -->
+  @if (totalCount() === 0 && !roadmapService.loading()) {
+    <div class="rounded-3xl bg-white border border-neutral-200/80 p-6 md:p-8 shadow-xs">
+      <app-blueprint-empty-state
+        title="Chưa có lộ trình học tập nào"
+        description="Hãy bắt đầu hành trình tự học thích ứng bằng cách mô tả mục tiêu của bạn. FocusFlow sẽ phân rã thành các Milestone và đồng bộ thời khóa biểu tự động."
+        ctaLabel="Tạo lộ trình học tập"
+        ctaRoute="/roadmaps/new"
+        shortcutKey="C"
+        (selectTemplate)="onSelectTemplate($event)"
+        (createCustomRoadmap)="onCreateCustomRoadmap()"
+      />
+    </div>
+  }
+
+  @if (totalCount() > 0) {
+    @if (filteredRoadmaps().length === 0) {
+      <div class="text-center py-12 bg-white rounded-2xl border border-neutral-200">
+        <span class="material-symbols-outlined text-4xl text-neutral-400 mb-2" aria-hidden="true">search_off</span>
+        <h3 class="font-bold text-base text-neutral-900">Không tìm thấy lộ trình phù hợp</h3>
+        <p class="text-xs text-neutral-500 mt-1">
+          Không có lộ trình nào khớp với bộ lọc hoặc từ khóa tìm kiếm "{{ searchQuery() }}".
+        </p>
+        <button
+          type="button"
+          (click)="setFilter('ALL'); onSearchChange('')"
+          class="mt-4 px-4 py-1.5 rounded-full bg-neutral-100 hover:bg-neutral-200 text-xs font-medium text-neutral-800 transition cursor-pointer"
+        >
+          Xóa bộ lọc
+        </button>
+      </div>
+    }
+
+    @if (viewMode() === 'grid') {
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        @for (roadmap of filteredRoadmaps(); track roadmap.id) {
+          <app-roadmap-card
+            [roadmap]="roadmap"
+            variant="full"
+            (pauseRoadmap)="onPauseRoadmap($event)"
+            (resumeRoadmap)="onResumeRoadmap($event)"
+            (archive)="onArchiveRoadmap($event)"
+          />
+        }
+
+        <!-- Dashed "Khởi tạo Lộ trình Mới với AI" Card -->
+        <button
+          type="button"
+          (click)="openCreateWizard(1)"
+          data-testid="hub-dashed-create-card"
+          class="border-2 border-dashed border-neutral-300 hover:border-[#246B4A] bg-neutral-50/50 hover:bg-neutral-100/60 rounded-2xl p-6 sm:p-8 flex flex-col items-center justify-center text-center hover:-translate-y-1 hover:shadow-md transition-all duration-200 cursor-pointer h-full group w-full"
+        >
+          <div class="w-12 h-12 rounded-full border border-neutral-300 flex items-center justify-center text-neutral-600 mb-4 bg-white shadow-xs group-hover:scale-110 group-hover:border-[#246B4A] group-hover:text-[#246B4A] transition-all duration-200">
+            <span class="material-symbols-outlined text-[24px]" aria-hidden="true">add</span>
+          </div>
+          <h3 class="font-bold text-neutral-900 text-base mb-1 tracking-tight">Khởi tạo Lộ trình Mới với AI</h3>
+          <p class="text-xs text-neutral-500 max-w-xs leading-relaxed">
+            Nhập mục tiêu học tập bất kỳ và để AI phân rã thành các Milestone và Task phù hợp với quỹ giờ của bạn.
+          </p>
+          <div class="bg-neutral-200/60 text-neutral-700 text-[10px] px-2.5 py-1 rounded-full mt-4 font-medium flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[13px] text-neutral-500" aria-hidden="true">auto_awesome</span>
+            <span>Hỗ trợ quy tắc BR-001 • Bản thảo nháp</span>
+          </div>
+        </button>
+      </div>
+    }
+
+    @if (viewMode() === 'list') {
+      <div class="flex flex-col gap-3">
+        @for (roadmap of filteredRoadmaps(); track roadmap.id) {
+          <app-roadmap-card
+            [roadmap]="roadmap"
+            variant="compact"
+          />
+        }
+      </div>
+    }
+  }
+
+  <!-- 4-STEP ROADMAP CREATION WIZARD DIALOG HOST -->
+  <app-roadmap-wizard-host
+    [open]="wizardOpen()"
+    [initialStep]="wizardStep()"
+    [initialTitle]="wizardInitialTitle()"
+    [initialLevel]="wizardInitialLevel()"
+    [initialWeeklyHours]="wizardInitialWeeklyHours()"
+    (closeWizard)="closeCreateWizard()"
+  />
+
+  <!-- SCR-08 ADAPTATION & DOMINO SHIFT MODAL DIALOG -->
+  <app-adaptation-modal-dialog
+    [open]="adaptationModalOpen()"
+    [roadmapId]="adaptationRoadmapId()"
+    [roadmapTitle]="adaptationRoadmapTitle()"
+    (closeModal)="closeAdaptationModal()"
+    (confirmAdaptation)="onConfirmAdaptation($event)"
+  />
+</div>

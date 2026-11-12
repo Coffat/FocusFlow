@@ -85,6 +85,7 @@ class AvailabilityConfigurationDTO:
     default_daily_quota_minutes: int = 120
     availability_slots: Sequence[AvailabilitySlotDTO] = ()
     disabled_weekdays: frozenset[str] = field(default_factory=frozenset)
+    timezone: str = "UTC"
 
 
 def normalize_weekday_name(day_val: int | str | date) -> str:

@@ -1,4 +1,4 @@
-# Quy tắc nghiệp vụ cô đọng (nguồn: SRS v1.2)
+# Quy tắc nghiệp vụ cô đọng (nguồn: SRS v1.3)
 
 Mục lục: 1. BUSR · 2. Quyết định OS-01..08 · 3. State machine · 4. Quá hạn · 5. Pause/Domino · 6. Phiên học · 7. Learner profile · 8. Giới hạn số · 9. Báo cáo · 10. Admin
 
@@ -33,15 +33,15 @@ Mục lục: 1. BUSR · 2. Quyết định OS-01..08 · 3. State machine · 4. Q
 - Proposal: `DRAFT → APPLIED | DISCARDED`; ≤1 DRAFT/roadmap.
 - Derived (không lưu): `OVERDUE`, `BLOCKED`, `STALLED (reschedule_count>=3)`.
 
-## 4. Quá hạn (UC-22 / FR-ADAPT-001)
+## 4. Quá hạn (UC-23/25 / FR-ADAPT-001)
 - Chạy hằng ngày **00:05 theo `User.timezone`** (SRS). ADR-004/010 ghi "00:05 UTC+7" — xem conflicts #2. Cách cài đề xuất để đúng cả hai: scheduler tick mỗi 15–30 phút; với mỗi user lấy `local_now`; nếu `local_now ≥ 00:05` và chưa quét ngày `local_date` đó thì quét (lũy đẳng bằng bảng/khóa `(user_id, local_date)`); `SKIP LOCKED`.
 - Chỉ xét roadmap `ACTIVE` (PAUSED/ARCHIVED không quét). Gửi email qua `EmailNotificationPort` (SMTP adapter + mock). Không gọi LLM. UI "Needs Attention" lấy danh sách OVERDUE kèm nút "Dời lịch hợp lý bằng AI" theo roadmap.
-- Dời thủ công (UC-13) hoặc AI Reschedule (UC-21) mới đổi `scheduled_date`, tăng `reschedule_count`, ghi `schedule_change_logs`. `reschedule_count >= 3` ⇒ STALLED: khóa dời tự động, phát `TaskStalledThresholdReachedEvent`; người học chọn: Re-commit ngày mới / AI Micro-Stepping (tách thành 2–3 task ≤30 phút) / chuyển Backlog hoặc Cancel.
+- Dời thủ công (UC-13) hoặc AI Reschedule (UC-23) mới đổi `scheduled_date`, tăng `reschedule_count`, ghi `schedule_change_logs`. `reschedule_count >= 3` ⇒ STALLED: khóa dời tự động, phát `TaskStalledThresholdReachedEvent`; người học chọn: Re-commit ngày mới / AI Micro-Stepping (tách thành 2–3 task ≤30 phút) / chuyển Backlog hoặc Cancel.
 
-## 5. Pause / Resume (UC-20)
+## 5. Pause / Resume (UC-22)
 - `PauseRecord(start,end)` hợp lệ. `DominoShiftEngine` (thuần) tính dịch chuyển theo số ngày khả dụng, kiểm qua UC-12, ghi `schedule_change_logs` (trước/sau, lý do, số ngày). Không tăng `reschedule_count`. Resume sớm/hết hạn ⇒ ACTIVE nếu chưa vượt trần gói.
 
-## 6. Phiên học (UC-14/15)
+## 6. Phiên học (UC-14/15/16)
 - Heartbeat `POST /api/v1/sessions/{id}/heartbeat` mỗi 60s ghi `actual_minutes` + `last_heartbeat_at`. Sweeper mỗi 60s quét `IN_PROGRESS` có `last_heartbeat_at < now()-5m`, áp OS-01, phát `StudySessionCompletedEvent` (outbox).
 - Scratchpad/Key Takeaways lưu `study_notes`; ghi chú nháp bảo mật không đưa vào LLM.
 
@@ -70,8 +70,8 @@ Mục lục: 1. BUSR · 2. Quyết định OS-01..08 · 3. State machine · 4. Q
 | REST P95 | ≤250ms (ADR-002); SRS: ≤200ms với 20 user đồng thời |
 | TTFT SSE | ≤2.5s |
 
-## 9. Báo cáo & AI Review (UC-18/19)
-- Thống kê toán học tất định (Adherence = buổi tham gia / buổi đã lên lịch, loại khoảng PAUSED; Velocity...) phải chính xác 100% và độc lập LLM. AI Review (UC-19, `<<extend>>` UC-18) chỉ định tính, dùng số liệu đã tính + Key Takeaways đã sanitize.
+## 9. Báo cáo, Prove Mode & Weekly Review (UC-19/20/21)
+- Thống kê toán học tất định (Adherence = buổi tham gia / buổi đã lên lịch, loại khoảng PAUSED; Velocity...) phải chính xác 100% và độc lập LLM. Weekly Review (UC-21) chỉ định tính, dùng số liệu đã tính + Key Takeaways đã sanitize.
 
-## 10. Admin (UC-23/24/25)
+## 10. Admin (UC-26/27/28)
 - Quản lý user/tier/quota, đối soát giao dịch với Payment Gateway, dashboard giám sát (`ai_usage_logs`, sức khỏe hệ thống, doanh thu). Phản hồi ≤500ms, non-blocking; mọi thao tác nhạy cảm vào audit stream; ADMIN session 8h.

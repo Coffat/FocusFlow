@@ -12,12 +12,12 @@ import { cn } from '../../utils/cn';
   `
 })
 export class CardComponent {
-  readonly userClass = input<string>('', { alias: 'class' });
+  readonly class = input<string>('');
 
   readonly classes = computed(() => {
     return cn(
       'rounded-xl border border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)] shadow-xs p-6 space-y-4',
-      this.userClass()
+      this.class()
     );
   });
 }

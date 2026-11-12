@@ -94,6 +94,7 @@ class ExecutionScheduleSyncAdapter(ExecutionScheduleSyncPort):
         proposed_tasks: Sequence[ProposedTaskSyncItemDTO],
         proposed_dependencies: Sequence[ProposedDependencySyncItemDTO],
         now: datetime,
+        protected_task_ids: Sequence[UUID] = (),
     ) -> ScheduleSyncResultDTO:
         """Apply OS-03 Merge / Future Shift:
         - Preserves any existing tasks for `roadmap_id` with `status == 'COMPLETED'`.
@@ -106,11 +107,15 @@ class ExecutionScheduleSyncAdapter(ExecutionScheduleSyncPort):
         existing_tasks = list((await self._session.execute(existing_stmt)).scalars().all())
 
         completed_tasks: dict[UUID, TaskORM] = {}
+        protected_tasks: dict[UUID, TaskORM] = {}
         non_completed_tasks: list[TaskORM] = []
+        protected_ids = set(protected_task_ids)
 
         for task in existing_tasks:
             if task.status == "COMPLETED":
                 completed_tasks[task.id] = task
+            elif task.id in protected_ids:
+                protected_tasks[task.id] = task
             else:
                 non_completed_tasks.append(task)
 
@@ -153,17 +158,17 @@ class ExecutionScheduleSyncAdapter(ExecutionScheduleSyncPort):
         await self._session.flush()
 
         # Keep completed tasks linked to the current official_schedule_id
-        for comp_task in completed_tasks.values():
+        for comp_task in (*completed_tasks.values(), *protected_tasks.values()):
             comp_task.official_schedule_id = official_schedule_id
             comp_task.updated_at = now
 
         # Insert new tasks (skipping any task_id that is already COMPLETED)
-        valid_task_ids: set[UUID] = set(completed_tasks.keys())
+        valid_task_ids: set[UUID] = set(completed_tasks) | set(protected_tasks)
         inserted_count = 0
         inserted_minutes = 0
 
         for item in proposed_tasks:
-            if item.task_id in completed_tasks:
+            if item.task_id in completed_tasks or item.task_id in protected_tasks:
                 continue
             new_id = item.task_id
             if new_id in tasks_with_sessions:
@@ -216,9 +221,12 @@ class ExecutionScheduleSyncAdapter(ExecutionScheduleSyncPort):
 
         await self._session.flush()
 
-        completed_minutes = sum(int(t.estimated_minutes or 0) for t in completed_tasks.values())
-        total_active_sessions = len(completed_tasks) + inserted_count
-        total_planned_minutes = completed_minutes + inserted_minutes
+        preserved_minutes = sum(
+            int(task.estimated_minutes or 0)
+            for task in (*completed_tasks.values(), *protected_tasks.values())
+        )
+        total_active_sessions = len(completed_tasks) + len(protected_tasks) + inserted_count
+        total_planned_minutes = preserved_minutes + inserted_minutes
         affected_tasks_count = replaced_count + inserted_count
         total_shifted_minutes = shifted_minutes if replaced_count > 0 else inserted_minutes
 

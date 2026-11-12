@@ -10,6 +10,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     SmallInteger,
     String,
     Text,
@@ -94,6 +95,13 @@ class RoadmapORM(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="INITIALIZED")
     start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     target_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    weekly_reschedule_budget: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=3)
+    weekly_reschedule_used: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
+    budget_week_start: Mapped[date | None] = mapped_column(Date, nullable=True)
+    last_study_activity_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    reset_ritual_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
@@ -134,6 +142,7 @@ class MilestoneORM(Base):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="PENDING")
+    proof_status: Mapped[str] = mapped_column(String(20), nullable=False, default="UNVERIFIED")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
@@ -167,6 +176,10 @@ class OfficialScheduleORM(Base):
     )
     total_sessions: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_planned_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    buffer_minutes_per_week: Mapped[int] = mapped_column(Integer, nullable=False, default=60)
+    recovery_window_days: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=7)
+    daily_workload_cap_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=180)
+    stability_weight: Mapped[float] = mapped_column(Numeric(4, 3), nullable=False, default=0.8)
     activated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
@@ -216,6 +229,16 @@ class ScheduleProposalORM(Base):
         nullable=False,
     )
     proposal_data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    proposal_type: Mapped[str] = mapped_column(
+        String(35), nullable=False, default="INITIAL_SCHEDULE"
+    )
+    original_proposal_data: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
+    user_edit_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    pedagogical_warnings: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="DRAFT")
     applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(

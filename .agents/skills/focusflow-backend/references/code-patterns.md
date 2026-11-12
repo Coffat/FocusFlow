@@ -31,7 +31,7 @@ class Task:
 
     def reschedule_due_to_overdue(self, new_date: date) -> None:
         if self.is_stalled:
-            raise DomainError("TASK_STALLED")      # buộc người học can thiệp (UC-21 tiền điều kiện)
+            raise DomainError("TASK_STALLED")      # buộc người học can thiệp (UC-23 tiền điều kiện)
         self.scheduled_date = new_date
         self.reschedule_count += 1
 ```

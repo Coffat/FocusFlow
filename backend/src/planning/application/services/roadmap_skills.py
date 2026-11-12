@@ -90,7 +90,7 @@ TASK_DECOMPOSER_SKILL = SkillDefinition(
         "3. Mỗi nhiệm vụ có `learning_objective` và `completion_criteria` đo lường được bằng tiếng Việt.\n"
         "4. Sử dụng công cụ `get_learning_resources_and_guidance` để tra cứu và đính kèm danh sách `learning_resources` (mỗi mục gồm `title`, `url`, `type`: DOCS|TUTORIAL|VIDEO|BOOK|PRACTICE, `description`) và chỉ dẫn sư phạm cho từng nhiệm vụ.\n"
         "5. Đồ thị `dependencies` (`predecessor_id -> successor_id`) phải là DAG không chu trình, không ngược thứ tự tiên quyết.\n"
-        "6. KHÔNG tự áp dụng lịch trình chính thức; chỉ tạo dữ liệu bản nháp (`ScheduleProposal(DRAFT)`)."
+        "6. KHÔNG sinh scheduled_date, scheduled_start hoặc scheduled_end. Bộ lập lịch tất định sẽ phân bổ thời gian sau khi nhận Roadmap."
     ),
 )
 
@@ -214,6 +214,7 @@ def build_task_decomposer_prompt(
         "(mỗi nhiệm vụ 30..120 phút, gắn đúng milestone_id của cột mốc APPROVED, kèm task_type, "
         "learning_objective, completion_criteria và danh sách learning_resources tra cứu từ Knowledge Base) "
         "và danh sách cạnh phụ thuộc (`dependencies`).\n"
+        "Chỉ sinh nội dung học tập và estimated_minutes; không gán ngày hoặc giờ học.\n"
         "Đảm bảo cân bằng giữa lý thuyết (THEORY), thực hành (PRACTICE), ôn tập (REVIEW) và dự án (PROJECT).\n"
         f"{extra_block}\n"
         f"{context_block}".strip()

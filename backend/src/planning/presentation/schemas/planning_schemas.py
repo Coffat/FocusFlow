@@ -32,6 +32,24 @@ class GoalResponse(BaseModel):
     updated_at: datetime
 
 
+class CreateKnowledgeUrlRequest(BaseModel):
+    title: str = Field(default="Nguồn học liệu URL", max_length=255)
+    url: str = Field(..., min_length=8, max_length=2048)
+
+
+class KnowledgeSourceResponse(BaseModel):
+    id: UUID
+    goal_id: UUID
+    source_type: str
+    title: str
+    ingestion_status: str
+    chunk_count: int
+    provenance_metadata: dict[str, Any] = Field(default_factory=dict)
+    error_detail: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
 class SubmitClarificationAnswersRequest(BaseModel):
     answers: list[ClarificationAnswerItem] = Field(default_factory=list)
     skipped: bool = Field(default=False)
@@ -180,6 +198,15 @@ class SoftOverflowWarningSchema(BaseModel):
     message: str
 
 
+class ProposedScheduleBlockSchema(BaseModel):
+    task_id: UUID | str
+    sequence_in_task: int = Field(..., ge=1)
+    block_date: date
+    scheduled_start: datetime
+    scheduled_end: datetime
+    scheduled_duration_minutes: int = Field(..., ge=10, le=240)
+
+
 class ScheduleProposalResponse(BaseModel):
     id: UUID
     roadmap_id: UUID
@@ -188,6 +215,7 @@ class ScheduleProposalResponse(BaseModel):
     is_valid: bool = True
     has_soft_overflow: bool = False
     tasks: list[dict[str, Any]] = Field(default_factory=list)
+    schedule_blocks: list[ProposedScheduleBlockSchema] = Field(default_factory=list)
     dependencies: list[dict[str, Any]] = Field(default_factory=list)
     violations: list[ConstraintViolationSchema] = Field(default_factory=list)
     soft_overflow_warnings: list[SoftOverflowWarningSchema] = Field(default_factory=list)

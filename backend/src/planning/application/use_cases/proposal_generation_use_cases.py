@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
@@ -8,6 +9,7 @@ from src.account.public_api import (
     AvailabilitySnapshotDTO,
     LearnerProfileQueryPort,
     QuotaFacadePort,
+    UserQueryPort,
 )
 from src.execution.public_api import ExecutionScheduleSyncPort
 from src.planning.application.dtos.planning_dtos import SseJobTicketDTO
@@ -18,7 +20,13 @@ from src.planning.application.ports.planning_repository_ports import (
     RoadmapRepositoryPort,
     ScheduleProposalRepositoryPort,
 )
+from src.planning.application.ports.schedule_block_repository_port import (
+    ScheduleBlockRepositoryPort,
+)
 from src.planning.application.ports.sse_job_port import SseJobPort
+from src.planning.application.services.existing_schedule_occupancy import (
+    expand_existing_schedule_occupancy,
+)
 from src.planning.application.services.knowledge_tool_dispatcher import (
     KnowledgeToolDispatcher,
     RoadmapPipelineStage,
@@ -101,15 +109,11 @@ SCHEDULE_PROPOSAL_RESPONSE_SCHEMA: dict[str, Any] = {
                         "minimum": AI_BLOCK_MIN_MINUTES,
                         "maximum": AI_BLOCK_MAX_MINUTES,
                     },
-                    "scheduled_date": {"type": "string"},
-                    "scheduled_start": {"type": "string"},
-                    "scheduled_end": {"type": "string"},
                 },
                 "required": [
                     "milestone_id",
                     "title",
                     "estimated_minutes",
-                    "scheduled_date",
                 ],
             },
         },
@@ -243,6 +247,13 @@ def normalize_proposal_task_ids_and_dependencies(
 
     normalized["tasks"] = cleaned_tasks
     normalized["dependencies"] = cleaned_deps
+    raw_blocks = normalized.get("schedule_blocks")
+    if isinstance(raw_blocks, list):
+        normalized["schedule_blocks"] = [
+            {**block, "task_id": id_remap.get(str(block.get("task_id")), str(block.get("task_id")))}
+            for block in raw_blocks
+            if isinstance(block, dict)
+        ]
     return normalized
 
 
@@ -265,6 +276,8 @@ class ExecuteScheduleProposalGenerationUseCase:
         uow: AsyncUnitOfWork,
         enable_tier3_judge: bool = True,
         knowledge_base: KnowledgeBasePort | None = None,
+        user_query_port: UserQueryPort | None = None,
+        block_repo: ScheduleBlockRepositoryPort | None = None,
     ) -> None:
         self._goal_repo = goal_repo
         self._roadmap_repo = roadmap_repo
@@ -279,6 +292,8 @@ class ExecuteScheduleProposalGenerationUseCase:
         self._uow = uow
         self._enable_tier3_judge = enable_tier3_judge
         self._kb = knowledge_base
+        self._user_query_port = user_query_port
+        self._block_repo = block_repo
 
     async def execute(
         self,
@@ -304,6 +319,10 @@ class ExecuteScheduleProposalGenerationUseCase:
             goal = await self._goal_repo.get_by_id(roadmap.goal_id)
             avail_snapshot = await self._availability_port.get_active_availability(user_id)
             avail_config = build_availability_config_from_snapshot(avail_snapshot)
+            if self._user_query_port is not None:
+                user_snapshot = await self._user_query_port.get_user_by_id(user_id)
+                if user_snapshot is not None:
+                    avail_config = replace(avail_config, timezone=user_snapshot.timezone)
             learner_profile = await self._learner_profile_port.get_learner_profile(user_id)
             goal = await self._goal_repo.get_by_id(roadmap.goal_id)
             prior_knowledge = goal.prior_knowledge_level if goal is not None else "BEGINNER"
@@ -317,6 +336,11 @@ class ExecuteScheduleProposalGenerationUseCase:
                 other_roadmap_ids,
                 roadmap_target_dates=roadmap_target_dates,
             )
+            if self._block_repo is not None:
+                existing_tasks = expand_existing_schedule_occupancy(
+                    existing_tasks,
+                    await self._block_repo.list_by_roadmap_ids(other_roadmap_ids),
+                )
 
             await self._sse.append_event(
                 job_id=job_id,
@@ -341,9 +365,7 @@ class ExecuteScheduleProposalGenerationUseCase:
                 for slot in avail_config.availability_slots
                 if slot.is_active
             ]
-            start_date_str = (
-                roadmap.start_date.isoformat() if roadmap.start_date is not None else "2026-11-02"
-            )
+            start_date_str = (roadmap.start_date or effective_now.date()).isoformat()
 
             system_prompt = TASK_DECOMPOSER_SKILL.system_instruction
             legacy_block = (
@@ -439,7 +461,7 @@ class ExecuteScheduleProposalGenerationUseCase:
                 goal_title=goal.title if goal is not None else roadmap.title,
                 max_retries=max_retries,
                 on_retry_callback=_on_retry,
-                start_date=roadmap.start_date,
+                start_date=roadmap.start_date or effective_now.date(),
                 milestone_order_map=milestone_order_map,
                 tools=(
                     dispatcher.get_allowed_tool_declarations() if dispatcher is not None else None
@@ -447,6 +469,8 @@ class ExecuteScheduleProposalGenerationUseCase:
                 tool_executor=dispatcher.dispatch if dispatcher is not None else None,
                 max_tool_calls=TASK_DECOMPOSER_SKILL.max_tool_calls,
                 thinking_level=TASK_DECOMPOSER_SKILL.thinking_level,
+                deterministic_allocation=True,
+                preferred_session_minutes=learner_profile.opt_session_minutes,
             )
 
             normalized_data = normalize_proposal_task_ids_and_dependencies(

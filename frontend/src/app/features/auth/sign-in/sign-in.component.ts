@@ -10,8 +10,13 @@ import { GoogleSsoService } from '../../../core/services/google-sso.service';
 import { TranslationService, LanguageCode } from '../../../core/services/translation.service';
 import { TranslatePipe } from '../../../shared/pipes/translate.pipe';
 import { GoogleAuthRequest, LoginRequest, LoginResponse } from '../../../models/auth.interface';
-import { AuthHeaderComponent } from '../shared/auth-header/auth-header.component';
-import { SocialAuthComponent } from '../shared/social-auth/social-auth.component';
+import {
+  AuthCardComponent,
+  AuthHeaderComponent,
+  SocialAuthComponent,
+  AuthFormFieldComponent,
+  AuthNoticeBannerComponent
+} from '../shared';
 
 @Component({
   selector: 'app-sign-in',
@@ -21,8 +26,11 @@ import { SocialAuthComponent } from '../shared/social-auth/social-auth.component
     ReactiveFormsModule,
     RouterLink,
     TranslatePipe,
+    AuthCardComponent,
     AuthHeaderComponent,
-    SocialAuthComponent
+    SocialAuthComponent,
+    AuthFormFieldComponent,
+    AuthNoticeBannerComponent
   ],
   templateUrl: './sign-in.component.html',
   styleUrl: './sign-in.component.scss'

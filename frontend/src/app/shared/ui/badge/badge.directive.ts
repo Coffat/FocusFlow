@@ -10,7 +10,7 @@ export type BadgeVariant = 'default' | 'secondary' | 'outline' | 'destructive' |
 })
 export class BadgeDirective {
   readonly variant = input<BadgeVariant>('default');
-  readonly userClass = input<string>('', { alias: 'class' });
+  readonly class = input<string>('');
 
   readonly classes = computed(() => {
     const base = 'inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--ring)] focus:ring-offset-2';
@@ -23,6 +23,6 @@ export class BadgeDirective {
       success: 'border-transparent bg-emerald-600 text-white shadow-xs'
     };
 
-    return cn(base, variants[this.variant()], this.userClass());
+    return cn(base, variants[this.variant()], this.class());
   });
 }

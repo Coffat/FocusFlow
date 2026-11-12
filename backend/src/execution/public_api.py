@@ -375,6 +375,7 @@ class ExecutionScheduleSyncPort(Protocol):
         proposed_tasks: Sequence[ProposedTaskSyncItemDTO],
         proposed_dependencies: Sequence[ProposedDependencySyncItemDTO],
         now: datetime,
+        protected_task_ids: Sequence[UUID] = (),
     ) -> ScheduleSyncResultDTO: ...
 
 

@@ -49,6 +49,39 @@ class RoadmapTaskQueryPort(Protocol):
     async def get_task_summary(self, task_id: UUID) -> TaskSummaryDTO | None: ...
 
 
+@dataclass(frozen=True, slots=True)
+class MilestoneOwnershipDTO:
+    milestone_id: UUID
+    roadmap_id: UUID
+    user_id: UUID
+    title: str
+
+
+class MilestoneOwnershipQueryPort(Protocol):
+    async def get_milestone(self, milestone_id: UUID) -> MilestoneOwnershipDTO | None: ...
+
+    async def roadmap_belongs_to(self, roadmap_id: UUID, user_id: UUID) -> bool: ...
+
+
+_milestone_ownership_factory: Any = None
+
+
+def register_milestone_ownership_factory(factory: Any) -> None:
+    global _milestone_ownership_factory
+    _milestone_ownership_factory = factory
+
+
+def create_milestone_ownership_port(session: Any) -> MilestoneOwnershipQueryPort:
+    global _milestone_ownership_factory
+    if _milestone_ownership_factory is None:
+        import importlib
+
+        importlib.import_module("src.planning.infrastructure.adapters.milestone_ownership_adapter")
+    assert callable(_milestone_ownership_factory)
+    result: MilestoneOwnershipQueryPort = _milestone_ownership_factory(session)
+    return result
+
+
 @dataclass(frozen=True)
 class ScheduleBlockSyncDTO:
     """Read-only ScheduleBlock DTO exposed for Calendar Sync (UC-17)."""

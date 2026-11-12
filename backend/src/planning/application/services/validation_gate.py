@@ -2,7 +2,7 @@ import asyncio
 import inspect
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 from uuid import UUID
 
@@ -46,6 +46,14 @@ logger = structlog.get_logger(__name__)
 
 TIER3_JUDGE_TIMEOUT_SECONDS: float = 5.0
 DEFAULT_MAX_RETRIES: int = 2
+
+
+def _safe_minutes(value: object) -> int:
+    try:
+        return int(str(value))
+    except (TypeError, ValueError):
+        return 0
+
 
 PEDAGOGICAL_JUDGE_RESPONSE_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -235,6 +243,8 @@ class ProposalValidationGateOrchestrator:
         )
 
         minutes_by_date: dict[date, list[tuple[int, int]]] = {}
+        raw_blocks = proposal_data.get("schedule_blocks")
+        has_blocks = isinstance(raw_blocks, list)
 
         for idx, task in enumerate(raw_tasks):
             if not isinstance(task, dict):
@@ -310,8 +320,106 @@ class ProposalValidationGateOrchestrator:
                         suggested_fix="Cung cấp ngày học hợp lệ theo định dạng YYYY-MM-DD.",
                     )
                 )
-            elif est_mins > 0:
+            elif est_mins > 0 and not has_blocks:
                 minutes_by_date.setdefault(sched_date, []).append((idx, est_mins))
+
+        if has_blocks:
+            task_efforts = {
+                str(task.get("task_id") or task.get("id")): _safe_minutes(
+                    task.get("estimated_minutes")
+                )
+                for task in raw_tasks
+                if isinstance(task, dict)
+            }
+            allocated_efforts: dict[str, int] = {}
+            block_intervals: list[tuple[int, datetime, datetime]] = []
+            block_bounds: dict[str, tuple[datetime, datetime]] = {}
+            block_sequences: set[tuple[str, int]] = set()
+            assert isinstance(raw_blocks, list)
+            for idx, block in enumerate(raw_blocks):
+                if not isinstance(block, dict):
+                    continue
+                task_id = str(block.get("task_id"))
+                block_date = parse_iso_date(block.get("block_date"))
+                start = parse_iso_datetime(block.get("scheduled_start"))
+                end = parse_iso_datetime(block.get("scheduled_end"))
+                duration = _safe_minutes(block.get("scheduled_duration_minutes"))
+                sequence = _safe_minutes(block.get("sequence_in_task"))
+                if (
+                    task_id not in task_efforts
+                    or block_date is None
+                    or start is None
+                    or end is None
+                    or block_date != start.date()
+                    or duration < 10
+                    or duration > 240
+                    or int((end - start).total_seconds() // 60) != duration
+                    or sequence < 1
+                    or (task_id, sequence) in block_sequences
+                ):
+                    violations.append(
+                        ConstraintViolationDTO(
+                            task_index=idx,
+                            field="schedule_blocks",
+                            rule_code="INVALID_SCHEDULE_BLOCK",
+                            expected_bound="Task hợp lệ, thời gian tăng và phiên 10..240 phút",
+                            actual_value=str(block),
+                            suggested_fix="Xếp lại các phiên học theo thời gian rảnh.",
+                        )
+                    )
+                    continue
+                block_sequences.add((task_id, sequence))
+                block_intervals.append((idx, start, end))
+                first, last = block_bounds.get(task_id, (start, end))
+                block_bounds[task_id] = min(first, start), max(last, end)
+                allocated_efforts[task_id] = allocated_efforts.get(task_id, 0) + duration
+                minutes_by_date.setdefault(block_date, []).append((idx, duration))
+            block_intervals.sort(key=lambda item: item[1])
+            for previous, current in zip(block_intervals, block_intervals[1:], strict=False):
+                if current[1] < previous[2]:
+                    violations.append(
+                        ConstraintViolationDTO(
+                            task_index=current[0],
+                            field="schedule_blocks",
+                            rule_code="SCHEDULE_BLOCK_OVERLAP",
+                            expected_bound="Các phiên học không trùng giờ",
+                            actual_value=f"{current[1].isoformat()} < {previous[2].isoformat()}",
+                            suggested_fix="Dời phiên học sang khung giờ còn trống.",
+                        )
+                    )
+            for task_id, effort in task_efforts.items():
+                if allocated_efforts.get(task_id, 0) != effort:
+                    violations.append(
+                        ConstraintViolationDTO(
+                            task_index=None,
+                            field="schedule_blocks",
+                            rule_code="SCHEDULE_BLOCK_EFFORT_MISMATCH",
+                            expected_bound=f"{effort} phút cho task {task_id}",
+                            actual_value=f"{allocated_efforts.get(task_id, 0)} phút",
+                            suggested_fix="Phân bổ đủ nỗ lực ước tính của nhiệm vụ.",
+                        )
+                    )
+            for task in raw_tasks:
+                if not isinstance(task, dict):
+                    continue
+                task_id = str(task.get("task_id") or task.get("id"))
+                bounds = block_bounds.get(task_id)
+                if bounds is None:
+                    continue
+                if (
+                    parse_iso_datetime(task.get("scheduled_start")) != bounds[0]
+                    or parse_iso_datetime(task.get("scheduled_end")) != bounds[1]
+                ):
+                    violations.append(
+                        ConstraintViolationDTO(
+                            task_index=None,
+                            field="schedule_blocks",
+                            rule_code="SCHEDULE_BLOCK_TIME_MISMATCH",
+                            expected_bound="Giờ bắt đầu/kết thúc nhiệm vụ khớp các phiên học",
+                            actual_value=task_id,
+                            suggested_fix="Cập nhật thời gian nhiệm vụ theo phiên đầu và phiên cuối.",
+                        )
+                    )
 
         for sched_date, day_entries in minutes_by_date.items():
             daily_total = sum(m for _, m in day_entries)
@@ -353,9 +461,24 @@ class ProposalValidationGateOrchestrator:
         mode_upper = (availability.mode or "MODE_A").strip().upper()
         is_mode_b = mode_upper in ("MODE_B", "FIXED_SLOTS", "SLOTS")
 
+        raw_blocks = proposal_data.get("schedule_blocks")
+        scheduling_items = raw_tasks
+        if isinstance(raw_blocks, list):
+            scheduling_items = [
+                {
+                    "task_id": block.get("task_id"),
+                    "estimated_minutes": block.get("scheduled_duration_minutes"),
+                    "scheduled_date": block.get("block_date"),
+                    "scheduled_start": block.get("scheduled_start"),
+                    "scheduled_end": block.get("scheduled_end"),
+                }
+                for block in raw_blocks
+                if isinstance(block, dict)
+            ]
+
         if is_mode_b:
             b_violations, b_warnings = SpatioTemporalRuleEngine.validate_mode_b_slots(
-                tasks=raw_tasks,
+                tasks=scheduling_items,
                 availability=availability,
                 existing_tasks=existing_tasks,
                 current_roadmap_target_date=current_roadmap_target_date,
@@ -364,7 +487,7 @@ class ProposalValidationGateOrchestrator:
             warnings.extend(b_warnings)
         else:
             a_violations = SpatioTemporalRuleEngine.validate_mode_a_quota(
-                tasks=raw_tasks,
+                tasks=scheduling_items,
                 availability=availability,
                 existing_tasks=existing_tasks,
                 current_roadmap_target_date=current_roadmap_target_date,
@@ -656,6 +779,8 @@ class ProposalValidationGateOrchestrator:
         tool_executor: Any | None = None,
         max_tool_calls: int = 4,
         thinking_level: str | None = None,
+        deterministic_allocation: bool = False,
+        preferred_session_minutes: int = 60,
     ) -> ValidationGateResultDTO:
         """Invoke LLMProviderPort and run the 3-Tier Validation Gate with up to `max_retries` (2) self-correction loops."""
         if self._llm is None:
@@ -698,21 +823,56 @@ class ProposalValidationGateOrchestrator:
             total_completion_tokens += int(c_tokens or 0)
 
             raw_tasks = raw_proposal.get("tasks") if isinstance(raw_proposal, dict) else None
-            if isinstance(raw_tasks, list) and any(
-                isinstance(t, dict) and parse_iso_date(t.get("scheduled_date")) is None
-                for t in raw_tasks
-            ):
+            if deterministic_allocation and isinstance(raw_tasks, list):
+                # LLM owns the learning graph; placement is exclusively deterministic.
+                unscheduled_tasks = [
+                    {
+                        k: v
+                        for k, v in task.items()
+                        if k
+                        not in {
+                            "scheduled_date",
+                            "scheduled_start",
+                            "scheduled_end",
+                            "start_time",
+                            "end_time",
+                        }
+                    }
+                    if isinstance(task, dict)
+                    else task
+                    for task in raw_tasks
+                ]
                 raw_deps = (
                     raw_proposal.get("dependencies")
                     if isinstance(raw_proposal.get("dependencies"), list)
                     else []
                 )
+                allocated_tasks, schedule_blocks = SpatioTemporalRuleEngine.allocate_task_sessions(
+                    unscheduled_tasks,
+                    availability,
+                    start_date=start_date or date.today(),
+                    target_date=current_roadmap_target_date,
+                    dependencies=raw_deps,
+                    existing_tasks=existing_tasks,
+                    milestone_order_map=milestone_order_map,
+                    preferred_session_minutes=preferred_session_minutes,
+                )
+                raw_proposal = {
+                    **raw_proposal,
+                    "tasks": allocated_tasks,
+                    "schedule_blocks": schedule_blocks,
+                }
+            elif isinstance(raw_tasks, list) and any(
+                isinstance(t, dict) and parse_iso_date(t.get("scheduled_date")) is None
+                for t in raw_tasks
+            ):
+                raw_deps = raw_proposal.get("dependencies", [])
                 allocated_tasks = SpatioTemporalRuleEngine.allocate_tasks_to_availability(
                     raw_tasks,
                     availability,
-                    start_date=start_date or date(2026, 11, 2),
+                    start_date=start_date or date.today(),
                     target_date=current_roadmap_target_date,
-                    dependencies=raw_deps,
+                    dependencies=raw_deps if isinstance(raw_deps, list) else [],
                     existing_tasks=existing_tasks,
                     milestone_order_map=milestone_order_map,
                 )

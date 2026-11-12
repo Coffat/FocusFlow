@@ -2,7 +2,6 @@ import {
   Component,
   ChangeDetectionStrategy,
   signal,
-  effect,
   output,
   input,
   ElementRef,
@@ -19,18 +18,18 @@ import { TranslatePipe } from '../../../../shared/pipes/translate.pipe';
   imports: [CommonModule, TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="space-y-4">
-      <div class="flex items-center justify-between mb-2">
-        <label class="font-sans text-xs uppercase tracking-wider text-secondary font-medium">
+    <div class="space-y-5">
+      <div class="flex items-center justify-between mb-2.5">
+        <label class="font-sans text-[13px] uppercase tracking-wider text-secondary font-medium">
           {{ label() }}
         </label>
         @if (isAutoFilled()) {
-          <span class="font-mono text-[11px] text-primary font-medium">{{ 'auth.otp.autoFillDetected' | translate }}</span>
+          <span class="font-mono text-xs text-primary font-medium">{{ 'auth.otp.autoFillDetected' | translate }}</span>
         }
       </div>
 
       <!-- 6-digit grid container -->
-      <div class="grid grid-cols-6 gap-2 sm:gap-3">
+      <div class="grid grid-cols-6 gap-2.5 sm:gap-3.5">
         @for (item of digits(); track $index) {
           <input
             #inputBox
@@ -44,7 +43,7 @@ import { TranslatePipe } from '../../../../shared/pipes/translate.pipe';
             (keydown)="onKeyDown($event, $index)"
             (paste)="onPaste($event)"
             [placeholder]="placeholder()"
-            class="w-full h-14 text-center font-mono text-2xl font-semibold bg-surface-container-lowest border border-outline-variant rounded-lg text-on-surface focus:border-on-surface focus:ring-1 focus:ring-on-surface focus:bg-white transition-all outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+            class="w-full h-14 sm:h-16 text-center font-mono text-2xl sm:text-3xl font-semibold bg-surface-container-lowest border border-outline-variant/80 rounded-xl text-on-surface focus:border-on-surface focus:ring-1 focus:ring-on-surface focus:bg-white dark:focus:bg-surface transition-all outline-none disabled:opacity-50 disabled:cursor-not-allowed shadow-2xs"
             [class.border-on-surface]="item !== ''"
             [attr.aria-label]="('auth.otp.digitAriaLabel' | translate) + ' ' + ($index + 1)"
           />
@@ -52,7 +51,7 @@ import { TranslatePipe } from '../../../../shared/pipes/translate.pipe';
       </div>
 
       <!-- Countdown & Resend action bar -->
-      <div class="flex items-center justify-between py-1 font-sans text-xs">
+      <div class="flex items-center justify-between py-1.5 font-sans text-[13px] sm:text-sm">
         <span class="text-secondary flex items-center gap-1.5">
           <span class="material-symbols-outlined text-[15px] text-secondary">schedule</span>
           {{ 'auth.otp.didntReceiveCode' | translate }}
@@ -94,6 +93,7 @@ export class OtpInputComponent implements OnInit, OnDestroy {
   readonly isAutoFilled = signal<boolean>(false);
 
   private timerInterval?: ReturnType<typeof setInterval>;
+  private targetTimestamp?: number;
 
   ngOnInit() {
     this.timerSeconds.set(this.initialSeconds());
@@ -106,20 +106,27 @@ export class OtpInputComponent implements OnInit, OnDestroy {
 
   startTimer() {
     this.stopTimer();
+    this.targetTimestamp = Date.now() + this.initialSeconds() * 1000;
+    this.updateRemainingTime();
     this.timerInterval = setInterval(() => {
-      const current = this.timerSeconds();
-      if (current > 0) {
-        this.timerSeconds.set(current - 1);
-      } else {
-        this.stopTimer();
-      }
-    }, 1000);
+      this.updateRemainingTime();
+    }, 500);
   }
 
   stopTimer() {
     if (this.timerInterval) {
       clearInterval(this.timerInterval);
       this.timerInterval = undefined;
+    }
+  }
+
+  private updateRemainingTime() {
+    if (!this.targetTimestamp) return;
+    const remainingMs = this.targetTimestamp - Date.now();
+    const remainingSec = Math.max(0, Math.ceil(remainingMs / 1000));
+    this.timerSeconds.set(remainingSec);
+    if (remainingSec <= 0) {
+      this.stopTimer();
     }
   }
 
@@ -191,7 +198,7 @@ export class OtpInputComponent implements OnInit, OnDestroy {
     this.codeChange.emit(fullCode);
 
     const boxes = this.inputBoxes();
-    const nextEmptyIndex = currentDigits.findIndex(d => !d);
+    const nextEmptyIndex = currentDigits.findIndex((d) => !d);
     const targetIndex = nextEmptyIndex === -1 ? 5 : nextEmptyIndex;
     if (boxes && boxes[targetIndex]) {
       boxes[targetIndex].nativeElement.focus();
@@ -203,7 +210,6 @@ export class OtpInputComponent implements OnInit, OnDestroy {
   }
 
   onResend() {
-    this.timerSeconds.set(this.initialSeconds());
     this.startTimer();
     this.resend.emit();
   }

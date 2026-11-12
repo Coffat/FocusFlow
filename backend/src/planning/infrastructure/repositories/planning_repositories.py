@@ -19,6 +19,7 @@ from src.planning.domain.models.schedule import (
     OfficialSchedule,
     ScheduleProposal,
     ScheduleProposalStatus,
+    ScheduleProposalType,
 )
 from src.planning.infrastructure.orm.planning_orm import (
     GoalORM,
@@ -314,6 +315,10 @@ class SqlAlchemyScheduleProposalRepository(ScheduleProposalRepositoryPort):
             roadmap_id=row.roadmap_id,
             user_id=row.user_id,
             proposal_data=dict(row.proposal_data or {}),
+            proposal_type=ScheduleProposalType(row.proposal_type),
+            original_proposal_data=dict(row.original_proposal_data or {}),
+            user_edit_count=row.user_edit_count,
+            pedagogical_warnings=list(row.pedagogical_warnings or []),
             status=ScheduleProposalStatus(row.status),
             applied_at=row.applied_at,
             created_at=row.created_at,
@@ -348,6 +353,10 @@ class SqlAlchemyScheduleProposalRepository(ScheduleProposalRepositoryPort):
                 roadmap_id=proposal.roadmap_id,
                 user_id=proposal.user_id,
                 proposal_data=dict(proposal.proposal_data),
+                proposal_type=proposal.proposal_type.value,
+                original_proposal_data=dict(proposal.original_proposal_data),
+                user_edit_count=proposal.user_edit_count,
+                pedagogical_warnings=list(proposal.pedagogical_warnings),
                 status=proposal.status.value,
                 applied_at=proposal.applied_at,
                 created_at=created,
@@ -356,6 +365,10 @@ class SqlAlchemyScheduleProposalRepository(ScheduleProposalRepositoryPort):
             self._session.add(row)
         else:
             row.proposal_data = dict(proposal.proposal_data)
+            row.proposal_type = proposal.proposal_type.value
+            row.original_proposal_data = dict(proposal.original_proposal_data)
+            row.user_edit_count = proposal.user_edit_count
+            row.pedagogical_warnings = list(proposal.pedagogical_warnings)
             row.status = proposal.status.value
             row.applied_at = proposal.applied_at
             row.updated_at = now

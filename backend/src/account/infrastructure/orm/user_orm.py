@@ -248,7 +248,7 @@ class AIUsageLogORM(Base):
     __tablename__ = "ai_usage_logs"
     __table_args__ = (
         CheckConstraint(
-            "action_type IN ('ROADMAP_GENERATION', 'SCHEDULE_PROPOSAL', 'AI_REVIEW_WEEKLY', 'AI_REVIEW_MILESTONE', 'MILESTONE_BREAKDOWN', 'CHAT_ASSISTANT')",
+            "action_type IN ('ROADMAP_GENERATION', 'SCHEDULE_PROPOSAL', 'AI_REVIEW_WEEKLY', 'AI_REVIEW_MILESTONE', 'MILESTONE_BREAKDOWN', 'CHAT_ASSISTANT', 'KNOWLEDGE_INGESTION', 'WHAT_IF_SIMULATION', 'OVERDUE_RECOVERY', 'CONTINUOUS_LEARNING')",
             name="chk_ai_usage_logs_action",
         ),
         CheckConstraint(
@@ -281,7 +281,11 @@ class AIUsageLogORM(Base):
     completion_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     latency_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    estimated_cost_usd: Mapped[float] = mapped_column(
+        Numeric(12, 6), nullable=False, default=0, server_default="0"
+    )
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="SUCCESS")
+    error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -301,6 +305,7 @@ class AIUsageLogORM(Base):
         kwargs.setdefault("completion_tokens", c_tok)
         kwargs.setdefault("total_tokens", p_tok + c_tok)
         kwargs.setdefault("latency_ms", 0)
+        kwargs.setdefault("estimated_cost_usd", 0)
         kwargs.setdefault("status", "SUCCESS")
         kwargs.setdefault("created_at", datetime.now(UTC))
         super().__init__(**kwargs)

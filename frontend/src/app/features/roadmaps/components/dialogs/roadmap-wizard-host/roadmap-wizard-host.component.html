@@ -1,0 +1,53 @@
+<app-wizard-dialog-shell
+  [open]="open()"
+  [activeStep]="currentStep()"
+  title="WIZARD KHỞI TẠO LỘ TRÌNH HỌC TẬP"
+  [maxWidthClass]="shellMaxWidthClass()"
+  [errorMessage]="shellErrorMessage()"
+  [sseProgress]="shellSseProgress()"
+  (stepChange)="onStepChange($event)"
+  (closeDialog)="onClose()"
+  (saveDraftAndExit)="onSaveDraftAndExit()"
+>
+  @switch (currentStep()) {
+    @case (1) {
+      <app-goal-setup-dialog
+        [initialTitle]="draftTitle()"
+        [initialLevel]="draftLevel()"
+        [initialWeeklyHours]="draftWeeklyHours()"
+        [isSubmitting]="isSaving()"
+        (submitGoal)="onGoalSubmit($event)"
+        (canceled)="onClose()"
+      />
+    }
+    @case (2) {
+      <app-ai-grill-me-dialog
+        [goalTitle]="draftTitle()"
+        [baselineLevel]="draftLevel()"
+        [weeklyHours]="draftWeeklyHours()"
+        [targetDeadline]="draftDeadline()"
+        (backToStep1)="onStepChange(1)"
+        (generateQuestions)="onGenerateQuestions()"
+        (skipInterview)="onSkipInterview()"
+        (submitAnswers)="onSubmitInterviewAnswers($event)"
+      />
+    }
+    @case (3) {
+      <app-milestone-approval-dialog
+        [targetCapacityHours]="draftWeeklyHours() * 12"
+        (backToStep2)="onStepChange(2)"
+        (generateMilestones)="onGenerateMilestones($event)"
+        (saveMilestones)="onSaveMilestones($event)"
+        (approveMilestones)="onApproveMilestones()"
+      />
+    }
+    @case (4) {
+      <app-schedule-proposal-dialog
+        (backToStep3)="onStepChange(3)"
+        (generateProposal)="onGenerateProposal()"
+        (updateProposal)="onUpdateProposal()"
+        (applyProposal)="onApplyProposal($event)"
+      />
+    }
+  }
+</app-wizard-dialog-shell>

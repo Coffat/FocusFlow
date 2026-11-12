@@ -24,6 +24,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/account/learner-memory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Learner Memory */
+        get: operations["list_learner_memory_api_v1_account_learner_memory_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/account/learner-memory/{memory_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Learner Memory */
+        patch: operations["update_learner_memory_api_v1_account_learner_memory__memory_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/account/learner-memory/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reset Learner Memory */
+        post: operations["reset_learner_memory_api_v1_account_learner_memory_reset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/availabilities/me": {
         parameters: {
             query?: never;
@@ -282,6 +333,95 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/account/calendar/google/authorize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Generate Google Calendar OAuth consent URL */
+        post: operations["initiate_google_calendar_auth_api_v1_account_calendar_google_authorize_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/account/calendar/google/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Handle Google OAuth redirection callback (GET) */
+        get: operations["handle_google_calendar_callback_get_api_v1_account_calendar_google_callback_get"];
+        put?: never;
+        /** Handle Google OAuth redirection callback (POST from SPA) */
+        post: operations["handle_google_calendar_callback_post_api_v1_account_calendar_google_callback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/account/calendar/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get current external calendar integration status */
+        get: operations["get_calendar_status_api_v1_account_calendar_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/account/calendar/disconnect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Disconnect external calendar and stop push notifications */
+        post: operations["disconnect_calendar_api_v1_account_calendar_disconnect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/calendar/webhooks/google": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Receive Google Calendar push notifications via webhook
+         * @description Handle incoming Google Calendar push notifications with strict 3-header verification.
+         */
+        post: operations["handle_google_calendar_webhook_api_v1_calendar_webhooks_google_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/planning/status": {
         parameters: {
             query?: never;
@@ -294,6 +434,74 @@ export interface paths {
          * @description Bounded Context 2 health/status endpoint (UC-07..UC-10, UC-12).
          */
         get: operations["get_planning_context_status_api_v1_planning_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/planning/goals/{goal_id}/knowledge-sources/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload Knowledge Source File */
+        post: operations["upload_knowledge_source_file_api_v1_planning_goals__goal_id__knowledge_sources_files_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/planning/goals/{goal_id}/knowledge-sources/urls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Knowledge Source Url */
+        post: operations["add_knowledge_source_url_api_v1_planning_goals__goal_id__knowledge_sources_urls_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/planning/goals/{goal_id}/knowledge-sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Knowledge Sources */
+        get: operations["list_knowledge_sources_api_v1_planning_goals__goal_id__knowledge_sources_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/planning/knowledge-sources/{source_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Knowledge Source */
+        get: operations["get_knowledge_source_api_v1_planning_knowledge_sources__source_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -599,6 +807,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/evaluation/dashboard-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Dashboard Summary
+         * @description Trả về tổng quan bảng điều khiển Dashboard cá nhân hóa của người học.
+         */
+        get: operations["get_dashboard_summary_api_v1_evaluation_dashboard_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/evaluation/milestones/{milestone_id}/proofs/generate-jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Generate Milestone Proof */
+        post: operations["generate_milestone_proof_api_v1_evaluation_milestones__milestone_id__proofs_generate_jobs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/evaluation/milestones/{milestone_id}/proofs/{proof_id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit Milestone Proof */
+        post: operations["submit_milestone_proof_api_v1_evaluation_milestones__milestone_id__proofs__proof_id__submit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/evaluation/weekly-reviews/generate-jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Generate Weekly Review */
+        post: operations["generate_weekly_review_api_v1_evaluation_weekly_reviews_generate_jobs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/evaluation/weekly-reviews/latest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Latest Weekly Review */
+        get: operations["latest_weekly_review_api_v1_evaluation_weekly_reviews_latest_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -698,6 +994,52 @@ export interface components {
             /** Updated At */
             updated_at: string;
         };
+        /** Body_upload_knowledge_source_file_api_v1_planning_goals__goal_id__knowledge_sources_files_post */
+        Body_upload_knowledge_source_file_api_v1_planning_goals__goal_id__knowledge_sources_files_post: {
+            /** File */
+            file: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+        };
+        /**
+         * CalendarConnectionResponseDTO
+         * @description Public representation of external calendar connection status.
+         */
+        CalendarConnectionResponseDTO: {
+            /** Connected */
+            connected: boolean;
+            /**
+             * Provider
+             * @default GOOGLE
+             */
+            provider: string;
+            /**
+             * Sync Status
+             * @default REVOKED
+             */
+            sync_status: string;
+            /** External Calendar Id */
+            external_calendar_id?: string | null;
+            /** Source Calendars */
+            source_calendars?: string[];
+            /** Last Synced At */
+            last_synced_at?: string | null;
+            /** Error Detail */
+            error_detail?: string | null;
+        };
+        /**
+         * CalendarOAuthCallbackRequestDTO
+         * @description Callback payload received from Google OAuth redirection.
+         */
+        CalendarOAuthCallbackRequestDTO: {
+            /** Code */
+            code: string;
+            /** State */
+            state: string;
+        };
         /** ClarificationAnswerItem */
         ClarificationAnswerItem: {
             /** Question Id */
@@ -711,48 +1053,60 @@ export interface components {
         ClarificationQuestion: {
             /**
              * Question Id
+             * @description Mã định danh duy nhất của câu hỏi (q1, q2, q3).
              * @default q1
              */
             question_id: string;
             /**
              * Id
+             * @description Mã định danh câu hỏi, đồng bộ với question_id.
              * @default q1
              */
             id: string;
             /**
              * Text
+             * @description Nội dung câu hỏi ngắn gọn bằng tiếng Việt, đồng bộ với question.
              * @default
              */
             text: string;
             /**
              * Question
+             * @description Nội dung câu hỏi ngắn gọn bằng tiếng Việt.
              * @default
              */
             question: string;
             /**
              * Placeholder
+             * @description Văn bản gợi ý placeholder cho người học.
              * @default Nhập câu trả lời của bạn...
              */
             placeholder: string;
             /**
              * Question Type
+             * @description Loại câu hỏi: 'single_choice' (trắc nghiệm chọn 1 đáp án nhanh bằng 1 click) hoặc 'text' (tự luận ngắn).
              * @default single_choice
              */
             question_type: string;
-            /** Options */
+            /**
+             * Options
+             * @description Danh sách BẮT BUỘC gồm 3 đến 4 phương án lựa chọn thực tế, ngắn gọn khi question_type='single_choice' để người học chọn nhanh bằng 1 click. Để mảng rỗng [] khi question_type='text'.
+             */
             options?: string[];
             /**
              * Question Purpose
+             * @description Mục đích sư phạm của câu hỏi nhằm thu thập thông tin gì cho việc lập lộ trình.
              * @default Làm rõ bối cảnh và nhu cầu cá nhân hóa lộ trình học tập.
              */
             question_purpose: string;
             /**
              * Expected Answer Format
+             * @description Định dạng câu trả lời mong đợi.
              * @default short_text
              */
             expected_answer_format: string;
             /**
              * Diagnostic Dimension
+             * @description Chiều chẩn đoán: KNOWLEDGE_BASELINE | PRACTICAL_EXPERIENCE | LEARNING_CONSTRAINTS | GENERAL
              * @default KNOWLEDGE_BASELINE
              */
             diagnostic_dimension: string;
@@ -796,6 +1150,16 @@ export interface components {
             /** Suggested Fix */
             suggested_fix: string;
         };
+        /** CreateKnowledgeUrlRequest */
+        CreateKnowledgeUrlRequest: {
+            /**
+             * Title
+             * @default Nguồn học liệu URL
+             */
+            title: string;
+            /** Url */
+            url: string;
+        };
         /** CreateManualRoadmapPlanRequest */
         CreateManualRoadmapPlanRequest: {
             /** Milestones */
@@ -825,6 +1189,291 @@ export interface components {
             /** Target Date */
             target_date?: string | null;
         };
+        /** DashboardActiveRoadmapDTO */
+        DashboardActiveRoadmapDTO: {
+            /**
+             * Id
+             * Format: uuid
+             * @description ID của lộ trình học tập
+             */
+            id: string;
+            /**
+             * Code
+             * @description Mã định danh lộ trình
+             */
+            code: string;
+            /**
+             * Title
+             * @description Tên lộ trình học
+             */
+            title: string;
+            /**
+             * Commitment Hours Per Week
+             * @description Cam kết số giờ học mỗi tuần
+             */
+            commitment_hours_per_week: number;
+            /**
+             * Deadline
+             * @description Hạn chót hoàn thành lộ trình
+             */
+            deadline: string;
+            /**
+             * Completed Tasks
+             * @description Số bài học/nhiệm vụ đã hoàn thành
+             */
+            completed_tasks: number;
+            /**
+             * Total Tasks
+             * @description Tổng số bài học/nhiệm vụ
+             */
+            total_tasks: number;
+            /**
+             * Progress Pct
+             * @description Tiến độ hoàn thành lộ trình (%)
+             */
+            progress_pct: number;
+            /**
+             * Next Task Code
+             * @description Mã nhiệm vụ tiếp theo
+             */
+            next_task_code: string;
+            /**
+             * Next Task Title
+             * @description Tiêu đề nhiệm vụ tiếp theo
+             */
+            next_task_title: string;
+        };
+        /** DashboardAdaptationStatusDTO */
+        DashboardAdaptationStatusDTO: {
+            /**
+             * Is Balanced
+             * @description Lịch học có đang cân bằng và không xung đột
+             */
+            is_balanced: boolean;
+            /**
+             * Message
+             * @description Mô tả trạng thái cân bằng hoặc cảnh báo rủi ro
+             */
+            message: string;
+            /**
+             * Domino Shift Ready
+             * @description Sẵn sàng thực hiện dời lịch tự động Domino Shift nếu quá hạn
+             */
+            domino_shift_ready: boolean;
+        };
+        /** DashboardAiInsightDTO */
+        DashboardAiInsightDTO: {
+            /**
+             * Model Version
+             * @description Phiên bản mô hình AI H-SRL
+             */
+            model_version: string;
+            /**
+             * Message
+             * @description Thông điệp nhận xét & khuyến nghị cá nhân hóa
+             */
+            message: string;
+            /**
+             * Peak Hours
+             * @description Khung giờ tập trung cao độ nhất của người học
+             */
+            peak_hours: string;
+            /**
+             * Efficiency Growth Pct
+             * @description Tốc độ tăng trưởng hiệu suất học tập (%)
+             */
+            efficiency_growth_pct: number;
+        };
+        /** DashboardKpiDTO */
+        DashboardKpiDTO: {
+            /**
+             * Monthly Hours
+             * @description Tổng số giờ học trong tháng
+             */
+            monthly_hours: number;
+            /**
+             * Target Hours
+             * @description Mục tiêu số giờ học trong tháng
+             */
+            target_hours: number;
+            /**
+             * Monthly Progress Pct
+             * @description Phần trăm hoàn thành mục tiêu tháng
+             */
+            monthly_progress_pct: number;
+            /**
+             * Streak Days
+             * @description Số ngày chuỗi học tập hiện tại
+             */
+            streak_days: number;
+            /**
+             * Personal Best Streak
+             * @description Kỷ lục chuỗi ngày học tập cao nhất
+             */
+            personal_best_streak: number;
+            /**
+             * Streak History Last 7 Days
+             * @description Lịch sử chuỗi học 7 ngày gần nhất
+             */
+            streak_history_last_7_days: boolean[];
+            /**
+             * Adherence Rate Pct
+             * @description Tỷ lệ tuân thủ lịch học (%)
+             */
+            adherence_rate_pct: number;
+            /**
+             * Adherence Delta Pct
+             * @description Mức tăng trưởng tỷ lệ tuân thủ so với tuần trước (%)
+             */
+            adherence_delta_pct: number;
+            /**
+             * Completed Pomodoro Count
+             * @description Tổng số chu kỳ Pomodoro hoàn thành
+             */
+            completed_pomodoro_count: number;
+            /**
+             * Deep Work Hours
+             * @description Số giờ Deep Work đạt được
+             */
+            deep_work_hours: number;
+        };
+        /** DashboardScheduleBlockDTO */
+        DashboardScheduleBlockDTO: {
+            /**
+             * Id
+             * Format: uuid
+             * @description ID của block lịch học
+             */
+            id: string;
+            /**
+             * Day Of Week
+             * @description Thứ trong tuần (1 = Thứ 2, 7 = Chủ nhật)
+             */
+            day_of_week: number;
+            /**
+             * Day Label
+             * @description Nhãn thứ (Thứ Hai, Thứ Ba...)
+             */
+            day_label: string;
+            /**
+             * Start Time
+             * @description Giờ bắt đầu (HH:MM)
+             */
+            start_time: string;
+            /**
+             * End Time
+             * @description Giờ kết thúc (HH:MM)
+             */
+            end_time: string;
+            /**
+             * Title
+             * @description Tiêu đề khối học
+             */
+            title: string;
+            /**
+             * Category
+             * @description Phân loại môn học / kỹ năng
+             */
+            category: string;
+            /**
+             * Status
+             * @description Trạng thái khối lịch (SCHEDULED, IN_PROGRESS, COMPLETED)
+             */
+            status: string;
+            /**
+             * Pomodoro Count
+             * @description Số phiên Pomodoro
+             */
+            pomodoro_count: number;
+            /**
+             * Duration Minutes
+             * @description Thời lượng khối học theo phút
+             */
+            duration_minutes: number;
+            /**
+             * Roadmap Code
+             * @description Mã lộ trình tương ứng
+             */
+            roadmap_code: string;
+            /**
+             * Description
+             * @description Mô tả tóm tắt phiên học
+             */
+            description?: string | null;
+        };
+        /** DashboardSummaryResponseDTO */
+        DashboardSummaryResponseDTO: {
+            /** @description Chỉ số hiệu suất học tập cốt lõi */
+            kpi: components["schemas"]["DashboardKpiDTO"];
+            /**
+             * Study Distribution
+             * @description Biểu đồ phân bổ giờ học theo tuần
+             */
+            study_distribution: components["schemas"]["DayStudyDistributionDTO"][];
+            /**
+             * Active Roadmaps
+             * @description Danh sách lộ trình đang học tích cực
+             */
+            active_roadmaps: components["schemas"]["DashboardActiveRoadmapDTO"][];
+            /**
+             * Today Queue
+             * @description Hàng đợi nhiệm vụ cần học hôm nay
+             */
+            today_queue: components["schemas"]["DashboardTodayQueueItemDTO"][];
+            /** @description Thông tin chi tiết và khuyến nghị từ AI */
+            ai_insight: components["schemas"]["DashboardAiInsightDTO"];
+            /** @description Trạng thái tự thích ứng và cân bằng lịch học */
+            adaptation_status: components["schemas"]["DashboardAdaptationStatusDTO"];
+            /**
+             * Schedule Blocks
+             * @description Lịch học trực quan phân bổ theo tuần
+             */
+            schedule_blocks: components["schemas"]["DashboardScheduleBlockDTO"][];
+        };
+        /** DashboardTodayQueueItemDTO */
+        DashboardTodayQueueItemDTO: {
+            /**
+             * Id
+             * Format: uuid
+             * @description ID nhiệm vụ trong hàng đợi hôm nay
+             */
+            id: string;
+            /**
+             * Task Code
+             * @description Mã nhiệm vụ
+             */
+            task_code: string;
+            /**
+             * Title
+             * @description Tên nhiệm vụ
+             */
+            title: string;
+            /**
+             * Roadmap Title
+             * @description Lộ trình học trực thuộc
+             */
+            roadmap_title: string;
+            /**
+             * Scheduled Time
+             * @description Khung giờ học dự kiến (VD: 08:30 - 10:00)
+             */
+            scheduled_time: string;
+            /**
+             * Pomodoro Estimate
+             * @description Số block Pomodoro ước tính
+             */
+            pomodoro_estimate: number;
+            /**
+             * Duration Minutes
+             * @description Thời lượng tính bằng phút
+             */
+            duration_minutes: number;
+            /**
+             * Status
+             * @description Trạng thái nhiệm vụ (SCHEDULED, READY, IN_PROGRESS, COMPLETED)
+             */
+            status: string;
+        };
         /** DayScheduleDTO */
         DayScheduleDTO: {
             /** Enabled */
@@ -844,6 +1493,60 @@ export interface components {
              * @default 30
              */
             min_session_minutes: number;
+        };
+        /** DayStudyDistributionDTO */
+        DayStudyDistributionDTO: {
+            /**
+             * Day Label
+             * @description Nhãn ngày (Mon, Tue, Wed, Thu, Fri, Sat, Sun)
+             */
+            day_label: string;
+            /**
+             * Hours
+             * @description Số giờ học tập trong ngày
+             */
+            hours: number;
+            /**
+             * Is Today
+             * @description Đánh dấu ngày hôm nay
+             */
+            is_today: boolean;
+        };
+        /** GenerateProofResponseDTO */
+        GenerateProofResponseDTO: {
+            /**
+             * Proof Id
+             * Format: uuid
+             */
+            proof_id: string;
+            /** Status */
+            status: string;
+            /** Questions */
+            questions: {
+                [key: string]: unknown;
+            }[];
+        };
+        /** GenerateWeeklyReviewRequestDTO */
+        GenerateWeeklyReviewRequestDTO: {
+            /**
+             * Roadmap Id
+             * Format: uuid
+             */
+            roadmap_id: string;
+            /**
+             * Period Start
+             * Format: date
+             */
+            period_start: string;
+            /**
+             * Period End
+             * Format: date
+             */
+            period_end: string;
+            /** Reflection */
+            reflection?: {
+                [key: string]: unknown;
+            };
         };
         /** GoalResponse */
         GoalResponse: {
@@ -896,6 +1599,104 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * InitiateCalendarAuthRequestDTO
+         * @description Request payload to initiate Google Calendar OAuth authorization (UC-17).
+         */
+        InitiateCalendarAuthRequestDTO: {
+            /**
+             * Sync Type
+             * @default two_way
+             */
+            sync_type: string;
+            /** Redirect Uri */
+            redirect_uri?: string | null;
+        };
+        /**
+         * InitiateCalendarAuthResponseDTO
+         * @description Response containing Google OAuth authorization URL and CSRF state token.
+         */
+        InitiateCalendarAuthResponseDTO: {
+            /** Authorization Url */
+            authorization_url: string;
+            /** State */
+            state: string;
+        };
+        /** KnowledgeSourceResponse */
+        KnowledgeSourceResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Goal Id
+             * Format: uuid
+             */
+            goal_id: string;
+            /** Source Type */
+            source_type: string;
+            /** Title */
+            title: string;
+            /** Ingestion Status */
+            ingestion_status: string;
+            /** Chunk Count */
+            chunk_count: number;
+            /** Provenance Metadata */
+            provenance_metadata?: {
+                [key: string]: unknown;
+            };
+            /** Error Detail */
+            error_detail?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** LearnerMemoryResponseDTO */
+        LearnerMemoryResponseDTO: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Memory Key */
+            memory_key: string;
+            /** Value */
+            value: {
+                [key: string]: unknown;
+            };
+            /** Category */
+            category: string;
+            /** Epistemic Level */
+            epistemic_level: string;
+            /** Confidence */
+            confidence: number;
+            /** Sample Size */
+            sample_size: number;
+            /** Evidence */
+            evidence: {
+                [key: string]: unknown;
+            }[];
+            /** Status */
+            status: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /** LearningResourceSchema */
         LearningResourceSchema: {
@@ -956,6 +1757,27 @@ export interface components {
             roadmap_id: string;
             /** Milestones */
             milestones: components["schemas"]["MilestoneResponse"][];
+        };
+        /** MilestoneProofResponseDTO */
+        MilestoneProofResponseDTO: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Milestone Id
+             * Format: uuid
+             */
+            milestone_id: string;
+            /** Status */
+            status: string;
+            /** Score */
+            score: number;
+            /** Confidence */
+            confidence: number;
+            /** Corrective Action */
+            corrective_action: string | null;
         };
         /** MilestoneResponse */
         MilestoneResponse: {
@@ -1048,6 +1870,30 @@ export interface components {
              */
             is_mandatory: boolean;
         };
+        /** ProposedScheduleBlockSchema */
+        ProposedScheduleBlockSchema: {
+            /** Task Id */
+            task_id: string;
+            /** Sequence In Task */
+            sequence_in_task: number;
+            /**
+             * Block Date
+             * Format: date
+             */
+            block_date: string;
+            /**
+             * Scheduled Start
+             * Format: date-time
+             */
+            scheduled_start: string;
+            /**
+             * Scheduled End
+             * Format: date-time
+             */
+            scheduled_end: string;
+            /** Scheduled Duration Minutes */
+            scheduled_duration_minutes: number;
+        };
         /** ProposedTaskItemSchema */
         ProposedTaskItemSchema: {
             /** Task Id */
@@ -1119,6 +1965,14 @@ export interface components {
              * Format: email
              */
             email: string;
+        };
+        /** ResetLearnerMemoryRequestDTO */
+        ResetLearnerMemoryRequestDTO: {
+            /**
+             * Confirm
+             * @description Must be true after explicit learner confirmation
+             */
+            confirm: boolean;
         };
         /** RoadmapDetailResponse */
         RoadmapDetailResponse: {
@@ -1237,6 +2091,8 @@ export interface components {
             tasks?: {
                 [key: string]: unknown;
             }[];
+            /** Schedule Blocks */
+            schedule_blocks?: components["schemas"]["ProposedScheduleBlockSchema"][];
             /** Dependencies */
             dependencies?: {
                 [key: string]: unknown;
@@ -1384,6 +2240,15 @@ export interface components {
              */
             message: string;
         };
+        /** SubmitProofRequestDTO */
+        SubmitProofRequestDTO: {
+            /** Answers */
+            answers: {
+                [key: string]: unknown;
+            }[];
+            /** Confidence */
+            confidence: number;
+        };
         /** TimeSlotDTO */
         TimeSlotDTO: {
             /** Start */
@@ -1414,6 +2279,18 @@ export interface components {
              */
             min_session_minutes: number;
             weekly_schedule: components["schemas"]["WeeklyScheduleDTO"];
+        };
+        /** UpdateLearnerMemoryRequestDTO */
+        UpdateLearnerMemoryRequestDTO: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "confirm" | "edit" | "reject";
+            /** Value */
+            value?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** UpdateMilestonesRequest */
         UpdateMilestonesRequest: {
@@ -1500,6 +2377,48 @@ export interface components {
             /** Otp Code */
             otp_code: string;
         };
+        /** WeeklyReviewResponseDTO */
+        WeeklyReviewResponseDTO: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Roadmap Id
+             * Format: uuid
+             */
+            roadmap_id: string;
+            /**
+             * Period Start
+             * Format: date
+             */
+            period_start: string;
+            /**
+             * Period End
+             * Format: date
+             */
+            period_end: string;
+            /** Quantitative Summary */
+            quantitative_summary: {
+                [key: string]: unknown;
+            };
+            /** Strengths Feedback */
+            strengths_feedback: string;
+            /** Bottlenecks Feedback */
+            bottlenecks_feedback: string;
+            /** Action Recommendations */
+            action_recommendations: string;
+            /** User Reflection Payload */
+            user_reflection_payload: {
+                [key: string]: unknown;
+            };
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+        };
         /** WeeklyScheduleDTO */
         WeeklyScheduleDTO: {
             monday: components["schemas"]["DayScheduleDTO"];
@@ -1537,6 +2456,92 @@ export interface operations {
                     "application/json": {
                         [key: string]: string;
                     };
+                };
+            };
+        };
+    };
+    list_learner_memory_api_v1_account_learner_memory_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearnerMemoryResponseDTO"][];
+                };
+            };
+        };
+    };
+    update_learner_memory_api_v1_account_learner_memory__memory_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                memory_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateLearnerMemoryRequestDTO"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearnerMemoryResponseDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reset_learner_memory_api_v1_account_learner_memory_reset_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResetLearnerMemoryRequestDTO"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -1966,6 +2971,202 @@ export interface operations {
             };
         };
     };
+    initiate_google_calendar_auth_api_v1_account_calendar_google_authorize_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InitiateCalendarAuthRequestDTO"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InitiateCalendarAuthResponseDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    handle_google_calendar_callback_get_api_v1_account_calendar_google_callback_get: {
+        parameters: {
+            query: {
+                code: string;
+                state: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    handle_google_calendar_callback_post_api_v1_account_calendar_google_callback_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CalendarOAuthCallbackRequestDTO"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarConnectionResponseDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_calendar_status_api_v1_account_calendar_status_get: {
+        parameters: {
+            query?: {
+                provider?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarConnectionResponseDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    disconnect_calendar_api_v1_account_calendar_disconnect_post: {
+        parameters: {
+            query?: {
+                provider?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CalendarConnectionResponseDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    handle_google_calendar_webhook_api_v1_calendar_webhooks_google_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Goog-Channel-ID"?: string | null;
+                "X-Goog-Resource-ID"?: string | null;
+                "X-Goog-Channel-Token"?: string | null;
+                "X-Goog-Resource-State"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_planning_context_status_api_v1_planning_status_get: {
         parameters: {
             query?: never;
@@ -1984,6 +3185,138 @@ export interface operations {
                     "application/json": {
                         [key: string]: string;
                     };
+                };
+            };
+        };
+    };
+    upload_knowledge_source_file_api_v1_planning_goals__goal_id__knowledge_sources_files_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_knowledge_source_file_api_v1_planning_goals__goal_id__knowledge_sources_files_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeSourceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_knowledge_source_url_api_v1_planning_goals__goal_id__knowledge_sources_urls_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateKnowledgeUrlRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeSourceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_knowledge_sources_api_v1_planning_goals__goal_id__knowledge_sources_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeSourceResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_knowledge_source_api_v1_planning_knowledge_sources__source_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                source_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeSourceResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2595,6 +3928,146 @@ export interface operations {
                     "application/json": {
                         [key: string]: string;
                     };
+                };
+            };
+        };
+    };
+    get_dashboard_summary_api_v1_evaluation_dashboard_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardSummaryResponseDTO"];
+                };
+            };
+        };
+    };
+    generate_milestone_proof_api_v1_evaluation_milestones__milestone_id__proofs_generate_jobs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                milestone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerateProofResponseDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_milestone_proof_api_v1_evaluation_milestones__milestone_id__proofs__proof_id__submit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                milestone_id: string;
+                proof_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitProofRequestDTO"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MilestoneProofResponseDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_weekly_review_api_v1_evaluation_weekly_reviews_generate_jobs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GenerateWeeklyReviewRequestDTO"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WeeklyReviewResponseDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    latest_weekly_review_api_v1_evaluation_weekly_reviews_latest_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WeeklyReviewResponseDTO"];
                 };
             };
         };

@@ -63,6 +63,16 @@ class Settings(BaseSettings):
     llm_max_tool_calls: int = 4
     llm_tool_timeout_seconds: float = 5.0
     enable_tier3_judge: bool = True
+    ai_harness_v2_enabled: bool = False
+    knowledge_rag_enabled: bool = False
+    learner_memory_enabled: bool = False
+    ai_circuit_failure_threshold: int = 3
+    ai_circuit_window_seconds: int = 60
+    ai_circuit_open_seconds: int = 60
+    knowledge_upload_dir: str = "/tmp/focusflow-knowledge"
+    knowledge_file_max_bytes: int = 20 * 1024 * 1024
+    knowledge_url_max_bytes: int = 5 * 1024 * 1024
+    knowledge_url_timeout_seconds: float = 8.0
 
     # External Providers (Sandbox / Mock fallback for offline thesis defense)
     payment_provider: str = "mock"
