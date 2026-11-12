@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Subject } from 'rxjs';
-import { RoadmapService } from './services/roadmap.service';
+import { mapRawTasksToProposedItems, RoadmapService } from './services/roadmap.service';
 import { AiSseService, AiStreamChunkEvent } from '../../core/services/ai-sse.service';
 import { API_ENDPOINTS } from '../../core/constants/api-endpoints';
 import {
@@ -15,6 +15,23 @@ import {
 } from './models/roadmap.model';
 
 describe('RoadmapService (WBS 6.3 AI Planning & Approval Store)', () => {
+  it('khởi tạo nhiệm vụ mới không kèm học liệu giả', () => {
+    service.addEditableTask({ title: 'Học kiến trúc' });
+    expect(service.editableTasks()[0].learning_resources).toEqual([]);
+    expect(service.proposalDirty()).toBe(true);
+  });
+
+  it('không tạo nguồn học liệu giả khi phản hồi AI thiếu URL', () => {
+    const tasks = mapRawTasksToProposedItems([{
+      task_id: 'task-1',
+      title: 'Học kiến trúc',
+      estimated_minutes: 60,
+      learning_resources: [{ title: 'Nguồn không hợp lệ' }],
+    }]);
+    expect(tasks[0].learning_resources).toEqual([]);
+    expect(tasks[0].scheduled_date).toBeNull();
+  });
+
   let service: RoadmapService;
   let httpTesting: HttpTestingController;
   let aiSseService: AiSseService;

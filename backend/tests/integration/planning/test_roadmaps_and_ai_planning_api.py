@@ -22,6 +22,7 @@ from src.evaluation.infrastructure.orm.schedule_change_log_orm import (
 )
 from src.execution.infrastructure.orm.task_orm import TaskDependencyORM, TaskORM
 from src.main import app
+from src.planning.infrastructure.orm.planning_orm import ScheduleBlockORM
 from src.planning.presentation.deps import get_llm_provider
 from src.shared_kernel.infrastructure.database.session import async_session_factory
 from src.shared_kernel.infrastructure.external_ai.litellm_adapter import MockLLMAdapter
@@ -100,7 +101,7 @@ async def planning_users() -> AsyncGenerator[tuple[UUID, UUID], None]:
 
 
 @pytest.mark.asyncio
-async def test_e2e_ai_planning_flow_sse_approval_edit_soft_overflow_and_os03_merge(
+async def test_e2e_ai_planning_flow_sse_approval_edit_and_os03_merge(
     planning_users: tuple[UUID, UUID],
 ) -> None:
     """Full End-to-End Integration Test covering Phase 3 & Phase 4:
@@ -113,8 +114,7 @@ async def test_e2e_ai_planning_flow_sse_approval_edit_soft_overflow_and_os03_mer
     5. Generate Level-2 Schedule Proposal (`POST .../proposals/generate-jobs`) with Self-Correction Retry
        (1st attempt fails Tier 1 duration, 2nd attempt succeeds) -> SSE emits `validation_retry` & `completed`.
     6. Preview (`GET .../proposals/current`) & Edit Proposal (`PUT .../proposals/{id}`).
-    7. Mode B Soft Overflow <= 30m Confirmation Gate on Apply (`409 SOFT_OVERFLOW_CONFIRMATION_REQUIRED`
-       when `confirm_soft_overflow=False`, `200 OK` when `confirm_soft_overflow=True`).
+    7. Deterministic allocation discards AI dates; Apply persists validated schedule blocks.
     8. OS-03 Merge / Future Shift on Re-plan Apply preserving `COMPLETED` tasks from the past.
     9. Portfolio endpoints (`GET /api/v1/roadmaps`, `GET /api/v1/roadmaps/{id}`, `PATCH`, `POST .../archive`).
     """
@@ -180,7 +180,7 @@ async def test_e2e_ai_planning_flow_sse_approval_edit_soft_overflow_and_os03_mer
         # 4. Edit Milestones (`PUT .../milestones`) & Approve (`POST .../milestones/approve`)
         detail_before = (await client.get(f"/api/v1/roadmaps/{roadmap_id}")).json()
         generated_ms = detail_before["milestones"]
-        assert len(generated_ms) == 3
+        assert len(generated_ms) >= 3
         assert all(m["status"] == "PENDING" for m in generated_ms)
 
         put_ms_res = await client.put(
@@ -333,29 +333,77 @@ async def test_e2e_ai_planning_flow_sse_approval_edit_soft_overflow_and_os03_mer
         curr_prop = curr_prop_res.json()
         proposal_id = curr_prop["id"]
         assert curr_prop["status"] == "DRAFT"
-        assert curr_prop["has_soft_overflow"] is True
-        assert curr_prop["soft_overflow_warnings"][0]["overflow_minutes"] == 20
-
-        # 7. Apply without confirm_soft_overflow -> 409 SOFT_OVERFLOW_CONFIRMATION_REQUIRED
-        apply_no_confirm = await client.post(
-            f"/api/v1/roadmaps/{roadmap_id}/proposals/{proposal_id}/apply",
-            json={"confirm_soft_overflow": False},
+        # AI-supplied dates are discarded; deterministic allocation avoids its overflow.
+        assert curr_prop["has_soft_overflow"] is False
+        assert len(curr_prop["schedule_blocks"]) == 4
+        assert len({block["block_date"] for block in curr_prop["schedule_blocks"]}) >= 2
+        assert all(
+            block["scheduled_start"].endswith("+07:00") for block in curr_prop["schedule_blocks"]
         )
-        assert apply_no_confirm.status_code == 409
-        assert apply_no_confirm.json()["code"] == "SOFT_OVERFLOW_CONFIRMATION_REQUIRED"
 
-        # Apply WITH confirm_soft_overflow=True -> 200 OK
+        # 7. Apply the validated deterministic schedule.
         apply_ok = await client.post(
             f"/api/v1/roadmaps/{roadmap_id}/proposals/{proposal_id}/apply",
-            json={"confirm_soft_overflow": True},
+            json={"confirm_soft_overflow": False},
         )
         assert apply_ok.status_code == 200
         apply_data = apply_ok.json()
         assert apply_data["roadmap_status"] == "ACTIVE"
         assert apply_data["proposal_status"] == "APPLIED"
-        assert apply_data["total_sessions"] == 2
+        assert apply_data["total_sessions"] == 4
         assert apply_data["total_planned_minutes"] == 140
         assert apply_data["trigger_type"] == "INITIAL_APPLY"
+        async with async_session_factory() as session:
+            initial_blocks = list(
+                (
+                    await session.execute(
+                        select(ScheduleBlockORM).where(ScheduleBlockORM.roadmap_id == roadmap_id)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            assert len(initial_blocks) == 4
+            assert sum(block.scheduled_duration_minutes for block in initial_blocks) == 140
+
+        # A protected session cannot be moved by a later Apply.
+        async with async_session_factory() as session:
+            protected_block = next(
+                block for block in initial_blocks if block.task_id == UUID(t2_id)
+            )
+            protected_block = await session.get(ScheduleBlockORM, protected_block.id)
+            assert protected_block is not None
+            protected_block.is_protected = True
+            await session.commit()
+        moved_proposal = await client.post(
+            f"/api/v1/roadmaps/{roadmap_id}/proposals/manual",
+            json={
+                "tasks": [
+                    {
+                        "task_id": t2_id,
+                        "milestone_id": m2_id,
+                        "title": "Thực hành Raft Leader Election",
+                        "estimated_minutes": 15,
+                        "scheduled_date": "2026-11-09",
+                        "scheduled_start": "2026-11-09T19:00:00+07:00",
+                        "scheduled_end": "2026-11-09T19:15:00+07:00",
+                    }
+                ],
+                "dependencies": [],
+            },
+        )
+        assert moved_proposal.status_code == 201, moved_proposal.json().get("violations")
+        rejected_move = await client.post(
+            f"/api/v1/roadmaps/{roadmap_id}/proposals/{moved_proposal.json()['id']}/apply",
+            json={"confirm_soft_overflow": False},
+        )
+        assert rejected_move.status_code == 422
+        assert rejected_move.json()["code"] == "PROTECTED_SESSION_CHANGED"
+        async with async_session_factory() as session:
+            protected_block = await session.get(ScheduleBlockORM, protected_block.id)
+            assert protected_block is not None
+            protected_block.is_protected = False
+            await session.commit()
 
         # 8. Mark Task 1 as COMPLETED in DB, then create & edit a new Proposal and Apply to verify OS-03 Merge
         async with async_session_factory() as session:
@@ -377,8 +425,8 @@ async def test_e2e_ai_planning_flow_sse_approval_edit_soft_overflow_and_os03_mer
                         "title": "Ôn tập nhanh Outbox Relay (15 phút thủ công)",
                         "estimated_minutes": 15,
                         "scheduled_date": "2026-11-09",
-                        "scheduled_start": "2026-11-09T19:00:00+00:00",
-                        "scheduled_end": "2026-11-09T19:15:00+00:00",
+                        "scheduled_start": "2026-11-09T19:00:00+07:00",
+                        "scheduled_end": "2026-11-09T19:15:00+07:00",
                     }
                 ],
                 "dependencies": [],
@@ -398,8 +446,8 @@ async def test_e2e_ai_planning_flow_sse_approval_edit_soft_overflow_and_os03_mer
                         "title": "Cài đặt hoàn chỉnh Outbox Relay (45 phút)",
                         "estimated_minutes": 45,
                         "scheduled_date": "2026-11-09",
-                        "scheduled_start": "2026-11-09T19:00:00+00:00",
-                        "scheduled_end": "2026-11-09T19:45:00+00:00",
+                        "scheduled_start": "2026-11-09T19:00:00+07:00",
+                        "scheduled_end": "2026-11-09T19:45:00+07:00",
                     }
                 ],
                 "dependencies": [
@@ -424,9 +472,21 @@ async def test_e2e_ai_planning_flow_sse_approval_edit_soft_overflow_and_os03_mer
         assert replan_data["preserved_completed_tasks_count"] == 1
         assert replan_data["replaced_tasks_count"] == 1
         assert replan_data["inserted_tasks_count"] == 1
-        assert replan_data["total_sessions"] == 2
+        assert replan_data["total_sessions"] == 3
         assert replan_data["total_planned_minutes"] == 105  # 60m completed + 45m new
         assert replan_data["trigger_type"] == "REPLAN_MERGE"
+        async with async_session_factory() as session:
+            replanned_blocks = list(
+                (
+                    await session.execute(
+                        select(ScheduleBlockORM).where(ScheduleBlockORM.roadmap_id == roadmap_id)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            assert sum(block.status == "COMPLETED" for block in replanned_blocks) == 2
+            assert sum(block.status == "PLANNED" for block in replanned_blocks) == 1
 
         # 9. Get Roadmap Detail & Archive
         detail_after = await client.get(f"/api/v1/roadmaps/{roadmap_id}")

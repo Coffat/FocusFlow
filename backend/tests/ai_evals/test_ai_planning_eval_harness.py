@@ -46,6 +46,7 @@ from src.planning.domain.models.schedule import (
     ScheduleProposal,
     ScheduleProposalStatus,
 )
+from src.planning.domain.models.schedule_block import ScheduleBlock
 from src.planning.domain.services.validation_types import (
     AvailabilityConfigurationDTO,
     AvailabilitySlotDTO,
@@ -439,6 +440,32 @@ class _FakeLearnerProfilePort:
         return self._profile
 
 
+class _FakeScheduleBlockRepo:
+    def __init__(self) -> None:
+        self.blocks: list[ScheduleBlock] = []
+
+    async def save_all(self, blocks: list[ScheduleBlock]) -> list[ScheduleBlock]:
+        by_id = {block.id: block for block in self.blocks}
+        by_id.update({block.id: block for block in blocks})
+        self.blocks = list(by_id.values())
+        return blocks
+
+    async def get_by_schedule_id(
+        self,
+        official_schedule_id: UUID,
+        sync_status_in: list[str] | None = None,
+    ) -> list[ScheduleBlock]:
+        return [
+            block
+            for block in self.blocks
+            if block.official_schedule_id == official_schedule_id
+            and (sync_status_in is None or block.sync_status in sync_status_in)
+        ]
+
+    async def list_by_roadmap_ids(self, roadmap_ids: Sequence[UUID]) -> list[ScheduleBlock]:
+        return [block for block in self.blocks if block.roadmap_id in roadmap_ids]
+
+
 class _FakeExecutionSyncPort:
     def __init__(
         self,
@@ -476,8 +503,9 @@ class _FakeExecutionSyncPort:
         proposed_tasks: Sequence[ProposedTaskSyncItemDTO],
         proposed_dependencies: Sequence[ProposedDependencySyncItemDTO],
         now: datetime,
+        protected_task_ids: Sequence[UUID] = (),
     ) -> ScheduleSyncResultDTO:
-        _ = now
+        _ = (now, protected_task_ids)
         self.synced_tasks = list(proposed_tasks)
         self.synced_deps = list(proposed_dependencies)
         return ScheduleSyncResultDTO(
@@ -806,6 +834,10 @@ async def test_metric2_self_correction_post_retry_recovery_and_single_quota_comm
     uow = _FakeUoW()
     proposal_repo = _FakeProposalRepo()
 
+    invalid_ai_attempt = dict(g3["adversarial_attempt_1"])
+    invalid_ai_attempt["tasks"] = [dict(task) for task in invalid_ai_attempt["tasks"]]
+    invalid_ai_attempt["tasks"][0]["estimated_minutes"] = 15
+
     use_case = ExecuteScheduleProposalGenerationUseCase(
         goal_repo=_FakeGoalRepo(goal),
         roadmap_repo=_FakeRoadmapRepo(roadmap),
@@ -815,9 +847,7 @@ async def test_metric2_self_correction_post_retry_recovery_and_single_quota_comm
         learner_profile_port=_FakeLearnerProfilePort(learner_profile),
         execution_sync_port=_FakeExecutionSyncPort(),
         quota_facade=quota_facade,
-        llm_provider=_RecordingSelfCorrectionLLM(
-            [g3["adversarial_attempt_1"], g3["golden_valid_proposal"]]
-        ),
+        llm_provider=_RecordingSelfCorrectionLLM([invalid_ai_attempt, g3["golden_valid_proposal"]]),
         sse_job_store=sse_store,
         uow=uow,
     )
@@ -1037,6 +1067,7 @@ async def test_metric3_soft_overflow_detection_and_apply_confirmation_gate_g4() 
     proposal_repo = _FakeProposalRepo()
     await proposal_repo.save(proposal)
     schedule_repo = _FakeOfficialScheduleRepo()
+    block_repo = _FakeScheduleBlockRepo()
     exec_sync_port = _FakeExecutionSyncPort()
     change_log_port = _FakeScheduleChangeLogPort()
     uow = _FakeUoW()
@@ -1046,6 +1077,7 @@ async def test_metric3_soft_overflow_detection_and_apply_confirmation_gate_g4() 
         milestone_repo=_FakeMilestoneRepo(milestones),
         proposal_repo=proposal_repo,
         schedule_repo=schedule_repo,
+        block_repo=block_repo,
         availability_query_port=_FakeAvailabilityPort(avail_snapshot),
         execution_sync_port=exec_sync_port,
         schedule_change_log_port=change_log_port,
@@ -1073,8 +1105,12 @@ async def test_metric3_soft_overflow_detection_and_apply_confirmation_gate_g4() 
     )
     assert apply_res.roadmap.status == RoadmapStatus.ACTIVE
     assert apply_res.proposal.status == ScheduleProposalStatus.APPLIED
-    assert apply_res.official_schedule.total_sessions == 3
+    assert apply_res.official_schedule.total_sessions == 5
     assert apply_res.official_schedule.total_planned_minutes == 230
+    assert sum(b.scheduled_duration_minutes for b in block_repo.blocks) == 230
+    assert len(block_repo.blocks) == 5
+    assert all(10 <= b.scheduled_duration_minutes <= 60 for b in block_repo.blocks)
+    assert all(b.official_schedule_id == apply_res.official_schedule.id for b in block_repo.blocks)
     assert len(change_log_port.logs) == 1
     assert change_log_port.logs[0]["diff_payload"]["confirm_soft_overflow"] is True
 

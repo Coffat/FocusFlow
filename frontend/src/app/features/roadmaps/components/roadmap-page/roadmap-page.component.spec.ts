@@ -122,6 +122,7 @@ describe('RoadmapPageComponent (WBS 6.3 3-Step AI Planning & Approval Workspace)
 
     component.newGoalTitle.set('Chinh phục AI Evaluation Harness');
     component.newGoalDescription.set('Kiểm thử 5 Golden Datasets');
+    component.newStartDate.set('2026-11-02');
     component.newTargetDate.set('2026-12-15');
 
     const compiled = fixture.nativeElement as HTMLElement;
@@ -374,6 +375,24 @@ describe('RoadmapPageComponent (WBS 6.3 3-Step AI Planning & Approval Workspace)
           learning_resources: [],
         },
       ],
+      schedule_blocks: [
+        {
+          task_id: 'task-1',
+          sequence_in_task: 1,
+          block_date: '2026-11-02',
+          scheduled_start: '2026-11-02T20:20:00Z',
+          scheduled_end: '2026-11-02T21:05:00Z',
+          scheduled_duration_minutes: 45,
+        },
+        {
+          task_id: 'task-1',
+          sequence_in_task: 2,
+          block_date: '2026-11-03',
+          scheduled_start: '2026-11-03T20:20:00Z',
+          scheduled_end: '2026-11-03T21:05:00Z',
+          scheduled_duration_minutes: 45,
+        },
+      ],
       dependencies: [],
       violations: [],
       soft_overflow_warnings: [
@@ -428,6 +447,7 @@ describe('RoadmapPageComponent (WBS 6.3 3-Step AI Planning & Approval Workspace)
     const compiled = fixture.nativeElement as HTMLElement;
     const warningPanel = compiled.querySelector('[data-testid="soft-overflow-warning-panel"]');
     expect(warningPanel).toBeTruthy();
+    expect(compiled.querySelectorAll('[data-testid="proposal-schedule-blocks"] tbody tr').length).toBe(2);
 
     const applyBtn = compiled.querySelector('[data-testid="apply-proposal-btn"]') as HTMLButtonElement;
     expect(applyBtn.disabled).toBe(true);
