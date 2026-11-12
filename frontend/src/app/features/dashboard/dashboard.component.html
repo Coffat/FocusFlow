@@ -2,38 +2,40 @@
   <!-- Top Navigation Header -->
   <header class="dashboard-nav">
     <div class="nav-left">
-      <img src="assets/logo.svg" alt="FocusFlow" class="brand-logo" />
-      <span class="brand-title">FocusFlow</span>
+      <a routerLink="/dashboard" class="flex items-center gap-2.5 no-underline">
+        <img src="assets/logo.svg" alt="FocusFlow" class="brand-logo" />
+        <span class="brand-title">FocusFlow</span>
+      </a>
 
       <!-- Primary Navigation Links -->
       <nav class="hidden md:flex items-center gap-1 ml-6 text-sm font-medium">
         <a
           routerLink="/dashboard"
-          class="px-3 py-1.5 rounded-lg bg-[var(--surface-container-high,#e8eae6)] font-semibold text-[var(--foreground)]"
+          class="px-3 py-1.5 rounded-lg bg-[var(--surface-container-high,#eae8e7)] font-semibold text-[var(--on-surface,#1b1c1c)] no-underline"
         >
           Bảng điều khiển
         </a>
         <a
           routerLink="/availability"
-          class="px-3 py-1.5 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--surface-container)] transition-colors"
+          class="px-3 py-1.5 rounded-lg text-[var(--secondary,#5f5e5e)] hover:text-[var(--on-surface,#1b1c1c)] hover:bg-[var(--surface-container,#efeded)] transition-colors no-underline"
         >
           Thời gian rảnh
         </a>
         <a
           routerLink="/roadmaps"
-          class="px-3 py-1.5 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--surface-container)] transition-colors"
+          class="px-3 py-1.5 rounded-lg text-[var(--secondary,#5f5e5e)] hover:text-[var(--on-surface,#1b1c1c)] hover:bg-[var(--surface-container,#efeded)] transition-colors no-underline"
         >
           Lộ trình AI
         </a>
         <a
           routerLink="/schedule"
-          class="px-3 py-1.5 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--surface-container)] transition-colors"
+          class="px-3 py-1.5 rounded-lg text-[var(--secondary,#5f5e5e)] hover:text-[var(--on-surface,#1b1c1c)] hover:bg-[var(--surface-container,#efeded)] transition-colors no-underline"
         >
           Lịch học
         </a>
         <a
           routerLink="/settings"
-          class="px-3 py-1.5 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--surface-container)] transition-colors"
+          class="px-3 py-1.5 rounded-lg text-[var(--secondary,#5f5e5e)] hover:text-[var(--on-surface,#1b1c1c)] hover:bg-[var(--surface-container,#efeded)] transition-colors no-underline"
         >
           Cài đặt
         </a>
@@ -41,12 +43,33 @@
     </div>
 
     <div class="nav-right">
+      <!-- Quick Action "Vào học" -->
+      <a
+        routerLink="/workspace"
+        class="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[var(--primary,#005234)] text-white text-xs font-semibold hover:bg-[var(--primary-container,#246b4a)] transition-all shadow-xs no-underline"
+      >
+        <span class="material-symbols-outlined text-[16px]">play_arrow</span>
+        <span>Vào học</span>
+      </a>
+
+      <!-- Notifications Bell -->
+      <button
+        type="button"
+        class="w-8 h-8 rounded-full border border-[var(--outline-variant,#bfc9c0)]/70 flex items-center justify-center text-[var(--on-surface-variant,#404942)] hover:bg-[var(--surface-container,#efeded)] transition-colors relative cursor-pointer"
+        title="Thông báo"
+        aria-label="Thông báo"
+      >
+        <span class="material-symbols-outlined text-[18px]">notifications</span>
+        <span class="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-500 border-2 border-white"></span>
+      </button>
+
+      <!-- User Avatar Chip -->
       @if (currentUser()?.email) {
         <div class="user-chip">
           <span class="material-symbols-outlined user-avatar-icon">account_circle</span>
           <div class="user-meta">
             <span class="user-name">{{ currentUser()?.fullName || currentUser()?.email }}</span>
-            <span class="user-role-badge">{{ currentUser()?.tier || 'FREE' }} &bull; {{ currentUser()?.role || 'LEARNER' }}</span>
+            <span class="user-role-badge">{{ currentUser()?.tier || 'PRO' }} &bull; {{ currentUser()?.role || 'LEARNER' }}</span>
           </div>
         </div>
       }
@@ -58,89 +81,80 @@
     </div>
   </header>
 
-  <!-- Main Content Area with Quick Access Cards -->
-  <main class="max-w-6xl mx-auto w-full p-6 md:p-8 space-y-8 flex-1">
-    <div>
-      <h1 class="text-2xl font-bold tracking-tight">Xin chào, {{ currentUser()?.fullName || currentUser()?.email || 'Học viên' }}!</h1>
-      <p class="text-sm text-[var(--muted-foreground)] mt-1">Chọn tính năng bạn muốn thao tác để bắt đầu lộ trình học tập thích ứng.</p>
-    </div>
+  <!-- Page Content Container -->
+  <main class="max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8 space-y-6 flex-1">
+    <!-- State Switcher Toolbar -->
+    <app-dashboard-state-switcher
+      [activeState]="currentState()"
+      (stateChange)="onStateChange($event)"
+    />
 
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-      <!-- Card 1: Availability -->
-      <a
-        routerLink="/availability"
-        class="block p-6 rounded-2xl border border-[var(--border)] bg-[var(--card)] hover:border-[var(--primary)] hover:shadow-md transition-all group"
-      >
-        <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
-          <span class="text-2xl">⏰</span>
-        </div>
-        <h3 class="font-bold text-base text-[var(--foreground)] group-hover:text-[var(--primary)] transition-colors">
-          Thời Gian Rảnh Lai
-        </h3>
-        <p class="text-xs text-[var(--muted-foreground)] mt-2 leading-relaxed">
-          Cấu hình quỹ giờ rảnh linh hoạt (Mode A) hoặc khung giờ cố định (Mode B) để AI tự động tối ưu hóa lịch.
-        </p>
-        <span class="inline-flex items-center text-xs font-semibold text-emerald-600 dark:text-emerald-400 mt-4">
-          Cấu hình ngay &rarr;
-        </span>
-      </a>
+    <!-- When New User: Render Empty State -->
+    @if (currentState() === 'new-user') {
+      <app-dashboard-empty-state />
+    } @else {
+      @if (summary(); as s) {
+        <!-- KPI Cards Grid -->
+        <app-dashboard-kpi-grid [kpi]="s.kpi" />
 
-      <!-- Card 2: Roadmaps -->
-      <a
-        routerLink="/roadmaps"
-        class="block p-6 rounded-2xl border border-[var(--border)] bg-[var(--card)] hover:border-[var(--primary)] hover:shadow-md transition-all group"
-      >
-        <div class="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-400 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
-          <span class="text-2xl">🗺️</span>
-        </div>
-        <h3 class="font-bold text-base text-[var(--foreground)] group-hover:text-[var(--primary)] transition-colors">
-          Lập Kế Hoạch AI & Duyệt Lịch
-        </h3>
-        <p class="text-xs text-[var(--muted-foreground)] mt-2 leading-relaxed">
-          Sinh cột mốc thời gian thực (2-Stage SSE), xem trước đề xuất lịch học, kiểm tra tràn mềm và phê duyệt lịch.
-        </p>
-        <span class="inline-flex items-center text-xs font-semibold text-blue-600 dark:text-blue-400 mt-4">
-          Tạo lộ trình &rarr;
-        </span>
-      </a>
+        <!-- Weekly Time-Grid -->
+        <app-dashboard-weekly-grid
+          [scheduleBlocks]="s.scheduleBlocks"
+          [currentState]="currentState()"
+          [weekOffset]="weekOffset()"
+          (weekOffsetChange)="onWeekOffsetChange($event)"
+        />
 
-      <!-- Card 3: Schedule -->
-      <a
-        routerLink="/schedule"
-        class="block p-6 rounded-2xl border border-[var(--border)] bg-[var(--card)] hover:border-[var(--primary)] hover:shadow-md transition-all group"
-      >
-        <div class="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 dark:bg-purple-950 dark:text-purple-400 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
-          <span class="text-2xl">📅</span>
-        </div>
-        <h3 class="font-bold text-base text-[var(--foreground)] group-hover:text-[var(--primary)] transition-colors">
-          Lịch Học Tập
-        </h3>
-        <p class="text-xs text-[var(--muted-foreground)] mt-2 leading-relaxed">
-          Xem lịch biểu tuần, phiên học đã kích hoạt và theo dõi các nhiệm vụ học tập theo thời gian biểu.
-        </p>
-        <span class="inline-flex items-center text-xs font-semibold text-purple-600 dark:text-purple-400 mt-4">
-          Xem lịch &rarr;
-        </span>
-      </a>
+        <!-- Lower Workspace 2-Column Split (Left: Activity & Active Roadmaps; Right: Today Queue & AI Insights) -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          <!-- Left Column (Span 7) -->
+          <div class="lg:col-span-7 space-y-6">
+            <app-dashboard-activity-chart [distribution]="s.studyDistribution" />
+            <app-dashboard-active-roadmaps [roadmaps]="s.activeRoadmaps" />
+          </div>
 
-      <!-- Card 4: Settings -->
-      <a
-        routerLink="/settings"
-        class="block p-6 rounded-2xl border border-[var(--border)] bg-[var(--card)] hover:border-[var(--primary)] hover:shadow-md transition-all group"
-      >
-        <div class="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-400 flex items-center justify-center mb-4 group-hover:scale-105 transition-transform">
-          <span class="text-2xl">⚙️</span>
+          <!-- Right Column (Span 5) -->
+          <div class="lg:col-span-5 space-y-6">
+            <app-dashboard-today-queue [tasks]="s.todayQueue" />
+            <app-dashboard-ai-insights
+              [insight]="s.aiInsight"
+              [adaptation]="s.adaptationStatus"
+            />
+          </div>
         </div>
-        <h3 class="font-bold text-base text-[var(--foreground)] group-hover:text-[var(--primary)] transition-colors">
-          Cài Đặt Hệ Thống
-        </h3>
-        <p class="text-xs text-[var(--muted-foreground)] mt-2 leading-relaxed">
-          Theo dõi hạn ngạch AI Credits (2-Phase Reserve/Commit), tùy chọn giao diện và cài đặt ứng dụng.
-        </p>
-        <span class="inline-flex items-center text-xs font-semibold text-amber-600 dark:text-amber-400 mt-4">
-          Mở cài đặt &rarr;
-        </span>
-      </a>
-    </div>
+      }
+    }
   </main>
+
+  <!-- Footer Dock -->
+  <footer class="w-full border-t border-[var(--outline-variant,#bfc9c0)]/60 bg-[var(--surface-container-lowest,#ffffff)] py-3 px-6 text-xs text-[var(--secondary,#5f5e5e)] flex flex-wrap items-center justify-between gap-3">
+    <!-- Left: WebCal sync status -->
+    <div class="flex items-center gap-2">
+      <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+      <span class="font-medium text-[var(--on-surface,#1b1c1c)]">WebCal trường Đại học:</span>
+      <span class="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 font-semibold text-[11px]">
+        Đã đồng bộ (10 phút trước)
+      </span>
+    </div>
+
+    <!-- Right: Keyboard Shortcuts dock -->
+    <div class="flex items-center flex-wrap gap-4 font-mono text-[11px]">
+      <span class="flex items-center gap-1">
+        <kbd class="px-1.5 py-0.5 rounded bg-[var(--surface-container-high,#eae8e7)] border border-[var(--outline-variant,#bfc9c0)] text-[var(--on-surface,#1b1c1c)] font-bold">⌘K</kbd>
+        <span>Tìm kiếm</span>
+      </span>
+      <span class="flex items-center gap-1">
+        <kbd class="px-1.5 py-0.5 rounded bg-[var(--surface-container-high,#eae8e7)] border border-[var(--outline-variant,#bfc9c0)] text-[var(--on-surface,#1b1c1c)] font-bold">C</kbd>
+        <span>Tạo lộ trình</span>
+      </span>
+      <span class="flex items-center gap-1">
+        <kbd class="px-2 py-0.5 rounded bg-[var(--surface-container-high,#eae8e7)] border border-[var(--outline-variant,#bfc9c0)] text-[var(--on-surface,#1b1c1c)] font-bold">Space</kbd>
+        <span>Bắt đầu phiên học</span>
+      </span>
+      <span class="flex items-center gap-1">
+        <kbd class="px-1.5 py-0.5 rounded bg-[var(--surface-container-high,#eae8e7)] border border-[var(--outline-variant,#bfc9c0)] text-[var(--on-surface,#1b1c1c)] font-bold">Esc</kbd>
+        <span>Đóng</span>
+      </span>
+    </div>
+  </footer>
 </div>
