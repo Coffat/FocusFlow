@@ -5,7 +5,7 @@ description: Quy tắc kiến trúc và quy trình làm việc cho backend Focus
 
 # FocusFlow Backend — hướng dẫn cho AI agent (vai trò: Senior Backend Engineer)
 
-FocusFlow: hệ thống lập kế hoạch & thực thi lộ trình tự học thích ứng tích hợp AI (mô hình SRL của Zimmerman: Forethought → Performance → Self-Reflection). Backend là **Context-First Modular Monolith + Hexagonal**, 4 Bounded Context + `shared_kernel`, 24 bảng PostgreSQL.
+FocusFlow: hệ thống lập kế hoạch & thực thi lộ trình tự học thích ứng tích hợp AI (mô hình SRL của Zimmerman: Forethought → Performance → Self-Reflection). Backend là **Context-First Modular Monolith + Hexagonal**, 4 Bounded Context + `shared_kernel`. SRS v1.3 xác định đích 35 bảng; Alembic hiện có 28 bảng, nên luôn kiểm migration trước khi dùng bảng mới.
 
 Skill này tồn tại vì dự án có nhiều ràng buộc kiến trúc được *máy kiểm tra* (import-linter, mypy --strict, CI diff schema). Code "chạy được nhưng sai ranh giới" sẽ làm hỏng CI và mất điểm thiết kế. Hãy đọc kỹ phần "Luật bất khả xâm phạm" trước khi viết bất cứ dòng code nào.
 
@@ -24,17 +24,16 @@ Khi yêu cầu mơ hồ ở điểm có thể gây sai nghiệp vụ nghiêm tr�
 
 ```
 backend/src/
-  shared_kernel/        # UoW, outbox, event bus, LLMProviderPort, config, logging, worker broker
-  modules/ (hoặc src/)  # tên thư mục gốc: theo repo hiện có
-    account/     9 bảng  UC-01..06, UC-23, UC-24   (auth, profile, availability, quota, billing)
-    planning/    5 bảng  UC-07..10, UC-12           (goal, roadmap, milestone, proposal, official schedule, validation gate)
-    execution/   5 bảng  UC-11, UC-13..17           (task, DAG, study session, notes, calendar sync/webcal)
-    evaluation/  3 bảng  UC-18..22, UC-25           (pause/domino, ai review, overdue, schedule_change_logs)
-      <context>/{domain,application,infrastructure,presentation}/ + public_api.py
+  shared_kernel/   # UoW, outbox, LLMProviderPort, config, logging, worker
+  account/         # auth, profile, availability, quota, billing, learner model
+  planning/        # goal, roadmap, RAG, schedule proposal, official schedule
+  execution/       # task, DAG, study session, calendar sync
+  evaluation/      # proof, review, adaptation, schedule change log
+  <context>/{domain,application,infrastructure,presentation}/ + public_api.py
 ```
 Phụ thuộc một chiều: `presentation → infrastructure → application → domain`. Chi tiết, cấu hình import-linter, cây thư mục: `references/architecture-and-layout.md`.
 
-**Lưu ý đánh số UC**: SRS v1.2 dùng UC-01..UC-25 (nguồn chuẩn). Các ADR cũ dùng đánh số 19 UC. Khi viết code/commit/docstring, dùng số UC của SRS v1.2; xem bảng ánh xạ trong `references/spec-conflicts.md`.
+**Lưu ý đánh số UC**: SRS v1.3 dùng UC-01..UC-28. ADR và skill cũ còn dùng 19/25 UC; tra tên UC trong SRS trước khi ghi số. Xem `references/spec-conflicts.md`.
 
 ## 2. Luật bất khả xâm phạm (vi phạm = CI đỏ hoặc bug nghiệp vụ)
 
@@ -77,7 +76,7 @@ Phụ thuộc một chiều: `presentation → infrastructure → application �
 | Task nền | Taskiq + `RedisStreamBroker` (XREADGROUP/XACK), Redis `--appendonly yes`. `scheduler` **replicas: 1**, `worker` scale N. Payload task chỉ chứa ID nguyên thủy/ISO time. Sweeper dùng `SELECT … FOR UPDATE SKIP LOCKED`. Gọi dịch vụ ngoài: timeout + `SimpleRetryMiddleware` (backoff lũy thừa + jitter). |
 | Streaming AI | 2 chặng: `POST` (kèm `Idempotency-Key`, reserve quota) → `202 {job_id}` trong <150ms; `GET .../jobs/{job_id}/stream` SSE với sự kiện `stage, chunk, validation_retry, completed, failed`. Hard timeout LLM 55s (NFR-PERF-001). TTFT mục tiêu ≤ 2.5s. |
 | Quota | `SELECT … FOR UPDATE` trên `ai_quotas`; bất biến `used + reserved <= max`; reservation TTL 120s; sweeper 60s. Free 30 lượt/tháng, Premium 300; reset ngày 01. |
-| Validation gate | Tier1 Pydantic (block AI 15..120 phút — xem conflict), Tier2 tất định (`HybridAvailabilityRuleEngine`, `DagCycleValidator`, fail-closed), Tier3 Pedagogical Judge (advisory, timeout ≤5s, fail-open). Retry có cấu trúc tối đa 2 vòng với `ConstraintViolationDTO`; hết retry ⇒ RELEASE quota, không lưu DRAFT. |
+| Validation gate | Tier1 Pydantic (block AI 30..120 phút theo SRS v1.3 — xem conflict), Tier2 tất định (`HybridAvailabilityRuleEngine`, `DagCycleValidator`, fail-closed), Tier3 Pedagogical Judge (advisory, timeout ≤5s, fail-open). Retry có cấu trúc tối đa 2 vòng với `ConstraintViolationDTO`; hết retry ⇒ RELEASE quota, không lưu DRAFT. |
 | Offline defense | `LLM_PROVIDER=mock`, `PAYMENT_PROVIDER=local_mock`, `CALENDAR_PROVIDER=local_mock` chọn adapter ở composition root. Mọi tích hợp ngoài **phải** có adapter mock tương ứng. |
 | Quan sát | `structlog` JSON + `correlation_id` (middleware ASGI, truyền qua Taskiq headers). |
 
@@ -107,7 +106,8 @@ Phụ thuộc một chiều: `presentation → infrastructure → application �
 ruff check . && ruff format --check .
 mypy --strict src
 lint-imports                       # phải "0 broken contracts"
-pytest -q                          # unit domain trước, rồi integration
+pytest -q                          # unit domain trước, rồi integration; thêm AI eval offline
+# Từ gốc repo: bash scripts/quality-gates.sh backend-static|backend-tests
 alembic upgrade head               # nếu đụng schema; rồi diff với docs/database/schema.sql
 ```
 Definition of Done cho một tính năng: domain test (kể cả ca biên) + use case test với fake port + (nếu có DB) integration test; kiểm IDOR; kiểm lũy đẳng nếu là consumer/webhook/sweeper; không log dữ liệu nhạy cảm; migration + schema diff xanh; có mock adapter nếu thêm tích hợp ngoài; cập nhật OpenAPI (frontend sinh type từ đó — đổi tên field là breaking change, báo người dùng).

@@ -1,5 +1,7 @@
 # Kiểm thử Frontend (Vitest + Playwright)
 
+Chạy unit/component qua `pnpm exec ng test --watch=false` để Angular TestBed được khởi tạo; `vitest run` trực tiếp quét cả Playwright và thiếu môi trường Angular. Chạy `pnpm exec ng lint`, production build và `bash scripts/check-api-contract.sh` theo `docs/engineering/harness-quality.md`. E2E cần backend mock cùng PostgreSQL/Redis; chưa coi CI E2E là đã xác minh trước khi workflow chạy thực tế.
+
 ## 1. Vitest (unit/component)
 - **Store**: test state machine bằng signals: trạng thái ban đầu → hành động → trạng thái mong đợi; `computed` dẫn xuất (overdue, stalled, remaining); rollback optimistic khi API lỗi; không bấm đúp khi đang `starting/streaming`.
 - **SSE store**: mock `EventSource` (class giả có `addEventListener`, `close`, `readyState`); kiểm chuỗi `stage→chunk*→completed`, `validation_retry` tăng bộ đếm, `failed` map ra `ApiError`, `close()` được gọi khi `completed`/hủy/destroy, reconnect (CONNECTING) không tạo job mới.

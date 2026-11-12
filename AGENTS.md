@@ -72,6 +72,8 @@ Nếu skill chưa được cài, đọc trực tiếp `focusflow-*/SKILL.md` và
 5. Chạy cổng chất lượng (mục 6). Không báo "xong" khi chưa chạy; nếu không chạy được, nói rõ phần nào chưa kiểm chứng.
 6. Báo cáo ngắn: file đã đổi, quyết định đáng chú ý, giả định, việc cần người dùng xác nhận.
 
+Engineering harness: xem `docs/engineering/harness-quality.md`; chạy `scripts/quality-gates.sh` theo phần backend/frontend liên quan và `scripts/check-api-contract.sh` khi đổi API. Các golden eval trong CI luôn chạy offline với mock provider. Skill FocusFlow phân biệt thiết kế đích SRS v1.3 (35 bảng) với migration hiện có (28 bảng); khi lệch, ưu tiên SRS về nghiệp vụ và kiểm schema thực tế trước khi dùng bảng.
+
 ## 6. Lệnh kiểm tra
 
 Backend (`backend/`):
@@ -87,7 +89,7 @@ Frontend (`frontend/`):
 ```bash
 npm run api:gen         # khi backend đổi OpenAPI
 npx ng lint
-npx vitest run
+pnpm exec ng test --watch=false
 npx ng build --configuration production
 npx playwright test     # khi đụng luồng chính
 ```

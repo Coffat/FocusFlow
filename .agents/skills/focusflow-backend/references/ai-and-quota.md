@@ -22,7 +22,7 @@ Quy tắc: RELEASE/COMMIT lũy đẳng theo `reservation_id` (không giảm hai 
 
 Test bắt buộc: 10 request song song khi còn 1 lượt ⇒ đúng 1 thành công, 9 nhận 429/`QUOTA_EXHAUSTED`.
 
-## 3. SSE 2 chặng (áp dụng cho UC-07 milestone và UC-08 schedule proposal, và UC-21)
+## 3. SSE 2 chặng (áp dụng cho UC-07 milestone và UC-08 schedule proposal, và UC-23)
 
 - **Chặng 1** `POST /api/v1/.../generate` (header `Idempotency-Key`): xác thực → kiểm sở hữu → reserve quota → tạo job → `202 {"job_id": "..."}` trong <150ms. Cùng `Idempotency-Key` ⇒ trả lại cùng `job_id`, không reserve lần hai.
 - **Chặng 2** `GET /api/v1/.../jobs/{job_id}/stream` (`text/event-stream`, xác thực bằng cookie, `Cache-Control: no-cache`, `X-Accel-Buffering: no`): sự kiện `stage`, `chunk`, `validation_retry`, `completed`, `failed`. `EventSource` tự reconnect ⇒ kết nối lại **không** được tái kích hoạt LLM hay trừ quota (job idempotent; hỗ trợ `Last-Event-ID` hoặc phát lại trạng thái hiện tại của job).
@@ -33,15 +33,15 @@ Test bắt buộc: 10 request song song khi còn 1 lượt ⇒ đúng 1 thành c
 
 Luồng: LLM → Tier1 → Tier2 → Tier3 → lưu `ScheduleProposal(DRAFT)` + COMMIT quota. Vi phạm Tier1/Tier2 ⇒ retry có cấu trúc (tối đa 2 lần, backoff OS-08: 2s/4s, trần 10s, full jitter) bằng prompt chứa `ConstraintViolationDTO` (mã lỗi, ngày, phút vượt, cặp task tạo chu trình). Hết retry ⇒ hủy, RELEASE quota, `AI_SCHEMA_VALIDATION_ERROR`, **không lưu bản nháp vi phạm**. Phát SSE `validation_retry` mỗi lần retry.
 
-- **Tier 1** (Pydantic v2, fail-closed): cấu trúc JSON, độ dài, ISO 8601, `milestone_id` hợp lệ, khối liên tục do AI sinh trong dải cho phép (xem `spec-conflicts.md` #3 — hiện ADR-009 `[15,120]`, SRS v1.2 `30–120`).
+- **Tier 1** (Pydantic v2, fail-closed): cấu trúc JSON, độ dài, ISO 8601, `milestone_id` hợp lệ, khối liên tục do AI sinh trong dải cho phép (xem `spec-conflicts.md` — mục Thời lượng — hiện ADR-009 `[15,120]`, SRS v1.3 `30–120`).
 - **Tier 2** (tất định, fail-closed): `HybridAvailabilityRuleEngine` — Mode A: tổng phút/ngày ≤ `max_daily_minutes` (dải cấu hình 30 phút–14h/ngày, OS-06); Mode B: mỗi task nằm trong `TimeSlot` thực (đã trừ khoảng bận Google Calendar & lịch các roadmap khác), Soft Overflow ≤ 30 phút **chỉ cho task cuối ngày** và cần cảnh báo + xác nhận khi Apply, cấm overlap tuyệt đối, hỗ trợ khe vắt nửa đêm. `DagCycleValidator` — Kahn/DFS, 0 chu trình, tiền đề xếp trước hậu kế. Xung đột slot giữa nhiều roadmap: EDF theo `target_date` (OS-04).
 - **Tier 3** (Pedagogical Judge, advisory, timeout ≤5s, **fail-open**): chỉ gắn `advisory_warnings` vào DRAFT khi timeout/lỗi/cảnh báo nhẹ; "vi phạm nặng khi còn lượt retry" mới kích hoạt retry.
 
 **Apply** (UC-08/09/13/20/21 `<<include>>` UC-12): khi người học bấm Apply, chạy lại Tier 2 tất định lần cuối (trạng thái có thể đã đổi), rồi ghi `OfficialSchedule` theo OS-03 (Merge/Future Shift: giữ nguyên task/phiên `COMPLETED` quá khứ, thay các task chưa hoàn thành), ghi `schedule_change_logs`, phát `OfficialScheduleAppliedEvent`. Roadmap `INITIALIZED → ACTIVE` chỉ khi chưa vượt trần lộ trình ACTIVE của gói (Free 3 / Premium 15).
 
-## 5. AI Reschedule quá hạn (UC-21) — **có mâu thuẫn SRS/ADR**
+## 5. AI Reschedule quá hạn (UC-23) — **có mâu thuẫn SRS/ADR**
 
-Đọc `spec-conflicts.md` #1 trước khi cài. Mặc định áp dụng SRS v1.2 (mới hơn, và do BUSR-02): tạo `ScheduleProposal(DRAFT)` cho **một** roadmap, đi qua cổng 3 tầng, người học Apply, và `reschedule_count` chỉ tăng khi Apply. Phạm vi: chỉ task chưa hoàn thành của roadmap đó, trừ khung giờ đã bị roadmap khác/lịch ngoài chiếm; tuyệt đối không chạm roadmap/task khác. Tiền điều kiện: có task OVERDUE, `reschedule_count < 3`, còn quota. Consume quota như mọi lệnh AI.
+Đọc `spec-conflicts.md` — mục AI overdue recovery trước khi cài. Mặc định áp dụng SRS v1.3 (mới hơn, và do BUSR-02): tạo `ScheduleProposal(DRAFT)` cho **một** roadmap, đi qua cổng 3 tầng, người học Apply, và `reschedule_count` chỉ tăng khi Apply. Phạm vi: chỉ task chưa hoàn thành của roadmap đó, trừ khung giờ đã bị roadmap khác/lịch ngoài chiếm; tuyệt đối không chạm roadmap/task khác. Tiền điều kiện: có task OVERDUE, `reschedule_count < 3`, còn quota. Consume quota như mọi lệnh AI.
 
 ## 6. Chịu lỗi
 

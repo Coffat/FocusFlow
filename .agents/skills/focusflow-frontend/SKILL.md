@@ -5,11 +5,11 @@ description: Quy tắc kiến trúc và quy trình làm việc cho frontend Focu
 
 # FocusFlow Frontend — hướng dẫn cho AI agent (vai trò: Senior Frontend Engineer)
 
-SPA Angular 21+ phục vụ 25 use case của FocusFlow (Learner + Administrator). Các điểm khó đã được chốt trong ADR: bộ đếm Pomodoro cập nhật mỗi giây (zoneless để không quét lại cây), luồng AI SSE 2 chặng với Human-in-the-Loop, lịch/analytics giàu dữ liệu, và Lighthouse Accessibility ≥ 90. Skill này giúp bạn làm đúng ngay lần đầu và nhất quán với backend.
+SPA Angular 21+ hướng tới 28 use case theo SRS v1.3 của FocusFlow (Learner + Administrator). Các điểm khó đã được chốt trong ADR: bộ đếm Pomodoro cập nhật mỗi giây (zoneless để không quét lại cây), luồng AI SSE 2 chặng với Human-in-the-Loop, lịch/analytics giàu dữ liệu, và Lighthouse Accessibility ≥ 90. Skill này giúp bạn làm đúng ngay lần đầu và nhất quán với backend.
 
 ## 0. Quy trình bắt buộc cho mọi tác vụ
 
-1. **Xác định feature slice** (mục 2) và use case SRS v1.2 liên quan. Màn hình mới ⇒ đọc `references/feature-slices.md` để biết hành vi, trạng thái, mã lỗi cần xử lý.
+1. **Xác định feature slice** (mục 2) và use case SRS v1.3 liên quan. Màn hình mới ⇒ đọc `references/feature-slices.md` để biết hành vi, trạng thái, mã lỗi cần xử lý.
 2. **Kiểm tra hợp đồng API**: kiểu dữ liệu lấy từ `src/app/core/api/schema.d.ts` (sinh từ OpenAPI). Chưa có endpoint/field? Dừng và báo cho người dùng/backend — **không tự viết interface tay** cho dữ liệu API.
 3. **Đọc component/store lân cận** để khớp pattern có sẵn trước khi viết mới.
 4. **Viết**: store/service (signals) → component trình bày (dumb) → container (smart) → route. Mỗi trạng thái UI (loading, empty, error, success, disabled, offline) đều phải có thiết kế.
@@ -57,17 +57,17 @@ Khi SRS và ADR lệch nhau (đặc biệt số UC, AI Reschedule, thời lượ
 
 ## 2. 9 Feature slice (`src/app/features/`)
 
-| Slice | Nội dung | UC (SRS v1.2) |
+| Slice | Nội dung | UC (SRS v1.3) |
 |---|---|---|
 | `auth/` | đăng ký, đăng nhập, quên mật khẩu, onboarding | 01, 02 |
-| `dashboard/` | tiến độ hôm nay, **Needs Attention** (OVERDUE + nút AI Reschedule), quota AI, vào nhanh phiên học | 13, 21, 22 (hiển thị) |
+| `dashboard/` | Today Focus, tiến độ hôm nay, **Needs Attention**, quota AI | 13, 23, 25 (hiển thị) |
 | `planning/` | goal → AI milestone (SSE) → duyệt → AI schedule proposal (SSE) → diff → Apply; tạo thủ công; danh mục/lưu trữ lộ trình | 07, 08, 09, 10 |
-| `workspace/` | Pomodoro/Stopwatch, task checklist, Scratchpad Markdown, Key Takeaways, heartbeat 60s | 14 (+15 phục hồi) |
-| `calendar/` | lịch chính thức Calendar/Timeline, dời thủ công, Google Calendar OAuth, WebCal/.ics | 13, 16, 17 |
-| `tasks/` | danh sách task, backlog, phụ thuộc DAG, dialog can thiệp `STALLED` | 11, 21 |
-| `analytics/` | Adherence/Velocity, AI Review, Pause/Resume (Domino Shift) | 18, 19, 20 |
+| `workspace/` | Phiên học, MVS, Key Takeaways, heartbeat và khôi phục phiên | 14, 15, 16 |
+| `calendar/` | lịch chính thức, dời thủ công, Google Calendar và WebCal/.ics | 13, 17, 18 |
+| `tasks/` | danh sách task, backlog, DAG, can thiệp `STALLED` | 11, 23, 24 |
+| `analytics/` | thống kê, Prove Mode, Weekly Review, Pause/Resume | 19, 20, 21, 22 |
 | `settings/` | hồ sơ, múi giờ, lịch rảnh Mode A/B, Learner Profile (reset), nâng cấp Premium, thanh toán QR | 03, 04 (+05 kết quả) |
-| `admin/` | người dùng & hạn ngạch, đối soát giao dịch, giám sát hệ thống & log AI | 23, 24, 25 |
+| `admin/` | người dùng & hạn ngạch, đối soát, giám sát | 26, 27, 28 |
 
 Cấu trúc một slice:
 ```
@@ -116,8 +116,8 @@ Slice **không import chéo nội bộ** của slice khác; dùng chung qua `cor
 
 ```bash
 npm run api:gen            # nếu backend đổi OpenAPI
-npx ng lint
-npx vitest run             # hoặc: npm test
+pnpm exec ng lint
+pnpm exec ng test --watch=false  # Angular TestBed; raw vitest run chưa khởi tạo môi trường Angular
 npx ng build --configuration production
 npx playwright test        # khi đụng luồng chính
 ```

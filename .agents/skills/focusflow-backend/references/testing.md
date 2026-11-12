@@ -28,6 +28,7 @@ IDOR từng endpoint `{id}`; RBAC `/admin/*`; cookie flags; refresh rotation + r
 Dùng `MockLLMAdapter` có kịch bản lỗi (JSON hỏng, vi phạm overbooking, chu trình DAG, timeout Tier 3, 429) để test retry/RELEASE/fail-open. Không gọi LLM thật trong CI. Eval harness chạy riêng (`tests/ai_evals/`).
 
 ## 6. Quy ước
+- Engineering harness: từ gốc repo chạy `bash scripts/quality-gates.sh backend-static` và `backend-tests`; báo cáo JUnit, branch coverage, AI eval ở `artifacts/quality/`. Golden dataset v1 có 223 case offline về Mode A/B, DAG và prompt isolation; 5 planning scenario hiện có kiểm retry, quota và Apply. Mục tiêu ADR-009 là branch coverage ≥95% từng engine, không đánh đồng với số test xanh.
 - Tên test mô tả hành vi: `test_apply_proposal_rejects_overbooked_day`.
 - Fixture/factory cho aggregate; tránh sao chép dữ liệu lớn.
 - Test không phụ thuộc thứ tự, không phụ thuộc giờ hệ thống, không sleep thật (dùng fake clock / `asyncio` mock).

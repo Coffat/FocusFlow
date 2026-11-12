@@ -1,16 +1,18 @@
-# Mô hình dữ liệu (PostgreSQL 16, 24 bảng, 3NF/BCNF)
+# Mô hình dữ liệu (PostgreSQL 16)
 
-## 1. Sở hữu ghi độc quyền
+SRS v1.3 §12 và `docs/database/schema.sql` mô tả **35 bảng đích**: 12 `account`, 10 `planning`, 5 `execution`, 4 `evaluation`, 4 `shared_kernel`. Alembic hiện có **28 bảng** (24 bảng nền + `knowledge_sources`, `knowledge_chunks`, `calendar_connections`, `schedule_blocks`). Schema tài liệu đang đi trước migrations; không coi bảng chỉ có trong SRS/schema.sql là đã triển khai. Kiểm migration và ORM trước khi viết code, không sửa tay schema.sql và không thêm bảng vượt thiết kế 35 nếu chưa được người dùng cho phép.
 
-| Context | Bảng |
+## 1. Sở hữu ghi độc quyền hiện có
+
+| Context | Bảng trong migrations hiện tại |
 |---|---|
-| account (9) | `users`, `learner_profiles`, `webcal_tokens`, `availabilities`, `availability_slots`, `ai_quotas`, `ai_quota_reservations`, `ai_usage_logs`, `payment_transactions` |
-| planning (5) | `goals`, `roadmaps`, `milestones`, `official_schedules`, `schedule_proposals` |
+| account (10) | `users`, `learner_profiles`, `webcal_tokens`, `calendar_connections`, `availabilities`, `availability_slots`, `ai_quotas`, `ai_quota_reservations`, `ai_usage_logs`, `payment_transactions` |
+| planning (8) | `goals`, `roadmaps`, `milestones`, `official_schedules`, `schedule_proposals`, `schedule_blocks`, `knowledge_sources`, `knowledge_chunks` |
 | execution (5) | `tasks`, `task_dependencies`, `study_sessions`, `session_tasks`, `study_notes` |
 | evaluation (3) | `pause_records`, `ai_reviews`, `schedule_change_logs` |
 | shared_kernel (2) | `outbox_events`, `processed_events` |
 
-SRS v1.2 §12 còn nhắc thực thể `CalendarConnection` (OAuth, tách khỏi `WebCalToken`). 24 bảng của ADR-007 **không có bảng riêng** cho nó ⇒ đây là khoảng trống đặc tả: xem `spec-conflicts.md` mục "CalendarConnection". Đừng tự thêm bảng thứ 25 mà không hỏi người dùng; nếu cần lưu OAuth token, đề xuất bảng `calendar_connections` (context `account` hoặc `execution` — hỏi) kèm migration và cập nhật con số 24.
+Các bảng Learner Memory, mastery, workflow và proof thuộc thiết kế SRS v1.3 nhưng chưa có đầy đủ trong migrations. Đối chiếu `docs/srs/srs-v1.3.md` và `docs/database/schema.sql` khi triển khai; thay đổi schema phải qua Alembic.
 
 ## 2. Quy ước
 
