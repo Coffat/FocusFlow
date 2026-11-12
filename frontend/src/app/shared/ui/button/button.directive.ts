@@ -14,7 +14,7 @@ export type ButtonSize = 'default' | 'sm' | 'lg' | 'icon';
 export class ButtonDirective {
   readonly variant = input<ButtonVariant>('default');
   readonly size = input<ButtonSize>('default');
-  readonly userClass = input<string>('', { alias: 'class' });
+  readonly class = input<string>('');
 
   readonly classes = computed(() => {
     const base = 'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)] disabled:pointer-events-none disabled:opacity-50 cursor-pointer select-none';
@@ -35,6 +35,6 @@ export class ButtonDirective {
       icon: 'h-9 w-9'
     };
 
-    return cn(base, variants[this.variant()], sizes[this.size()], this.userClass());
+    return cn(base, variants[this.variant()], sizes[this.size()], this.class());
   });
 }
