@@ -158,6 +158,7 @@ class GetDashboardSummaryUseCase:
                 pomodoro_count=3,
                 duration_minutes=90,
                 roadmap_code="RD-GO-HEX",
+                description="Thực hành thiết kế interface và unit test mock pattern",
             ),
             DashboardScheduleBlockDTO(
                 id=uuid5(user_id, "block-wed-1"),
@@ -171,6 +172,7 @@ class GetDashboardSummaryUseCase:
                 pomodoro_count=3,
                 duration_minutes=90,
                 roadmap_code="RD-IELTS-75",
+                description="Lập dàn ý và hoàn thiện bài luận Task 2 chuyên sâu",
             ),
             DashboardScheduleBlockDTO(
                 id=uuid5(user_id, "block-wed-2"),
@@ -184,6 +186,7 @@ class GetDashboardSummaryUseCase:
                 pomodoro_count=3,
                 duration_minutes=90,
                 roadmap_code="RD-GO-HEX",
+                description="Triển khai bảng outbox_events và worker xử lý sự kiện trong Go",
             ),
             DashboardScheduleBlockDTO(
                 id=uuid5(user_id, "block-thu-1"),
@@ -197,6 +200,7 @@ class GetDashboardSummaryUseCase:
                 pomodoro_count=3,
                 duration_minutes=90,
                 roadmap_code="RD-IELTS-75",
+                description="Luyện nghe bài độc thoại học thuật và ghi chép từ vựng chuyên ngành",
             ),
             DashboardScheduleBlockDTO(
                 id=uuid5(user_id, "block-fri-1"),
@@ -210,6 +214,7 @@ class GetDashboardSummaryUseCase:
                 pomodoro_count=4,
                 duration_minutes=120,
                 roadmap_code="RD-GO-HEX",
+                description="Tìm hiểu HNSW index và viết API truy vấn similarity vector",
             ),
             DashboardScheduleBlockDTO(
                 id=uuid5(user_id, "block-sat-1"),
@@ -223,6 +228,7 @@ class GetDashboardSummaryUseCase:
                 pomodoro_count=6,
                 duration_minutes=180,
                 roadmap_code="RD-IELTS-75",
+                description="Luyện đề 4 kỹ năng & phân tích nhật ký lỗi sai chi tiết",
             ),
         ]
 

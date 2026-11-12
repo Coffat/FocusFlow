@@ -81,6 +81,7 @@ class DashboardScheduleBlockDTO(BaseModel):
     pomodoro_count: int = Field(..., description="Số phiên Pomodoro")
     duration_minutes: int = Field(..., description="Thời lượng khối học theo phút")
     roadmap_code: str = Field(..., description="Mã lộ trình tương ứng")
+    description: str | None = Field(default=None, description="Mô tả tóm tắt phiên học")
 
 
 class DashboardSummaryResponseDTO(BaseModel):
