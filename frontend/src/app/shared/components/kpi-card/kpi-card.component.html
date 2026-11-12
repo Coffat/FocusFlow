@@ -1,18 +1,21 @@
-<div class="kpi-card bg-white border border-[#DCDCDC] rounded-xl p-4 sm:p-5 shadow-xs flex flex-col justify-between transition-all duration-200 hover:border-neutral-400/80">
-  <!-- Top: Label & Icon -->
-  <div>
-    <div class="flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-neutral-500 mb-2">
-      <span class="font-sans truncate">{{ label() }}</span>
+<div class="kpi-card h-full flex flex-col justify-between p-5 sm:p-6 rounded-2xl border border-neutral-200/80 bg-white shadow-xs transition-all duration-200 hover:border-neutral-300">
+  <!-- Top: Label & Icon + Main Value Row -->
+  <div class="space-y-3">
+    <!-- Header Row (Fixed min-height 32px for label & icon badge) -->
+    <div class="flex items-center justify-between min-h-[32px]">
+      <span class="text-xs font-semibold uppercase tracking-wider text-neutral-500 font-sans truncate">
+        {{ label() }}
+      </span>
       @if (icon()) {
-        <div class="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" [ngClass]="toneIconClass()">
-          <span class="material-symbols-outlined text-[18px]" aria-hidden="true">{{ icon() }}</span>
+        <div class="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-2xs" [ngClass]="toneIconClass()">
+          <lucide-icon [name]="resolvedIconName()" [size]="16" class="shrink-0" aria-hidden="true"></lucide-icon>
         </div>
       }
     </div>
 
-    <!-- Main Value + Target / Delta -->
-    <div class="flex items-baseline flex-wrap gap-2 mt-1">
-      <span class="text-2xl sm:text-3xl font-bold text-neutral-900 tracking-tight font-serif">
+    <!-- Main Value Row (Fixed min-height 44px with accurate baseline alignment) -->
+    <div class="flex items-baseline flex-wrap gap-2 min-h-[44px]">
+      <span class="text-2xl sm:text-3xl font-bold text-neutral-900 tracking-tight font-serif leading-none">
         {{ value() }}
       </span>
 
@@ -24,7 +27,7 @@
 
       @if (delta()) {
         <span
-          class="inline-flex items-center gap-0.5 text-xs font-semibold px-2 py-0.5 rounded-full border shrink-0"
+          class="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border shrink-0"
           [class.bg-emerald-50]="trend() === 'up'"
           [class.text-emerald-700]="trend() === 'up'"
           [class.border-emerald-200]="trend() === 'up'"
@@ -35,34 +38,39 @@
           [class.text-neutral-600]="trend() === 'neutral'"
           [class.border-neutral-200]="trend() === 'neutral'"
         >
-          <span class="material-symbols-outlined text-[13px]" aria-hidden="true">{{ trendIcon() }}</span>
+          <lucide-icon [name]="trendIconName()" [size]="12" class="shrink-0" aria-hidden="true"></lucide-icon>
           <span>{{ delta() }}</span>
         </span>
       }
     </div>
   </div>
 
-  <!-- Bottom: Subtitle / Progress bar / Footer -->
-  @if (subtitle() || progress() !== undefined || footerText()) {
-    <div class="mt-3.5 pt-3 border-t border-neutral-100 space-y-2">
-      <div class="flex items-center justify-between text-xs text-neutral-500 font-sans">
-        @if (subtitle()) {
-          <span class="truncate font-medium text-neutral-700">{{ subtitle() }}</span>
-        }
-        @if (footerText()) {
-          <span class="text-[11px] truncate">{{ footerText() }}</span>
-        }
-      </div>
+  <!-- Bottom: Subtitle / Progress bar / Footer (Uniform alignment with reserved progress slot) -->
+  <div class="mt-4 pt-3 border-t border-neutral-100 flex flex-col justify-end space-y-2">
+    <!-- Subtitle & Footer Text Row (min-height 18px) -->
+    <div class="flex items-center justify-between text-xs text-neutral-500 font-sans min-h-[18px]">
+      @if (subtitle()) {
+        <span class="truncate font-medium text-neutral-700">{{ subtitle() }}</span>
+      } @else {
+        <span></span>
+      }
 
-      @if (progress() !== undefined) {
-        <div class="w-full h-1.5 bg-neutral-100 rounded-full overflow-hidden">
-          <div
-            class="h-full rounded-full transition-all duration-300"
-            [style.background-color]="toneBarColor()"
-            [style.width.%]="progress()"
-          ></div>
-        </div>
+      @if (footerText()) {
+        <span class="text-[11px] text-neutral-500 truncate flex items-center gap-1">
+          {{ footerText() }}
+        </span>
       }
     </div>
-  }
+
+    <!-- Reserved Slot for Progress Bar (occupies h-1.5 in both cases so all card bottoms align 100%) -->
+    <div class="w-full h-1.5 rounded-full overflow-hidden" [class.bg-neutral-100]="progress() !== undefined">
+      @if (progress() !== undefined) {
+        <div
+          class="h-full rounded-full transition-all duration-300"
+          [style.background-color]="toneBarColor()"
+          [style.width.%]="progress()"
+        ></div>
+      }
+    </div>
+  </div>
 </div>

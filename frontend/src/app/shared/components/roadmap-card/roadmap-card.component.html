@@ -1,22 +1,22 @@
 @if (variant() === 'compact') {
-  <!-- COMPACT VARIANT (FOR DASHBOARD WIDGET) -->
-  <div class="roadmap-card-compact p-4 rounded-lg border border-neutral-200/70 bg-[#FBF9F8] hover:border-emerald-700/60 transition-all group">
-    <div class="flex items-start justify-between gap-3 mb-2">
-      <div class="min-w-0">
-        <span class="inline-block text-[10px] font-semibold uppercase tracking-wider text-neutral-500 mb-0.5 truncate">
+  <!-- COMPACT VARIANT (FOR DASHBOARD WIDGET & LIST VIEW) -->
+  <div class="roadmap-card-compact p-3.5 sm:p-4 rounded-xl border border-neutral-200/70 bg-[#FBF9F8] hover:border-emerald-700/60 hover:-translate-y-0.5 hover:shadow-sm transition-all duration-200 group">
+    <div class="flex items-start justify-between gap-2.5 mb-2">
+      <div class="min-w-0 flex-1">
+        <span class="inline-block text-[10px] font-semibold uppercase tracking-wider text-neutral-500 mb-0.5 truncate max-w-full">
           {{ category() }}
         </span>
         <h4 class="font-bold text-sm text-neutral-900 group-hover:text-emerald-800 transition-colors truncate">
           {{ roadmap().title }}
         </h4>
       </div>
-      <span class="text-xs font-bold font-mono text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 shrink-0">
+      <span class="text-xs font-bold font-mono text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 shrink-0 ml-2">
         {{ progress() }}%
       </span>
     </div>
 
     <!-- Progress Bar -->
-    <div class="w-full h-1.5 bg-neutral-200/70 rounded-full overflow-hidden mb-3">
+    <div class="w-full h-1.5 bg-neutral-200/70 rounded-full overflow-hidden mb-2.5 sm:mb-3">
       <div
         class="h-full rounded-full transition-all duration-300"
         style="background-color: #246B4A;"
@@ -25,17 +25,17 @@
     </div>
 
     <!-- Next Task & Meta Footer -->
-    <div class="pt-2 border-t border-neutral-200/50 flex flex-wrap items-center justify-between gap-2 text-xs">
-      <div class="flex items-center gap-1.5 text-neutral-600 min-w-0 flex-1">
+    <div class="pt-2 border-t border-neutral-200/50 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2 text-xs">
+      <div class="flex items-center gap-1.5 text-neutral-600 min-w-0 w-full sm:w-auto sm:flex-1">
         <span class="material-symbols-outlined text-[14px] text-emerald-700 shrink-0" aria-hidden="true">arrow_forward</span>
         <span class="truncate font-medium text-neutral-900">{{ currentMilestone() }}</span>
       </div>
 
-      <div class="flex items-center gap-3 text-neutral-500 shrink-0">
-        <span class="text-[11px]">{{ taskRatio() }} &bull; Hạn: {{ formattedDate() }}</span>
+      <div class="flex items-center justify-between sm:justify-end gap-2.5 sm:gap-3 text-neutral-500 w-full sm:w-auto shrink-0 text-[11px] sm:text-xs">
+        <span class="truncate">{{ taskRatio() }} &bull; Hạn: {{ formattedDate() }}</span>
         <a
           [routerLink]="['/roadmaps', roadmap().id]"
-          class="font-semibold text-emerald-800 hover:underline inline-flex items-center gap-0.5 text-xs no-underline"
+          class="font-semibold text-emerald-800 hover:underline inline-flex items-center gap-0.5 text-xs no-underline shrink-0"
         >
           Chi tiết &rarr;
         </a>
@@ -45,7 +45,7 @@
 } @else {
   <!-- FULL VARIANT (FOR ROADMAP HUB) -->
   <div
-    class="roadmap-card-full bg-white rounded-2xl p-6 flex flex-col justify-between relative shadow-[0_1px_3px_rgba(0,0,0,0.02)] transition group"
+    class="roadmap-card-full h-full bg-white rounded-2xl p-5 sm:p-6 flex flex-col justify-between relative shadow-[0_1px_3px_rgba(0,0,0,0.02)] hover:-translate-y-1 hover:shadow-md transition-all duration-200 group"
     [class.border-2]="status() === 'ACTIVE' || status() === 'INITIALIZED'"
     [class.border-emerald-500/40]="status() === 'ACTIVE' || status() === 'INITIALIZED'"
     [class.hover:border-emerald-500/70]="status() === 'ACTIVE' || status() === 'INITIALIZED'"
@@ -54,7 +54,7 @@
     [class.border-neutral-200/70]="status() === 'COMPLETED'"
     (click)="closeMenu()"
   >
-    <div>
+    <div class="flex-1 flex flex-col">
       <!-- Header Status Badge & Action Menu -->
       <div class="flex items-center justify-between gap-2 mb-4 relative">
         @if (status() === 'ACTIVE' || status() === 'INITIALIZED') {
@@ -142,15 +142,15 @@
       </div>
 
       <!-- Title & Description -->
-      <h2 class="text-base sm:text-lg font-bold text-neutral-900 tracking-tight leading-snug">
+      <h2 class="text-base sm:text-lg font-bold text-neutral-900 tracking-tight leading-snug min-h-[3rem] line-clamp-2">
         {{ roadmap().title }}
       </h2>
-      <p class="text-xs text-neutral-500 mt-2 leading-relaxed line-clamp-2">
+      <p class="text-xs text-neutral-500 mt-2 leading-relaxed min-h-[2.25rem] line-clamp-2">
         {{ description() }}
       </p>
 
       <!-- Progress Bar -->
-      <div class="mt-5">
+      <div class="mt-4 sm:mt-5">
         <div class="flex items-center justify-between text-xs mb-1.5">
           <span class="text-neutral-500 font-medium">
             {{ status() === 'PAUSED' ? 'Tiến độ hiện tại:' : 'Tiến độ hoàn thành:' }}
@@ -172,12 +172,12 @@
       </div>
 
       <!-- Metadata 2-column Grid -->
-      <div class="grid grid-cols-2 gap-2.5 mt-5 bg-neutral-50/70 rounded-xl p-3 border border-neutral-100 text-[11px]">
+      <div class="grid grid-cols-2 gap-2.5 mt-4 sm:mt-5 bg-neutral-50/70 rounded-xl p-3 border border-neutral-100 text-[11px]">
         <div>
-          <div class="text-neutral-400">
+          <div class="text-neutral-400 truncate">
             {{ status() === 'COMPLETED' ? 'Hoàn thành ngày:' : 'Hạn chót:' }}
           </div>
-          <div class="font-medium text-neutral-800 mt-0.5">
+          <div class="font-medium text-neutral-800 mt-0.5 min-h-[1.25rem] flex items-center flex-wrap gap-1 leading-tight">
             @if (status() === 'PAUSED') {
               <span class="text-amber-800 flex items-center gap-1">
                 <span class="material-symbols-outlined text-[12px]" aria-hidden="true">ac_unit</span>
@@ -187,42 +187,42 @@
               <span>{{ completedDate() }}</span>
             } @else {
               <span>{{ formattedDate() }}</span>
-              <span class="text-emerald-700 font-mono font-semibold ml-1">{{ remainingDaysText() }}</span>
+              <span class="text-emerald-700 font-mono font-semibold">{{ remainingDaysText() }}</span>
             }
           </div>
         </div>
 
         <div>
-          <div class="text-neutral-400">
+          <div class="text-neutral-400 truncate">
             {{ status() === 'COMPLETED' ? 'Tổng tích lũy:' : 'Quỹ thời gian:' }}
           </div>
-          <div class="font-mono font-medium text-neutral-800 mt-0.5">
+          <div class="font-mono font-medium text-neutral-800 mt-0.5 min-h-[1.25rem] flex items-center leading-tight">
             {{ timeCommitment() }}
           </div>
         </div>
 
-        <div class="col-span-2 pt-1 border-t border-neutral-200/50">
-          <div class="text-neutral-400">
+        <div class="col-span-2 pt-1.5 border-t border-neutral-200/50">
+          <div class="text-neutral-400 truncate">
             {{ status() === 'COMPLETED' ? 'Đánh giá:' : (status() === 'PAUSED' ? 'Trạng thái:' : 'Mốc hiện tại:') }}
           </div>
-          <div class="font-medium text-neutral-800 truncate mt-0.5">
+          <div class="font-medium text-neutral-800 truncate mt-0.5 min-h-[1.25rem] flex items-center">
             @if (status() === 'COMPLETED') {
               <div class="flex items-center gap-1 text-emerald-800">
                 <span class="material-symbols-outlined text-[14px] text-amber-500" aria-hidden="true" style="font-variation-settings: 'FILL' 1;">star</span>
                 <span>{{ completedRating() }}</span>
               </div>
             } @else {
-              <span>{{ currentMilestone() }}</span>
+              <span class="truncate">{{ currentMilestone() }}</span>
             }
           </div>
         </div>
 
         @if (status() === 'ACTIVE' || status() === 'INITIALIZED') {
           <div class="col-span-2">
-            <div class="text-neutral-400">Nhịp sinh học:</div>
-            <div class="font-medium text-neutral-800 flex items-center gap-1.5 mt-0.5">
-              <span class="material-symbols-outlined text-[14px] text-amber-600" aria-hidden="true">dark_mode</span>
-              <span>Evening Flow (20:00 - 22:00)</span>
+            <div class="text-neutral-400 truncate">Nhịp sinh học:</div>
+            <div class="font-medium text-neutral-800 flex items-center gap-1.5 mt-0.5 min-h-[1.25rem]">
+              <span class="material-symbols-outlined text-[14px] text-amber-600 shrink-0" aria-hidden="true">dark_mode</span>
+              <span class="truncate">Evening Flow (20:00 - 22:00)</span>
             </div>
           </div>
         }
@@ -230,7 +230,7 @@
 
       <!-- Domino Shift Policy Alert Note (for Paused) -->
       @if (status() === 'PAUSED') {
-        <div class="mt-3.5 p-2.5 rounded-lg bg-amber-50/60 border border-amber-200/60 text-[11px] text-amber-900 leading-relaxed flex items-start gap-2">
+        <div class="mt-3 p-2.5 rounded-lg bg-amber-50/60 border border-amber-200/60 text-[11px] text-amber-900 leading-relaxed flex items-start gap-2">
           <span class="material-symbols-outlined text-[15px] text-amber-700 shrink-0 mt-0.5" aria-hidden="true">info</span>
           <span>Lịch học tạm đóng băng. Khi kích hoạt lại, hạn chót sẽ tự động tịnh tiến (Domino Shift v2).</span>
         </div>
@@ -238,7 +238,7 @@
     </div>
 
     <!-- Footer Actions -->
-    <div class="mt-6 pt-2">
+    <div class="mt-auto pt-5">
       @if (status() === 'ACTIVE' || status() === 'INITIALIZED') {
         <a
           routerLink="/workspace"

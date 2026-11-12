@@ -1,10 +1,10 @@
 @switch (type()) {
   @case ('domino_shift') {
     <!-- DOMINO SHIFT & ADAPTATION ALERT (AMBER TONE) -->
-    <div class="ai-insight-banner p-4 rounded-xl border border-amber-300 bg-amber-50/80 shadow-xs relative overflow-hidden">
+    <div class="ai-insight-banner p-5 sm:p-6 rounded-2xl border border-amber-300 bg-amber-50/80 shadow-xs relative overflow-hidden">
       <div class="flex items-start gap-3">
-        <div class="w-8 h-8 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
-          <span class="material-symbols-outlined text-[20px]" aria-hidden="true">swap_horiz</span>
+        <div class="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0">
+          <lucide-icon name="arrow-left-right" [size]="18" class="text-amber-800" aria-hidden="true"></lucide-icon>
         </div>
 
         <div class="flex-1 min-w-0">
@@ -29,7 +29,7 @@
             <div class="space-y-1 mb-2.5 text-xs text-amber-900/80">
               @for (rec of recommendations(); track $index) {
                 <div class="flex items-start gap-1.5">
-                  <span class="material-symbols-outlined text-[13px] text-amber-700 shrink-0 mt-0.5">arrow_right</span>
+                  <lucide-icon name="arrow-right" [size]="13" class="text-amber-700 shrink-0 mt-0.5" aria-hidden="true"></lucide-icon>
                   <span>{{ rec }}</span>
                 </div>
               }
@@ -50,19 +50,19 @@
             @if (actionRoute()) {
               <a
                 [routerLink]="actionRoute()"
-                class="font-semibold text-amber-950 hover:underline shrink-0 inline-flex items-center gap-0.5 no-underline"
+                class="font-semibold text-amber-950 hover:underline shrink-0 inline-flex items-center gap-1 no-underline"
               >
                 <span>{{ actionLabel() || 'Xem chi tiết' }}</span>
-                <span class="material-symbols-outlined text-[13px]">arrow_forward</span>
+                <lucide-icon name="arrow-right" [size]="13" aria-hidden="true"></lucide-icon>
               </a>
             } @else if (actionLabel()) {
               <button
                 type="button"
                 (click)="onActionClick()"
-                class="font-semibold text-amber-950 hover:underline shrink-0 inline-flex items-center gap-0.5 cursor-pointer bg-transparent border-none p-0"
+                class="font-semibold text-amber-950 hover:underline shrink-0 inline-flex items-center gap-1 cursor-pointer bg-transparent border-none p-0"
               >
                 <span>{{ actionLabel() }}</span>
-                <span class="material-symbols-outlined text-[13px]">arrow_forward</span>
+                <lucide-icon name="arrow-right" [size]="13" aria-hidden="true"></lucide-icon>
               </button>
             }
           </div>
@@ -73,17 +73,17 @@
 
   @case ('congratulation') {
     <!-- CONGRATULATION BANNER (EMERALD TONE) -->
-    <div class="ai-insight-banner p-4 rounded-xl border border-emerald-300 bg-emerald-50/80 shadow-xs relative overflow-hidden">
+    <div class="ai-insight-banner p-5 sm:p-6 rounded-2xl border border-emerald-300 bg-emerald-50/80 shadow-xs relative overflow-hidden">
       <div class="flex items-start gap-3">
-        <div class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
-          <span class="material-symbols-outlined text-[20px]" aria-hidden="true">emoji_events</span>
+        <div class="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
+          <lucide-icon name="trophy" [size]="18" class="text-emerald-800" aria-hidden="true"></lucide-icon>
         </div>
 
         <div class="flex-1 min-w-0">
           <div class="flex items-center justify-between gap-2 mb-1 flex-wrap">
             <h4 class="font-bold text-xs sm:text-sm text-emerald-950 flex items-center gap-1.5">
               <span>{{ title() }}</span>
-              <span class="material-symbols-outlined text-[15px] text-amber-500" style="font-variation-settings: 'FILL' 1;">star</span>
+              <lucide-icon name="star" [size]="15" class="text-amber-500 fill-amber-500" aria-hidden="true"></lucide-icon>
             </h4>
 
             @if (complianceBadge()) {
@@ -101,10 +101,10 @@
             <div class="pt-2 border-t border-emerald-200/60 flex justify-end">
               <a
                 [routerLink]="actionRoute()"
-                class="font-semibold text-emerald-950 hover:underline inline-flex items-center gap-0.5 text-xs no-underline"
+                class="font-semibold text-emerald-950 hover:underline inline-flex items-center gap-1 text-xs no-underline"
               >
                 <span>{{ actionLabel() || 'Xem báo cáo' }}</span>
-                <span class="material-symbols-outlined text-[13px]">arrow_forward</span>
+                <lucide-icon name="arrow-right" [size]="13" aria-hidden="true"></lucide-icon>
               </a>
             </div>
           }
@@ -115,14 +115,14 @@
 
   @default {
     <!-- COGNITIVE INSIGHT BANNER (PURPLE / MOSS TONE) -->
-    <div class="ai-insight-banner p-5 rounded-xl border border-neutral-200/80 bg-white shadow-xs relative overflow-hidden">
+    <div class="ai-insight-banner p-5 sm:p-6 rounded-2xl border border-neutral-200/80 bg-white shadow-xs relative overflow-hidden">
       <!-- Subtle Purple Glow Background Accent -->
       <div class="absolute -right-8 -top-8 w-24 h-24 bg-purple-100 rounded-full blur-2xl opacity-50 pointer-events-none"></div>
 
       <div class="flex items-center justify-between mb-3 relative">
         <div class="flex items-center gap-2">
           <div class="w-7 h-7 rounded-md bg-purple-50 text-purple-800 flex items-center justify-center shrink-0">
-            <span class="material-symbols-outlined text-[18px]" aria-hidden="true">psychology</span>
+            <lucide-icon name="brain" [size]="18" class="text-purple-800" aria-hidden="true"></lucide-icon>
           </div>
           <div>
             <span class="text-[10px] font-bold uppercase tracking-wider text-purple-800 block">
@@ -154,7 +154,7 @@
           </span>
           @for (rec of recommendations(); track $index) {
             <div class="flex items-start gap-1.5 text-xs text-neutral-600">
-              <span class="material-symbols-outlined text-[14px] text-purple-700 shrink-0 mt-0.5" aria-hidden="true">check_small</span>
+              <lucide-icon name="check" [size]="14" class="text-purple-700 stroke-[2.5] shrink-0 mt-0.5" aria-hidden="true"></lucide-icon>
               <span>{{ rec }}</span>
             </div>
           }
@@ -166,19 +166,19 @@
           @if (actionRoute()) {
             <a
               [routerLink]="actionRoute()"
-              class="font-semibold text-purple-800 hover:text-purple-950 hover:underline inline-flex items-center gap-0.5 text-xs no-underline"
+              class="font-semibold text-purple-800 hover:text-purple-950 hover:underline inline-flex items-center gap-1 text-xs no-underline"
             >
               <span>{{ actionLabel() || 'Tối ưu hóa lịch' }}</span>
-              <span class="material-symbols-outlined text-[13px]">arrow_forward</span>
+              <lucide-icon name="arrow-right" [size]="13" aria-hidden="true"></lucide-icon>
             </a>
           } @else {
             <button
               type="button"
               (click)="onActionClick()"
-              class="font-semibold text-purple-800 hover:text-purple-950 hover:underline inline-flex items-center gap-0.5 text-xs cursor-pointer bg-transparent border-none p-0"
+              class="font-semibold text-purple-800 hover:text-purple-950 hover:underline inline-flex items-center gap-1 text-xs cursor-pointer bg-transparent border-none p-0"
             >
               <span>{{ actionLabel() }}</span>
-              <span class="material-symbols-outlined text-[13px]">arrow_forward</span>
+              <lucide-icon name="arrow-right" [size]="13" aria-hidden="true"></lucide-icon>
             </button>
           }
         </div>

@@ -111,4 +111,25 @@ describe('RoadmapCardComponent', () => {
     cardInstance.onArchive();
     expect(host.archivedId()).toBe('rm-101');
   });
+
+  it('tính toán progress và taskRatio thực tế, không dùng số liệu mock hardcoded', () => {
+    const cardInstance = fixture.debugElement.children[0].componentInstance as RoadmapCardComponent;
+
+    // Không có metrics -> trả về 0% và (0/0 Tasks)
+    expect(cardInstance.progress()).toBe(0);
+    expect(cardInstance.taskRatio()).toBe('(0/0 Tasks)');
+
+    // Có metrics thực tế -> tính toán chuẩn xác
+    host.roadmap.set({
+      id: 'rm-103',
+      title: 'Fullstack Go Angular',
+      status: 'ACTIVE',
+      totalTasks: 20,
+      completedTasks: 15,
+    });
+    fixture.detectChanges();
+
+    expect(cardInstance.progress()).toBe(75);
+    expect(cardInstance.taskRatio()).toBe('(15/20 Tasks)');
+  });
 });

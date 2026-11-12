@@ -1,4 +1,12 @@
-.roadmap-card-full,
+:host {
+  display: block;
+  height: 100%;
+}
+
+.roadmap-card-full {
+  height: 100%;
+}
+
 .roadmap-card-compact {
   /* Hairline and responsive container */
 }

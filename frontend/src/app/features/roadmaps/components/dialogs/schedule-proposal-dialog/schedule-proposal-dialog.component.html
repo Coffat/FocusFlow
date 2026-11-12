@@ -15,7 +15,7 @@
       <span class="text-[#555555]">Tổng khối lượng:</span>
       <span class="font-bold text-[#111111]">{{ editableTasks().length }} phiên</span>
       <span class="text-[#DCDCDC]">•</span>
-      <span class="font-bold text-[#246B4A]">{{ totalPlannedMinutes() }} phút ({{ totalPomodoroBlocks() }} 🍅)</span>
+      <span class="font-bold text-[#246B4A]">{{ totalPlannedMinutes() }} phút ({{ totalPomodoroBlocks() }} Pomodoro)</span>
     </div>
   </div>
 
@@ -211,7 +211,7 @@
 
                 <div class="flex items-center gap-1 shrink-0">
                   <span class="font-mono text-[11px] font-semibold px-2 py-0.5 rounded bg-[#EBF3EE] text-[#246B4A] border border-[#246B4A]/20">
-                    🍅 {{ getPomodoroCount(task.estimated_minutes) }} Pomo
+                    {{ getPomodoroCount(task.estimated_minutes) }} Pomodoro
                   </span>
                   <button
                     type="button"

@@ -6,15 +6,43 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
+import {
+  LucideAngularModule,
+  LUCIDE_ICONS,
+  LucideIconProvider,
+  Brain,
+  Sparkles,
+  ArrowRight,
+  ArrowLeftRight,
+  Trophy,
+  Star,
+  Check,
+} from 'lucide-angular';
 
 export type AiInsightBannerType = 'insight' | 'domino_shift' | 'congratulation';
 
 @Component({
   selector: 'app-ai-insight-banner',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterLink, LucideAngularModule],
+  providers: [
+    {
+      provide: LUCIDE_ICONS,
+      multi: true,
+      useValue: new LucideIconProvider({
+        Brain,
+        Sparkles,
+        ArrowRight,
+        ArrowLeftRight,
+        Trophy,
+        Star,
+        Check,
+      }),
+    },
+  ],
   templateUrl: './ai-insight-banner.component.html',
   styleUrl: './ai-insight-banner.component.scss',
+  styles: [':host { display: block; width: 100%; }'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class AiInsightBannerComponent {

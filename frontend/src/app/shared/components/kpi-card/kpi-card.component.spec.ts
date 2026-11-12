@@ -61,7 +61,7 @@ describe('KpiCardComponent', () => {
   it('hiển thị delta badge với biểu tượng xu hướng trend up', () => {
     const el = fixture.nativeElement as HTMLElement;
     expect(el.textContent).toContain('+12%');
-    expect(el.textContent).toContain('trending_up');
+    expect(el.querySelector('lucide-icon, svg, [name="trending-up"]')).toBeTruthy();
   });
 
   it('hiển thị thanh tiến độ khi có input progress', () => {
@@ -73,7 +73,7 @@ describe('KpiCardComponent', () => {
   it('đổi màu sắc theo tone amber', () => {
     host.tone.set('amber');
     fixture.detectChanges();
-    const iconContainer = fixture.nativeElement.querySelector('.w-7.h-7');
+    const iconContainer = fixture.nativeElement.querySelector('.w-8.h-8');
     expect(iconContainer.className).toContain('text-amber-600');
   });
 });

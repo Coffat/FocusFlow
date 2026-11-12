@@ -40,6 +40,9 @@ export type RoadmapCardInput = RoadmapResponse | DashboardActiveRoadmap | Generi
   templateUrl: './roadmap-card.component.html',
   styleUrl: './roadmap-card.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: {
+    class: 'block h-full',
+  },
 })
 export class RoadmapCardComponent {
   readonly roadmap = input.required<RoadmapCardInput>();
@@ -68,10 +71,18 @@ export class RoadmapCardComponent {
     if ('progressPercentage' in rm && typeof rm.progressPercentage === 'number') {
       return rm.progressPercentage;
     }
+    if (
+      'completedTasks' in rm &&
+      'totalTasks' in rm &&
+      typeof rm.completedTasks === 'number' &&
+      typeof rm.totalTasks === 'number' &&
+      rm.totalTasks > 0
+    ) {
+      return Math.round((rm.completedTasks / rm.totalTasks) * 100);
+    }
     const st = this.status();
     if (st === 'COMPLETED') return 100;
-    if (st === 'PAUSED') return 28;
-    return 48;
+    return 0;
   });
 
   readonly taskRatio = computed<string>(() => {
@@ -84,10 +95,7 @@ export class RoadmapCardComponent {
     ) {
       return `(${rm.completedTasks}/${rm.totalTasks} Tasks)`;
     }
-    const st = this.status();
-    if (st === 'COMPLETED') return '(20/20 Tasks)';
-    if (st === 'PAUSED') return '(7/25 Tasks)';
-    return '(12/25 Tasks)';
+    return '(0/0 Tasks)';
   });
 
   readonly tags = computed<string[]>(() => {

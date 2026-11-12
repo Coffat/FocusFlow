@@ -15,13 +15,13 @@
       </p>
     </div>
 
-    <div class="flex flex-wrap items-center gap-2.5 shrink-0">
+    <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto shrink-0">
       <!-- Secondary Action: SCR-08 Adaptation & Domino Shift Rebalance -->
       <button
         type="button"
         (click)="openAdaptationModal()"
         data-testid="hub-open-adaptation-btn"
-        class="bg-[#FDF6E7] hover:bg-amber-100/80 text-[#B45309] border border-[#B45309]/30 px-4 py-2.5 rounded-full text-xs font-semibold inline-flex items-center gap-1.5 transition cursor-pointer"
+        class="w-full sm:w-auto justify-center bg-[#FDF6E7] hover:bg-amber-100/80 text-[#B45309] border border-[#B45309]/30 px-4 py-2.5 rounded-full text-xs font-semibold inline-flex items-center gap-1.5 transition cursor-pointer text-center"
       >
         <span class="material-symbols-outlined text-[16px]" aria-hidden="true">swap_horiz</span>
         <span>Kích hoạt lại / Tái cân bằng Domino Shift</span>
@@ -32,11 +32,11 @@
         type="button"
         (click)="openCreateWizard(1)"
         data-testid="hub-create-roadmap-btn"
-        class="bg-[#111111] hover:bg-[#246B4A] text-white px-5 py-2.5 rounded-full text-xs sm:text-sm font-semibold shadow-xs inline-flex items-center gap-2 transition active:scale-95 shrink-0 cursor-pointer group"
+        class="w-full sm:w-auto justify-center bg-[#111111] hover:bg-[#246B4A] text-white px-5 py-2.5 rounded-full text-xs sm:text-sm font-semibold shadow-xs inline-flex items-center gap-2 transition active:scale-95 shrink-0 cursor-pointer group text-center"
       >
         <span class="material-symbols-outlined text-[18px] group-hover:rotate-90 transition-transform duration-200" aria-hidden="true">add</span>
         <span>Khởi tạo Lộ trình Mới với AI</span>
-        <kbd class="font-mono text-[10px] bg-neutral-700 text-neutral-200 px-1.5 py-0.2 rounded border border-neutral-600">C</kbd>
+        <kbd class="font-mono text-[10px] bg-neutral-700 text-neutral-200 px-1.5 py-0.2 rounded border border-neutral-600 hidden sm:inline-block">C</kbd>
       </button>
     </div>
   </div>
@@ -104,12 +104,12 @@
   }
 
   <!-- FILTER, SEARCH & VIEW SWITCHER STRIP -->
-  <div class="flex flex-wrap items-center justify-between gap-4 border-b border-neutral-200/60 pb-4 pt-2">
-    <div class="flex items-center gap-2 overflow-x-auto py-1">
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 border-b border-neutral-200/60 pb-4 pt-2">
+    <div class="flex items-center gap-2 overflow-x-auto py-1 max-w-full no-scrollbar">
       <button
         type="button"
         (click)="setFilter('ALL')"
-        class="rounded-full px-4 py-1.5 text-xs font-semibold shadow-xs transition cursor-pointer"
+        class="shrink-0 whitespace-nowrap rounded-full px-4 py-1.5 text-xs font-semibold shadow-xs transition cursor-pointer"
         [class.bg-neutral-900]="activeFilter() === 'ALL'"
         [class.text-white]="activeFilter() === 'ALL'"
         [class.bg-neutral-100]="activeFilter() !== 'ALL'"
@@ -122,7 +122,7 @@
       <button
         type="button"
         (click)="setFilter('ACTIVE')"
-        class="rounded-full px-3.5 py-1.5 text-xs font-medium cursor-pointer transition flex items-center gap-1.5"
+        class="shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-medium cursor-pointer transition flex items-center gap-1.5"
         [class.bg-neutral-900]="activeFilter() === 'ACTIVE'"
         [class.text-white]="activeFilter() === 'ACTIVE'"
         [class.bg-neutral-100]="activeFilter() !== 'ACTIVE'"
@@ -136,7 +136,7 @@
       <button
         type="button"
         (click)="setFilter('PAUSED')"
-        class="rounded-full px-3.5 py-1.5 text-xs font-medium cursor-pointer transition flex items-center gap-1.5"
+        class="shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-medium cursor-pointer transition flex items-center gap-1.5"
         [class.bg-neutral-900]="activeFilter() === 'PAUSED'"
         [class.text-white]="activeFilter() === 'PAUSED'"
         [class.bg-neutral-100]="activeFilter() !== 'PAUSED'"
@@ -150,7 +150,7 @@
       <button
         type="button"
         (click)="setFilter('COMPLETED')"
-        class="rounded-full px-3.5 py-1.5 text-xs font-medium cursor-pointer transition flex items-center gap-1.5"
+        class="shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-xs font-medium cursor-pointer transition flex items-center gap-1.5"
         [class.bg-neutral-900]="activeFilter() === 'COMPLETED'"
         [class.text-white]="activeFilter() === 'COMPLETED'"
         [class.bg-neutral-100]="activeFilter() !== 'COMPLETED'"
@@ -162,8 +162,8 @@
       </button>
     </div>
 
-    <div class="flex items-center gap-3">
-      <div class="relative w-64">
+    <div class="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
+      <div class="relative flex-1 sm:w-64 sm:flex-initial">
         <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 text-[16px]" aria-hidden="true">search</span>
         <input
           type="text"
@@ -174,7 +174,7 @@
         />
       </div>
 
-      <div class="flex items-center bg-white border border-neutral-200 rounded-xl p-0.5 shadow-2xs">
+      <div class="flex items-center bg-white border border-neutral-200 rounded-xl p-0.5 shadow-2xs shrink-0">
         <button
           type="button"
           (click)="setViewMode('grid')"
@@ -253,7 +253,7 @@
           type="button"
           (click)="openCreateWizard(1)"
           data-testid="hub-dashed-create-card"
-          class="border-2 border-dashed border-neutral-300 hover:border-[#246B4A] bg-neutral-50/50 hover:bg-neutral-100/60 rounded-2xl p-8 flex flex-col items-center justify-center text-center transition cursor-pointer min-h-[340px] group w-full"
+          class="border-2 border-dashed border-neutral-300 hover:border-[#246B4A] bg-neutral-50/50 hover:bg-neutral-100/60 rounded-2xl p-6 sm:p-8 flex flex-col items-center justify-center text-center hover:-translate-y-1 hover:shadow-md transition-all duration-200 cursor-pointer h-full group w-full"
         >
           <div class="w-12 h-12 rounded-full border border-neutral-300 flex items-center justify-center text-neutral-600 mb-4 bg-white shadow-xs group-hover:scale-110 group-hover:border-[#246B4A] group-hover:text-[#246B4A] transition-all duration-200">
             <span class="material-symbols-outlined text-[24px]" aria-hidden="true">add</span>
