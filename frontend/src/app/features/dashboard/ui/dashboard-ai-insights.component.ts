@@ -1,4 +1,4 @@
-import { Component, ChangeDetectionStrategy, input } from '@angular/core';
+import { Component, ChangeDetectionStrategy, input, output } from '@angular/core';
 import { DashboardAiInsight, DashboardAdaptationStatus } from '../models/dashboard.model';
 import { AiInsightBannerComponent } from '../../../shared/components/ai-insight-banner/ai-insight-banner.component';
 
@@ -28,8 +28,8 @@ import { AiInsightBannerComponent } from '../../../shared/components/ai-insight-
           [message]="adapt.alertMessage"
           [complianceBadge]="adapt.affectedTasksCount + ' task tự dịch chuyển'"
           [metadata]="{ reason: adapt.rescheduleReason }"
-          actionLabel="Xem lịch biểu"
-          actionRoute="/schedule"
+          actionLabel="Tái cân bằng Domino Shift"
+          (actionClick)="onOpenAdaptation()"
         />
       }
     </div>
@@ -38,4 +38,9 @@ import { AiInsightBannerComponent } from '../../../shared/components/ai-insight-
 export class DashboardAiInsightsComponent {
   readonly insight = input<DashboardAiInsight | null>(null);
   readonly adaptation = input<DashboardAdaptationStatus | null>(null);
+  readonly openAdaptation = output<void>();
+
+  onOpenAdaptation(): void {
+    this.openAdaptation.emit();
+  }
 }

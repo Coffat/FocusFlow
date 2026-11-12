@@ -1,0 +1,279 @@
+<div class="bg-[#FFFFFF] text-[#111111]">
+  <!-- TOP INTERVIEWER INTRO BANNER -->
+  <div class="p-6 sm:px-8 sm:py-6 border-b border-[#EAEAE6] bg-[#FAFAFA]">
+    <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+      <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#EBF3EE] text-[#246B4A] border border-[#246B4A]/20 text-[11px] font-mono font-semibold uppercase tracking-wider">
+        <span class="material-symbols-outlined text-[13px]" aria-hidden="true">psychology_alt</span>
+        <span>BƯỚC 2 / 4 • FOCUSAI PEDAGOGICAL INTERVIEWER (GRILL-ME)</span>
+      </span>
+      <span class="text-[11px] font-mono text-[#555555]">
+        {{ answeredCount() }}/{{ questions().length }} câu hỏi đã trả lời
+      </span>
+    </div>
+
+    <h2 class="font-serif text-xl sm:text-2xl text-[#111111] font-medium tracking-tight">
+      Để tạo lộ trình chính xác nhất, FocusAI cần làm rõ một vài điểm then chốt cùng bạn.
+    </h2>
+    <p class="text-xs sm:text-sm text-[#555555] mt-1 leading-relaxed">
+      Trả lời nhanh các câu hỏi chẩn đoán sư phạm dưới đây để hệ thống đo ni đóng giày từng cột mốc và phiên Pomodoro.
+    </p>
+  </div>
+
+  <!-- ASYMMETRIC 7/5 TWO-COLUMN BODY -->
+  <div class="grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-[#EAEAE6]">
+    <!-- LEFT COLUMN (7 COLS): AI PEDAGOGICAL QUESTIONS -->
+    <div class="lg:col-span-7 p-6 sm:p-8 space-y-6">
+      @if (questions().length === 0) {
+        <!-- EMPTY QUESTIONS STATE -->
+        <div
+          data-testid="grill-me-empty-state"
+          class="rounded-xl border border-dashed border-[#DCDCDC] bg-[#FAFAFA] p-6 text-center space-y-4"
+        >
+          <div class="w-11 h-11 rounded-full bg-[#EBF3EE] text-[#246B4A] mx-auto flex items-center justify-center">
+            <span class="material-symbols-outlined text-[22px]" aria-hidden="true">quiz</span>
+          </div>
+
+          <div class="space-y-1.5 max-w-md mx-auto">
+            <h3 class="text-sm font-semibold text-[#111111]">
+              Chưa có danh sách câu hỏi phỏng vấn chẩn đoán
+            </h3>
+            <p class="text-xs text-[#555555] leading-relaxed">
+              Bạn có thể yêu cầu AI sinh bộ câu hỏi làm rõ từ máy chủ, tải bộ câu hỏi sư phạm mẫu, hoặc bỏ qua bước này để dùng cấu hình mặc định.
+            </p>
+          </div>
+
+          <div class="flex flex-wrap items-center justify-center gap-2.5 pt-2">
+            <button
+              type="button"
+              (click)="onGenerateQuestions()"
+              [disabled]="roadmapService.isGeneratingQuestions()"
+              data-testid="generate-questions-btn"
+              class="px-4 py-2 rounded-full bg-[#111111] hover:bg-[#246B4A] disabled:opacity-50 text-white text-xs font-semibold transition-colors cursor-pointer inline-flex items-center gap-1.5"
+            >
+              <span class="material-symbols-outlined text-[15px]" aria-hidden="true">auto_awesome</span>
+              <span>Yêu cầu AI Sinh Câu hỏi Làm rõ</span>
+            </button>
+
+            <button
+              type="button"
+              (click)="onLoadStandardPreviewQuestions()"
+              data-testid="preview-standard-questions-btn"
+              class="px-4 py-2 rounded-full bg-[#FFFFFF] hover:bg-[#F3F3F1] text-[#111111] border border-[#DCDCDC] text-xs font-medium transition-colors cursor-pointer"
+            >
+              Xem câu hỏi sư phạm chuẩn
+            </button>
+
+            <button
+              type="button"
+              (click)="onSkipInterview()"
+              data-testid="skip-interview-empty-btn"
+              class="px-4 py-2 rounded-full text-xs font-medium text-[#555555] hover:text-[#111111] hover:bg-[#F3F3F1] transition-colors cursor-pointer"
+            >
+              Bỏ qua bước này (Dùng cấu hình mặc định)
+            </button>
+          </div>
+        </div>
+      } @else {
+        <!-- QUESTIONS LIST -->
+        <div class="space-y-6">
+          @for (q of questions(); track getQuestionId(q, idx); let idx = $index) {
+            <div
+              [attr.data-testid]="'clarification-question-item-' + idx"
+              class="p-4 rounded-xl border border-[#DCDCDC] bg-[#FFFFFF] space-y-3"
+            >
+              <!-- Question Header & Category Badge -->
+              <div class="flex items-start justify-between gap-2">
+                <div class="flex items-start gap-2.5">
+                  <span class="w-5 h-5 rounded bg-[#111111] text-white font-mono text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                    {{ idx + 1 }}
+                  </span>
+                  <div>
+                    <h3 class="text-xs sm:text-sm font-semibold text-[#111111] leading-snug">
+                      {{ q.text || q.question }}
+                    </h3>
+                    @if (q.question_purpose) {
+                      <p class="text-[11px] text-[#8E8E8A] mt-0.5">
+                        {{ q.question_purpose }}
+                      </p>
+                    }
+                  </div>
+                </div>
+
+                <span class="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-[#EBF3EE] text-[#246B4A] border border-[#246B4A]/20 shrink-0">
+                  {{ q.diagnostic_dimension || 'PEDAGOGY' }}
+                </span>
+              </div>
+
+              <!-- Quick-Select Suggested Answer Chips -->
+              <div class="flex flex-wrap gap-1.5">
+                @for (chip of getSuggestedOptions(q); track chip; let cIdx = $index) {
+                  <button
+                    type="button"
+                    [attr.data-testid]="'question-' + idx + '-chip-' + cIdx"
+                    (click)="selectSuggestedChip(q, idx, chip)"
+                    class="text-left text-xs px-3 py-1.5 rounded-lg border transition-all cursor-pointer"
+                    [class.border-[#246B4A]]="getAnswer(q, idx) === chip"
+                    [class.bg-[#EBF3EE]]="getAnswer(q, idx) === chip"
+                    [class.text-[#246B4A]]="getAnswer(q, idx) === chip"
+                    [class.font-semibold]="getAnswer(q, idx) === chip"
+                    [class.border-[#DCDCDC]]="getAnswer(q, idx) !== chip"
+                    [class.bg-[#FAFAFA]]="getAnswer(q, idx) !== chip"
+                    [class.text-[#555555]]="getAnswer(q, idx) !== chip"
+                    [class.hover:border-[#8E8E8A]]="getAnswer(q, idx) !== chip"
+                  >
+                    {{ chip }}
+                  </button>
+                }
+              </div>
+
+              <!-- Custom Answer Input / Textarea -->
+              <div>
+                <textarea
+                  rows="2"
+                  [attr.data-testid]="'question-' + idx + '-input'"
+                  [ngModel]="getAnswer(q, idx)"
+                  (ngModelChange)="onAnswerChange(q, idx, $event)"
+                  [placeholder]="q.placeholder || 'Nhập câu trả lời cụ thể của bạn...'"
+                  class="w-full rounded-lg border border-[#DCDCDC] bg-[#FAFAFA] p-2.5 text-xs text-[#111111] placeholder-[#8E8E8A] focus:bg-[#FFFFFF] focus:border-[#246B4A] focus:outline-none focus:ring-2 focus:ring-[#246B4A]/20 resize-none"
+                ></textarea>
+              </div>
+            </div>
+          }
+        </div>
+      }
+    </div>
+
+    <!-- RIGHT COLUMN (5 COLS): CONTEXT UNDERSTANDING METER & LIVE LEARNER PROFILE -->
+    <div class="lg:col-span-5 p-6 sm:p-8 bg-[#FAFAFA] flex flex-col justify-between space-y-5">
+      <div class="space-y-5">
+        <!-- Context Understanding Meter Card -->
+        <div
+          data-testid="context-understanding-meter"
+          class="bg-[#FFFFFF] rounded-xl p-5 border border-[#DCDCDC] space-y-3"
+        >
+          <div class="flex items-center justify-between">
+            <span class="text-[11px] font-mono font-semibold uppercase tracking-wider text-[#555555]">
+              Độ Thấu Hiểu Ngữ Cảnh
+            </span>
+            <span class="font-mono text-xs font-bold text-[#246B4A] bg-[#EBF3EE] px-2 py-0.5 rounded-full border border-[#246B4A]/20">
+              {{ contextUnderstandingPercent() }}%
+            </span>
+          </div>
+
+          <div class="flex items-baseline justify-between">
+            <div class="text-3xl font-serif font-medium text-[#111111] font-mono">
+              {{ contextUnderstandingPercent() }}%
+            </div>
+            <span class="text-xs text-[#555555]">
+              {{ answeredCount() }}/{{ questions().length }} điểm làm rõ
+            </span>
+          </div>
+
+          <div class="w-full h-2 rounded-full bg-[#EAEAE6] overflow-hidden">
+            <div
+              class="h-full rounded-full bg-[#246B4A] transition-all duration-300"
+              [style.width.%]="contextUnderstandingPercent()"
+            ></div>
+          </div>
+
+          <p class="text-[11px] text-[#555555] leading-relaxed">
+            Càng nhiều câu hỏi được trả lời, AI càng phân bổ chính xác thời lượng Pomodoro và độ khó của từng cột mốc.
+          </p>
+        </div>
+
+        <!-- Live Learner Profile Card -->
+        <div
+          data-testid="live-learner-profile-card"
+          class="bg-[#FFFFFF] rounded-xl p-5 border border-[#DCDCDC] space-y-3.5"
+        >
+          <div class="flex items-center justify-between border-b border-[#EAEAE6] pb-2.5">
+            <h4 class="text-xs font-mono font-bold uppercase tracking-wider text-[#111111] flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-[16px] text-[#246B4A]" aria-hidden="true">badge</span>
+              <span>Chân Dung Người Học (Live Profile)</span>
+            </h4>
+            <span class="text-[10px] font-mono text-[#8E8E8A]">SRL FORE-THOUGHT</span>
+          </div>
+
+          <div class="space-y-2.5 text-xs">
+            <div class="flex items-center justify-between gap-2 py-1 border-b border-[#F3F3F1]">
+              <span class="text-[#555555]">Mục tiêu:</span>
+              <span class="font-semibold text-[#111111] text-right truncate max-w-[200px]">
+                {{ displayGoalTitle() }}
+              </span>
+            </div>
+
+            <div class="flex items-center justify-between gap-2 py-1 border-b border-[#F3F3F1]">
+              <span class="text-[#555555]">Trình độ nền:</span>
+              <span class="font-mono font-semibold text-[#246B4A] bg-[#EBF3EE] px-2 py-0.5 rounded text-[11px]">
+                {{ displayLevel() }}
+              </span>
+            </div>
+
+            <div class="flex items-center justify-between gap-2 py-1 border-b border-[#F3F3F1]">
+              <span class="text-[#555555]">Quỹ thời gian:</span>
+              <span class="font-mono font-semibold text-[#111111]">
+                {{ weeklyHours() }} giờ / tuần
+              </span>
+            </div>
+
+            <div class="flex items-center justify-between gap-2 py-1">
+              <span class="text-[#555555]">Hạn chót mục tiêu:</span>
+              <span class="font-mono text-[#111111]">
+                {{ displayDeadline() }}
+              </span>
+            </div>
+          </div>
+
+          @if (answeredEntries().length > 0) {
+            <div class="pt-3 border-t border-[#EAEAE6] space-y-1.5">
+              <span class="block text-[10px] font-mono uppercase tracking-wider text-[#555555]">
+                Ngữ cảnh vừa trích xuất:
+              </span>
+              @for (entry of answeredEntries(); track entry.id) {
+                <div class="text-[11px] bg-[#EBF3EE]/60 text-[#246B4A] px-2.5 py-1.5 rounded border border-[#246B4A]/20 truncate">
+                  ✓ {{ entry.answer }}
+                </div>
+              }
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER ACTIONS -->
+  <div class="p-4 sm:px-8 sm:py-4 bg-[#FFFFFF] border-t border-[#EAEAE6] flex flex-col sm:flex-row items-center justify-between gap-3">
+    <button
+      type="button"
+      (click)="onBack()"
+      data-testid="grill-me-back-btn"
+      class="w-full sm:w-auto px-4 py-2 rounded-full text-xs font-medium text-[#555555] hover:text-[#111111] hover:bg-[#F3F3F1] transition-colors cursor-pointer inline-flex items-center justify-center gap-1.5"
+    >
+      <span class="font-mono" aria-hidden="true">←</span>
+      <span>Quay lại Bước 1</span>
+    </button>
+
+    <div class="flex flex-col sm:flex-row items-center gap-2.5 w-full sm:w-auto">
+      <button
+        type="button"
+        (click)="onSkipInterview()"
+        [disabled]="roadmapService.isSubmittingAnswers()"
+        data-testid="skip-interview-btn"
+        class="w-full sm:w-auto px-4 py-2 rounded-full text-xs font-medium text-[#555555] hover:text-[#111111] hover:bg-[#F3F3F1] border border-[#DCDCDC] transition-colors cursor-pointer"
+      >
+        Bỏ qua phỏng vấn
+      </button>
+
+      <button
+        type="button"
+        (click)="onSubmit()"
+        [disabled]="roadmapService.isSubmittingAnswers()"
+        data-testid="submit-interview-btn"
+        class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-full bg-[#111111] hover:bg-[#246B4A] disabled:opacity-50 text-white text-xs sm:text-sm font-semibold transition-colors cursor-pointer"
+      >
+        <span>Hoàn tất Phỏng vấn &amp; Sinh Lộ trình AI</span>
+        <span class="font-mono text-xs" aria-hidden="true">→</span>
+      </button>
+    </div>
+  </div>
+</div>

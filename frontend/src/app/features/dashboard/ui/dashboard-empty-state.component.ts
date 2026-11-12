@@ -1,5 +1,4 @@
-import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
-import { Router } from '@angular/router';
+import { Component, ChangeDetectionStrategy, output } from '@angular/core';
 import {
   BlueprintEmptyStateComponent,
   StarterTemplate,
@@ -14,7 +13,7 @@ import {
     <app-blueprint-empty-state
       title="Chưa có lộ trình học tập nào"
       description="Hãy bắt đầu bằng cách mô tả mục tiêu học tập hoặc tài liệu bạn muốn chinh phục. AI Harness sẽ phân tích, chia nhỏ thành các cột mốc và tự động tối ưu hóa theo quỹ thời gian của bạn."
-      ctaLabel="Tạo lộ trình học tập"
+      ctaLabel="Tạo Lộ trình Học tập Đầu tiên với AI"
       ctaRoute="/roadmaps"
       shortcutKey="C"
       (selectTemplate)="onSelectTemplate($event)"
@@ -23,13 +22,14 @@ import {
   `,
 })
 export class DashboardEmptyStateComponent {
-  private readonly router = inject(Router);
+  readonly selectTemplate = output<StarterTemplate>();
+  readonly createCustomRoadmap = output<void>();
 
   onSelectTemplate(tpl: StarterTemplate): void {
-    this.router.navigate(['/roadmaps'], { queryParams: { goal: tpl.title } });
+    this.selectTemplate.emit(tpl);
   }
 
   onCreateCustom(): void {
-    this.router.navigate(['/roadmaps']);
+    this.createCustomRoadmap.emit();
   }
 }

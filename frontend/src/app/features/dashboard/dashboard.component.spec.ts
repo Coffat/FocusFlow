@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter, Router } from '@angular/router';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { DashboardComponent } from './dashboard.component';
 import { DashboardService } from './services/dashboard.service';
 
@@ -14,11 +15,7 @@ describe('DashboardComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [DashboardComponent],
-      providers: [
-        provideHttpClient(),
-        provideHttpClientTesting(),
-        provideRouter([])
-      ]
+      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
     }).compileComponents();
 
     fixture = TestBed.createComponent(DashboardComponent);
@@ -46,19 +43,31 @@ describe('DashboardComponent', () => {
     expect(compiled.querySelector('app-dashboard-empty-state')).toBeFalsy();
   });
 
-  it('hiển thị empty state khi ở trạng thái new-user', () => {
+  it('hiển thị empty state khi ở trạng thái new-user và mở Wizard Dialog khi bấm Tạo Lộ trình Học tập Đầu tiên với AI', () => {
     service.setState('new-user');
     fixture.detectChanges();
 
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('app-dashboard-empty-state')).toBeTruthy();
     expect(compiled.querySelector('app-dashboard-kpi-grid')).toBeFalsy();
+
+    const emptyCtaBtn = compiled.querySelector(
+      '[data-testid="empty-state-cta-btn"]'
+    ) as HTMLButtonElement;
+    expect(emptyCtaBtn).toBeTruthy();
+    emptyCtaBtn.click();
+    fixture.detectChanges();
+
+    expect(component.wizardOpen()).toBe(true);
+    expect(component.wizardStep()).toBe(1);
   });
 
-  it('điều hướng tới /roadmaps khi bấm phím C ngoài ô input', () => {
+  it('mở RoadmapWizardHostComponent ở Bước 1 khi bấm phím C ngoài ô input hoặc bấm nút Khởi tạo Lộ trình Mới với AI', () => {
+    expect(component.wizardOpen()).toBe(false);
     const event = new KeyboardEvent('keydown', { key: 'c' });
     window.dispatchEvent(event);
-    expect(router.navigate).toHaveBeenCalledWith(['/roadmaps']);
+    expect(component.wizardOpen()).toBe(true);
+    expect(component.wizardStep()).toBe(1);
   });
 
   it('điều hướng tới /workspace khi bấm phím Space ngoài ô input', () => {
@@ -76,7 +85,7 @@ describe('DashboardComponent', () => {
     const event = new KeyboardEvent('keydown', { key: 'c', bubbles: true });
     inputEl.dispatchEvent(event);
 
-    expect(router.navigate).not.toHaveBeenCalled();
+    expect(component.wizardOpen()).toBe(false);
     document.body.removeChild(inputEl);
   });
 });

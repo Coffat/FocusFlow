@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideRouter, Router } from '@angular/router';
+import { provideRouter } from '@angular/router';
 import { signal } from '@angular/core';
 import { of } from 'rxjs';
 import { ConfirmationService, MessageService } from 'primeng/api';
@@ -14,7 +14,6 @@ import { RoadmapResponse } from '../../models/roadmap.model';
 describe('RoadmapsHubComponent', () => {
   let component: RoadmapsHubComponent;
   let fixture: ComponentFixture<RoadmapsHubComponent>;
-  let router: Router;
   let mockRoadmapService: {
     roadmaps: ReturnType<typeof signal<RoadmapResponse[]>>;
     loading: ReturnType<typeof signal<boolean>>;
@@ -103,9 +102,6 @@ describe('RoadmapsHubComponent', () => {
       ],
     }).compileComponents();
 
-    router = TestBed.inject(Router);
-    vi.spyOn(router, 'navigate').mockResolvedValue(true);
-
     fixture = TestBed.createComponent(RoadmapsHubComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
@@ -173,19 +169,40 @@ describe('RoadmapsHubComponent', () => {
     expect(compiled.textContent).toContain('IELTS Academic Band 7.5');
   });
 
-  it('nên điều hướng tới /roadmaps/new khi nhấn phím tắt C', () => {
+  it('nên mở RoadmapWizardHostComponent ở Bước 1 khi nhấn phím tắt C hoặc bấm nút Khởi tạo Lộ trình Mới với AI', () => {
+    expect(component.wizardOpen()).toBe(false);
     const event = new KeyboardEvent('keydown', { key: 'c' });
     component.onGlobalKeydown(event);
-    expect(router.navigate).toHaveBeenCalledWith(['/roadmaps/new']);
+    expect(component.wizardOpen()).toBe(true);
+    expect(component.wizardStep()).toBe(1);
   });
 
-  it('không điều hướng khi gõ phím C bên trong trường input', () => {
+  it('nên mở RoadmapWizardHostComponent điền sẵn dữ liệu khi chọn Starter Template', () => {
+    component.onSelectTemplate({
+      id: 'aws-solutions-architect',
+      title: 'AWS Solutions Architect',
+      subtitle: 'Cloud',
+      categoryTag: 'Cloud Arch',
+      weeksCount: 8,
+      tasksCount: 56,
+      knowledgeLevel: 'BEGINNER',
+      hoursPerWeek: 8,
+      tags: ['AWS'],
+    });
+
+    expect(component.wizardOpen()).toBe(true);
+    expect(component.wizardInitialTitle()).toBe('AWS Solutions Architect');
+    expect(component.wizardInitialLevel()).toBe('BEGINNER');
+    expect(component.wizardInitialWeeklyHours()).toBe(8);
+  });
+
+  it('không mở wizard khi gõ phím C bên trong trường input', () => {
     const inputElement = document.createElement('input');
     const event = new KeyboardEvent('keydown', { key: 'c' });
     Object.defineProperty(event, 'target', { value: inputElement });
 
     component.onGlobalKeydown(event);
-    expect(router.navigate).not.toHaveBeenCalled();
+    expect(component.wizardOpen()).toBe(false);
   });
 
   it('nên trích xuất tags phù hợp từ tiêu đề lộ trình', () => {
@@ -201,11 +218,12 @@ describe('RoadmapsHubComponent', () => {
     expect(confirmSpy).toHaveBeenCalled();
   });
 
-  it('nên kích hoạt ConfirmationService khi kích hoạt lại lộ trình', () => {
-    const confirmationService = TestBed.inject(ConfirmationService);
-    const confirmSpy = vi.spyOn(confirmationService, 'confirm');
+  it('nên mở AdaptationModalDialogComponent (SCR-08) khi bấm kích hoạt lại / tái cân bằng Domino Shift', () => {
+    expect(component.adaptationModalOpen()).toBe(false);
     component.onResumeRoadmap('rm-2');
-    expect(confirmSpy).toHaveBeenCalled();
+    expect(component.adaptationModalOpen()).toBe(true);
+    expect(component.adaptationRoadmapId()).toBe('rm-2');
+    expect(component.adaptationRoadmapTitle()).toBe('AWS Certified Solutions Architect');
   });
 
   it('nên kích hoạt ConfirmationService khi lưu trữ lộ trình', () => {

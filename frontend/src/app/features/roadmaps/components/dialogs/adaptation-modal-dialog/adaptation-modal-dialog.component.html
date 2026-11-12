@@ -1,0 +1,216 @@
+@if (open()) {
+  <div
+    class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-[#111111]/40 backdrop-blur-md overflow-y-auto"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="adaptation-modal-title"
+    data-testid="adaptation-modal-backdrop"
+    (click)="onBackdropClick($event)"
+  >
+    <div
+      class="w-full max-w-2xl bg-[#FFFFFF] border border-[#DCDCDC] rounded-xl shadow-[0_24px_48px_-12px_rgba(17,17,17,0.12)] p-6 sm:p-8 relative my-auto text-[#111111]"
+      data-testid="adaptation-modal-container"
+    >
+      <!-- Close Button -->
+      <button
+        type="button"
+        (click)="onClose()"
+        aria-label="Đóng hộp thoại"
+        data-testid="adaptation-close-btn"
+        class="absolute top-5 right-5 w-8 h-8 rounded-full text-[#555555] hover:text-[#111111] hover:bg-[#F3F3F1] flex items-center justify-center transition-colors cursor-pointer"
+      >
+        <span class="material-symbols-outlined text-[18px]" aria-hidden="true">close</span>
+      </button>
+
+      <!-- Header -->
+      <div class="pr-8 space-y-2.5">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#FDF6E7] text-[#B45309] border border-[#B45309]/30 font-mono text-[11px] font-semibold uppercase tracking-wider">
+            <span class="w-1.5 h-1.5 rounded-full bg-[#B45309]" aria-hidden="true"></span>
+            <span>Cần điều chỉnh lộ trình</span>
+          </span>
+
+          <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#EBF3EE] text-[#246B4A] border border-[#246B4A]/20 text-[11px] font-medium">
+            <span>✓ Chuỗi học tập (Streak) của bạn vẫn được bảo toàn</span>
+          </span>
+        </div>
+
+        <h2
+          id="adaptation-modal-title"
+          class="font-serif text-2xl sm:text-[26px] font-medium tracking-tight text-[#111111]"
+        >
+          Tái cân bằng lộ trình học tập
+        </h2>
+
+        <p class="text-xs sm:text-sm text-[#555555] leading-relaxed">
+          Lộ trình <strong class="text-[#111111]">{{ roadmapTitle() }}</strong> đang có
+          <strong class="font-mono text-[#B45309]">{{ missedSessionsCount() }} phiên học</strong> ({{ missedMinutes() }} phút) cần tái phân bổ. Hãy chọn chiến lược thích ứng phù hợp với nhịp sinh học của bạn.
+        </p>
+      </div>
+
+      <!-- 3 STRATEGY RADIO CARDS -->
+      <div class="mt-6 space-y-3" role="radiogroup" aria-label="Chiến lược tái cân bằng lộ trình">
+        <!-- Strategy 1: DOMINO_SHIFT -->
+        <button
+          type="button"
+          role="radio"
+          [attr.aria-checked]="selectedStrategy() === 'DOMINO_SHIFT'"
+          data-testid="strategy-card-DOMINO_SHIFT"
+          (click)="selectStrategy('DOMINO_SHIFT')"
+          class="w-full text-left rounded-xl p-4 transition-all cursor-pointer block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#246B4A]"
+          [class.border-2]="selectedStrategy() === 'DOMINO_SHIFT'"
+          [class.border-[#246B4A]]="selectedStrategy() === 'DOMINO_SHIFT'"
+          [class.bg-[#EBF3EE]/40]="selectedStrategy() === 'DOMINO_SHIFT'"
+          [class.border]="selectedStrategy() !== 'DOMINO_SHIFT'"
+          [class.border-[#DCDCDC]]="selectedStrategy() !== 'DOMINO_SHIFT'"
+          [class.bg-[#FFFFFF]]="selectedStrategy() !== 'DOMINO_SHIFT'"
+        >
+          <div class="flex items-start gap-3">
+            <span
+              class="mt-0.5 w-4 h-4 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold"
+              [class.bg-[#246B4A]]="selectedStrategy() === 'DOMINO_SHIFT'"
+              [class.text-white]="selectedStrategy() === 'DOMINO_SHIFT'"
+              [class.border]="selectedStrategy() !== 'DOMINO_SHIFT'"
+              [class.border-[#DCDCDC]]="selectedStrategy() !== 'DOMINO_SHIFT'"
+            >
+              @if (selectedStrategy() === 'DOMINO_SHIFT') {
+                ✓
+              }
+            </span>
+
+            <div class="flex-1 space-y-2">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <span class="text-sm font-bold text-[#111111]">
+                  Phương án 1: Dời lịch Domino (+2 ngày)
+                </span>
+                <span class="px-2.5 py-0.5 rounded-full bg-[#EBF3EE] text-[#246B4A] border border-[#246B4A]/30 text-[10px] font-mono font-bold uppercase">
+                  Khuyên dùng
+                </span>
+              </div>
+
+              <p class="text-xs text-[#555555] leading-relaxed">
+                Dời toàn bộ các cột mốc tiếp theo lùi lại 2 ngày, giữ nguyên hạn mức học tập mỗi ngày, bảo vệ nhịp độ chống kiệt sức và không tăng <code class="font-mono text-[11px]">reschedule_count</code>.
+              </p>
+
+              <div class="p-2.5 rounded-lg bg-[#FFFFFF] border border-[#DCDCDC] flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+                <span class="text-[#8E8E8A]">
+                  Hạn cũ: <span class="line-through">{{ currentDeadline() }}</span>
+                </span>
+                <span class="text-[#246B4A] font-semibold">── tịnh tiến +2 ngày ──→</span>
+                <span class="font-bold text-[#246B4A]">
+                  Hạn mới: {{ shiftedDeadline() }}
+                </span>
+              </div>
+            </div>
+          </div>
+        </button>
+
+        <!-- Strategy 2: COMPACT_REBALANCE -->
+        <button
+          type="button"
+          role="radio"
+          [attr.aria-checked]="selectedStrategy() === 'COMPACT_REBALANCE'"
+          data-testid="strategy-card-COMPACT_REBALANCE"
+          (click)="selectStrategy('COMPACT_REBALANCE')"
+          class="w-full text-left rounded-xl p-4 transition-all cursor-pointer block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#246B4A]"
+          [class.border-2]="selectedStrategy() === 'COMPACT_REBALANCE'"
+          [class.border-[#246B4A]]="selectedStrategy() === 'COMPACT_REBALANCE'"
+          [class.bg-[#EBF3EE]/40]="selectedStrategy() === 'COMPACT_REBALANCE'"
+          [class.border]="selectedStrategy() !== 'COMPACT_REBALANCE'"
+          [class.border-[#DCDCDC]]="selectedStrategy() !== 'COMPACT_REBALANCE'"
+          [class.bg-[#FFFFFF]]="selectedStrategy() !== 'COMPACT_REBALANCE'"
+        >
+          <div class="flex items-start gap-3">
+            <span
+              class="mt-0.5 w-4 h-4 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold"
+              [class.bg-[#246B4A]]="selectedStrategy() === 'COMPACT_REBALANCE'"
+              [class.text-white]="selectedStrategy() === 'COMPACT_REBALANCE'"
+              [class.border]="selectedStrategy() !== 'COMPACT_REBALANCE'"
+              [class.border-[#DCDCDC]]="selectedStrategy() !== 'COMPACT_REBALANCE'"
+            >
+              @if (selectedStrategy() === 'COMPACT_REBALANCE') {
+                ✓
+              }
+            </span>
+
+            <div class="flex-1 space-y-1">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <span class="text-sm font-bold text-[#111111]">
+                  Phương án 2: Nén &amp; Phân bổ vào cuối tuần
+                </span>
+                <span class="text-[10px] font-mono text-[#555555]">Giữ nguyên Deadline</span>
+              </div>
+              <p class="text-xs text-[#555555] leading-relaxed">
+                Giữ nguyên ngày kết thúc dự kiến ({{ currentDeadline() }}) bằng cách phân bổ thêm các phiên học bù vào khung giờ trống Thứ Bảy &amp; Chủ Nhật tuần này.
+              </p>
+            </div>
+          </div>
+        </button>
+
+        <!-- Strategy 3: BACKLOG_PAUSE -->
+        <button
+          type="button"
+          role="radio"
+          [attr.aria-checked]="selectedStrategy() === 'BACKLOG_PAUSE'"
+          data-testid="strategy-card-BACKLOG_PAUSE"
+          (click)="selectStrategy('BACKLOG_PAUSE')"
+          class="w-full text-left rounded-xl p-4 transition-all cursor-pointer block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#246B4A]"
+          [class.border-2]="selectedStrategy() === 'BACKLOG_PAUSE'"
+          [class.border-[#246B4A]]="selectedStrategy() === 'BACKLOG_PAUSE'"
+          [class.bg-[#EBF3EE]/40]="selectedStrategy() === 'BACKLOG_PAUSE'"
+          [class.border]="selectedStrategy() !== 'BACKLOG_PAUSE'"
+          [class.border-[#DCDCDC]]="selectedStrategy() !== 'BACKLOG_PAUSE'"
+          [class.bg-[#FFFFFF]]="selectedStrategy() !== 'BACKLOG_PAUSE'"
+        >
+          <div class="flex items-start gap-3">
+            <span
+              class="mt-0.5 w-4 h-4 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold"
+              [class.bg-[#246B4A]]="selectedStrategy() === 'BACKLOG_PAUSE'"
+              [class.text-white]="selectedStrategy() === 'BACKLOG_PAUSE'"
+              [class.border]="selectedStrategy() !== 'BACKLOG_PAUSE'"
+              [class.border-[#DCDCDC]]="selectedStrategy() !== 'BACKLOG_PAUSE'"
+            >
+              @if (selectedStrategy() === 'BACKLOG_PAUSE') {
+                ✓
+              }
+            </span>
+
+            <div class="flex-1 space-y-1">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <span class="text-sm font-bold text-[#111111]">
+                  Phương án 3: Đưa vào Hàng chờ (Backlog)
+                </span>
+                <span class="text-[10px] font-mono text-[#555555]">Tự sắp xếp sau</span>
+              </div>
+              <p class="text-xs text-[#555555] leading-relaxed">
+                Tạm gỡ các phiên bị gián đoạn khỏi lịch tuần này và đưa vào Hàng chờ (Backlog) để ưu tiên hoàn thành các phiên học hiện tại.
+              </p>
+            </div>
+          </div>
+        </button>
+      </div>
+
+      <!-- Footer -->
+      <div class="mt-6 pt-4 border-t border-[#EAEAE6] flex flex-col sm:flex-row items-center justify-between gap-3">
+        <button
+          type="button"
+          (click)="onClose()"
+          data-testid="adaptation-cancel-btn"
+          class="w-full sm:w-auto px-4 py-2 rounded-full text-xs font-medium text-[#555555] hover:text-[#111111] hover:bg-[#F3F3F1] transition-colors cursor-pointer"
+        >
+          Để sau
+        </button>
+
+        <button
+          type="button"
+          (click)="onConfirm()"
+          data-testid="adaptation-confirm-btn"
+          class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-full bg-[#111111] hover:bg-[#246B4A] text-white text-xs sm:text-sm font-semibold transition-colors cursor-pointer"
+        >
+          <span>Áp dụng lộ trình mới</span>
+          <span class="font-mono text-xs" aria-hidden="true">→</span>
+        </button>
+      </div>
+    </div>
+  </div>
+}

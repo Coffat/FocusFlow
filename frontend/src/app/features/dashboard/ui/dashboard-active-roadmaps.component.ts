@@ -1,5 +1,4 @@
-import { Component, ChangeDetectionStrategy, input } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Component, ChangeDetectionStrategy, input, output } from '@angular/core';
 import { DashboardActiveRoadmap } from '../models/dashboard.model';
 import { RoadmapCardComponent } from '../../../shared/components/roadmap-card/roadmap-card.component';
 
@@ -7,7 +6,7 @@ import { RoadmapCardComponent } from '../../../shared/components/roadmap-card/ro
   selector: 'app-dashboard-active-roadmaps',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, RoadmapCardComponent],
+  imports: [RoadmapCardComponent],
   template: `
     <div class="bg-white border border-[#DCDCDC] rounded-xl p-5 shadow-xs">
       <!-- Section Header -->
@@ -18,13 +17,15 @@ import { RoadmapCardComponent } from '../../../shared/components/roadmap-card/ro
             Lộ trình Đang theo đuổi
           </h3>
         </div>
-        <a
-          routerLink="/roadmaps"
-          class="inline-flex items-center gap-1 text-xs font-semibold text-emerald-800 hover:text-emerald-950 transition-colors no-underline"
+        <button
+          type="button"
+          data-testid="dashboard-active-roadmaps-create-btn"
+          (click)="onCreateRoadmap()"
+          class="inline-flex items-center gap-1 text-xs font-semibold text-emerald-800 hover:text-emerald-950 transition-colors cursor-pointer bg-transparent border-none p-0"
         >
           <span class="material-symbols-outlined text-[16px]" aria-hidden="true">add</span>
-          <span>Tạo lộ trình mới</span>
-        </a>
+          <span>Khởi tạo Lộ trình Mới với AI</span>
+        </button>
       </div>
 
       <!-- Roadmap Cards List -->
@@ -37,9 +38,13 @@ import { RoadmapCardComponent } from '../../../shared/components/roadmap-card/ro
         } @empty {
           <div class="p-6 text-center text-xs text-neutral-500 bg-[#FBF9F8] rounded-lg border border-dashed border-neutral-300">
             Chưa có lộ trình nào đang hoạt động.
-            <a routerLink="/roadmaps" class="font-semibold text-emerald-800 ml-1 hover:underline no-underline">
-              Bắt đầu tạo ngay
-            </a>
+            <button
+              type="button"
+              (click)="onCreateRoadmap()"
+              class="font-semibold text-emerald-800 ml-1 hover:underline cursor-pointer bg-transparent border-none p-0"
+            >
+              Tạo Lộ trình Học tập Đầu tiên với AI
+            </button>
           </div>
         }
       </div>
@@ -48,4 +53,9 @@ import { RoadmapCardComponent } from '../../../shared/components/roadmap-card/ro
 })
 export class DashboardActiveRoadmapsComponent {
   readonly roadmaps = input<DashboardActiveRoadmap[]>([]);
+  readonly createRoadmap = output<void>();
+
+  onCreateRoadmap(): void {
+    this.createRoadmap.emit();
+  }
 }

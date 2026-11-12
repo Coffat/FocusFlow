@@ -9,17 +9,22 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { RoadmapService } from '../../services/roadmap.service';
 import { AuthService } from '../../../../core/services/auth.service';
-import { RoadmapResponse } from '../../models/roadmap.model';
+import { PriorKnowledgeLevel, RoadmapResponse } from '../../models/roadmap.model';
 import { KpiCardComponent } from '../../../../shared/components/kpi-card/kpi-card.component';
 import { RoadmapCardComponent } from '../../../../shared/components/roadmap-card/roadmap-card.component';
 import {
   BlueprintEmptyStateComponent,
+  DEFAULT_STARTER_TEMPLATES,
   StarterTemplate,
 } from '../../../../shared/components/blueprint-empty-state/blueprint-empty-state.component';
+import { RoadmapWizardHostComponent } from '../dialogs/roadmap-wizard-host/roadmap-wizard-host.component';
+import {
+  AdaptationConfirmEvent,
+  AdaptationModalDialogComponent,
+} from '../dialogs/adaptation-modal-dialog/adaptation-modal-dialog.component';
 
 export type RoadmapStatusFilter = 'ALL' | 'ACTIVE' | 'PAUSED' | 'COMPLETED';
 export type ViewMode = 'grid' | 'list';
@@ -30,10 +35,11 @@ export type ViewMode = 'grid' | 'list';
   imports: [
     CommonModule,
     FormsModule,
-    RouterLink,
     KpiCardComponent,
     RoadmapCardComponent,
     BlueprintEmptyStateComponent,
+    RoadmapWizardHostComponent,
+    AdaptationModalDialogComponent,
   ],
   templateUrl: './roadmaps-hub.component.html',
   styleUrl: './roadmaps-hub.component.scss',
@@ -42,13 +48,26 @@ export type ViewMode = 'grid' | 'list';
 export class RoadmapsHubComponent implements OnInit {
   readonly roadmapService = inject(RoadmapService);
   readonly authService = inject(AuthService);
-  private readonly router = inject(Router);
   private readonly confirmationService = inject(ConfirmationService, { optional: true });
   private readonly messageService = inject(MessageService, { optional: true });
 
   readonly activeFilter = signal<RoadmapStatusFilter>('ALL');
   readonly searchQuery = signal<string>('');
   readonly viewMode = signal<ViewMode>('grid');
+
+  // 4-Step Wizard Dialog State
+  readonly wizardOpen = signal<boolean>(false);
+  readonly wizardStep = signal<1 | 2 | 3 | 4>(1);
+  readonly wizardInitialTitle = signal<string>('');
+  readonly wizardInitialLevel = signal<PriorKnowledgeLevel>('BEGINNER');
+  readonly wizardInitialWeeklyHours = signal<number>(12);
+
+  // SCR-08 Adaptation Modal Dialog State
+  readonly adaptationModalOpen = signal<boolean>(false);
+  readonly adaptationRoadmapId = signal<string | null>(null);
+  readonly adaptationRoadmapTitle = signal<string>('AWS Certified Solutions Architect');
+
+  readonly starterTemplates: readonly StarterTemplate[] = DEFAULT_STARTER_TEMPLATES;
 
   readonly currentUser = this.authService.currentUser;
 
@@ -84,12 +103,10 @@ export class RoadmapsHubComponent implements OnInit {
     const query = this.searchQuery().trim().toLowerCase();
 
     return list.filter(item => {
-      // Status filter
       if (filter === 'ACTIVE' && item.status !== 'ACTIVE') return false;
       if (filter === 'PAUSED' && item.status !== 'PAUSED') return false;
       if (filter === 'COMPLETED' && item.status !== 'COMPLETED') return false;
 
-      // Search query
       if (query) {
         const titleMatch = item.title?.toLowerCase().includes(query) ?? false;
         const descMatch = item.description?.toLowerCase().includes(query) ?? false;
@@ -107,9 +124,12 @@ export class RoadmapsHubComponent implements OnInit {
       !['INPUT', 'TEXTAREA', 'SELECT'].includes((event.target as HTMLElement)?.tagName) &&
       !event.ctrlKey &&
       !event.metaKey &&
-      !event.altKey
+      !event.altKey &&
+      !this.wizardOpen() &&
+      !this.adaptationModalOpen()
     ) {
-      this.router.navigate(['/roadmaps/new']);
+      event.preventDefault();
+      this.openCreateWizard(1);
     }
   }
 
@@ -146,6 +166,30 @@ export class RoadmapsHubComponent implements OnInit {
     return ['Lộ trình', 'Tự học', 'AI Powered'];
   }
 
+  openCreateWizard(step: 1 | 2 | 3 | 4 = 1): void {
+    this.wizardInitialTitle.set('');
+    this.wizardInitialLevel.set('BEGINNER');
+    this.wizardInitialWeeklyHours.set(12);
+    this.wizardStep.set(step);
+    this.wizardOpen.set(true);
+  }
+
+  closeCreateWizard(): void {
+    this.wizardOpen.set(false);
+  }
+
+  onSelectTemplate(tpl: StarterTemplate): void {
+    this.wizardInitialTitle.set(tpl.title);
+    this.wizardInitialLevel.set(tpl.knowledgeLevel ?? 'BEGINNER');
+    this.wizardInitialWeeklyHours.set(tpl.hoursPerWeek ?? 12);
+    this.wizardStep.set(1);
+    this.wizardOpen.set(true);
+  }
+
+  onCreateCustomRoadmap(): void {
+    this.openCreateWizard(1);
+  }
+
   onPauseRoadmap(id: string): void {
     if (this.confirmationService) {
       this.confirmationService.confirm({
@@ -176,7 +220,6 @@ export class RoadmapsHubComponent implements OnInit {
         this.roadmapService.loadRoadmaps();
       },
       error: () => {
-        // Fallback for local reactive update or offline mock
         this.roadmapService.roadmaps.update(list =>
           list.map(r => (r.id === id ? { ...r, status: 'PAUSED' } : r))
         );
@@ -190,20 +233,32 @@ export class RoadmapsHubComponent implements OnInit {
   }
 
   onResumeRoadmap(id: string): void {
-    if (this.confirmationService) {
-      this.confirmationService.confirm({
-        header: 'Xác nhận Kích hoạt Lại Lộ trình',
-        message:
-          'Bạn muốn kích hoạt lại lộ trình này? Các mốc thời gian học sẽ tự động được điều phối lại.',
-        icon: 'pi pi-info-circle',
-        acceptLabel: 'Kích hoạt lại',
-        rejectLabel: 'Hủy bỏ',
-        acceptButtonStyleClass: 'p-button-success',
-        accept: () => {
-          this.executeResume(id);
-        },
-      });
-    } else {
+    this.openAdaptationModal(id);
+  }
+
+  openAdaptationModal(roadmapId?: string): void {
+    const list = this.roadmapService.roadmaps();
+    const target =
+      (roadmapId ? list.find(r => r.id === roadmapId) : null) ??
+      list.find(r => r.status === 'PAUSED') ??
+      list[0] ??
+      null;
+
+    this.adaptationRoadmapId.set(target?.id ?? roadmapId ?? null);
+    this.adaptationRoadmapTitle.set(
+      target?.title || 'AWS Certified Solutions Architect'
+    );
+    this.adaptationModalOpen.set(true);
+  }
+
+  closeAdaptationModal(): void {
+    this.adaptationModalOpen.set(false);
+  }
+
+  onConfirmAdaptation(event: AdaptationConfirmEvent): void {
+    this.adaptationModalOpen.set(false);
+    const id = event.roadmapId ?? this.adaptationRoadmapId();
+    if (id && (event.strategy === 'DOMINO_SHIFT' || event.strategy === 'COMPACT_REBALANCE')) {
       this.executeResume(id);
     }
   }
@@ -219,7 +274,6 @@ export class RoadmapsHubComponent implements OnInit {
         this.roadmapService.loadRoadmaps();
       },
       error: () => {
-        // Fallback for local reactive update or offline mock
         this.roadmapService.roadmaps.update(list =>
           list.map(r => (r.id === id ? { ...r, status: 'ACTIVE' } : r))
         );
@@ -254,13 +308,5 @@ export class RoadmapsHubComponent implements OnInit {
     } else {
       this.roadmapService.archiveRoadmap(id);
     }
-  }
-
-  onSelectTemplate(tpl: StarterTemplate): void {
-    this.router.navigate(['/roadmaps/new'], { queryParams: { goal: tpl.title } });
-  }
-
-  onCreateCustomRoadmap(): void {
-    this.router.navigate(['/roadmaps/new']);
   }
 }

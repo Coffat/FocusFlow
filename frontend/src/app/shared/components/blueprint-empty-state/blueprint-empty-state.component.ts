@@ -5,7 +5,6 @@ import {
   output,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterLink } from '@angular/router';
 
 export interface StarterTemplate {
   id: string;
@@ -61,7 +60,7 @@ export const DEFAULT_STARTER_TEMPLATES: StarterTemplate[] = [
 @Component({
   selector: 'app-blueprint-empty-state',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule],
   templateUrl: './blueprint-empty-state.component.html',
   styleUrl: './blueprint-empty-state.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

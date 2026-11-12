@@ -1,0 +1,338 @@
+<div class="bg-[#FFFFFF] text-[#111111]">
+  <!-- TOP HEADER BANNER -->
+  <div class="p-6 sm:px-8 sm:py-5 border-b border-[#EAEAE6] bg-[#FAFAFA] flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#EBF3EE] text-[#246B4A] border border-[#246B4A]/20 font-mono text-[11px] font-semibold uppercase tracking-wider mb-1.5">
+        <span class="w-1.5 h-1.5 rounded-full bg-[#246B4A]" aria-hidden="true"></span>
+        <span>BƯỚC 4 / 4 • ĐỀ XUẤT LỊCH BIỂU CẤP 2 &amp; KIỂM ĐỊNH 3 TẦNG (SCR-05)</span>
+      </div>
+      <h2 class="font-serif text-xl sm:text-2xl text-[#111111] font-medium tracking-tight">
+        Tinh chỉnh Phiên học Pomodoro &amp; Áp dụng Lịch Chính thức
+      </h2>
+    </div>
+
+    <div class="flex items-center gap-2 font-mono text-xs bg-[#FFFFFF] px-3.5 py-2 rounded-lg border border-[#DCDCDC]">
+      <span class="text-[#555555]">Tổng khối lượng:</span>
+      <span class="font-bold text-[#111111]">{{ editableTasks().length }} phiên</span>
+      <span class="text-[#DCDCDC]">•</span>
+      <span class="font-bold text-[#246B4A]">{{ totalPlannedMinutes() }} phút ({{ totalPomodoroBlocks() }} 🍅)</span>
+    </div>
+  </div>
+
+  <!-- 5/7 TWO-COLUMN WORKSPACE -->
+  <div class="grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-[#EAEAE6]">
+    <!-- LEFT COLUMN (5 COLS): 3-TIER DETERMINISTIC VALIDATION & DIFF SUMMARY -->
+    <div class="lg:col-span-5 p-6 sm:p-7 bg-[#FAFAFA] space-y-5">
+      <!-- Generate AI Proposal CTA -->
+      <button
+        type="button"
+        (click)="onGenerateProposal()"
+        [disabled]="roadmapService.isGeneratingStream()"
+        data-testid="generate-proposal-btn"
+        class="w-full py-2.5 px-4 rounded-full bg-[#111111] hover:bg-[#246B4A] disabled:opacity-50 text-white text-xs font-semibold transition-colors cursor-pointer inline-flex items-center justify-center gap-2"
+      >
+        <span class="material-symbols-outlined text-[16px]" aria-hidden="true">auto_awesome</span>
+        <span>Tạo Đề xuất Lịch với AI</span>
+      </button>
+
+      <!-- Schedule Diff Summary (3 Metric Boxes) -->
+      <div class="space-y-2">
+        <span class="block text-[11px] font-mono font-semibold uppercase tracking-wider text-[#555555]">
+          Tóm tắt Thay đổi Lịch biểu (Schedule Diff Summary)
+        </span>
+        <div
+          data-testid="schedule-diff-summary"
+          class="grid grid-cols-3 gap-2.5"
+        >
+          <div class="bg-[#FFFFFF] border border-[#DCDCDC] rounded-lg p-3 text-center">
+            <div class="text-[10px] font-mono text-[#555555]">Giữ nguyên / Preserved</div>
+            <div
+              data-testid="diff-preserved-count"
+              class="text-lg font-mono font-bold text-[#111111] mt-1"
+            >
+              {{ diffSummary().preserved_completed_tasks_count }}
+            </div>
+          </div>
+
+          <div class="bg-[#FFFFFF] border border-[#DCDCDC] rounded-lg p-3 text-center">
+            <div class="text-[10px] font-mono text-[#555555]">Thay thế / Replaced</div>
+            <div
+              data-testid="diff-replaced-count"
+              class="text-lg font-mono font-bold text-[#B45309] mt-1"
+            >
+              {{ diffSummary().replaced_tasks_count }}
+            </div>
+          </div>
+
+          <div class="bg-[#FFFFFF] border border-[#DCDCDC] rounded-lg p-3 text-center">
+            <div class="text-[10px] font-mono text-[#555555]">Chèn mới / Inserted</div>
+            <div
+              data-testid="diff-inserted-count"
+              class="text-lg font-mono font-bold text-[#246B4A] mt-1"
+            >
+              {{ diffSummary().inserted_tasks_count }}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3-Tier Deterministic Constraint Status -->
+      <div class="space-y-3 pt-2 border-t border-[#EAEAE6]">
+        <div class="flex items-center justify-between">
+          <span class="text-[11px] font-mono font-semibold uppercase tracking-wider text-[#111111]">
+            Kiểm định Ràng buộc Tất định 3 Tầng
+          </span>
+          <span class="text-[10px] font-mono text-[#555555]">BUSR-02 / BUSR-04</span>
+        </div>
+
+        <!-- Tier 1 & 2: Hard Violations -->
+        @if (violations().length > 0) {
+          <div
+            role="alert"
+            data-testid="hard-violations-alert"
+            class="bg-[#FBEBEB] border border-[#B91C1C]/30 rounded-xl p-4 text-[#B91C1C] space-y-2"
+          >
+            <div class="flex items-center gap-2 text-xs font-bold">
+              <span class="material-symbols-outlined text-[16px]" aria-hidden="true">gpp_bad</span>
+              <span>Phát hiện {{ violations().length }} vi phạm ràng buộc cứng</span>
+            </div>
+            <ul class="list-disc list-inside text-xs space-y-1">
+              @for (v of violations(); track $index) {
+                <li>
+                  <strong class="font-mono">{{ v.rule_code }}</strong> ({{ v.field }}): {{ v.suggested_fix }}
+                </li>
+              }
+            </ul>
+          </div>
+        } @else {
+          <div
+            data-testid="zero-hard-violations-badge"
+            class="bg-[#EBF3EE] border border-[#246B4A]/20 rounded-xl p-3.5 text-[#246B4A] flex items-center justify-between text-xs font-semibold"
+          >
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-[18px]" aria-hidden="true">verified</span>
+              <span>0 vi phạm ràng buộc cứng</span>
+            </div>
+            <span class="font-mono text-[10px] uppercase">PASS TIER 1-2</span>
+          </div>
+        }
+
+        <!-- Tier 3: Soft Overflow Warnings & Confirmation Checkbox -->
+        @if (hasSoftOverflow()) {
+          <div
+            data-testid="soft-overflow-warning-box"
+            class="bg-[#FDF6E7] border border-[#B45309]/30 rounded-xl p-4 text-[#B45309] space-y-3"
+          >
+            <div class="flex items-start gap-2 text-xs">
+              <span class="material-symbols-outlined text-[18px] shrink-0 mt-0.5" aria-hidden="true">warning</span>
+              <div>
+                <div class="font-bold">Cảnh báo Tràn lịch mềm (Soft Overflow ≤ 30 phút)</div>
+                <p class="text-[11px] mt-0.5 leading-relaxed">
+                  Một số phiên học cuối ngày vượt nhẹ khung giờ rảnh. Bạn cần xác nhận đồng ý trước khi áp dụng vào Lịch chính thức.
+                </p>
+              </div>
+            </div>
+
+            @if (softOverflowWarnings().length > 0) {
+              <ul class="list-disc list-inside text-[11px] space-y-1">
+                @for (w of softOverflowWarnings(); track $index) {
+                  <li>{{ w.task_title }} ({{ w.scheduled_date }}): +{{ w.overflow_minutes }} phút — {{ w.message }}</li>
+                }
+              </ul>
+            }
+
+            <label class="flex items-start gap-2.5 pt-2 border-t border-[#B45309]/20 text-xs font-semibold text-[#111111] cursor-pointer">
+              <input
+                type="checkbox"
+                data-testid="soft-overflow-confirm-checkbox"
+                [ngModel]="confirmSoftOverflow()"
+                (ngModelChange)="onToggleSoftOverflow($event)"
+                class="mt-0.5 w-4 h-4 rounded accent-[#246B4A] cursor-pointer"
+              />
+              <span>Tôi xác nhận chấp nhận cảnh báo tràn lịch mềm (Soft Overflow)</span>
+            </label>
+          </div>
+        }
+      </div>
+    </div>
+
+    <!-- RIGHT COLUMN (7 COLS): PROPOSED POMODORO SCHEDULE BLOCKS -->
+    <div class="lg:col-span-7 p-6 sm:p-7 space-y-4">
+      <div class="flex items-center justify-between gap-2 pb-3 border-b border-[#EAEAE6]">
+        <div>
+          <h3 class="text-sm font-bold text-[#111111]">
+            Danh sách Phiên học Pomodoro Đề xuất ({{ editableTasks().length }})
+          </h3>
+          <p class="text-xs text-[#555555]">
+            Tinh chỉnh tiêu đề, thời lượng Pomodoro, ngày học dự kiến và độ khó cho từng phiên.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          (click)="onAddTask()"
+          data-testid="add-task-btn"
+          class="px-3.5 py-1.5 rounded-full bg-[#F3F3F1] hover:bg-[#EAEAE6] text-[#111111] border border-[#DCDCDC] text-xs font-semibold transition-colors cursor-pointer shrink-0"
+        >
+          + Thêm phiên học
+        </button>
+      </div>
+
+      @if (editableTasks().length === 0) {
+        <div
+          data-testid="tasks-empty-state"
+          class="rounded-xl border border-dashed border-[#DCDCDC] bg-[#FAFAFA] p-8 text-center space-y-2"
+        >
+          <p class="text-xs text-[#555555]">
+            Chưa có phiên học nào trong bản nháp đề xuất. Bấm <strong>"Tạo Đề xuất Lịch với AI"</strong> hoặc <strong>"+ Thêm phiên học"</strong> để bắt đầu.
+          </p>
+        </div>
+      } @else {
+        <div class="space-y-3">
+          @for (task of editableTasks(); track idx; let idx = $index) {
+            <div
+              [attr.data-testid]="'proposed-task-card-' + idx"
+              class="rounded-xl border border-[#DCDCDC] bg-[#FFFFFF] p-3.5 space-y-3"
+            >
+              <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2 flex-1 min-w-0">
+                  <span class="font-mono text-[11px] font-bold px-2 py-0.5 rounded bg-[#F3F3F1] text-[#111111] shrink-0">
+                    #{{ idx + 1 }}
+                  </span>
+                  <input
+                    type="text"
+                    [attr.data-testid]="'task-title-input-' + idx"
+                    [ngModel]="task.title"
+                    (ngModelChange)="onTaskTitleChange(idx, $event)"
+                    placeholder="Tiêu đề phiên học..."
+                    class="flex-1 text-xs sm:text-sm font-semibold text-[#111111] bg-[#FAFAFA] border border-[#DCDCDC] rounded-lg px-3 py-1.5 focus:bg-[#FFFFFF] focus:border-[#246B4A] focus:outline-none"
+                  />
+                </div>
+
+                <div class="flex items-center gap-1 shrink-0">
+                  <span class="font-mono text-[11px] font-semibold px-2 py-0.5 rounded bg-[#EBF3EE] text-[#246B4A] border border-[#246B4A]/20">
+                    🍅 {{ getPomodoroCount(task.estimated_minutes) }} Pomo
+                  </span>
+                  <button
+                    type="button"
+                    (click)="onMoveTask(idx, 'UP')"
+                    [disabled]="idx === 0"
+                    [attr.data-testid]="'task-up-btn-' + idx"
+                    aria-label="Di chuyển phiên học lên"
+                    class="p-1 rounded text-[#555555] hover:text-[#111111] hover:bg-[#F3F3F1] disabled:opacity-30 cursor-pointer"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    (click)="onMoveTask(idx, 'DOWN')"
+                    [disabled]="idx === editableTasks().length - 1"
+                    [attr.data-testid]="'task-down-btn-' + idx"
+                    aria-label="Di chuyển phiên học xuống"
+                    class="p-1 rounded text-[#555555] hover:text-[#111111] hover:bg-[#F3F3F1] disabled:opacity-30 cursor-pointer"
+                  >
+                    ↓
+                  </button>
+                  <button
+                    type="button"
+                    (click)="onRemoveTask(idx)"
+                    [attr.data-testid]="'task-delete-btn-' + idx"
+                    aria-label="Xóa phiên học"
+                    class="p-1 rounded text-[#B91C1C] hover:bg-[#FBEBEB] cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              <!-- Metadata controls row -->
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                <div>
+                  <label class="block text-[10px] font-mono uppercase text-[#555555] mb-1">
+                    Thời lượng (Phút)
+                  </label>
+                  <input
+                    type="number"
+                    min="15"
+                    max="240"
+                    step="5"
+                    [attr.data-testid]="'task-minutes-input-' + idx"
+                    [ngModel]="task.estimated_minutes"
+                    (ngModelChange)="onTaskMinutesChange(idx, $event)"
+                    class="w-full font-mono text-xs text-[#111111] bg-[#FAFAFA] border border-[#DCDCDC] rounded-lg px-2.5 py-1.5 focus:bg-[#FFFFFF] focus:border-[#246B4A] focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label class="block text-[10px] font-mono uppercase text-[#555555] mb-1">
+                    Ngày dự kiến
+                  </label>
+                  <input
+                    type="date"
+                    [attr.data-testid]="'task-date-input-' + idx"
+                    [ngModel]="task.scheduled_date ?? ''"
+                    (ngModelChange)="onTaskDateChange(idx, $event)"
+                    class="w-full font-mono text-xs text-[#111111] bg-[#FAFAFA] border border-[#DCDCDC] rounded-lg px-2.5 py-1.5 focus:bg-[#FFFFFF] focus:border-[#246B4A] focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label class="block text-[10px] font-mono uppercase text-[#555555] mb-1">
+                    Loại / Độ khó
+                  </label>
+                  <select
+                    [attr.data-testid]="'task-type-select-' + idx"
+                    [ngModel]="task.task_type || 'PRACTICE'"
+                    (ngModelChange)="onTaskTypeChange(idx, $event)"
+                    class="w-full font-mono text-xs text-[#111111] bg-[#FAFAFA] border border-[#DCDCDC] rounded-lg px-2.5 py-1.5 focus:bg-[#FFFFFF] focus:border-[#246B4A] focus:outline-none"
+                  >
+                    <option value="THEORY">THEORY • Lý thuyết</option>
+                    <option value="PRACTICE">PRACTICE • Thực hành</option>
+                    <option value="DEEP_WORK">DEEP_WORK • Chuyên sâu</option>
+                    <option value="REVIEW">REVIEW • Ôn tập</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+      }
+    </div>
+  </div>
+
+  <!-- FOOTER ACTIONS -->
+  <div class="p-4 sm:px-8 sm:py-4 bg-[#FFFFFF] border-t border-[#EAEAE6] flex flex-col sm:flex-row items-center justify-between gap-3">
+    <button
+      type="button"
+      (click)="onBack()"
+      data-testid="proposal-back-btn"
+      class="w-full sm:w-auto px-4 py-2 rounded-full text-xs font-medium text-[#555555] hover:text-[#111111] hover:bg-[#F3F3F1] transition-colors cursor-pointer inline-flex items-center justify-center gap-1.5"
+    >
+      <span class="font-mono" aria-hidden="true">←</span>
+      <span>Quay lại Bước 3</span>
+    </button>
+
+    <div class="flex flex-col sm:flex-row items-center gap-2.5 w-full sm:w-auto">
+      <button
+        type="button"
+        (click)="onUpdateProposal()"
+        [disabled]="roadmapService.saving()"
+        data-testid="update-proposal-btn"
+        class="w-full sm:w-auto px-4 py-2 rounded-full text-xs font-semibold text-[#111111] bg-[#FFFFFF] hover:bg-[#F3F3F1] border border-[#DCDCDC] transition-colors cursor-pointer"
+      >
+        Lưu bản nháp đề xuất
+      </button>
+
+      <button
+        type="button"
+        (click)="onApplyProposal()"
+        [disabled]="isApplyDisabled()"
+        data-testid="apply-proposal-btn"
+        class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-full bg-[#111111] hover:bg-[#246B4A] disabled:opacity-50 text-white text-xs sm:text-sm font-semibold transition-colors cursor-pointer"
+      >
+        <span>Phê duyệt &amp; Áp dụng vào Lịch chính thức (Apply Schedule)</span>
+        <span class="font-mono text-xs" aria-hidden="true">✓</span>
+      </button>
+    </div>
+  </div>
+</div>
