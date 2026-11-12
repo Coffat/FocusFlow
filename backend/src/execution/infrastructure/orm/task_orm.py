@@ -13,6 +13,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from uuid6 import uuid7
@@ -79,9 +80,22 @@ class TaskORM(Base):
         ),
         nullable=True,
     )
+    parent_task_id: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("tasks.id", ondelete="SET NULL", name="fk_tasks_parent"),
+        nullable=True,
+    )
+    concept_id: Mapped[str | None] = mapped_column(
+        String(120),
+        ForeignKey("learning_concepts.concept_id", ondelete="SET NULL", name="fk_tasks_concept"),
+        nullable=True,
+    )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     estimated_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
+    learning_resources_json: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
     scheduled_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     scheduled_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     scheduled_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

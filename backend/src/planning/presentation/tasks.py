@@ -4,7 +4,10 @@ from src.planning.presentation.deps import (
     get_execute_milestone_generation_use_case,
     get_execute_schedule_proposal_generation_use_case,
     get_goal_repository,
+    get_ingest_knowledge_source_use_case,
     get_knowledge_base_repository,
+    get_knowledge_file_store,
+    get_knowledge_source_repository,
     get_llm_provider,
     get_milestone_repository,
     get_planning_availability_query_port,
@@ -84,3 +87,15 @@ async def execute_ai_roadmap_generation(
                 roadmap_id=UUID(roadmap_id),
                 reservation_id=UUID(reservation_id),
             )
+
+
+@broker.task
+async def ingest_knowledge_source(source_id: str, user_id: str) -> None:
+    """Run the same secure ingestion use case outside the request lifecycle."""
+    async with async_session_factory() as session:
+        use_case = get_ingest_knowledge_source_use_case(
+            source_repository=get_knowledge_source_repository(session),
+            file_store=get_knowledge_file_store(),
+            uow=get_planning_uow(session),
+        )
+        await use_case.execute(source_id=UUID(source_id), user_id=UUID(user_id))

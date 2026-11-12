@@ -2,6 +2,7 @@ from collections.abc import Sequence
 from datetime import date, datetime, time, timedelta
 from typing import Any
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from src.planning.domain.services.validation_types import (
     MAX_DAILY_PLANNED_MINUTES,
@@ -28,6 +29,14 @@ def _to_int(val: object, default: int = 0) -> int:
         return int(str(val).strip())
     except ValueError:
         return default
+
+
+def _in_user_timezone(value: datetime | None, timezone: str) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=ZoneInfo(timezone))
+    return value.astimezone(ZoneInfo(timezone))
 
 
 def _slot_minute_range(slot: AvailabilitySlotDTO) -> tuple[int, int]:
@@ -261,10 +270,10 @@ class SpatioTemporalRuleEngine:
             sched_date = parse_iso_date(raw_task.get("scheduled_date"))
             start_dt = parse_iso_datetime(raw_task.get("scheduled_start"))
             end_dt = parse_iso_datetime(raw_task.get("scheduled_end"))
-            start_t = parse_hhmm_or_time(
-                raw_task.get("scheduled_start") or raw_task.get("start_time")
-            )
-            end_t = parse_hhmm_or_time(raw_task.get("scheduled_end") or raw_task.get("end_time"))
+            start_dt = _in_user_timezone(start_dt, availability.timezone)
+            end_dt = _in_user_timezone(end_dt, availability.timezone)
+            start_t = parse_hhmm_or_time(start_dt or raw_task.get("start_time"))
+            end_t = parse_hhmm_or_time(end_dt or raw_task.get("end_time"))
 
             if sched_date is None and start_dt is not None:
                 sched_date = start_dt.date()
@@ -332,8 +341,10 @@ class SpatioTemporalRuleEngine:
             ext_date = parse_iso_date(getattr(ext, "scheduled_date", None))
             ext_start_dt = parse_iso_datetime(getattr(ext, "scheduled_start", None))
             ext_end_dt = parse_iso_datetime(getattr(ext, "scheduled_end", None))
-            ext_start_t = parse_hhmm_or_time(getattr(ext, "scheduled_start", None))
-            ext_end_t = parse_hhmm_or_time(getattr(ext, "scheduled_end", None))
+            ext_start_dt = _in_user_timezone(ext_start_dt, availability.timezone)
+            ext_end_dt = _in_user_timezone(ext_end_dt, availability.timezone)
+            ext_start_t = parse_hhmm_or_time(ext_start_dt)
+            ext_end_t = parse_hhmm_or_time(ext_end_dt)
             if ext_date is None and ext_start_dt is not None:
                 ext_date = ext_start_dt.date()
             if ext_date is None:
@@ -530,7 +541,6 @@ class SpatioTemporalRuleEngine:
         - Respects `disabled_weekdays`, `existing_tasks` (EDF), Mode A (`QUOTA`) and Mode B (`FIXED_SLOTS`),
           and ensures `predecessor.end <= successor.start`.
         """
-        _ = target_date
         if not tasks:
             return []
 
@@ -600,6 +610,13 @@ class SpatioTemporalRuleEngine:
 
         # 1. Seed existing committed tasks
         for ex in existing_tasks or ():
+            status = (
+                str(ex.get("status", "TODO"))
+                if isinstance(ex, dict)
+                else str(getattr(ex, "status", "TODO"))
+            ).upper()
+            if status in ("CANCELLED", "COMPLETED"):
+                continue
             if isinstance(ex, dict):
                 ex_date = parse_iso_date(ex.get("scheduled_date"))
                 ex_mins = _to_int(ex.get("estimated_minutes"), 0)
@@ -610,8 +627,15 @@ class SpatioTemporalRuleEngine:
             else:
                 ex_date = parse_iso_date(getattr(ex, "scheduled_date", None))
                 ex_mins = _to_int(getattr(ex, "estimated_minutes", 0), 0)
-                ex_start = parse_iso_datetime(getattr(ex, "planned_start_at", None))
-                ex_end = parse_iso_datetime(getattr(ex, "planned_end_at", None))
+                ex_start = parse_iso_datetime(
+                    getattr(ex, "planned_start_at", None) or getattr(ex, "scheduled_start", None)
+                )
+                ex_end = parse_iso_datetime(
+                    getattr(ex, "planned_end_at", None) or getattr(ex, "scheduled_end", None)
+                )
+
+            ex_start = _in_user_timezone(ex_start, availability.timezone)
+            ex_end = _in_user_timezone(ex_end, availability.timezone)
 
             if ex_date is not None and ex_mins > 0:
                 daily_used_minutes[ex_date] = daily_used_minutes.get(ex_date, 0) + ex_mins
@@ -694,8 +718,10 @@ class SpatioTemporalRuleEngine:
         for idx in ordered_unscheduled:
             t_item = cloned_tasks[idx]
             tid = str(t_item.get("task_id") or t_item.get("id") or f"idx-{idx}")
-            duration = max(30, min(120, _to_int(t_item.get("estimated_minutes"), 60)))
-            t_item["estimated_minutes"] = duration
+            duration = _to_int(t_item.get("estimated_minutes"), 0)
+            if duration <= 0:
+                t_item["scheduled_date"] = None
+                continue
 
             min_date = start_date
             min_minute_on_min_date = 0
@@ -717,6 +743,8 @@ class SpatioTemporalRuleEngine:
             allocated = False
             for day_step in range(366):
                 cand_date = min_date + timedelta(days=day_step)
+                if target_date is not None and cand_date > target_date:
+                    break
                 wname = weekday_names[cand_date.weekday()]
                 if wname in disabled_days:
                     continue
@@ -724,7 +752,7 @@ class SpatioTemporalRuleEngine:
                 used_today = daily_used_minutes.get(cand_date, 0)
                 earliest_min = min_minute_on_min_date if day_step == 0 else 0
 
-                if mode_upper == "FIXED_SLOTS":
+                if mode_upper in ("FIXED_SLOTS", "MODE_B", "SLOTS"):
                     day_slots = slots_by_day.get(wname, [])
                     if not day_slots:
                         continue
@@ -780,10 +808,13 @@ class SpatioTemporalRuleEngine:
                 end_day_offset = win_e // 1440
                 end_date = cand_date + timedelta(days=end_day_offset)
                 eh, em = (win_e % 1440) // 60, win_e % 60
+                user_tz = ZoneInfo(availability.timezone)
+                local_start = datetime.combine(cand_date, time(sh, sm), tzinfo=user_tz)
+                local_end = datetime.combine(end_date, time(eh, em), tzinfo=user_tz)
 
                 t_item["scheduled_date"] = cand_date.isoformat()
-                t_item["scheduled_start"] = f"{cand_date.isoformat()}T{sh:02d}:{sm:02d}:00+00:00"
-                t_item["scheduled_end"] = f"{end_date.isoformat()}T{eh:02d}:{em:02d}:00+00:00"
+                t_item["scheduled_start"] = local_start.isoformat()
+                t_item["scheduled_end"] = local_end.isoformat()
 
                 daily_used_minutes[cand_date] = used_today + duration
                 daily_intervals.setdefault(cand_date, []).append((win_s, win_e))
@@ -795,12 +826,133 @@ class SpatioTemporalRuleEngine:
                 break
 
             if not allocated:
-                fallback_date = min_date
-                t_item["scheduled_date"] = fallback_date.isoformat()
-                t_item["scheduled_start"] = f"{fallback_date.isoformat()}T19:00:00+00:00"
-                end_m = 19 * 60 + duration
-                t_item["scheduled_end"] = (
-                    f"{fallback_date.isoformat()}T{(end_m // 60) % 24:02d}:{end_m % 60:02d}:00+00:00"
-                )
+                # Leave the task unplaced. The validation gate must reject the proposal.
+                t_item["scheduled_date"] = None
+                t_item["scheduled_start"] = None
+                t_item["scheduled_end"] = None
 
         return cloned_tasks
+
+    @classmethod
+    def allocate_task_sessions(
+        cls,
+        tasks: Sequence[dict[str, Any]],
+        availability: AvailabilityConfigurationDTO,
+        *,
+        start_date: date,
+        target_date: date | None = None,
+        dependencies: Sequence[dict[str, Any]] | None = None,
+        existing_tasks: Sequence[Any] | None = None,
+        milestone_order_map: dict[str, int] | None = None,
+        preferred_session_minutes: int = 60,
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """Place task effort in bounded sessions while retaining the task learning graph."""
+        mode_b = availability.mode.upper() in ("MODE_B", "FIXED_SLOTS", "SLOTS")
+        if mode_b:
+            slot_lengths = [
+                end - start
+                for slot in availability.availability_slots
+                if isinstance(slot, AvailabilitySlotDTO)
+                for start, end in [_slot_minute_range(slot)]
+                if end > start and slot.is_active
+            ]
+            capacity = max(slot_lengths, default=0)
+        else:
+            quotas = {
+                normalize_weekday_name(day): int(minutes)
+                for day, minutes in availability.daily_quota_minutes.items()
+            }
+            capacity = max(
+                (
+                    quotas.get(day, availability.default_daily_quota_minutes)
+                    for day in (
+                        "monday",
+                        "tuesday",
+                        "wednesday",
+                        "thursday",
+                        "friday",
+                        "saturday",
+                        "sunday",
+                    )
+                    if day not in availability.disabled_weekdays
+                ),
+                default=0,
+            )
+        session_limit = min(max(10, preferred_session_minutes), 60, capacity)
+        if session_limit < 10:
+            return ([{**task, "scheduled_date": None} for task in tasks], [])
+
+        expanded: list[dict[str, Any]] = []
+        expanded_deps: list[dict[str, Any]] = []
+        part_ids: dict[str, list[str]] = {}
+        for index, task in enumerate(tasks):
+            task_id = str(task.get("task_id") or task.get("id") or f"task_{index}")
+            effort = _to_int(task.get("estimated_minutes"), 0)
+            if effort <= 0:
+                count = 1
+            else:
+                count = (effort + session_limit - 1) // session_limit
+            base, extra = divmod(effort, count)
+            if base < 10:
+                return ([{**item, "scheduled_date": None} for item in tasks], [])
+            ids: list[str] = []
+            for sequence in range(1, count + 1):
+                part_id = f"{task_id}::session::{sequence}"
+                ids.append(part_id)
+                expanded.append(
+                    {
+                        "task_id": part_id,
+                        "milestone_id": task.get("milestone_id"),
+                        "task_order": index,
+                        "estimated_minutes": base + (1 if sequence <= extra else 0),
+                    }
+                )
+                if sequence > 1:
+                    expanded_deps.append({"predecessor_id": ids[-2], "successor_id": part_id})
+            part_ids[task_id] = ids
+
+        for dependency in dependencies or ():
+            predecessor = part_ids.get(str(dependency.get("predecessor_id")))
+            successor = part_ids.get(str(dependency.get("successor_id")))
+            if predecessor and successor:
+                expanded_deps.append(
+                    {"predecessor_id": predecessor[-1], "successor_id": successor[0]}
+                )
+
+        placed = cls.allocate_tasks_to_availability(
+            expanded,
+            availability,
+            start_date=start_date,
+            target_date=target_date,
+            dependencies=expanded_deps,
+            existing_tasks=existing_tasks,
+            milestone_order_map=milestone_order_map,
+        )
+        placed_by_id = {str(part["task_id"]): part for part in placed}
+        scheduled_tasks: list[dict[str, Any]] = []
+        blocks: list[dict[str, Any]] = []
+        for index, task in enumerate(tasks):
+            task_id = str(task.get("task_id") or task.get("id") or f"task_{index}")
+            parts = [placed_by_id[part_id] for part_id in part_ids[task_id]]
+            scheduled = dict(task)
+            if all(part.get("scheduled_start") and part.get("scheduled_end") for part in parts):
+                scheduled["scheduled_date"] = parts[0]["scheduled_date"]
+                scheduled["scheduled_start"] = parts[0]["scheduled_start"]
+                scheduled["scheduled_end"] = parts[-1]["scheduled_end"]
+                for sequence, part in enumerate(parts, start=1):
+                    blocks.append(
+                        {
+                            "task_id": task_id,
+                            "sequence_in_task": sequence,
+                            "block_date": part["scheduled_date"],
+                            "scheduled_start": part["scheduled_start"],
+                            "scheduled_end": part["scheduled_end"],
+                            "scheduled_duration_minutes": part["estimated_minutes"],
+                        }
+                    )
+            else:
+                scheduled["scheduled_date"] = None
+                scheduled["scheduled_start"] = None
+                scheduled["scheduled_end"] = None
+            scheduled_tasks.append(scheduled)
+        return scheduled_tasks, blocks

@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from typing import Protocol
 from uuid import UUID
 
@@ -17,6 +18,10 @@ class ScheduleBlockRepositoryPort(Protocol):
         sync_status_in: list[str] | None = None,
     ) -> list[ScheduleBlock]:
         """List blocks for an official schedule, optionally filtered by sync_status."""
+        ...
+
+    async def list_by_roadmap_ids(self, roadmap_ids: Sequence[UUID]) -> list[ScheduleBlock]:
+        """Return blocks belonging to active roadmaps without crossing context tables."""
         ...
 
     async def get_by_external_event_id(self, external_event_id: str) -> ScheduleBlock | None:

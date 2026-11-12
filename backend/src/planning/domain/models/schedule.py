@@ -15,6 +15,14 @@ class ScheduleProposalStatus(StrEnum):
     DISCARDED = "DISCARDED"
 
 
+class ScheduleProposalType(StrEnum):
+    INITIAL_SCHEDULE = "INITIAL_SCHEDULE"
+    AI_RECOVERY = "AI_RECOVERY"
+    POST_FAILURE_RESET = "POST_FAILURE_RESET"
+    SCHEDULE_ONLY_REOPTIMIZE = "SCHEDULE_ONLY_REOPTIMIZE"
+    WHAT_IF_SIMULATION = "WHAT_IF_SIMULATION"
+
+
 @dataclass
 class OfficialSchedule(AggregateRoot):
     """OfficialSchedule aggregate root representing the active committed study schedule (UC-08 / UC-12)."""
@@ -79,6 +87,10 @@ class ScheduleProposal(AggregateRoot):
     roadmap_id: UUID = field(default_factory=generate_uuid7)
     user_id: UUID = field(default_factory=generate_uuid7)
     proposal_data: dict[str, Any] = field(default_factory=dict)
+    proposal_type: ScheduleProposalType = ScheduleProposalType.INITIAL_SCHEDULE
+    original_proposal_data: dict[str, Any] = field(default_factory=dict)
+    user_edit_count: int = 0
+    pedagogical_warnings: list[dict[str, Any]] = field(default_factory=list)
     status: ScheduleProposalStatus = ScheduleProposalStatus.DRAFT
     applied_at: datetime | None = None
     created_at: datetime = field(default_factory=lambda: datetime.min)
@@ -87,10 +99,17 @@ class ScheduleProposal(AggregateRoot):
     def __post_init__(self) -> None:
         if isinstance(self.status, str):
             self.status = ScheduleProposalStatus(self.status)
+        if isinstance(self.proposal_type, str):
+            self.proposal_type = ScheduleProposalType(self.proposal_type)
         if not isinstance(self.proposal_data, dict):
             raise PlanningDomainError(
                 message="proposal_data phải là một dict JSON hợp lệ.",
                 code="INVALID_PROPOSAL_DATA",
+            )
+        if self.user_edit_count < 0:
+            raise PlanningDomainError(
+                message="Số lần chỉnh sửa đề xuất không thể âm.",
+                code="INVALID_PROPOSAL_EDIT_COUNT",
             )
         if self.updated_at == datetime.min and self.created_at != datetime.min:
             self.updated_at = self.created_at
