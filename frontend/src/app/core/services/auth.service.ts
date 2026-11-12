@@ -100,31 +100,38 @@ export class AuthService {
 
   login(credentials: { email: string; password: string }): Observable<User> {
     this._isLoading.set(true);
+    this.clearSession();
     const payload = {
       email: credentials.email,
       password: credentials.password
     };
 
     return this.http.post<BackendAuthResponse>(AUTH_ENDPOINTS.LOGIN, payload, { withCredentials: true }).pipe(
-      map((response: BackendAuthResponse): User => {
-        return {
-          id: response.user.id,
-          email: response.user.email,
-          fullName: response.user.full_name,
-          role: response.user.role,
-          tier: response.user.tier,
-          createdAt: response.user.created_at
-        };
-      }),
       tap({
-        next: (user: User) => {
-          this.setUser(user);
+        next: (response: BackendAuthResponse) => {
+          const user: User = {
+            id: response.user.id,
+            email: response.user.email,
+            fullName: response.user.full_name,
+            role: response.user.role,
+            tier: response.user.tier,
+            createdAt: response.user.created_at
+          };
+          this.setUser(user, response.access_token);
           this._isLoading.set(false);
         },
         error: () => {
           this._isLoading.set(false);
         }
-      })
+      }),
+      map((response: BackendAuthResponse): User => ({
+        id: response.user.id,
+        email: response.user.email,
+        fullName: response.user.full_name,
+        role: response.user.role,
+        tier: response.user.tier,
+        createdAt: response.user.created_at
+      }))
     );
   }
 
