@@ -1,6 +1,6 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, tap, catchError, of } from 'rxjs';
+import { Observable, tap, catchError, of, map } from 'rxjs';
 import {
   DashboardSummary,
   DashboardDataState,
@@ -10,376 +10,342 @@ import {
   DashboardTodayQueueItem,
   DashboardAiInsight,
   DashboardAdaptationStatus,
-  DashboardScheduleBlock
+  DashboardScheduleBlock,
 } from '../models/dashboard.model';
 
-export const DEFAULT_KPI: DashboardKpi = {
-  monthlyHours: 42.5,
-  monthlyTarget: 50.0,
-  weeklyCommitment: 10,
-  streakDays: 12,
-  streakRecord: 18,
-  recentStreak: [true, true, true, true, false, false, false],
-  adherenceRate: 91.2,
-  adherenceChange: 3.4,
-  pomodoroCompleted: 68,
-  pomodoroDeepWorkHours: 34,
-  pomodoroTargetRate: 78
-};
-
-export const DEFAULT_STUDY_DISTRIBUTION: DayStudyDistribution[] = [
-  { day: 'T2', fullDayName: 'Thứ Hai', hours: 2.5, isToday: false, date: '14/10' },
-  { day: 'T3', fullDayName: 'Thứ Ba', hours: 3.5, isToday: false, date: '15/10' },
-  { day: 'T4', fullDayName: 'Thứ Tư', hours: 4.5, isToday: true, date: '16/10' },
-  { day: 'T5', fullDayName: 'Thứ Năm', hours: 3.0, isToday: false, date: '17/10' },
-  { day: 'T6', fullDayName: 'Thứ Sáu', hours: 4.0, isToday: false, date: '18/10' },
-  { day: 'T7', fullDayName: 'Thứ Bảy', hours: 1.5, isToday: false, date: '19/10' },
-  { day: 'CN', fullDayName: 'Chủ Nhật', hours: 2.0, isToday: false, date: '20/10' }
-];
-
-export const DEFAULT_ACTIVE_ROADMAPS: DashboardActiveRoadmap[] = [
-  {
-    id: 'rm-01',
-    title: 'IELTS Academic Band 7.5',
-    category: 'Academic English',
-    progressPercentage: 48,
-    totalTasks: 70,
-    completedTasks: 34,
-    nextTaskTitle: 'Writing Task 2: Argue & Counter-argue',
-    deadline: '25/11/2026',
-    updatedAt: '2 giờ trước'
+export const EMPTY_DASHBOARD_SUMMARY: DashboardSummary = {
+  kpi: {
+    monthlyHours: 0,
+    monthlyTarget: 0,
+    weeklyCommitment: 0,
+    streakDays: 0,
+    streakRecord: 0,
+    recentStreak: [false, false, false, false, false, false, false],
+    adherenceRate: 0,
+    adherenceChange: 0,
+    pomodoroCompleted: 0,
+    pomodoroDeepWorkHours: 0,
+    pomodoroTargetRate: 0,
   },
-  {
-    id: 'rm-02',
-    title: 'Go Hexagonal Architecture & Microservices',
-    category: 'Backend Engineering',
-    progressPercentage: 30,
-    totalTasks: 84,
-    completedTasks: 25,
-    nextTaskTitle: 'Triển khai Outbox Pattern & Kafka Event Streaming',
-    deadline: '15/12/2026',
-    updatedAt: 'Hôm qua'
-  }
-];
-
-export const DEFAULT_TODAY_QUEUE: DashboardTodayQueueItem[] = [
-  {
-    id: 'q-01',
-    taskId: 'TSK-05',
-    title: 'Cấu hình Redis Cache & Distributed Lock Redlock',
-    roadmapTitle: 'Go Hexagonal Architecture & Microservices',
-    milestoneTitle: 'Chặng 3: Data Integrity',
-    scheduledTime: '10:00 - 11:30',
-    durationMinutes: 90,
-    pomodoroCount: 3,
-    status: 'active',
-    urgency: 'high'
+  activeRoadmaps: [],
+  todayQueue: [],
+  studyDistribution: [
+    { day: 'T2', fullDayName: 'Thứ Hai', hours: 0, isToday: false },
+    { day: 'T3', fullDayName: 'Thứ Ba', hours: 0, isToday: false },
+    { day: 'T4', fullDayName: 'Thứ Tư', hours: 0, isToday: false },
+    { day: 'T5', fullDayName: 'Thứ Năm', hours: 0, isToday: false },
+    { day: 'T6', fullDayName: 'Thứ Sáu', hours: 0, isToday: false },
+    { day: 'T7', fullDayName: 'Thứ Bảy', hours: 0, isToday: false },
+    { day: 'CN', fullDayName: 'Chủ Nhật', hours: 0, isToday: false },
+  ],
+  scheduleBlocks: [],
+  aiInsight: {
+    peakHourRange: 'Chưa có dữ liệu',
+    efficiencyChange: 0,
+    suggestedBreak: 'Nghỉ 5 phút sau 25 phút',
+    summary: 'Chưa có đủ dữ liệu học tập để phân tích nhịp sinh học.',
+    recommendations: ['Hãy bắt đầu phiên học đầu tiên trong phòng học Pomodoro!'],
   },
-  {
-    id: 'q-02',
-    taskId: 'TSK-03',
-    title: 'Luyện đề Line Graph & Viết Introduction Overview',
-    roadmapTitle: 'IELTS Academic Band 7.5',
-    milestoneTitle: 'Chặng 2: Writing Mastery',
-    scheduledTime: '14:00 - 15:30',
-    durationMinutes: 90,
-    pomodoroCount: 3,
-    status: 'pending',
-    urgency: 'medium'
+  adaptationStatus: {
+    hasDominoShift: false,
+    affectedTasksCount: 0,
+    rescheduleReason: '',
+    needsAttention: false,
+    alertMessage: 'Lịch trình học tập hiện tại cân bằng.',
   },
-  {
-    id: 'q-03',
-    taskId: 'TSK-08',
-    title: 'Triển khai Automated Integration Tests với Testcontainers',
-    roadmapTitle: 'Go Hexagonal Architecture & Microservices',
-    milestoneTitle: 'Chặng 4: CI/CD & Testing',
-    scheduledTime: '16:00 - 17:00',
-    durationMinutes: 60,
-    pomodoroCount: 2,
-    status: 'pending',
-    urgency: 'normal'
-  }
-];
-
-export const DEFAULT_SCHEDULE_BLOCKS: DashboardScheduleBlock[] = [
-  {
-    id: 'sb-01',
-    title: 'Đại số tuyến tính & Tối ưu hóa',
-    type: 'university',
-    dayOfWeek: 1,
-    dayLabel: 'T2',
-    startTime: '08:00',
-    endTime: '10:00',
-    room: 'A2-301',
-    code: 'MATH201'
-  },
-  {
-    id: 'sb-02',
-    title: 'TSK-01: Thiết kế Schema DB PostgreSQL 16',
-    type: 'completed',
-    dayOfWeek: 1,
-    dayLabel: 'T2',
-    startTime: '14:00',
-    endTime: '16:00',
-    code: 'TSK-01'
-  },
-  {
-    id: 'sb-03',
-    title: 'TSK-02: Viết Unit Test Domain Hexagonal',
-    type: 'completed',
-    dayOfWeek: 2,
-    dayLabel: 'T3',
-    startTime: '09:00',
-    endTime: '11:30',
-    code: 'TSK-02'
-  },
-  {
-    id: 'sb-04',
-    title: 'Lập trình Hướng đối tượng nâng cao',
-    type: 'university',
-    dayOfWeek: 2,
-    dayLabel: 'T3',
-    startTime: '13:30',
-    endTime: '15:30',
-    room: 'B1-104',
-    code: 'CS202'
-  },
-  {
-    id: 'sb-05',
-    title: 'Cấu trúc Dữ liệu & Giải thuật',
-    type: 'university',
-    dayOfWeek: 3,
-    dayLabel: 'T4',
-    startTime: '07:30',
-    endTime: '09:30',
-    room: 'C3-205',
-    code: 'CS101'
-  },
-  {
-    id: 'sb-06',
-    title: 'TSK-05: Redis Cache & Distributed Lock',
-    type: 'live',
-    dayOfWeek: 3,
-    dayLabel: 'T4',
-    startTime: '10:00',
-    endTime: '11:30',
-    code: 'TSK-05',
-    isLive: true
-  },
-  {
-    id: 'sb-07',
-    title: 'TSK-03: Line Graph & Writing Prep',
-    type: 'upcoming',
-    dayOfWeek: 3,
-    dayLabel: 'T4',
-    startTime: '14:00',
-    endTime: '15:30',
-    code: 'TSK-03'
-  },
-  {
-    id: 'sb-08',
-    title: 'TSK-06: Domino Shift - Đề xuất dời phiên học',
-    type: 'domino_proposal',
-    dayOfWeek: 3,
-    dayLabel: 'T4',
-    startTime: '16:30',
-    endTime: '18:00',
-    code: 'TSK-06',
-    description: 'AI tự động dịch chuyển tránh xung đột'
-  },
-  {
-    id: 'sb-09',
-    title: 'Cơ sở Dữ liệu Nâng cao & Phân tán',
-    type: 'university',
-    dayOfWeek: 4,
-    dayLabel: 'T5',
-    startTime: '08:30',
-    endTime: '10:30',
-    room: 'A1-402',
-    code: 'DB301'
-  },
-  {
-    id: 'sb-10',
-    title: 'TSK-07: Mock API & Vitest Testing',
-    type: 'upcoming',
-    dayOfWeek: 4,
-    dayLabel: 'T5',
-    startTime: '15:00',
-    endTime: '17:00',
-    code: 'TSK-07'
-  },
-  {
-    id: 'sb-11',
-    title: 'TSK-08: CI/CD Workflow & Docker Compose',
-    type: 'upcoming',
-    dayOfWeek: 5,
-    dayLabel: 'T6',
-    startTime: '10:00',
-    endTime: '12:00',
-    code: 'TSK-08'
-  },
-  {
-    id: 'sb-12',
-    title: 'Hệ điều hành & Nhân Linux',
-    type: 'university',
-    dayOfWeek: 5,
-    dayLabel: 'T6',
-    startTime: '14:00',
-    endTime: '16:00',
-    room: 'B2-201',
-    code: 'OS201'
-  },
-  {
-    id: 'sb-13',
-    title: 'TSK-09: IELTS Mock Test Listening Section 1-4',
-    type: 'upcoming',
-    dayOfWeek: 6,
-    dayLabel: 'T7',
-    startTime: '09:00',
-    endTime: '11:00',
-    code: 'TSK-09'
-  },
-  {
-    id: 'sb-14',
-    title: 'TSK-10: Tổng kết tuần & Self-Reflection SRL',
-    type: 'upcoming',
-    dayOfWeek: 7,
-    dayLabel: 'CN',
-    startTime: '15:00',
-    endTime: '17:00',
-    code: 'TSK-10'
-  }
-];
-
-export const DEFAULT_AI_INSIGHT: DashboardAiInsight = {
-  peakHourRange: '09:00 - 11:30',
-  efficiencyChange: 14.2,
-  suggestedBreak: '15 phút sau mỗi 2 phiên Pomodoro',
-  summary: 'Khả năng tập trung và tốc độ xử lý logic đạt đỉnh trong khung giờ sáng từ 09:00 đến 11:30. Hiệu suất học tăng 14.2% khi hoàn thành các task Domain trước trưa.',
-  recommendations: [
-    'Nên xếp các task độ khó cao (Thuật toán, System Design) vào ca sáng 09:00 – 11:00',
-    'Đã ghi nhận 3 phiên Pomodoro bị trễ ca chiều do tiết học WebCal kéo dài'
-  ]
-};
-
-export const DEFAULT_ADAPTATION_STATUS: DashboardAdaptationStatus = {
-  hasDominoShift: true,
-  affectedTasksCount: 1,
-  rescheduleReason: 'Tiết học Cấu trúc dữ liệu kéo dài +20 phút làm trễ phiên học',
-  needsAttention: true,
-  alertMessage: 'Domino Shift đang kích hoạt: Đã tự động đề xuất dời TSK-06 sang 16:30 mà không làm vỡ các ràng buộc cứng.'
-};
-
-export const DEFAULT_DASHBOARD_SUMMARY: DashboardSummary = {
-  kpi: DEFAULT_KPI,
-  activeRoadmaps: DEFAULT_ACTIVE_ROADMAPS,
-  todayQueue: DEFAULT_TODAY_QUEUE,
-  studyDistribution: DEFAULT_STUDY_DISTRIBUTION,
-  scheduleBlocks: DEFAULT_SCHEDULE_BLOCKS,
-  aiInsight: DEFAULT_AI_INSIGHT,
-  adaptationStatus: DEFAULT_ADAPTATION_STATUS,
   currentWeek: {
-    weekNumber: 42,
-    startDate: '14/10',
-    endDate: '20/10'
+    weekNumber: 1,
+    startDate: '',
+    endDate: '',
   },
-  activeRoadmapTitle: 'IELTS Academic Band 7.5',
-  totalMilestones: 8,
-  completedMilestones: 4,
-  totalStudyHours: 42.5,
-  weeklyTargetHours: 15,
-  streakDays: 12,
-  upcomingTasks: [
-    {
-      id: 't-01',
-      title: 'Thiết kế REST API Endpoints chuẩn OpenAPI 3.1',
-      milestoneTitle: 'Chặng 2: Xây dựng Backend FastAPI',
-      scheduledDate: 'Hôm nay, 10:00',
-      pomodoroEstimate: 3,
-      isCompleted: false
-    },
-    {
-      id: 't-02',
-      title: 'Luyện đề Line Graph & Viết Introduction Overview',
-      milestoneTitle: 'Chặng 2: Writing Mastery',
-      scheduledDate: 'Hôm nay, 14:00',
-      pomodoroEstimate: 3,
-      isCompleted: false
-    }
-  ]
+  activeRoadmapTitle: '',
+  totalMilestones: 0,
+  completedMilestones: 0,
+  totalStudyHours: 0,
+  weeklyTargetHours: 0,
+  streakDays: 0,
+  upcomingTasks: [],
 };
+
+export const DEFAULT_DASHBOARD_SUMMARY = EMPTY_DASHBOARD_SUMMARY;
+
+export function mapDashboardSummary(data: unknown): DashboardSummary {
+  if (!data || typeof data !== 'object') {
+    return { ...EMPTY_DASHBOARD_SUMMARY };
+  }
+
+  const payload = data as Record<string, unknown>;
+  const rawKpi = (payload['kpi'] as Record<string, unknown>) ?? {};
+
+  // Active roadmaps mapping
+  const rawRoadmaps = payload['active_roadmaps'] ?? payload['activeRoadmaps'];
+  const activeRoadmaps: DashboardActiveRoadmap[] = Array.isArray(rawRoadmaps)
+    ? rawRoadmaps.map((r: Record<string, unknown>) => ({
+        id: String(r?.['id'] ?? ''),
+        title: String(r?.['title'] ?? 'Lộ trình học tập'),
+        category: String(r?.['category'] ?? (r?.['code'] ? `Mã: ${r['code']}` : 'Chung')),
+        progressPercentage: Number(r?.['progress_pct'] ?? r?.['progressPercentage'] ?? 0),
+        totalTasks: Number(r?.['total_tasks'] ?? r?.['totalTasks'] ?? 0),
+        completedTasks: Number(r?.['completed_tasks'] ?? r?.['completedTasks'] ?? 0),
+        nextTaskTitle: String(r?.['next_task_title'] ?? r?.['nextTaskTitle'] ?? 'Chưa có nhiệm vụ kế tiếp'),
+        deadline: String(r?.['deadline'] ?? 'Chưa xác định'),
+        updatedAt: String(r?.['updated_at'] ?? r?.['updatedAt'] ?? 'Gần đây'),
+        commitmentHoursPerWeek: Number(r?.['commitment_hours_per_week'] ?? r?.['commitmentHoursPerWeek'] ?? 0),
+      }))
+    : [];
+
+  // Calculate weekly commitment from active roadmaps or fallback
+  const roadmapWeeklySum = activeRoadmaps.reduce(
+    (sum, r) => sum + (r.commitmentHoursPerWeek ?? 0),
+    0
+  );
+  const fallbackCommitment = rawKpi['target_hours']
+    ? Math.round(Number(rawKpi['target_hours']) / 4)
+    : Number(rawKpi['weeklyCommitment'] ?? 0);
+  const weeklyCommitment = roadmapWeeklySum > 0 ? roadmapWeeklySum : fallbackCommitment;
+
+  const monthlyHours = Number(rawKpi['monthly_hours'] ?? rawKpi['monthlyHours'] ?? 0);
+  const monthlyTarget = Number(rawKpi['target_hours'] ?? rawKpi['monthlyTarget'] ?? 0);
+  const streakDays = Number(rawKpi['streak_days'] ?? rawKpi['streakDays'] ?? 0);
+  const streakRecord = Number(rawKpi['personal_best_streak'] ?? rawKpi['streakRecord'] ?? streakDays);
+  const adherenceRate = Number(rawKpi['adherence_rate_pct'] ?? rawKpi['adherenceRate'] ?? 0);
+  const adherenceChange = Number(rawKpi['adherence_delta_pct'] ?? rawKpi['adherenceChange'] ?? 0);
+  const pomodoroCompleted = Number(rawKpi['completed_pomodoro_count'] ?? rawKpi['pomodoroCompleted'] ?? 0);
+  const pomodoroDeepWorkHours = Number(rawKpi['deep_work_hours'] ?? rawKpi['pomodoroDeepWorkHours'] ?? 0);
+
+  const pomodoroTargetRate = rawKpi['monthly_progress_pct'] !== undefined
+    ? Math.round(Number(rawKpi['monthly_progress_pct']))
+    : rawKpi['pomodoroTargetRate'] !== undefined
+      ? Number(rawKpi['pomodoroTargetRate'])
+      : pomodoroCompleted > 0
+        ? Math.min(100, Math.round(pomodoroCompleted * 1.25))
+        : 0;
+
+  const rawRecent = rawKpi['streak_history_last_7_days'] ?? rawKpi['recentStreak'];
+  const recentStreak = Array.isArray(rawRecent)
+    ? (rawRecent as boolean[])
+    : [false, false, false, false, false, false, false];
+
+  const kpi: DashboardKpi = {
+    monthlyHours: isNaN(monthlyHours) ? 0 : monthlyHours,
+    monthlyTarget: isNaN(monthlyTarget) ? 0 : monthlyTarget,
+    weeklyCommitment: isNaN(weeklyCommitment) ? 0 : weeklyCommitment,
+    streakDays: isNaN(streakDays) ? 0 : streakDays,
+    streakRecord: isNaN(streakRecord) ? 0 : streakRecord,
+    recentStreak,
+    adherenceRate: isNaN(adherenceRate) ? 0 : adherenceRate,
+    adherenceChange: isNaN(adherenceChange) ? 0 : adherenceChange,
+    pomodoroCompleted: isNaN(pomodoroCompleted) ? 0 : pomodoroCompleted,
+    pomodoroDeepWorkHours: isNaN(pomodoroDeepWorkHours) ? 0 : pomodoroDeepWorkHours,
+    pomodoroTargetRate: isNaN(pomodoroTargetRate) ? 0 : pomodoroTargetRate,
+  };
+
+  // Study Distribution mapping
+  const DAY_MAP: Record<string, { day: string; full: string }> = {
+    Mon: { day: 'T2', full: 'Thứ Hai' },
+    Tue: { day: 'T3', full: 'Thứ Ba' },
+    Wed: { day: 'T4', full: 'Thứ Tư' },
+    Thu: { day: 'T5', full: 'Thứ Năm' },
+    Fri: { day: 'T6', full: 'Thứ Sáu' },
+    Sat: { day: 'T7', full: 'Thứ Bảy' },
+    Sun: { day: 'CN', full: 'Chủ Nhật' },
+    T2: { day: 'T2', full: 'Thứ Hai' },
+    T3: { day: 'T3', full: 'Thứ Ba' },
+    T4: { day: 'T4', full: 'Thứ Tư' },
+    T5: { day: 'T5', full: 'Thứ Năm' },
+    T6: { day: 'T6', full: 'Thứ Sáu' },
+    T7: { day: 'T7', full: 'Thứ Bảy' },
+    CN: { day: 'CN', full: 'Chủ Nhật' },
+  };
+
+  const rawDist = payload['study_distribution'] ?? payload['studyDistribution'];
+  const studyDistribution: DayStudyDistribution[] = Array.isArray(rawDist)
+    ? rawDist.map((d: Record<string, unknown>) => {
+        const label = String(d?.['day_label'] ?? d?.['day'] ?? '');
+        const mapped = DAY_MAP[label] ?? {
+          day: label || 'T2',
+          full: String(d?.['full_day_name'] ?? d?.['fullDayName'] ?? label),
+        };
+        return {
+          day: mapped.day,
+          fullDayName: mapped.full,
+          hours: Number(d?.['hours'] ?? 0),
+          isToday: Boolean(d?.['is_today'] ?? d?.['isToday']),
+          date: String(d?.['date'] ?? ''),
+        };
+      })
+    : [...EMPTY_DASHBOARD_SUMMARY.studyDistribution];
+
+  // Today queue mapping
+  const rawQueue = payload['today_queue'] ?? payload['todayQueue'];
+  const todayQueue: DashboardTodayQueueItem[] = Array.isArray(rawQueue)
+    ? rawQueue.map((q: Record<string, unknown>) => {
+        const rawStatus = String(q?.['status'] ?? '').toLowerCase();
+        let status: 'active' | 'pending' | 'completed' | 'in_progress' = 'pending';
+        if (rawStatus === 'in_progress') status = 'in_progress';
+        else if (rawStatus === 'completed') status = 'completed';
+        else if (rawStatus === 'ready' || rawStatus === 'active') status = 'active';
+
+        return {
+          id: String(q?.['id'] ?? ''),
+          taskId: String(q?.['task_code'] ?? q?.['task_id'] ?? q?.['taskId'] ?? 'TASK'),
+          title: String(q?.['title'] ?? 'Nhiệm vụ học tập'),
+          roadmapTitle: String(q?.['roadmap_title'] ?? q?.['roadmapTitle'] ?? ''),
+          milestoneTitle: String(q?.['milestone_title'] ?? q?.['milestoneTitle'] ?? 'Phiên học hôm nay'),
+          scheduledTime: String(q?.['scheduled_time'] ?? q?.['scheduledTime'] ?? '08:00 - 09:30'),
+          durationMinutes: Number(q?.['duration_minutes'] ?? q?.['durationMinutes'] ?? 90),
+          pomodoroCount: Number(q?.['pomodoro_estimate'] ?? q?.['pomodoro_count'] ?? q?.['pomodoroCount'] ?? 2),
+          status,
+          urgency: (q?.['urgency'] ?? 'normal') as 'high' | 'medium' | 'normal',
+        };
+      })
+    : [];
+
+  // Schedule blocks mapping
+  const rawBlocks = payload['schedule_blocks'] ?? payload['scheduleBlocks'];
+  const scheduleBlocks: DashboardScheduleBlock[] = Array.isArray(rawBlocks)
+    ? rawBlocks.map((b: Record<string, unknown>) => {
+        const status = String(b?.['status'] ?? '');
+        const rawType = b?.['type'] as DashboardScheduleBlock['type'];
+        const type: DashboardScheduleBlock['type'] =
+          rawType ?? (status === 'COMPLETED' ? 'completed' : status === 'IN_PROGRESS' ? 'live' : 'upcoming');
+
+        return {
+          id: String(b?.['id'] ?? ''),
+          title: String(b?.['title'] ?? 'Khung giờ học'),
+          type,
+          dayOfWeek: Number(b?.['day_of_week'] ?? b?.['dayOfWeek'] ?? 1),
+          dayLabel: String(b?.['day_label'] ?? b?.['dayLabel'] ?? 'T2'),
+          startTime: String(b?.['start_time'] ?? b?.['startTime'] ?? '08:00'),
+          endTime: String(b?.['end_time'] ?? b?.['endTime'] ?? '09:00'),
+          code: String(b?.['roadmap_code'] ?? b?.['code'] ?? ''),
+          room: String(b?.['room'] ?? ''),
+          isLive: Boolean(b?.['is_live'] ?? b?.['isLive'] ?? (status === 'IN_PROGRESS')),
+          description: String(b?.['description'] ?? ''),
+          pomodoroCount: Number(b?.['pomodoro_count'] ?? b?.['pomodoroCount'] ?? 0),
+          durationMinutes: Number(b?.['duration_minutes'] ?? b?.['durationMinutes'] ?? 0),
+        };
+      })
+    : [];
+
+  // AI insight mapping
+  const rawAi = (payload['ai_insight'] as Record<string, unknown>) ?? (payload['aiInsight'] as Record<string, unknown>) ?? {};
+  const aiInsight: DashboardAiInsight = {
+    peakHourRange: String(rawAi['peak_hours'] ?? rawAi['peakHourRange'] ?? '09:00 - 11:30'),
+    efficiencyChange: Number(rawAi['efficiency_growth_pct'] ?? rawAi['efficiencyChange'] ?? 0),
+    suggestedBreak: String(rawAi['suggested_break'] ?? rawAi['suggestedBreak'] ?? '15 phút sau mỗi 2 phiên Pomodoro'),
+    summary: String(rawAi['message'] ?? rawAi['summary'] ?? 'AI đồng bộ và theo dõi tiến độ học tập hàng ngày.'),
+    recommendations: Array.isArray(rawAi['recommendations']) && rawAi['recommendations'].length > 0
+      ? (rawAi['recommendations'] as string[])
+      : ['Nên hoàn thành các phiên học trong khung giờ rảnh tối ưu để nâng cao hiệu quả hấp thu kiến thức.'],
+  };
+
+  // Adaptation status mapping
+  const rawAdapt = (payload['adaptation_status'] as Record<string, unknown>) ?? (payload['adaptationStatus'] as Record<string, unknown>) ?? {};
+  const adaptationStatus: DashboardAdaptationStatus = {
+    hasDominoShift: Boolean(rawAdapt['domino_shift_ready'] ?? rawAdapt['hasDominoShift']),
+    affectedTasksCount: Number(rawAdapt['affected_tasks_count'] ?? rawAdapt['affectedTasksCount'] ?? 0),
+    rescheduleReason: String(rawAdapt['reschedule_reason'] ?? rawAdapt['rescheduleReason'] ?? ''),
+    needsAttention: !(rawAdapt['is_balanced'] ?? !rawAdapt['needsAttention']),
+    alertMessage: String(rawAdapt['message'] ?? rawAdapt['alertMessage'] ?? 'Lịch trình học tập hiện tại cân bằng.'),
+  };
+
+  const currentWeek = (payload['current_week'] as DashboardSummary['currentWeek']) ??
+    (payload['currentWeek'] as DashboardSummary['currentWeek']) ?? {
+      weekNumber: 1,
+      startDate: '',
+      endDate: '',
+    };
+
+  return {
+    kpi,
+    activeRoadmaps,
+    todayQueue,
+    studyDistribution,
+    scheduleBlocks,
+    aiInsight,
+    adaptationStatus,
+    currentWeek,
+    activeRoadmapTitle: activeRoadmaps[0]?.title ?? '',
+    totalMilestones: Number(
+      payload['total_milestones'] ??
+        payload['totalMilestones'] ??
+        activeRoadmaps.reduce((acc, r) => acc + (r.totalTasks || 0), 0)
+    ),
+    completedMilestones: Number(
+      payload['completed_milestones'] ??
+        payload['completedMilestones'] ??
+        activeRoadmaps.reduce((acc, r) => acc + (r.completedTasks || 0), 0)
+    ),
+    totalStudyHours: kpi.monthlyHours,
+    weeklyTargetHours: weeklyCommitment,
+    streakDays: kpi.streakDays,
+    upcomingTasks: todayQueue.map((q) => ({
+      id: q.id,
+      title: q.title,
+      milestoneTitle: q.milestoneTitle,
+      scheduledDate: q.scheduledTime,
+      pomodoroEstimate: q.pomodoroCount,
+      isCompleted: q.status === 'completed',
+    })),
+  };
+}
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class DashboardService {
   private readonly http = inject(HttpClient);
 
-  readonly summary = signal<DashboardSummary | null>(DEFAULT_DASHBOARD_SUMMARY);
+  readonly summary = signal<DashboardSummary>(EMPTY_DASHBOARD_SUMMARY);
   readonly currentState = signal<DashboardDataState>('normal');
   readonly isLoading = signal<boolean>(false);
   readonly weekOffset = signal<number>(0);
 
   loadSummary(): Observable<DashboardSummary> {
     this.isLoading.set(true);
-    return this.http.get<DashboardSummary>('/api/v1/evaluation/dashboard-summary').pipe(
+    return this.http.get<unknown>('/api/v1/evaluation/dashboard-summary').pipe(
+      map((data) => mapDashboardSummary(data)),
       tap({
-        next: (data) => {
-          if (data && data.kpi) {
-            this.summary.set(data);
-          } else {
-            this.summary.set(DEFAULT_DASHBOARD_SUMMARY);
-          }
+        next: (mapped) => {
+          this.summary.set(mapped);
           this.isLoading.set(false);
         },
         error: () => {
-          // Fallback gracefully to the rich default dataset so UI is never blank
-          this.summary.set(DEFAULT_DASHBOARD_SUMMARY);
+          this.summary.set(EMPTY_DASHBOARD_SUMMARY);
           this.isLoading.set(false);
-        }
+        },
       }),
       catchError(() => {
-        this.summary.set(DEFAULT_DASHBOARD_SUMMARY);
+        this.summary.set(EMPTY_DASHBOARD_SUMMARY);
         this.isLoading.set(false);
-        return of(DEFAULT_DASHBOARD_SUMMARY);
+        return of(EMPTY_DASHBOARD_SUMMARY);
       })
     );
   }
 
   setState(state: DashboardDataState): void {
     this.currentState.set(state);
-    if (state === 'normal') {
-      this.summary.set(DEFAULT_DASHBOARD_SUMMARY);
-    } else if (state === 'new-user') {
+    if (state === 'new-user') {
+      const current = this.summary();
       this.summary.set({
-        ...DEFAULT_DASHBOARD_SUMMARY,
-        kpi: {
-          ...DEFAULT_KPI,
-          monthlyHours: 0,
-          streakDays: 0,
-          streakRecord: 0,
-          recentStreak: [false, false, false, false, false, false, false],
-          adherenceRate: 0,
-          adherenceChange: 0,
-          pomodoroCompleted: 0,
-          pomodoroDeepWorkHours: 0,
-          pomodoroTargetRate: 0
-        },
+        ...current,
         activeRoadmaps: [],
         todayQueue: [],
         scheduleBlocks: [],
-        studyDistribution: DEFAULT_STUDY_DISTRIBUTION.map(d => ({ ...d, hours: 0 }))
       });
     } else if (state === 'unscheduled') {
+      const current = this.summary();
       this.summary.set({
-        ...DEFAULT_DASHBOARD_SUMMARY,
+        ...current,
         scheduleBlocks: [],
-        todayQueue: []
+        todayQueue: [],
       });
     } else if (state === 'empty-week') {
+      const current = this.summary();
       this.summary.set({
-        ...DEFAULT_DASHBOARD_SUMMARY,
-        scheduleBlocks: []
+        ...current,
+        scheduleBlocks: [],
       });
     }
   }

@@ -32,6 +32,7 @@ export interface DashboardActiveRoadmap {
   nextTaskTitle: string;
   deadline: string;
   updatedAt?: string;
+  commitmentHoursPerWeek?: number;
 }
 
 export interface DashboardTodayQueueItem {
@@ -75,6 +76,8 @@ export interface DashboardScheduleBlock {
   room?: string;
   isLive?: boolean;
   description?: string;
+  pomodoroCount?: number;
+  durationMinutes?: number;
 }
 
 export interface UpcomingTaskSummary {
