@@ -2,12 +2,18 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
+from src.evaluation.application.dtos.dashboard_dtos import (
+    DashboardSummaryResponseDTO,
+)
 from src.evaluation.application.dtos.intelligence import (
     GenerateProofResponseDTO,
     GenerateWeeklyReviewRequestDTO,
     MilestoneProofResponseDTO,
     SubmitProofRequestDTO,
     WeeklyReviewResponseDTO,
+)
+from src.evaluation.application.use_cases.dashboard_summary import (
+    GetDashboardSummaryUseCase,
 )
 from src.evaluation.application.use_cases.intelligence import (
     EvaluationResourceNotFoundError,
@@ -18,6 +24,7 @@ from src.evaluation.application.use_cases.intelligence import (
 )
 from src.evaluation.presentation.deps import (
     get_current_evaluation_learner_id,
+    get_dashboard_summary_use_case,
     get_generate_proof_use_case,
     get_generate_weekly_review_use_case,
     get_latest_weekly_review_use_case,
@@ -31,6 +38,15 @@ router = APIRouter(prefix="/api/v1/evaluation", tags=["Evaluation & Analytics"])
 async def get_evaluation_context_status() -> dict[str, str]:
     """Bounded Context 4 health/status endpoint (UC-14..UC-17, UC-19)."""
     return {"context": "evaluation", "status": "ready"}
+
+
+@router.get("/dashboard-summary", response_model=DashboardSummaryResponseDTO)
+async def get_dashboard_summary(
+    user_id: UUID = Depends(get_current_evaluation_learner_id),
+    use_case: GetDashboardSummaryUseCase = Depends(get_dashboard_summary_use_case),
+) -> DashboardSummaryResponseDTO:
+    """Trả về tổng quan bảng điều khiển Dashboard cá nhân hóa của người học."""
+    return await use_case.execute(user_id)
 
 
 @router.post(

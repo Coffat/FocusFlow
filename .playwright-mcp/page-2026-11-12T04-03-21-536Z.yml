@@ -1,0 +1,62 @@
+- generic [ref=e4]:
+  - banner [ref=e5]:
+    - link "arrow_back Về trang chủ" [ref=e6] [cursor=pointer]:
+      - /url: /
+      - generic [ref=e7]: arrow_back
+      - generic [ref=e8]: Về trang chủ
+    - group "Ngôn ngữ" [ref=e9]:
+      - button "Chuyển sang Tiếng Việt" [pressed] [ref=e10] [cursor=pointer]:
+        - generic [ref=e14]: VI
+      - button "Chuyển sang Tiếng Anh" [ref=e15] [cursor=pointer]:
+        - generic [ref=e22]: EN
+  - main [ref=e23]:
+    - generic [ref=e26]:
+      - img "FocusFlow" [ref=e28]
+      - generic [ref=e29]:
+        - generic [ref=e31]:
+          - heading "Chào mừng trở lại" [level=1] [ref=e32]
+          - paragraph [ref=e34]: Nhập thông tin xác thực để truy cập không gian học tập trung của bạn.
+        - generic [ref=e35]:
+          - button "Google" [ref=e37] [cursor=pointer]
+          - generic [ref=e44]: hoặc tiếp tục với email
+        - generic [ref=e47]:
+          - generic [ref=e49]:
+            - generic [ref=e50]:
+              - generic [ref=e51]: Email học tập / làm việc
+              - generic [ref=e52]: Khuyến nghị email trường / tổ chức
+            - generic [ref=e53]:
+              - generic: alternate_email
+              - textbox "Email học tập / làm việc" [ref=e54]:
+                - /placeholder: elena@institute.ac.uk
+          - generic [ref=e56]:
+            - generic [ref=e57]:
+              - generic [ref=e58]: Mật khẩu
+              - link "Quên mật khẩu?" [ref=e59] [cursor=pointer]:
+                - /url: /forgot-password
+            - generic [ref=e60]:
+              - generic: lock_open
+              - textbox "Mật khẩu" [ref=e61]:
+                - /placeholder: ••••••••••••
+              - button "Ẩn/Hiện mật khẩu" [ref=e62] [cursor=pointer]:
+                - generic [ref=e63]: visibility
+          - generic [ref=e65] [cursor=pointer]:
+            - checkbox "Ghi nhớ phiên đăng nhập trong 30 ngày" [checked] [ref=e66]
+            - generic [ref=e67]: Ghi nhớ phiên đăng nhập trong 30 ngày
+          - button "Đăng nhập vào không gian học →" [ref=e69] [cursor=pointer]:
+            - generic [ref=e70]: Đăng nhập vào không gian học
+            - generic [ref=e71]: →
+        - paragraph [ref=e73]:
+          - text: Chưa có tài khoản?
+          - link "Đăng ký miễn phí" [ref=e74] [cursor=pointer]:
+            - /url: /sign-up
+  - contentinfo [ref=e75]:
+    - generic [ref=e76]:
+      - link "Chính sách quyền riêng tư" [ref=e77] [cursor=pointer]:
+        - /url: "#"
+      - generic [ref=e78]: •
+      - link "Điều khoản dịch vụ" [ref=e79] [cursor=pointer]:
+        - /url: "#"
+      - generic [ref=e80]: •
+      - link "Báo cáo bảo mật" [ref=e81] [cursor=pointer]:
+        - /url: "#"
+    - generic [ref=e82]: Hệ thống hoạt động bình thường

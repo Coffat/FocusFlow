@@ -11,6 +11,9 @@ from src.account.public_api import UserQueryPort, create_user_query_port
 from src.evaluation.application.ports.intelligence_repository_port import (
     EvaluationIntelligenceRepositoryPort,
 )
+from src.evaluation.application.use_cases.dashboard_summary import (
+    GetDashboardSummaryUseCase,
+)
 from src.evaluation.application.use_cases.intelligence import (
     GenerateMilestoneProofUseCase,
     GenerateWeeklyReviewUseCase,
@@ -113,3 +116,7 @@ def get_latest_weekly_review_use_case(
     repository: EvaluationIntelligenceRepositoryPort = Depends(get_intelligence_repository),
 ) -> GetLatestWeeklyReviewUseCase:
     return GetLatestWeeklyReviewUseCase(repository)
+
+
+def get_dashboard_summary_use_case() -> GetDashboardSummaryUseCase:
+    return GetDashboardSummaryUseCase()
