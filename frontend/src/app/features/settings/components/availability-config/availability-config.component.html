@@ -146,11 +146,11 @@
           </div>
 
           <!-- Total Counter -->
-          <div class="flex items-baseline gap-2">
-            <span
-              data-testid="total-weekly-hours"
-              class="text-4xl font-serif font-bold text-[#1B1C1C] tracking-tight"
-            >
+          <div
+            data-testid="total-weekly-hours"
+            class="flex items-baseline gap-2"
+          >
+            <span class="text-4xl font-serif font-bold text-[#1B1C1C] tracking-tight">
               {{ service.totalWeeklyHours().toFixed(1) }}
             </span>
             <span class="text-sm text-[#656464] font-mono font-medium">giờ / tuần</span>
