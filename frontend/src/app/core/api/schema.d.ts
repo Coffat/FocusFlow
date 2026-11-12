@@ -1688,6 +1688,11 @@ export interface components {
             sync_type: string;
             /** Redirect Uri */
             redirect_uri?: string | null;
+            /**
+             * Return To
+             * @default /settings
+             */
+            return_to: string;
         };
         /**
          * InitiateCalendarAuthResponseDTO
