@@ -1,0 +1,109 @@
+name: FocusFlow quality
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: focusflow_user
+          POSTGRES_PASSWORD: focusflow_secure_password
+          POSTGRES_DB: focusflow_db
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U focusflow_user -d focusflow_db"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.12'
+      - run: uv sync --frozen --extra dev
+        working-directory: backend
+      - run: uv run --extra dev alembic upgrade head
+        working-directory: backend
+      - run: bash scripts/quality-gates.sh backend-static
+      - run: bash scripts/quality-gates.sh backend-tests
+        env:
+          LLM_PROVIDER: mock
+          PAYMENT_PROVIDER: local_mock
+          CALENDAR_PROVIDER: local_mock
+          RUN_LIVE_AI_EVALS: '0'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-quality
+          path: artifacts/quality/
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.12'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: frontend
+      - run: uv sync --frozen --extra dev
+        working-directory: backend
+      - run: bash scripts/check-api-contract.sh
+      - run: bash scripts/quality-gates.sh frontend-static
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: frontend
+      - run: pnpm exec playwright install --with-deps chromium
+        working-directory: frontend
+      - run: docker compose up -d --build
+        env:
+          LLM_PROVIDER: mock
+          PAYMENT_PROVIDER: local_mock
+          CALENDAR_PROVIDER: local_mock
+      - name: Wait for backend
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://localhost:8000/api/health > /dev/null; then exit 0; fi
+            sleep 2
+          done
+          docker compose logs backend
+          exit 1
+      - run: pnpm exec playwright test e2e/availability.spec.ts e2e/e2e_full_workflow.spec.ts
+        working-directory: frontend
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+      - run: docker compose down
+        if: always()

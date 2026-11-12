@@ -74,6 +74,7 @@ outputs/
 .pytest_cache/
 .coverage
 htmlcov/
+artifacts/quality/
 
 # Celery
 celerybeat-schedule*
