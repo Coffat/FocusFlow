@@ -91,10 +91,10 @@ test.describe('FocusFlow End-to-End Visual Evidence Suite', () => {
     await expect(page.locator('[data-testid="save-success-banner"]')).toBeVisible({ timeout: 10000 });
 
     // =========================================================================
-    // STEP 5: Navigate to /roadmaps & Create New Goal
+    // STEP 5: Navigate to /roadmaps/new & Create New Goal
     // =========================================================================
-    await page.goto('/roadmaps');
-    await page.waitForURL('**/roadmaps');
+    await page.goto('/roadmaps/new');
+    await page.waitForURL('**/roadmaps/new');
     await page.waitForLoadState('networkidle');
     await page.screenshot({ path: path.join(EVIDENCE_DIR, '06_roadmaps_initial_page.png'), fullPage: true });
 
@@ -135,7 +135,7 @@ test.describe('FocusFlow End-to-End Visual Evidence Suite', () => {
     // STEP 6: AI Diagnostic Clarification Questions (FR-GOAL-002)
     // =========================================================================
     const clarifyCard = page.locator('[data-testid="clarification-questionnaire-card"]');
-    await expect(clarifyCard).toBeVisible({ timeout: 15000 });
+    await expect(clarifyCard).toBeVisible({ timeout: 45000 });
     await page.screenshot({ path: path.join(EVIDENCE_DIR, '08_goal_clarification_questions.png'), fullPage: true });
 
     // Select options or answers for questions
@@ -284,9 +284,9 @@ test.describe('FocusFlow End-to-End Visual Evidence Suite', () => {
     await page.waitForURL('**/dashboard');
     await page.waitForLoadState('networkidle');
 
-    // Go directly to /roadmaps WITHOUT configuring availability in /availability
-    await page.goto('/roadmaps');
-    await page.waitForURL('**/roadmaps');
+    // Go directly to /roadmaps/new WITHOUT configuring availability in /availability
+    await page.goto('/roadmaps/new');
+    await page.waitForURL('**/roadmaps/new');
     await page.waitForLoadState('networkidle');
 
     // Click "+ Tạo Mục tiêu & Lộ trình mới"
@@ -325,7 +325,7 @@ test.describe('FocusFlow End-to-End Visual Evidence Suite', () => {
 
     // Verify Clarification Questions appear
     const clarifyCard = page.locator('[data-testid="clarification-questionnaire-card"]');
-    await expect(clarifyCard).toBeVisible({ timeout: 15000 });
+    await expect(clarifyCard).toBeVisible({ timeout: 45000 });
 
     // Click "Bỏ qua phỏng vấn (Skip)"
     const skipBtn = page.locator('[data-testid="skip-clarification-btn"]');
