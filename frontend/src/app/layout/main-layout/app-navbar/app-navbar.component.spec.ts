@@ -59,7 +59,7 @@ describe('AppNavbarComponent', () => {
     expect(component.navItems.length).toBe(5);
     const el = fixture.nativeElement as HTMLElement;
     expect(el.textContent).toContain('Tổng quan');
-    expect(el.textContent).toContain('Lộ trình');
+    expect(el.textContent).toContain('Roadmap Hub');
     expect(el.textContent).toContain('Thời khóa biểu');
     expect(el.textContent).toContain('Hàng đợi Task');
     expect(el.textContent).toContain('Báo cáo');

@@ -30,7 +30,7 @@ export class AppNavbarComponent {
 
   readonly navItems: NavItem[] = [
     { path: '/dashboard', label: 'Tổng quan' },
-    { path: '/roadmaps', label: 'Lộ trình' },
+    { path: '/roadmaps', label: 'Roadmap Hub' },
     { path: '/schedule', label: 'Thời khóa biểu' },
     { path: '/tasks', label: 'Hàng đợi Task' },
     { path: '/analytics', label: 'Báo cáo' },
