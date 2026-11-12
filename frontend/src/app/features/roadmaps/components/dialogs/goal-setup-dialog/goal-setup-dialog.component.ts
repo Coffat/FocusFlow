@@ -43,7 +43,7 @@ export class GoalSetupDialogComponent {
   readonly isSubmitting = input<boolean>(false);
 
   readonly submitGoal = output<CreateRoadmapRequest>();
-  readonly cancel = output<void>();
+  readonly canceled = output<void>();
 
   readonly goalTitle = signal<string>('');
   readonly currentLevel = signal<PriorKnowledgeLevel>('BEGINNER');
@@ -176,6 +176,6 @@ export class GoalSetupDialogComponent {
   }
 
   onCancel(): void {
-    this.cancel.emit();
+    this.canceled.emit();
   }
 }

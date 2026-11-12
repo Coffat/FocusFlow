@@ -49,8 +49,8 @@ export class RoadmapCardComponent {
   readonly variant = input<RoadmapCardVariant>('full');
 
   readonly selectRoadmap = output<string>();
-  readonly pause = output<string>();
-  readonly resume = output<string>();
+  readonly pauseRoadmap = output<string>();
+  readonly resumeRoadmap = output<string>();
   readonly archive = output<string>();
   readonly viewDetails = output<string>();
 
@@ -209,13 +209,13 @@ export class RoadmapCardComponent {
   onPause(event?: MouseEvent): void {
     event?.stopPropagation();
     this.closeMenu();
-    this.pause.emit(this.roadmap().id);
+    this.pauseRoadmap.emit(this.roadmap().id);
   }
 
   onResume(event?: MouseEvent): void {
     event?.stopPropagation();
     this.closeMenu();
-    this.resume.emit(this.roadmap().id);
+    this.resumeRoadmap.emit(this.roadmap().id);
   }
 
   onArchive(event?: MouseEvent): void {

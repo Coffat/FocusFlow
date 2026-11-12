@@ -14,8 +14,8 @@ import {
     <app-roadmap-card
       [roadmap]="roadmap()"
       [variant]="variant()"
-      (pause)="onPause($event)"
-      (resume)="onResume($event)"
+      (pauseRoadmap)="onPause($event)"
+      (resumeRoadmap)="onResume($event)"
       (archive)="onArchive($event)"
     />
   `,

@@ -17,7 +17,7 @@
         [initialWeeklyHours]="draftWeeklyHours()"
         [isSubmitting]="isSaving()"
         (submitGoal)="onGoalSubmit($event)"
-        (cancel)="onClose()"
+        (canceled)="onClose()"
       />
     }
     @case (2) {
