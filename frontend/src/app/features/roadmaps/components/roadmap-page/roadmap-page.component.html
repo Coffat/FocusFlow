@@ -1259,9 +1259,29 @@
                               </button>
                             </div>
 
+                            @if (resourceEditorTaskIndex() === tIdx) {
+                              <div class="mt-3 grid gap-2 sm:grid-cols-2" aria-label="Thêm nguồn học tập">
+                                <label class="form-field">
+                                  <span class="form-label">Tên tài liệu</span>
+                                  <input class="form-input" type="text" [ngModel]="resourceTitle()" (ngModelChange)="resourceTitle.set($event)" />
+                                </label>
+                                <label class="form-field">
+                                  <span class="form-label">URL tài liệu</span>
+                                  <input class="form-input" type="url" [ngModel]="resourceUrl()" (ngModelChange)="resourceUrl.set($event)" />
+                                </label>
+                                @if (resourceError()) {
+                                  <p class="text-[var(--error)] sm:col-span-2" role="alert">{{ resourceError() }}</p>
+                                }
+                                <div class="flex gap-2 sm:col-span-2">
+                                  <button type="button" class="btn-pill-action primary" (click)="onSaveResource()">Lưu nguồn học</button>
+                                  <button type="button" class="btn-pill-action outline" (click)="resourceEditorTaskIndex.set(null)">Hủy</button>
+                                </div>
+                              </div>
+                            }
+
                             @if (!task.learning_resources || task.learning_resources.length === 0) {
                               <p class="text-xs text-[var(--secondary)] italic m-0">
-                                Chưa đính kèm tài liệu học tập. Bấm dấu + để thêm nguồn học gợi ý từ Knowledge Base.
+                                Chưa đính kèm tài liệu học tập. Bấm dấu + để thêm nguồn học của bạn.
                               </p>
                             } @else {
                               <div
@@ -1487,6 +1507,34 @@
                   </p>
                 </div>
               </div>
+
+              @if ((proposal.schedule_blocks?.length ?? 0) > 0) {
+                <div class="mt-5 overflow-x-auto" data-testid="proposal-schedule-blocks">
+                  <h4 class="font-semibold mb-2">Các phiên học được xếp lịch</h4>
+                  <table class="w-full text-sm text-left">
+                    <thead>
+                      <tr>
+                        <th scope="col" class="p-2">Nhiệm vụ</th>
+                        <th scope="col" class="p-2">Ngày</th>
+                        <th scope="col" class="p-2">Bắt đầu</th>
+                        <th scope="col" class="p-2">Kết thúc</th>
+                        <th scope="col" class="p-2">Thời lượng</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (block of proposal.schedule_blocks ?? []; track block.task_id + '-' + block.sequence_in_task) {
+                        <tr>
+                          <td class="p-2">{{ getBlockTaskTitle(block.task_id) }} · Phiên {{ block.sequence_in_task }}</td>
+                          <td class="p-2">{{ block.block_date }}</td>
+                          <td class="p-2">{{ block.scheduled_start.slice(11, 16) }}</td>
+                          <td class="p-2">{{ block.scheduled_end.slice(11, 16) }}</td>
+                          <td class="p-2">{{ block.scheduled_duration_minutes }} phút</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              }
 
               <!-- OS-03 Diff Summary Metrics -->
               <div class="diff-metrics-grid">

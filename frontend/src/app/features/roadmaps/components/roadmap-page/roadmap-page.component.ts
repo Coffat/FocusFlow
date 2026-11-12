@@ -45,8 +45,12 @@ export class RoadmapPageComponent implements OnInit {
   readonly newGoalTitle = signal<string>('');
   readonly newGoalDescription = signal<string>('');
   readonly newPriorKnowledgeLevel = signal<PriorKnowledgeLevel>('BEGINNER');
-  readonly newStartDate = signal<string>('2026-11-02');
-  readonly newTargetDate = signal<string>('2026-12-30');
+  readonly newStartDate = signal<string>('');
+  readonly newTargetDate = signal<string>('');
+  readonly resourceEditorTaskIndex = signal<number | null>(null);
+  readonly resourceTitle = signal<string>('');
+  readonly resourceUrl = signal<string>('');
+  readonly resourceError = signal<string | null>(null);
 
   // AI Diagnostic Clarification Questionnaire State (FR-GOAL-002)
   readonly userAnswers = signal<Record<string, string>>({});
@@ -203,7 +207,7 @@ export class RoadmapPageComponent implements OnInit {
   }
 
   onAddTaskToMilestone(milestoneId?: string | null, sequenceOrder?: number): void {
-    const defaultDate = this.selectedDetail()?.start_date ?? '2026-11-02';
+    const defaultDate = this.selectedDetail()?.start_date ?? null;
     this.roadmapService.addEditableTask({
       milestone_id: milestoneId ?? null,
       milestone_sequence_order: sequenceOrder ?? 1,
@@ -215,33 +219,47 @@ export class RoadmapPageComponent implements OnInit {
       scheduled_end: '20:30',
       learning_objective: 'Nắm vững kiến thức trọng tâm và thực hành ứng dụng',
       completion_criteria: 'Hoàn thành bài tập mẫu và giải thích được nguyên lý',
-      learning_resources: [
-        {
-          title: 'Tài liệu hướng dẫn chuyên sâu',
-          url: 'https://docs.python.org/3/',
-          type: 'DOCS',
-          description: 'Tài liệu chuẩn từ Knowledge Base.',
-        },
-      ],
+      learning_resources: [],
     });
   }
 
   onConfirmTasksToStep4(roadmapId: string): void {
     this.roadmapService.setActiveStep(4);
     const prop = this.roadmapService.currentProposal();
-    if (prop) {
+    if (prop && this.roadmapService.proposalDirty()) {
       this.roadmapService.updateProposal(roadmapId, prop.id);
     }
   }
 
   onAddQuickResource(taskGlobalIndex: number): void {
-    const sampleResource = {
-      title: 'Tài liệu chuẩn hóa chính thức',
-      url: 'https://fastapi.tiangolo.com/',
-      type: 'DOCS',
-      description: 'Nguồn tài liệu học tập được đề xuất từ Knowledge Base.',
-    };
-    this.roadmapService.addResourceToTask(taskGlobalIndex, sampleResource);
+    this.resourceEditorTaskIndex.set(taskGlobalIndex);
+    this.resourceTitle.set('');
+    this.resourceUrl.set('');
+    this.resourceError.set(null);
+  }
+
+  onSaveResource(): void {
+    const taskIndex = this.resourceEditorTaskIndex();
+    const title = this.resourceTitle().trim();
+    const url = this.resourceUrl().trim();
+    if (taskIndex === null || !title) {
+      this.resourceError.set('Vui lòng nhập tên tài liệu.');
+      return;
+    }
+    try {
+      const parsed = new URL(url);
+      if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('invalid protocol');
+    } catch {
+      this.resourceError.set('Vui lòng nhập URL http hoặc https hợp lệ.');
+      return;
+    }
+    this.roadmapService.addResourceToTask(taskIndex, { title, url, type: 'DOCS' });
+    this.resourceEditorTaskIndex.set(null);
+    this.resourceError.set(null);
+  }
+
+  getBlockTaskTitle(taskId: string): string {
+    return this.roadmapService.editableTasks().find(task => task.task_id === taskId)?.title ?? 'Nhiệm vụ học tập';
   }
 
   onRemoveResource(taskGlobalIndex: number, resIndex: number): void {

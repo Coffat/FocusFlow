@@ -4,2621 +4,3725 @@
  */
 
 export interface paths {
-    "/api/v1/account/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Account Context Status
-         * @description Bounded Context 1 health/status endpoint (UC-01..UC-05, UC-18).
-         */
-        get: operations["get_account_context_status_api_v1_account_status_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+  '/api/v1/account/status': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/availabilities/me": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get current learner's availability profile */
-        get: operations["get_my_availability_api_v1_availabilities_me_get"];
-        /** Update current learner's availability profile */
-        put: operations["update_my_availability_api_v1_availabilities_me_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /**
+     * Get Account Context Status
+     * @description Bounded Context 1 health/status endpoint (UC-01..UC-05, UC-18).
+     */
+    get: operations['get_account_context_status_api_v1_account_status_get'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/account/learner-memory': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/auth/login": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * User Login (UC-AUTH-02)
-         * @description Authenticates credentials using Argon2id, generates HS256 JWT & 7-day Refresh Token.
-         */
-        post: operations["login_api_v1_auth_login_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** List Learner Memory */
+    get: operations['list_learner_memory_api_v1_account_learner_memory_get'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/account/learner-memory/{memory_id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/auth/google": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Google OAuth 2.0 Single Sign-On (SSO)
-         * @description Verifies Google ID Token or Access Token, auto-provisions user if new, issues JWT pair.
-         */
-        post: operations["google_auth_api_v1_auth_google_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Update Learner Memory */
+    patch: operations['update_learner_memory_api_v1_account_learner_memory__memory_id__patch'];
+    trace?: never;
+  };
+  '/api/v1/account/learner-memory/reset': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/auth/register": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * User Registration (Direct fallback)
-         * @description Direct registration fallback without OTP (UC-AUTH-01).
-         */
-        post: operations["register_api_v1_auth_register_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Reset Learner Memory */
+    post: operations['reset_learner_memory_api_v1_account_learner_memory_reset_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/availabilities/me': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/auth/register/request-otp": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Request OTP for User Registration
-         * @description Step 1: Check duplicate, generate OTP, store in Redis, dispatch email.
-         */
-        post: operations["request_register_otp_api_v1_auth_register_request_otp_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Get current learner's availability profile */
+    get: operations['get_my_availability_api_v1_availabilities_me_get'];
+    /** Update current learner's availability profile */
+    put: operations['update_my_availability_api_v1_availabilities_me_put'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/auth/login': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/auth/register/resend-otp": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Resend OTP for User Registration
-         * @description Step 1b: Resend fresh OTP using existing Redis registration session.
-         */
-        post: operations["resend_register_otp_api_v1_auth_register_resend_otp_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /**
+     * User Login (UC-AUTH-02)
+     * @description Authenticates credentials using Argon2id, generates HS256 JWT & 7-day Refresh Token.
+     */
+    post: operations['login_api_v1_auth_login_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/auth/google': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/auth/register/verify-otp": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Verify OTP and Complete Registration
-         * @description Step 2: Verify OTP from Redis, write to PostgreSQL, and return JWT tokens.
-         */
-        post: operations["verify_register_otp_api_v1_auth_register_verify_otp_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /**
+     * Google OAuth 2.0 Single Sign-On (SSO)
+     * @description Verifies Google ID Token or Access Token, auto-provisions user if new, issues JWT pair.
+     */
+    post: operations['google_auth_api_v1_auth_google_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/auth/register': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/auth/password-reset/request-otp": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Request Password Reset OTP
-         * @description Step 1: Check user, generate OTP, store in Redis, dispatch email.
-         */
-        post: operations["request_password_reset_otp_api_v1_auth_password_reset_request_otp_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /**
+     * User Registration (Direct fallback)
+     * @description Direct registration fallback without OTP (UC-AUTH-01).
+     */
+    post: operations['register_api_v1_auth_register_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/auth/register/request-otp': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/auth/password-reset/verify-otp": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Verify OTP for Password Reset (Step 2)
-         * @description Step 2: Verify reset OTP from Redis, consume it, and issue temporary reset_token.
-         */
-        post: operations["verify_password_reset_otp_api_v1_auth_password_reset_verify_otp_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /**
+     * Request OTP for User Registration
+     * @description Step 1: Check duplicate, generate OTP, store in Redis, dispatch email.
+     */
+    post: operations['request_register_otp_api_v1_auth_register_request_otp_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/auth/register/resend-otp': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/auth/password-reset/confirm": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Confirm Password Reset (Step 3)
-         * @description Step 3: Verify reset_token (or direct OTP), update password_hash in PostgreSQL with Argon2id.
-         */
-        post: operations["confirm_password_reset_api_v1_auth_password_reset_confirm_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /**
+     * Resend OTP for User Registration
+     * @description Step 1b: Resend fresh OTP using existing Redis registration session.
+     */
+    post: operations['resend_register_otp_api_v1_auth_register_resend_otp_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/auth/register/verify-otp': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/auth/refresh": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Refresh Access Token (ADR-008 RTR)
-         * @description Consumes existing refresh token, rotates session, and issues fresh JWT access/refresh token pair.
-         */
-        post: operations["refresh_token_api_v1_auth_refresh_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /**
+     * Verify OTP and Complete Registration
+     * @description Step 2: Verify OTP from Redis, write to PostgreSQL, and return JWT tokens.
+     */
+    post: operations['verify_register_otp_api_v1_auth_register_verify_otp_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/auth/password-reset/request-otp': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/auth/me": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Current Authenticated User
-         * @description Retrieves profile information for currently authenticated learner.
-         */
-        get: operations["get_current_user_profile_api_v1_auth_me_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /**
+     * Request Password Reset OTP
+     * @description Step 1: Check user, generate OTP, store in Redis, dispatch email.
+     */
+    post: operations['request_password_reset_otp_api_v1_auth_password_reset_request_otp_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/auth/password-reset/verify-otp': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/auth/logout": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * User Logout
-         * @description Clears authentication cookies and invalidates session.
-         */
-        post: operations["logout_api_v1_auth_logout_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /**
+     * Verify OTP for Password Reset (Step 2)
+     * @description Step 2: Verify reset OTP from Redis, consume it, and issue temporary reset_token.
+     */
+    post: operations['verify_password_reset_otp_api_v1_auth_password_reset_verify_otp_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/auth/password-reset/confirm': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/planning/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Planning Context Status
-         * @description Bounded Context 2 health/status endpoint (UC-07..UC-10, UC-12).
-         */
-        get: operations["get_planning_context_status_api_v1_planning_status_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /**
+     * Confirm Password Reset (Step 3)
+     * @description Step 3: Verify reset_token (or direct OTP), update password_hash in PostgreSQL with Argon2id.
+     */
+    post: operations['confirm_password_reset_api_v1_auth_password_reset_confirm_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/auth/refresh': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/roadmaps/jobs/{job_id}/stream": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Stream 2-Stage SSE AI generation events with Last-Event-ID replay (ADR-005) */
-        get: operations["stream_ai_generation_job_api_v1_roadmaps_jobs__job_id__stream_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /**
+     * Refresh Access Token (ADR-008 RTR)
+     * @description Consumes existing refresh token, rotates session, and issues fresh JWT access/refresh token pair.
+     */
+    post: operations['refresh_token_api_v1_auth_refresh_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/auth/me': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/roadmaps": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List learner's roadmaps with optional status filter (UC-10) */
-        get: operations["list_roadmaps_api_v1_roadmaps_get"];
-        put?: never;
-        /** Create a Learner Goal and an INITIALIZED Roadmap (UC-07 / OS-02) */
-        post: operations["create_roadmap_api_v1_roadmaps_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /**
+     * Get Current Authenticated User
+     * @description Retrieves profile information for currently authenticated learner.
+     */
+    get: operations['get_current_user_profile_api_v1_auth_me_get'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/auth/logout': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/roadmaps/goals/{goal_id}/clarify-questions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Generate 2-3 diagnostic clarification questions for a goal (FR-GOAL-002) */
-        post: operations["generate_clarification_questions_api_v1_roadmaps_goals__goal_id__clarify_questions_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /**
+     * User Logout
+     * @description Clears authentication cookies and invalidates session.
+     */
+    post: operations['logout_api_v1_auth_logout_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/account/calendar/google/authorize': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/roadmaps/goals/{goal_id}/clarify-answers": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Submit answers to clarification questions and update goal context (FR-GOAL-002) */
-        post: operations["submit_clarification_answers_api_v1_roadmaps_goals__goal_id__clarify_answers_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Generate Google Calendar OAuth consent URL */
+    post: operations['initiate_google_calendar_auth_api_v1_account_calendar_google_authorize_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/account/calendar/google/callback': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/roadmaps/goals/{goal_id}/clarify-skip": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Explicitly skip goal clarification survey and record unresolved assumptions (FR-GOAL-002) */
-        post: operations["skip_clarification_questions_api_v1_roadmaps_goals__goal_id__clarify_skip_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Handle Google OAuth redirection callback (GET) */
+    get: operations['handle_google_calendar_callback_get_api_v1_account_calendar_google_callback_get'];
+    put?: never;
+    /** Handle Google OAuth redirection callback (POST from SPA) */
+    post: operations['handle_google_calendar_callback_post_api_v1_account_calendar_google_callback_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/account/calendar/status': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/roadmaps/{roadmap_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get full Roadmap detail including Goal, Milestones, OfficialSchedule, Tasks & Draft Proposal (UC-10) */
-        get: operations["get_roadmap_detail_api_v1_roadmaps__roadmap_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Update Roadmap metadata or status (UC-10) */
-        patch: operations["update_roadmap_api_v1_roadmaps__roadmap_id__patch"];
-        trace?: never;
+    /** Get current external calendar integration status */
+    get: operations['get_calendar_status_api_v1_account_calendar_status_get'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/account/calendar/disconnect': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/roadmaps/{roadmap_id}/archive": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Archive a Roadmap into immutable ARCHIVED state (UC-10) */
-        post: operations["archive_roadmap_api_v1_roadmaps__roadmap_id__archive_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Disconnect external calendar and stop push notifications */
+    post: operations['disconnect_calendar_api_v1_account_calendar_disconnect_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/calendar/webhooks/google': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/roadmaps/{roadmap_id}/milestones/generate-jobs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Stage 1: Reserve AI Quota & initiate Level-1 Milestone Generation SSE job (UC-07) */
-        post: operations["initiate_milestone_generation_job_api_v1_roadmaps__roadmap_id__milestones_generate_jobs_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /**
+     * Receive Google Calendar push notifications via webhook
+     * @description Handle incoming Google Calendar push notifications with strict 3-header verification.
+     */
+    post: operations['handle_google_calendar_webhook_api_v1_calendar_webhooks_google_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/planning/status': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/roadmaps/{roadmap_id}/milestones": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Add, edit, delete, and reorder Milestones (1..N) for a Roadmap (UC-07) */
-        put: operations["update_milestones_api_v1_roadmaps__roadmap_id__milestones_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /**
+     * Get Planning Context Status
+     * @description Bounded Context 2 health/status endpoint (UC-07..UC-10, UC-12).
+     */
+    get: operations['get_planning_context_status_api_v1_planning_status_get'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/planning/goals/{goal_id}/knowledge-sources/files': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/roadmaps/{roadmap_id}/milestones/approve": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Approve Level-1 Milestones & unlock Level-2 Schedule Proposal generation (UC-07 / FR-PLAN-001) */
-        post: operations["approve_milestones_api_v1_roadmaps__roadmap_id__milestones_approve_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Upload Knowledge Source File */
+    post: operations['upload_knowledge_source_file_api_v1_planning_goals__goal_id__knowledge_sources_files_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/planning/goals/{goal_id}/knowledge-sources/urls': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/roadmaps/{roadmap_id}/proposals/generate-jobs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Stage 1: Reserve AI Quota & initiate Level-2 ScheduleProposal SSE job (UC-08) */
-        post: operations["initiate_schedule_proposal_generation_job_api_v1_roadmaps__roadmap_id__proposals_generate_jobs_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Add Knowledge Source Url */
+    post: operations['add_knowledge_source_url_api_v1_planning_goals__goal_id__knowledge_sources_urls_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/planning/goals/{goal_id}/knowledge-sources': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/roadmaps/{roadmap_id}/proposals/current": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get active DRAFT ScheduleProposal with warnings and diff metadata (UC-08) */
-        get: operations["get_current_schedule_proposal_api_v1_roadmaps__roadmap_id__proposals_current_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** List Knowledge Sources */
+    get: operations['list_knowledge_sources_api_v1_planning_goals__goal_id__knowledge_sources_get'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/planning/knowledge-sources/{source_id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/roadmaps/{roadmap_id}/proposals/{proposal_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Edit tasks & dependencies on a DRAFT ScheduleProposal and run UC-12 validation ([15, 240]m) */
-        put: operations["update_schedule_proposal_api_v1_roadmaps__roadmap_id__proposals__proposal_id__put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Get Knowledge Source */
+    get: operations['get_knowledge_source_api_v1_planning_knowledge_sources__source_id__get'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/roadmaps/jobs/{job_id}/stream': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/roadmaps/{roadmap_id}/proposals/manual": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Save manual roadmap milestones & ScheduleProposal(DRAFT) without AI quota (UC-09) */
-        post: operations["save_manual_roadmap_plan_api_v1_roadmaps__roadmap_id__proposals_manual_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** Stream 2-Stage SSE AI generation events with Last-Event-ID replay (ADR-005) */
+    get: operations['stream_ai_generation_job_api_v1_roadmaps_jobs__job_id__stream_get'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/roadmaps': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/roadmaps/{roadmap_id}/proposals/{proposal_id}/apply": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Apply verified ScheduleProposal as OfficialSchedule with OS-03 Merge & Soft Overflow gate (UC-12) */
-        post: operations["apply_schedule_proposal_api_v1_roadmaps__roadmap_id__proposals__proposal_id__apply_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    /** List learner's roadmaps with optional status filter (UC-10) */
+    get: operations['list_roadmaps_api_v1_roadmaps_get'];
+    put?: never;
+    /** Create a Learner Goal and an INITIALIZED Roadmap (UC-07 / OS-02) */
+    post: operations['create_roadmap_api_v1_roadmaps_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/roadmaps/goals/{goal_id}/clarify-questions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/execution/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Execution Context Status
-         * @description Bounded Context 3 health/status endpoint (UC-10..UC-13).
-         */
-        get: operations["get_execution_context_status_api_v1_execution_status_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Generate 2-3 diagnostic clarification questions for a goal (FR-GOAL-002) */
+    post: operations['generate_clarification_questions_api_v1_roadmaps_goals__goal_id__clarify_questions_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/roadmaps/goals/{goal_id}/clarify-answers': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/v1/evaluation/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Evaluation Context Status
-         * @description Bounded Context 4 health/status endpoint (UC-14..UC-17, UC-19).
-         */
-        get: operations["get_evaluation_context_status_api_v1_evaluation_status_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Submit answers to clarification questions and update goal context (FR-GOAL-002) */
+    post: operations['submit_clarification_answers_api_v1_roadmaps_goals__goal_id__clarify_answers_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/roadmaps/goals/{goal_id}/clarify-skip': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    "/api/health": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Health Check */
-        get: operations["health_check_api_health_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
+    get?: never;
+    put?: never;
+    /** Explicitly skip goal clarification survey and record unresolved assumptions (FR-GOAL-002) */
+    post: operations['skip_clarification_questions_api_v1_roadmaps_goals__goal_id__clarify_skip_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/roadmaps/{roadmap_id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
+    /** Get full Roadmap detail including Goal, Milestones, OfficialSchedule, Tasks & Draft Proposal (UC-10) */
+    get: operations['get_roadmap_detail_api_v1_roadmaps__roadmap_id__get'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /** Update Roadmap metadata or status (UC-10) */
+    patch: operations['update_roadmap_api_v1_roadmaps__roadmap_id__patch'];
+    trace?: never;
+  };
+  '/api/v1/roadmaps/{roadmap_id}/archive': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Archive a Roadmap into immutable ARCHIVED state (UC-10) */
+    post: operations['archive_roadmap_api_v1_roadmaps__roadmap_id__archive_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/roadmaps/{roadmap_id}/milestones/generate-jobs': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Stage 1: Reserve AI Quota & initiate Level-1 Milestone Generation SSE job (UC-07) */
+    post: operations['initiate_milestone_generation_job_api_v1_roadmaps__roadmap_id__milestones_generate_jobs_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/roadmaps/{roadmap_id}/milestones': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** Add, edit, delete, and reorder Milestones (1..N) for a Roadmap (UC-07) */
+    put: operations['update_milestones_api_v1_roadmaps__roadmap_id__milestones_put'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/roadmaps/{roadmap_id}/milestones/approve': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Approve Level-1 Milestones & unlock Level-2 Schedule Proposal generation (UC-07 / FR-PLAN-001) */
+    post: operations['approve_milestones_api_v1_roadmaps__roadmap_id__milestones_approve_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/roadmaps/{roadmap_id}/proposals/generate-jobs': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Stage 1: Reserve AI Quota & initiate Level-2 ScheduleProposal SSE job (UC-08) */
+    post: operations['initiate_schedule_proposal_generation_job_api_v1_roadmaps__roadmap_id__proposals_generate_jobs_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/roadmaps/{roadmap_id}/proposals/current': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Get active DRAFT ScheduleProposal with warnings and diff metadata (UC-08) */
+    get: operations['get_current_schedule_proposal_api_v1_roadmaps__roadmap_id__proposals_current_get'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/roadmaps/{roadmap_id}/proposals/{proposal_id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /** Edit tasks & dependencies on a DRAFT ScheduleProposal and run UC-12 validation ([15, 240]m) */
+    put: operations['update_schedule_proposal_api_v1_roadmaps__roadmap_id__proposals__proposal_id__put'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/roadmaps/{roadmap_id}/proposals/manual': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Save manual roadmap milestones & ScheduleProposal(DRAFT) without AI quota (UC-09) */
+    post: operations['save_manual_roadmap_plan_api_v1_roadmaps__roadmap_id__proposals_manual_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/roadmaps/{roadmap_id}/proposals/{proposal_id}/apply': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Apply verified ScheduleProposal as OfficialSchedule with OS-03 Merge & Soft Overflow gate (UC-12) */
+    post: operations['apply_schedule_proposal_api_v1_roadmaps__roadmap_id__proposals__proposal_id__apply_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/execution/status': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Execution Context Status
+     * @description Bounded Context 3 health/status endpoint (UC-10..UC-13).
+     */
+    get: operations['get_execution_context_status_api_v1_execution_status_get'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/evaluation/status': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Get Evaluation Context Status
+     * @description Bounded Context 4 health/status endpoint (UC-14..UC-17, UC-19).
+     */
+    get: operations['get_evaluation_context_status_api_v1_evaluation_status_get'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/evaluation/milestones/{milestone_id}/proofs/generate-jobs': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Generate Milestone Proof */
+    post: operations['generate_milestone_proof_api_v1_evaluation_milestones__milestone_id__proofs_generate_jobs_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/evaluation/milestones/{milestone_id}/proofs/{proof_id}/submit': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Submit Milestone Proof */
+    post: operations['submit_milestone_proof_api_v1_evaluation_milestones__milestone_id__proofs__proof_id__submit_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/evaluation/weekly-reviews/generate-jobs': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Generate Weekly Review */
+    post: operations['generate_weekly_review_api_v1_evaluation_weekly_reviews_generate_jobs_post'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/evaluation/weekly-reviews/latest': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Latest Weekly Review */
+    get: operations['latest_weekly_review_api_v1_evaluation_weekly_reviews_latest_get'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/health': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Health Check */
+    get: operations['health_check_api_health_get'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 }
 export type webhooks = Record<string, never>;
 export interface components {
-    schemas: {
-        /** AllowedWindowDTO */
-        AllowedWindowDTO: {
-            /**
-             * Start
-             * @default 07:00
-             */
-            start: string;
-            /**
-             * End
-             * @default 23:00
-             */
-            end: string;
-        };
-        /** ApplyScheduleProposalRequest */
-        ApplyScheduleProposalRequest: {
-            /**
-             * Confirm Soft Overflow
-             * @default false
-             */
-            confirm_soft_overflow: boolean;
-        };
-        /** ApplyScheduleProposalResponse */
-        ApplyScheduleProposalResponse: {
-            /**
-             * Roadmap Id
-             * Format: uuid
-             */
-            roadmap_id: string;
-            /** Roadmap Status */
-            roadmap_status: string;
-            /**
-             * Official Schedule Id
-             * Format: uuid
-             */
-            official_schedule_id: string;
-            /**
-             * Proposal Id
-             * Format: uuid
-             */
-            proposal_id: string;
-            /** Proposal Status */
-            proposal_status: string;
-            /** Total Sessions */
-            total_sessions: number;
-            /** Total Planned Minutes */
-            total_planned_minutes: number;
-            /** Preserved Completed Tasks Count */
-            preserved_completed_tasks_count: number;
-            /** Replaced Tasks Count */
-            replaced_tasks_count: number;
-            /** Inserted Tasks Count */
-            inserted_tasks_count: number;
-            /** Affected Tasks Count */
-            affected_tasks_count: number;
-            /** Total Shifted Minutes */
-            total_shifted_minutes: number;
-            /** Trigger Type */
-            trigger_type: string;
-            official_schedule: components["schemas"]["OfficialScheduleResponse"];
-        };
-        /** AvailabilityResponseDTO */
-        AvailabilityResponseDTO: {
-            /** Id */
-            id?: string | null;
-            /** User Id */
-            user_id: string;
-            /** Mode */
-            mode: string;
-            /** Calendar Integration Mode */
-            calendar_integration_mode: string;
-            /** Min Session Minutes */
-            min_session_minutes: number;
-            weekly_schedule: components["schemas"]["WeeklyScheduleDTO"];
-            /** Total Weekly Hours */
-            total_weekly_hours: number;
-            /** Updated At */
-            updated_at: string;
-        };
-        /** ClarificationAnswerItem */
-        ClarificationAnswerItem: {
-            /** Question Id */
-            question_id: string;
-            /** Question Text */
-            question_text?: string | null;
-            /** Answer */
-            answer: string;
-        };
-        /** ClarificationQuestion */
-        ClarificationQuestion: {
-            /**
-             * Question Id
-             * @default q1
-             */
-            question_id: string;
-            /**
-             * Id
-             * @default q1
-             */
-            id: string;
-            /**
-             * Text
-             * @default
-             */
-            text: string;
-            /**
-             * Question
-             * @default
-             */
-            question: string;
-            /**
-             * Placeholder
-             * @default Nhập câu trả lời của bạn...
-             */
-            placeholder: string;
-            /**
-             * Question Type
-             * @default single_choice
-             */
-            question_type: string;
-            /** Options */
-            options?: string[];
-            /**
-             * Question Purpose
-             * @default Làm rõ bối cảnh và nhu cầu cá nhân hóa lộ trình học tập.
-             */
-            question_purpose: string;
-            /**
-             * Expected Answer Format
-             * @default short_text
-             */
-            expected_answer_format: string;
-            /**
-             * Diagnostic Dimension
-             * @default KNOWLEDGE_BASELINE
-             */
-            diagnostic_dimension: string;
-        };
-        /** ClarificationQuestionsResponse */
-        ClarificationQuestionsResponse: {
-            /** Questions */
-            questions?: components["schemas"]["ClarificationQuestion"][];
-            /**
-             * Questions Version
-             * @default v1.0
-             */
-            questions_version: string;
-        };
-        /** ConfirmPasswordResetSchema */
-        ConfirmPasswordResetSchema: {
-            /**
-             * Email
-             * Format: email
-             */
-            email: string;
-            /** New Password */
-            new_password: string;
-            /** Reset Token */
-            reset_token?: string | null;
-            /** Otp Code */
-            otp_code?: string | null;
-        };
-        /** ConstraintViolationSchema */
-        ConstraintViolationSchema: {
-            /** Task Index */
-            task_index?: number | null;
-            /** Field */
-            field: string;
-            /** Rule Code */
-            rule_code: string;
-            /** Expected Bound */
-            expected_bound: string;
-            /** Actual Value */
-            actual_value: string;
-            /** Suggested Fix */
-            suggested_fix: string;
-        };
-        /** CreateManualRoadmapPlanRequest */
-        CreateManualRoadmapPlanRequest: {
-            /** Milestones */
-            milestones?: components["schemas"]["MilestoneUpsertItemSchema"][] | null;
-            /** Tasks */
-            tasks: components["schemas"]["ProposedTaskItemSchema"][];
-            /** Dependencies */
-            dependencies?: components["schemas"]["ProposedDependencyItemSchema"][];
-        };
-        /** CreateRoadmapRequest */
-        CreateRoadmapRequest: {
-            /** Title */
-            title: string;
-            /** Description */
-            description?: string | null;
-            /** Goal Title */
-            goal_title?: string | null;
-            /** Goal Description */
-            goal_description?: string | null;
-            /**
-             * Prior Knowledge Level
-             * @default BEGINNER
-             */
-            prior_knowledge_level: string;
-            /** Start Date */
-            start_date?: string | null;
-            /** Target Date */
-            target_date?: string | null;
-        };
-        /** DayScheduleDTO */
-        DayScheduleDTO: {
-            /** Enabled */
-            enabled: boolean;
-            /** Quota Hours */
-            quota_hours: number;
-            /** Time Slots */
-            time_slots?: components["schemas"]["TimeSlotDTO"][];
-            allowed_window?: components["schemas"]["AllowedWindowDTO"];
-            /**
-             * Preferred Period
-             * @default ANY
-             */
-            preferred_period: string;
-            /**
-             * Min Session Minutes
-             * @default 30
-             */
-            min_session_minutes: number;
-        };
-        /** GoalResponse */
-        GoalResponse: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /**
-             * User Id
-             * Format: uuid
-             */
-            user_id: string;
-            /** Title */
-            title: string;
-            /** Raw Description */
-            raw_description?: string | null;
-            /** Target Date */
-            target_date?: string | null;
-            /** Status */
-            status: string;
-            /**
-             * Prior Knowledge Level
-             * @default BEGINNER
-             */
-            prior_knowledge_level: string;
-            /** Clarification Context */
-            clarification_context?: string | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-        };
-        /** GoogleAuthRequestSchema */
-        GoogleAuthRequestSchema: {
-            /** Id Token */
-            id_token?: string | null;
-            /** Credential */
-            credential?: string | null;
-            /** Access Token */
-            access_token?: string | null;
-        };
-        /** HTTPValidationError */
-        HTTPValidationError: {
-            /** Detail */
-            detail?: components["schemas"]["ValidationError"][];
-        };
-        /** LearningResourceSchema */
-        LearningResourceSchema: {
-            /** Title */
-            title: string;
-            /** Url */
-            url: string;
-            /**
-             * Type
-             * @default DOCS
-             */
-            type: string;
-            /** Description */
-            description?: string | null;
-        };
-        /** LoginRequestSchema */
-        LoginRequestSchema: {
-            /**
-             * Email
-             * Format: email
-             */
-            email: string;
-            /** Password */
-            password: string;
-            /**
-             * Remember Me
-             * @default true
-             */
-            remember_me: boolean;
-        };
-        /** LoginResponseSchema */
-        LoginResponseSchema: {
-            /** Access Token */
-            access_token: string;
-            /**
-             * Token Type
-             * @default bearer
-             */
-            token_type: string;
-            /**
-             * Expires In
-             * @default 900
-             */
-            expires_in: number;
-            user: components["schemas"]["UserProfileSchema"];
-        };
-        /** MessageResponseSchema */
-        MessageResponseSchema: {
-            /** Message */
-            message: string;
-        };
-        /** MilestoneListResponse */
-        MilestoneListResponse: {
-            /**
-             * Roadmap Id
-             * Format: uuid
-             */
-            roadmap_id: string;
-            /** Milestones */
-            milestones: components["schemas"]["MilestoneResponse"][];
-        };
-        /** MilestoneResponse */
-        MilestoneResponse: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /**
-             * Roadmap Id
-             * Format: uuid
-             */
-            roadmap_id: string;
-            /** Sequence Order */
-            sequence_order: number;
-            /** Title */
-            title: string;
-            /** Description */
-            description?: string | null;
-            /** Status */
-            status: string;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-        };
-        /** MilestoneUpsertItemSchema */
-        MilestoneUpsertItemSchema: {
-            /** Id */
-            id?: string | null;
-            /** Milestone Id */
-            milestone_id?: string | null;
-            /**
-             * Sequence Order
-             * @default 1
-             */
-            sequence_order: number;
-            /** Title */
-            title: string;
-            /** Description */
-            description?: string | null;
-        };
-        /** OfficialScheduleResponse */
-        OfficialScheduleResponse: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /**
-             * Roadmap Id
-             * Format: uuid
-             */
-            roadmap_id: string;
-            /** Total Sessions */
-            total_sessions: number;
-            /** Total Planned Minutes */
-            total_planned_minutes: number;
-            /**
-             * Activated At
-             * Format: date-time
-             */
-            activated_at: string;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-        };
-        /** ProposedDependencyItemSchema */
-        ProposedDependencyItemSchema: {
-            /** Predecessor Id */
-            predecessor_id: string;
-            /** Successor Id */
-            successor_id: string;
-            /**
-             * Is Mandatory
-             * @default true
-             */
-            is_mandatory: boolean;
-        };
-        /** ProposedTaskItemSchema */
-        ProposedTaskItemSchema: {
-            /** Task Id */
-            task_id?: string | null;
-            /** Milestone Id */
-            milestone_id?: string | null;
-            /** Milestone Sequence Order */
-            milestone_sequence_order?: number | null;
-            /** Title */
-            title: string;
-            /** Description */
-            description?: string | null;
-            /**
-             * Task Type
-             * @default PRACTICE
-             */
-            task_type: string | null;
-            /** Learning Objective */
-            learning_objective?: string | null;
-            /** Completion Criteria */
-            completion_criteria?: string | null;
-            /** Learning Resources */
-            learning_resources?: components["schemas"]["LearningResourceSchema"][];
-            /** Concept Ids */
-            concept_ids?: string[];
-            /**
-             * Estimated Minutes
-             * @default 45
-             */
-            estimated_minutes: number;
-            /** Scheduled Date */
-            scheduled_date?: string | null;
-            /** Scheduled Start */
-            scheduled_start?: string | null;
-            /** Scheduled End */
-            scheduled_end?: string | null;
-            /** Prerequisite Ids */
-            prerequisite_ids?: (string)[];
-        };
-        /** RefreshTokenRequestSchema */
-        RefreshTokenRequestSchema: {
-            /** Refresh Token */
-            refresh_token?: string | null;
-        };
-        /** RegisterRequestSchema */
-        RegisterRequestSchema: {
-            /** Full Name */
-            full_name: string;
-            /**
-             * Email
-             * Format: email
-             */
-            email: string;
-            /** Password */
-            password: string;
-        };
-        /** RequestPasswordResetOtpSchema */
-        RequestPasswordResetOtpSchema: {
-            /**
-             * Email
-             * Format: email
-             */
-            email: string;
-        };
-        /** ResendRegisterOtpSchema */
-        ResendRegisterOtpSchema: {
-            /**
-             * Email
-             * Format: email
-             */
-            email: string;
-        };
-        /** RoadmapDetailResponse */
-        RoadmapDetailResponse: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /**
-             * User Id
-             * Format: uuid
-             */
-            user_id: string;
-            /**
-             * Goal Id
-             * Format: uuid
-             */
-            goal_id: string;
-            /** Title */
-            title: string;
-            /** Description */
-            description?: string | null;
-            /** Status */
-            status: string;
-            /** Start Date */
-            start_date?: string | null;
-            /** Target Date */
-            target_date?: string | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-            goal?: components["schemas"]["GoalResponse"] | null;
-            /** Milestones */
-            milestones?: components["schemas"]["MilestoneResponse"][];
-            official_schedule?: components["schemas"]["OfficialScheduleResponse"] | null;
-            /** Scheduled Tasks */
-            scheduled_tasks?: components["schemas"]["ScheduledTaskResponse"][];
-            current_draft_proposal?: components["schemas"]["ScheduleProposalResponse"] | null;
-        };
-        /** RoadmapResponse */
-        RoadmapResponse: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /**
-             * User Id
-             * Format: uuid
-             */
-            user_id: string;
-            /**
-             * Goal Id
-             * Format: uuid
-             */
-            goal_id: string;
-            /** Title */
-            title: string;
-            /** Description */
-            description?: string | null;
-            /** Status */
-            status: string;
-            /** Start Date */
-            start_date?: string | null;
-            /** Target Date */
-            target_date?: string | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-            goal?: components["schemas"]["GoalResponse"] | null;
-        };
-        /** ScheduleProposalResponse */
-        ScheduleProposalResponse: {
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /**
-             * Roadmap Id
-             * Format: uuid
-             */
-            roadmap_id: string;
-            /**
-             * User Id
-             * Format: uuid
-             */
-            user_id: string;
-            /** Status */
-            status: string;
-            /**
-             * Is Valid
-             * @default true
-             */
-            is_valid: boolean;
-            /**
-             * Has Soft Overflow
-             * @default false
-             */
-            has_soft_overflow: boolean;
-            /** Tasks */
-            tasks?: {
-                [key: string]: unknown;
-            }[];
-            /** Dependencies */
-            dependencies?: {
-                [key: string]: unknown;
-            }[];
-            /** Violations */
-            violations?: components["schemas"]["ConstraintViolationSchema"][];
-            /** Soft Overflow Warnings */
-            soft_overflow_warnings?: components["schemas"]["SoftOverflowWarningSchema"][];
-            /** Advisory Warnings */
-            advisory_warnings?: string[];
-            /** Diff Summary */
-            diff_summary?: {
-                [key: string]: unknown;
-            };
-            /** Proposal Data */
-            proposal_data?: {
-                [key: string]: unknown;
-            };
-            /** Applied At */
-            applied_at?: string | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-        };
-        /** ScheduledTaskResponse */
-        ScheduledTaskResponse: {
-            /**
-             * Task Id
-             * Format: uuid
-             */
-            task_id: string;
-            /**
-             * Roadmap Id
-             * Format: uuid
-             */
-            roadmap_id: string;
-            /**
-             * Milestone Id
-             * Format: uuid
-             */
-            milestone_id: string;
-            /** Title */
-            title: string;
-            /** Estimated Minutes */
-            estimated_minutes: number;
-            /** Scheduled Date */
-            scheduled_date?: string | null;
-            /** Scheduled Start */
-            scheduled_start?: string | null;
-            /** Scheduled End */
-            scheduled_end?: string | null;
-            /** Status */
-            status: string;
-            /** Roadmap Target Date */
-            roadmap_target_date?: string | null;
-        };
-        /** SkipClarificationRequest */
-        SkipClarificationRequest: {
-            /** Skipped Question Ids */
-            skipped_question_ids?: string[];
-        };
-        /** SoftOverflowWarningSchema */
-        SoftOverflowWarningSchema: {
-            /** Task Index */
-            task_index: number;
-            /** Task Title */
-            task_title: string;
-            /** Scheduled Date */
-            scheduled_date: string;
-            /** Overflow Minutes */
-            overflow_minutes: number;
-            /** Message */
-            message: string;
-        };
-        /** SseJobTicketResponse */
-        SseJobTicketResponse: {
-            /**
-             * Job Id
-             * Format: uuid
-             */
-            job_id: string;
-            /**
-             * Reservation Id
-             * Format: uuid
-             */
-            reservation_id: string;
-            /**
-             * Roadmap Id
-             * Format: uuid
-             */
-            roadmap_id: string;
-            /** Job Type */
-            job_type: string;
-            /** Status */
-            status: string;
-            /** Stream Url */
-            stream_url: string;
-            /** Jobid */
-            jobId: string;
-            /** Reservationid */
-            reservationId: string;
-            /** Streamurl */
-            streamUrl: string;
-        };
-        /** SubmitClarificationAnswersRequest */
-        SubmitClarificationAnswersRequest: {
-            /** Answers */
-            answers?: components["schemas"]["ClarificationAnswerItem"][];
-            /**
-             * Skipped
-             * @default false
-             */
-            skipped: boolean;
-            /** Skipped Question Ids */
-            skipped_question_ids?: string[];
-            /** Total Questions Count */
-            total_questions_count?: number | null;
-        };
-        /** SubmitClarificationAnswersResponse */
-        SubmitClarificationAnswersResponse: {
-            /**
-             * Goal Id
-             * Format: uuid
-             */
-            goal_id: string;
-            /**
-             * Status
-             * @default ANSWERED
-             */
-            status: string;
-            /** Clarification Context */
-            clarification_context: string;
-            /** Unresolved Assumptions */
-            unresolved_assumptions?: string[];
-            /**
-             * Message
-             * @default Clarification context updated successfully
-             */
-            message: string;
-        };
-        /** TimeSlotDTO */
-        TimeSlotDTO: {
-            /** Start */
-            start: string;
-            /** End */
-            end: string;
-            /**
-             * End Day Offset
-             * @default 0
-             */
-            end_day_offset: number;
-        };
-        /** UpdateAvailabilityRequestDTO */
-        UpdateAvailabilityRequestDTO: {
-            /**
-             * Mode
-             * @default MODE_A
-             */
-            mode: string;
-            /**
-             * Calendar Integration Mode
-             * @default NONE
-             */
-            calendar_integration_mode: string;
-            /**
-             * Min Session Minutes
-             * @default 30
-             */
-            min_session_minutes: number;
-            weekly_schedule: components["schemas"]["WeeklyScheduleDTO"];
-        };
-        /** UpdateMilestonesRequest */
-        UpdateMilestonesRequest: {
-            /** Milestones */
-            milestones: components["schemas"]["MilestoneUpsertItemSchema"][];
-        };
-        /** UpdateRoadmapRequest */
-        UpdateRoadmapRequest: {
-            /** Title */
-            title?: string | null;
-            /** Description */
-            description?: string | null;
-            /** Start Date */
-            start_date?: string | null;
-            /** Target Date */
-            target_date?: string | null;
-            /** Status */
-            status?: string | null;
-        };
-        /** UpdateScheduleProposalRequest */
-        UpdateScheduleProposalRequest: {
-            /** Tasks */
-            tasks: components["schemas"]["ProposedTaskItemSchema"][];
-            /** Dependencies */
-            dependencies?: components["schemas"]["ProposedDependencyItemSchema"][];
-            /**
-             * Reject Invalid
-             * @default false
-             */
-            reject_invalid: boolean;
-        };
-        /** UserProfileSchema */
-        UserProfileSchema: {
-            /** Id */
-            id: string;
-            /** Email */
-            email: string;
-            /** Full Name */
-            full_name: string;
-            /** Role */
-            role: string;
-            /** Tier */
-            tier: string;
-            /** Created At */
-            created_at: string;
-        };
-        /** ValidationError */
-        ValidationError: {
-            /** Location */
-            loc: (string | number)[];
-            /** Message */
-            msg: string;
-            /** Error Type */
-            type: string;
-            /** Input */
-            input?: unknown;
-            /** Context */
-            ctx?: Record<string, never>;
-        };
-        /** VerifyPasswordResetOtpResponseSchema */
-        VerifyPasswordResetOtpResponseSchema: {
-            /** Message */
-            message: string;
-            /** Reset Token */
-            reset_token: string;
-        };
-        /** VerifyPasswordResetOtpSchema */
-        VerifyPasswordResetOtpSchema: {
-            /**
-             * Email
-             * Format: email
-             */
-            email: string;
-            /** Otp Code */
-            otp_code: string;
-        };
-        /** VerifyRegisterOtpSchema */
-        VerifyRegisterOtpSchema: {
-            /**
-             * Email
-             * Format: email
-             */
-            email: string;
-            /** Otp Code */
-            otp_code: string;
-        };
-        /** WeeklyScheduleDTO */
-        WeeklyScheduleDTO: {
-            monday: components["schemas"]["DayScheduleDTO"];
-            tuesday: components["schemas"]["DayScheduleDTO"];
-            wednesday: components["schemas"]["DayScheduleDTO"];
-            thursday: components["schemas"]["DayScheduleDTO"];
-            friday: components["schemas"]["DayScheduleDTO"];
-            saturday: components["schemas"]["DayScheduleDTO"];
-            sunday: components["schemas"]["DayScheduleDTO"];
-        };
+  schemas: {
+    /** AllowedWindowDTO */
+    AllowedWindowDTO: {
+      /**
+       * Start
+       * @default 07:00
+       */
+      start: string;
+      /**
+       * End
+       * @default 23:00
+       */
+      end: string;
     };
-    responses: never;
-    parameters: never;
-    requestBodies: never;
-    headers: never;
-    pathItems: never;
+    /** ApplyScheduleProposalRequest */
+    ApplyScheduleProposalRequest: {
+      /**
+       * Confirm Soft Overflow
+       * @default false
+       */
+      confirm_soft_overflow: boolean;
+    };
+    /** ApplyScheduleProposalResponse */
+    ApplyScheduleProposalResponse: {
+      /**
+       * Roadmap Id
+       * Format: uuid
+       */
+      roadmap_id: string;
+      /** Roadmap Status */
+      roadmap_status: string;
+      /**
+       * Official Schedule Id
+       * Format: uuid
+       */
+      official_schedule_id: string;
+      /**
+       * Proposal Id
+       * Format: uuid
+       */
+      proposal_id: string;
+      /** Proposal Status */
+      proposal_status: string;
+      /** Total Sessions */
+      total_sessions: number;
+      /** Total Planned Minutes */
+      total_planned_minutes: number;
+      /** Preserved Completed Tasks Count */
+      preserved_completed_tasks_count: number;
+      /** Replaced Tasks Count */
+      replaced_tasks_count: number;
+      /** Inserted Tasks Count */
+      inserted_tasks_count: number;
+      /** Affected Tasks Count */
+      affected_tasks_count: number;
+      /** Total Shifted Minutes */
+      total_shifted_minutes: number;
+      /** Trigger Type */
+      trigger_type: string;
+      official_schedule: components['schemas']['OfficialScheduleResponse'];
+    };
+    /** AvailabilityResponseDTO */
+    AvailabilityResponseDTO: {
+      /** Id */
+      id?: string | null;
+      /** User Id */
+      user_id: string;
+      /** Mode */
+      mode: string;
+      /** Calendar Integration Mode */
+      calendar_integration_mode: string;
+      /** Min Session Minutes */
+      min_session_minutes: number;
+      weekly_schedule: components['schemas']['WeeklyScheduleDTO'];
+      /** Total Weekly Hours */
+      total_weekly_hours: number;
+      /** Updated At */
+      updated_at: string;
+    };
+    /** Body_upload_knowledge_source_file_api_v1_planning_goals__goal_id__knowledge_sources_files_post */
+    Body_upload_knowledge_source_file_api_v1_planning_goals__goal_id__knowledge_sources_files_post: {
+      /** File */
+      file: string;
+      /**
+       * Title
+       * @default
+       */
+      title: string;
+    };
+    /**
+     * CalendarConnectionResponseDTO
+     * @description Public representation of external calendar connection status.
+     */
+    CalendarConnectionResponseDTO: {
+      /** Connected */
+      connected: boolean;
+      /**
+       * Provider
+       * @default GOOGLE
+       */
+      provider: string;
+      /**
+       * Sync Status
+       * @default REVOKED
+       */
+      sync_status: string;
+      /** External Calendar Id */
+      external_calendar_id?: string | null;
+      /** Source Calendars */
+      source_calendars?: string[];
+      /** Last Synced At */
+      last_synced_at?: string | null;
+      /** Error Detail */
+      error_detail?: string | null;
+    };
+    /**
+     * CalendarOAuthCallbackRequestDTO
+     * @description Callback payload received from Google OAuth redirection.
+     */
+    CalendarOAuthCallbackRequestDTO: {
+      /** Code */
+      code: string;
+      /** State */
+      state: string;
+    };
+    /** ClarificationAnswerItem */
+    ClarificationAnswerItem: {
+      /** Question Id */
+      question_id: string;
+      /** Question Text */
+      question_text?: string | null;
+      /** Answer */
+      answer: string;
+    };
+    /** ClarificationQuestion */
+    ClarificationQuestion: {
+      /**
+       * Question Id
+       * @description Mã định danh duy nhất của câu hỏi (q1, q2, q3).
+       * @default q1
+       */
+      question_id: string;
+      /**
+       * Id
+       * @description Mã định danh câu hỏi, đồng bộ với question_id.
+       * @default q1
+       */
+      id: string;
+      /**
+       * Text
+       * @description Nội dung câu hỏi ngắn gọn bằng tiếng Việt, đồng bộ với question.
+       * @default
+       */
+      text: string;
+      /**
+       * Question
+       * @description Nội dung câu hỏi ngắn gọn bằng tiếng Việt.
+       * @default
+       */
+      question: string;
+      /**
+       * Placeholder
+       * @description Văn bản gợi ý placeholder cho người học.
+       * @default Nhập câu trả lời của bạn...
+       */
+      placeholder: string;
+      /**
+       * Question Type
+       * @description Loại câu hỏi: 'single_choice' (trắc nghiệm chọn 1 đáp án nhanh bằng 1 click) hoặc 'text' (tự luận ngắn).
+       * @default single_choice
+       */
+      question_type: string;
+      /**
+       * Options
+       * @description Danh sách BẮT BUỘC gồm 3 đến 4 phương án lựa chọn thực tế, ngắn gọn khi question_type='single_choice' để người học chọn nhanh bằng 1 click. Để mảng rỗng [] khi question_type='text'.
+       */
+      options?: string[];
+      /**
+       * Question Purpose
+       * @description Mục đích sư phạm của câu hỏi nhằm thu thập thông tin gì cho việc lập lộ trình.
+       * @default Làm rõ bối cảnh và nhu cầu cá nhân hóa lộ trình học tập.
+       */
+      question_purpose: string;
+      /**
+       * Expected Answer Format
+       * @description Định dạng câu trả lời mong đợi.
+       * @default short_text
+       */
+      expected_answer_format: string;
+      /**
+       * Diagnostic Dimension
+       * @description Chiều chẩn đoán: KNOWLEDGE_BASELINE | PRACTICAL_EXPERIENCE | LEARNING_CONSTRAINTS | GENERAL
+       * @default KNOWLEDGE_BASELINE
+       */
+      diagnostic_dimension: string;
+    };
+    /** ClarificationQuestionsResponse */
+    ClarificationQuestionsResponse: {
+      /** Questions */
+      questions?: components['schemas']['ClarificationQuestion'][];
+      /**
+       * Questions Version
+       * @default v1.0
+       */
+      questions_version: string;
+    };
+    /** ConfirmPasswordResetSchema */
+    ConfirmPasswordResetSchema: {
+      /**
+       * Email
+       * Format: email
+       */
+      email: string;
+      /** New Password */
+      new_password: string;
+      /** Reset Token */
+      reset_token?: string | null;
+      /** Otp Code */
+      otp_code?: string | null;
+    };
+    /** ConstraintViolationSchema */
+    ConstraintViolationSchema: {
+      /** Task Index */
+      task_index?: number | null;
+      /** Field */
+      field: string;
+      /** Rule Code */
+      rule_code: string;
+      /** Expected Bound */
+      expected_bound: string;
+      /** Actual Value */
+      actual_value: string;
+      /** Suggested Fix */
+      suggested_fix: string;
+    };
+    /** CreateKnowledgeUrlRequest */
+    CreateKnowledgeUrlRequest: {
+      /**
+       * Title
+       * @default Nguồn học liệu URL
+       */
+      title: string;
+      /** Url */
+      url: string;
+    };
+    /** CreateManualRoadmapPlanRequest */
+    CreateManualRoadmapPlanRequest: {
+      /** Milestones */
+      milestones?: components['schemas']['MilestoneUpsertItemSchema'][] | null;
+      /** Tasks */
+      tasks: components['schemas']['ProposedTaskItemSchema'][];
+      /** Dependencies */
+      dependencies?: components['schemas']['ProposedDependencyItemSchema'][];
+    };
+    /** CreateRoadmapRequest */
+    CreateRoadmapRequest: {
+      /** Title */
+      title: string;
+      /** Description */
+      description?: string | null;
+      /** Goal Title */
+      goal_title?: string | null;
+      /** Goal Description */
+      goal_description?: string | null;
+      /**
+       * Prior Knowledge Level
+       * @default BEGINNER
+       */
+      prior_knowledge_level: string;
+      /** Start Date */
+      start_date?: string | null;
+      /** Target Date */
+      target_date?: string | null;
+    };
+    /** DayScheduleDTO */
+    DayScheduleDTO: {
+      /** Enabled */
+      enabled: boolean;
+      /** Quota Hours */
+      quota_hours: number;
+      /** Time Slots */
+      time_slots?: components['schemas']['TimeSlotDTO'][];
+      allowed_window?: components['schemas']['AllowedWindowDTO'];
+      /**
+       * Preferred Period
+       * @default ANY
+       */
+      preferred_period: string;
+      /**
+       * Min Session Minutes
+       * @default 30
+       */
+      min_session_minutes: number;
+    };
+    /** GenerateProofResponseDTO */
+    GenerateProofResponseDTO: {
+      /**
+       * Proof Id
+       * Format: uuid
+       */
+      proof_id: string;
+      /** Status */
+      status: string;
+      /** Questions */
+      questions: {
+        [key: string]: unknown;
+      }[];
+    };
+    /** GenerateWeeklyReviewRequestDTO */
+    GenerateWeeklyReviewRequestDTO: {
+      /**
+       * Roadmap Id
+       * Format: uuid
+       */
+      roadmap_id: string;
+      /**
+       * Period Start
+       * Format: date
+       */
+      period_start: string;
+      /**
+       * Period End
+       * Format: date
+       */
+      period_end: string;
+      /** Reflection */
+      reflection?: {
+        [key: string]: unknown;
+      };
+    };
+    /** GoalResponse */
+    GoalResponse: {
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /**
+       * User Id
+       * Format: uuid
+       */
+      user_id: string;
+      /** Title */
+      title: string;
+      /** Raw Description */
+      raw_description?: string | null;
+      /** Target Date */
+      target_date?: string | null;
+      /** Status */
+      status: string;
+      /**
+       * Prior Knowledge Level
+       * @default BEGINNER
+       */
+      prior_knowledge_level: string;
+      /** Clarification Context */
+      clarification_context?: string | null;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /**
+       * Updated At
+       * Format: date-time
+       */
+      updated_at: string;
+    };
+    /** GoogleAuthRequestSchema */
+    GoogleAuthRequestSchema: {
+      /** Id Token */
+      id_token?: string | null;
+      /** Credential */
+      credential?: string | null;
+      /** Access Token */
+      access_token?: string | null;
+    };
+    /** HTTPValidationError */
+    HTTPValidationError: {
+      /** Detail */
+      detail?: components['schemas']['ValidationError'][];
+    };
+    /**
+     * InitiateCalendarAuthRequestDTO
+     * @description Request payload to initiate Google Calendar OAuth authorization (UC-17).
+     */
+    InitiateCalendarAuthRequestDTO: {
+      /**
+       * Sync Type
+       * @default two_way
+       */
+      sync_type: string;
+      /** Redirect Uri */
+      redirect_uri?: string | null;
+    };
+    /**
+     * InitiateCalendarAuthResponseDTO
+     * @description Response containing Google OAuth authorization URL and CSRF state token.
+     */
+    InitiateCalendarAuthResponseDTO: {
+      /** Authorization Url */
+      authorization_url: string;
+      /** State */
+      state: string;
+    };
+    /** KnowledgeSourceResponse */
+    KnowledgeSourceResponse: {
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /**
+       * Goal Id
+       * Format: uuid
+       */
+      goal_id: string;
+      /** Source Type */
+      source_type: string;
+      /** Title */
+      title: string;
+      /** Ingestion Status */
+      ingestion_status: string;
+      /** Chunk Count */
+      chunk_count: number;
+      /** Provenance Metadata */
+      provenance_metadata?: {
+        [key: string]: unknown;
+      };
+      /** Error Detail */
+      error_detail?: string | null;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /**
+       * Updated At
+       * Format: date-time
+       */
+      updated_at: string;
+    };
+    /** LearnerMemoryResponseDTO */
+    LearnerMemoryResponseDTO: {
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /** Memory Key */
+      memory_key: string;
+      /** Value */
+      value: {
+        [key: string]: unknown;
+      };
+      /** Category */
+      category: string;
+      /** Epistemic Level */
+      epistemic_level: string;
+      /** Confidence */
+      confidence: number;
+      /** Sample Size */
+      sample_size: number;
+      /** Evidence */
+      evidence: {
+        [key: string]: unknown;
+      }[];
+      /** Status */
+      status: string;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /**
+       * Updated At
+       * Format: date-time
+       */
+      updated_at: string;
+    };
+    /** LearningResourceSchema */
+    LearningResourceSchema: {
+      /** Title */
+      title: string;
+      /** Url */
+      url: string;
+      /**
+       * Type
+       * @default DOCS
+       */
+      type: string;
+      /** Description */
+      description?: string | null;
+    };
+    /** LoginRequestSchema */
+    LoginRequestSchema: {
+      /**
+       * Email
+       * Format: email
+       */
+      email: string;
+      /** Password */
+      password: string;
+      /**
+       * Remember Me
+       * @default true
+       */
+      remember_me: boolean;
+    };
+    /** LoginResponseSchema */
+    LoginResponseSchema: {
+      /** Access Token */
+      access_token: string;
+      /**
+       * Token Type
+       * @default bearer
+       */
+      token_type: string;
+      /**
+       * Expires In
+       * @default 900
+       */
+      expires_in: number;
+      user: components['schemas']['UserProfileSchema'];
+    };
+    /** MessageResponseSchema */
+    MessageResponseSchema: {
+      /** Message */
+      message: string;
+    };
+    /** MilestoneListResponse */
+    MilestoneListResponse: {
+      /**
+       * Roadmap Id
+       * Format: uuid
+       */
+      roadmap_id: string;
+      /** Milestones */
+      milestones: components['schemas']['MilestoneResponse'][];
+    };
+    /** MilestoneProofResponseDTO */
+    MilestoneProofResponseDTO: {
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /**
+       * Milestone Id
+       * Format: uuid
+       */
+      milestone_id: string;
+      /** Status */
+      status: string;
+      /** Score */
+      score: number;
+      /** Confidence */
+      confidence: number;
+      /** Corrective Action */
+      corrective_action: string | null;
+    };
+    /** MilestoneResponse */
+    MilestoneResponse: {
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /**
+       * Roadmap Id
+       * Format: uuid
+       */
+      roadmap_id: string;
+      /** Sequence Order */
+      sequence_order: number;
+      /** Title */
+      title: string;
+      /** Description */
+      description?: string | null;
+      /** Status */
+      status: string;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /**
+       * Updated At
+       * Format: date-time
+       */
+      updated_at: string;
+    };
+    /** MilestoneUpsertItemSchema */
+    MilestoneUpsertItemSchema: {
+      /** Id */
+      id?: string | null;
+      /** Milestone Id */
+      milestone_id?: string | null;
+      /**
+       * Sequence Order
+       * @default 1
+       */
+      sequence_order: number;
+      /** Title */
+      title: string;
+      /** Description */
+      description?: string | null;
+    };
+    /** OfficialScheduleResponse */
+    OfficialScheduleResponse: {
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /**
+       * Roadmap Id
+       * Format: uuid
+       */
+      roadmap_id: string;
+      /** Total Sessions */
+      total_sessions: number;
+      /** Total Planned Minutes */
+      total_planned_minutes: number;
+      /**
+       * Activated At
+       * Format: date-time
+       */
+      activated_at: string;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /**
+       * Updated At
+       * Format: date-time
+       */
+      updated_at: string;
+    };
+    /** ProposedDependencyItemSchema */
+    ProposedDependencyItemSchema: {
+      /** Predecessor Id */
+      predecessor_id: string;
+      /** Successor Id */
+      successor_id: string;
+      /**
+       * Is Mandatory
+       * @default true
+       */
+      is_mandatory: boolean;
+    };
+    /** ProposedTaskItemSchema */
+    ProposedTaskItemSchema: {
+      /** Task Id */
+      task_id?: string | null;
+      /** Milestone Id */
+      milestone_id?: string | null;
+      /** Milestone Sequence Order */
+      milestone_sequence_order?: number | null;
+      /** Title */
+      title: string;
+      /** Description */
+      description?: string | null;
+      /**
+       * Task Type
+       * @default PRACTICE
+       */
+      task_type: string | null;
+      /** Learning Objective */
+      learning_objective?: string | null;
+      /** Completion Criteria */
+      completion_criteria?: string | null;
+      /** Learning Resources */
+      learning_resources?: components['schemas']['LearningResourceSchema'][];
+      /** Concept Ids */
+      concept_ids?: string[];
+      /**
+       * Estimated Minutes
+       * @default 45
+       */
+      estimated_minutes: number;
+      /** Scheduled Date */
+      scheduled_date?: string | null;
+      /** Scheduled Start */
+      scheduled_start?: string | null;
+      /** Scheduled End */
+      scheduled_end?: string | null;
+      /** Prerequisite Ids */
+      prerequisite_ids?: string[];
+    };
+    /** RefreshTokenRequestSchema */
+    RefreshTokenRequestSchema: {
+      /** Refresh Token */
+      refresh_token?: string | null;
+    };
+    /** RegisterRequestSchema */
+    RegisterRequestSchema: {
+      /** Full Name */
+      full_name: string;
+      /**
+       * Email
+       * Format: email
+       */
+      email: string;
+      /** Password */
+      password: string;
+    };
+    /** RequestPasswordResetOtpSchema */
+    RequestPasswordResetOtpSchema: {
+      /**
+       * Email
+       * Format: email
+       */
+      email: string;
+    };
+    /** ResendRegisterOtpSchema */
+    ResendRegisterOtpSchema: {
+      /**
+       * Email
+       * Format: email
+       */
+      email: string;
+    };
+    /** ResetLearnerMemoryRequestDTO */
+    ResetLearnerMemoryRequestDTO: {
+      /**
+       * Confirm
+       * @description Must be true after explicit learner confirmation
+       */
+      confirm: boolean;
+    };
+    /** RoadmapDetailResponse */
+    RoadmapDetailResponse: {
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /**
+       * User Id
+       * Format: uuid
+       */
+      user_id: string;
+      /**
+       * Goal Id
+       * Format: uuid
+       */
+      goal_id: string;
+      /** Title */
+      title: string;
+      /** Description */
+      description?: string | null;
+      /** Status */
+      status: string;
+      /** Start Date */
+      start_date?: string | null;
+      /** Target Date */
+      target_date?: string | null;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /**
+       * Updated At
+       * Format: date-time
+       */
+      updated_at: string;
+      goal?: components['schemas']['GoalResponse'] | null;
+      /** Milestones */
+      milestones?: components['schemas']['MilestoneResponse'][];
+      official_schedule?: components['schemas']['OfficialScheduleResponse'] | null;
+      /** Scheduled Tasks */
+      scheduled_tasks?: components['schemas']['ScheduledTaskResponse'][];
+      current_draft_proposal?: components['schemas']['ScheduleProposalResponse'] | null;
+    };
+    /** RoadmapResponse */
+    RoadmapResponse: {
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /**
+       * User Id
+       * Format: uuid
+       */
+      user_id: string;
+      /**
+       * Goal Id
+       * Format: uuid
+       */
+      goal_id: string;
+      /** Title */
+      title: string;
+      /** Description */
+      description?: string | null;
+      /** Status */
+      status: string;
+      /** Start Date */
+      start_date?: string | null;
+      /** Target Date */
+      target_date?: string | null;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /**
+       * Updated At
+       * Format: date-time
+       */
+      updated_at: string;
+      goal?: components['schemas']['GoalResponse'] | null;
+    };
+    /** ScheduleProposalResponse */
+    ScheduleProposalResponse: {
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /**
+       * Roadmap Id
+       * Format: uuid
+       */
+      roadmap_id: string;
+      /**
+       * User Id
+       * Format: uuid
+       */
+      user_id: string;
+      /** Status */
+      status: string;
+      /**
+       * Is Valid
+       * @default true
+       */
+      is_valid: boolean;
+      /**
+       * Has Soft Overflow
+       * @default false
+       */
+      has_soft_overflow: boolean;
+      /** Tasks */
+      tasks?: {
+        [key: string]: unknown;
+      }[];
+      /** Dependencies */
+      dependencies?: {
+        [key: string]: unknown;
+      }[];
+      /** Violations */
+      violations?: components['schemas']['ConstraintViolationSchema'][];
+      /** Soft Overflow Warnings */
+      soft_overflow_warnings?: components['schemas']['SoftOverflowWarningSchema'][];
+      /** Advisory Warnings */
+      advisory_warnings?: string[];
+      /** Diff Summary */
+      diff_summary?: {
+        [key: string]: unknown;
+      };
+      /** Proposal Data */
+      proposal_data?: {
+        [key: string]: unknown;
+      };
+      /** Applied At */
+      applied_at?: string | null;
+      /**
+       * Created At
+       * Format: date-time
+       */
+      created_at: string;
+      /**
+       * Updated At
+       * Format: date-time
+       */
+      updated_at: string;
+    };
+    /** ScheduledTaskResponse */
+    ScheduledTaskResponse: {
+      /**
+       * Task Id
+       * Format: uuid
+       */
+      task_id: string;
+      /**
+       * Roadmap Id
+       * Format: uuid
+       */
+      roadmap_id: string;
+      /**
+       * Milestone Id
+       * Format: uuid
+       */
+      milestone_id: string;
+      /** Title */
+      title: string;
+      /** Estimated Minutes */
+      estimated_minutes: number;
+      /** Scheduled Date */
+      scheduled_date?: string | null;
+      /** Scheduled Start */
+      scheduled_start?: string | null;
+      /** Scheduled End */
+      scheduled_end?: string | null;
+      /** Status */
+      status: string;
+      /** Roadmap Target Date */
+      roadmap_target_date?: string | null;
+    };
+    /** SkipClarificationRequest */
+    SkipClarificationRequest: {
+      /** Skipped Question Ids */
+      skipped_question_ids?: string[];
+    };
+    /** SoftOverflowWarningSchema */
+    SoftOverflowWarningSchema: {
+      /** Task Index */
+      task_index: number;
+      /** Task Title */
+      task_title: string;
+      /** Scheduled Date */
+      scheduled_date: string;
+      /** Overflow Minutes */
+      overflow_minutes: number;
+      /** Message */
+      message: string;
+    };
+    /** SseJobTicketResponse */
+    SseJobTicketResponse: {
+      /**
+       * Job Id
+       * Format: uuid
+       */
+      job_id: string;
+      /**
+       * Reservation Id
+       * Format: uuid
+       */
+      reservation_id: string;
+      /**
+       * Roadmap Id
+       * Format: uuid
+       */
+      roadmap_id: string;
+      /** Job Type */
+      job_type: string;
+      /** Status */
+      status: string;
+      /** Stream Url */
+      stream_url: string;
+      /** Jobid */
+      jobId: string;
+      /** Reservationid */
+      reservationId: string;
+      /** Streamurl */
+      streamUrl: string;
+    };
+    /** SubmitClarificationAnswersRequest */
+    SubmitClarificationAnswersRequest: {
+      /** Answers */
+      answers?: components['schemas']['ClarificationAnswerItem'][];
+      /**
+       * Skipped
+       * @default false
+       */
+      skipped: boolean;
+      /** Skipped Question Ids */
+      skipped_question_ids?: string[];
+      /** Total Questions Count */
+      total_questions_count?: number | null;
+    };
+    /** SubmitClarificationAnswersResponse */
+    SubmitClarificationAnswersResponse: {
+      /**
+       * Goal Id
+       * Format: uuid
+       */
+      goal_id: string;
+      /**
+       * Status
+       * @default ANSWERED
+       */
+      status: string;
+      /** Clarification Context */
+      clarification_context: string;
+      /** Unresolved Assumptions */
+      unresolved_assumptions?: string[];
+      /**
+       * Message
+       * @default Clarification context updated successfully
+       */
+      message: string;
+    };
+    /** SubmitProofRequestDTO */
+    SubmitProofRequestDTO: {
+      /** Answers */
+      answers: {
+        [key: string]: unknown;
+      }[];
+      /** Confidence */
+      confidence: number;
+    };
+    /** TimeSlotDTO */
+    TimeSlotDTO: {
+      /** Start */
+      start: string;
+      /** End */
+      end: string;
+      /**
+       * End Day Offset
+       * @default 0
+       */
+      end_day_offset: number;
+    };
+    /** UpdateAvailabilityRequestDTO */
+    UpdateAvailabilityRequestDTO: {
+      /**
+       * Mode
+       * @default MODE_A
+       */
+      mode: string;
+      /**
+       * Calendar Integration Mode
+       * @default NONE
+       */
+      calendar_integration_mode: string;
+      /**
+       * Min Session Minutes
+       * @default 30
+       */
+      min_session_minutes: number;
+      weekly_schedule: components['schemas']['WeeklyScheduleDTO'];
+    };
+    /** UpdateLearnerMemoryRequestDTO */
+    UpdateLearnerMemoryRequestDTO: {
+      /**
+       * Action
+       * @enum {string}
+       */
+      action: 'confirm' | 'edit' | 'reject';
+      /** Value */
+      value?: {
+        [key: string]: unknown;
+      } | null;
+    };
+    /** UpdateMilestonesRequest */
+    UpdateMilestonesRequest: {
+      /** Milestones */
+      milestones: components['schemas']['MilestoneUpsertItemSchema'][];
+    };
+    /** UpdateRoadmapRequest */
+    UpdateRoadmapRequest: {
+      /** Title */
+      title?: string | null;
+      /** Description */
+      description?: string | null;
+      /** Start Date */
+      start_date?: string | null;
+      /** Target Date */
+      target_date?: string | null;
+      /** Status */
+      status?: string | null;
+    };
+    /** UpdateScheduleProposalRequest */
+    UpdateScheduleProposalRequest: {
+      /** Tasks */
+      tasks: components['schemas']['ProposedTaskItemSchema'][];
+      /** Dependencies */
+      dependencies?: components['schemas']['ProposedDependencyItemSchema'][];
+      /**
+       * Reject Invalid
+       * @default false
+       */
+      reject_invalid: boolean;
+    };
+    /** UserProfileSchema */
+    UserProfileSchema: {
+      /** Id */
+      id: string;
+      /** Email */
+      email: string;
+      /** Full Name */
+      full_name: string;
+      /** Role */
+      role: string;
+      /** Tier */
+      tier: string;
+      /** Created At */
+      created_at: string;
+    };
+    /** ValidationError */
+    ValidationError: {
+      /** Location */
+      loc: (string | number)[];
+      /** Message */
+      msg: string;
+      /** Error Type */
+      type: string;
+      /** Input */
+      input?: unknown;
+      /** Context */
+      ctx?: Record<string, never>;
+    };
+    /** VerifyPasswordResetOtpResponseSchema */
+    VerifyPasswordResetOtpResponseSchema: {
+      /** Message */
+      message: string;
+      /** Reset Token */
+      reset_token: string;
+    };
+    /** VerifyPasswordResetOtpSchema */
+    VerifyPasswordResetOtpSchema: {
+      /**
+       * Email
+       * Format: email
+       */
+      email: string;
+      /** Otp Code */
+      otp_code: string;
+    };
+    /** VerifyRegisterOtpSchema */
+    VerifyRegisterOtpSchema: {
+      /**
+       * Email
+       * Format: email
+       */
+      email: string;
+      /** Otp Code */
+      otp_code: string;
+    };
+    /** WeeklyReviewResponseDTO */
+    WeeklyReviewResponseDTO: {
+      /**
+       * Id
+       * Format: uuid
+       */
+      id: string;
+      /**
+       * Roadmap Id
+       * Format: uuid
+       */
+      roadmap_id: string;
+      /**
+       * Period Start
+       * Format: date
+       */
+      period_start: string;
+      /**
+       * Period End
+       * Format: date
+       */
+      period_end: string;
+      /** Quantitative Summary */
+      quantitative_summary: {
+        [key: string]: unknown;
+      };
+      /** Strengths Feedback */
+      strengths_feedback: string;
+      /** Bottlenecks Feedback */
+      bottlenecks_feedback: string;
+      /** Action Recommendations */
+      action_recommendations: string;
+      /** User Reflection Payload */
+      user_reflection_payload: {
+        [key: string]: unknown;
+      };
+      /**
+       * Generated At
+       * Format: date-time
+       */
+      generated_at: string;
+    };
+    /** WeeklyScheduleDTO */
+    WeeklyScheduleDTO: {
+      monday: components['schemas']['DayScheduleDTO'];
+      tuesday: components['schemas']['DayScheduleDTO'];
+      wednesday: components['schemas']['DayScheduleDTO'];
+      thursday: components['schemas']['DayScheduleDTO'];
+      friday: components['schemas']['DayScheduleDTO'];
+      saturday: components['schemas']['DayScheduleDTO'];
+      sunday: components['schemas']['DayScheduleDTO'];
+    };
+  };
+  responses: never;
+  parameters: never;
+  requestBodies: never;
+  headers: never;
+  pathItems: never;
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    get_account_context_status_api_v1_account_status_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
-                };
-            };
-        };
+  get_account_context_status_api_v1_account_status_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    get_my_availability_api_v1_availabilities_me_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AvailabilityResponseDTO"];
-                };
-            };
+        content: {
+          'application/json': {
+            [key: string]: string;
+          };
         };
+      };
     };
-    update_my_availability_api_v1_availabilities_me_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateAvailabilityRequestDTO"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AvailabilityResponseDTO"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
+  };
+  list_learner_memory_api_v1_account_learner_memory_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    login_api_v1_auth_login_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LoginRequestSchema"];
-            };
+        content: {
+          'application/json': components['schemas']['LearnerMemoryResponseDTO'][];
         };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LoginResponseSchema"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
+      };
     };
-    google_auth_api_v1_auth_google_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["GoogleAuthRequestSchema"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LoginResponseSchema"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
+  };
+  update_learner_memory_api_v1_account_learner_memory__memory_id__patch: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        memory_id: string;
+      };
+      cookie?: never;
     };
-    register_api_v1_auth_register_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RegisterRequestSchema"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LoginResponseSchema"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdateLearnerMemoryRequestDTO'];
+      };
     };
-    request_register_otp_api_v1_auth_register_request_otp_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RegisterRequestSchema"];
-            };
+        content: {
+          'application/json': components['schemas']['LearnerMemoryResponseDTO'];
         };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MessageResponseSchema"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
         };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
     };
-    resend_register_otp_api_v1_auth_register_resend_otp_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ResendRegisterOtpSchema"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MessageResponseSchema"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
+  };
+  reset_learner_memory_api_v1_account_learner_memory_reset_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    verify_register_otp_api_v1_auth_register_verify_otp_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["VerifyRegisterOtpSchema"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LoginResponseSchema"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ResetLearnerMemoryRequestDTO'];
+      };
     };
-    request_password_reset_otp_api_v1_auth_password_reset_request_otp_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    responses: {
+      /** @description Successful Response */
+      204: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RequestPasswordResetOtpSchema"];
-            };
+        content?: never;
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
         };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MessageResponseSchema"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
         };
+      };
     };
-    verify_password_reset_otp_api_v1_auth_password_reset_verify_otp_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["VerifyPasswordResetOtpSchema"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VerifyPasswordResetOtpResponseSchema"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
+  };
+  get_my_availability_api_v1_availabilities_me_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    confirm_password_reset_api_v1_auth_password_reset_confirm_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ConfirmPasswordResetSchema"];
-            };
+        content: {
+          'application/json': components['schemas']['AvailabilityResponseDTO'];
         };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MessageResponseSchema"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
+      };
     };
-    refresh_token_api_v1_auth_refresh_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["RefreshTokenRequestSchema"] | null;
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LoginResponseSchema"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
+  };
+  update_my_availability_api_v1_availabilities_me_put: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    get_current_user_profile_api_v1_auth_me_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["UserProfileSchema"];
-                };
-            };
-        };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdateAvailabilityRequestDTO'];
+      };
     };
-    logout_api_v1_auth_logout_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
-                };
-            };
+        content: {
+          'application/json': components['schemas']['AvailabilityResponseDTO'];
         };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
     };
-    get_planning_context_status_api_v1_planning_status_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
-                };
-            };
-        };
+  };
+  login_api_v1_auth_login_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    stream_ai_generation_job_api_v1_roadmaps_jobs__job_id__stream_get: {
-        parameters: {
-            query?: {
-                last_event_id?: number | null;
-            };
-            header?: {
-                "Last-Event-ID"?: string | null;
-            };
-            path: {
-                job_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['LoginRequestSchema'];
+      };
     };
-    list_roadmaps_api_v1_roadmaps_get: {
-        parameters: {
-            query?: {
-                status?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RoadmapResponse"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
+        content: {
+          'application/json': components['schemas']['LoginResponseSchema'];
         };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
     };
-    create_roadmap_api_v1_roadmaps_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateRoadmapRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RoadmapResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
+  };
+  google_auth_api_v1_auth_google_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    generate_clarification_questions_api_v1_roadmaps_goals__goal_id__clarify_questions_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                goal_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ClarificationQuestionsResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['GoogleAuthRequestSchema'];
+      };
     };
-    submit_clarification_answers_api_v1_roadmaps_goals__goal_id__clarify_answers_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                goal_id: string;
-            };
-            cookie?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SubmitClarificationAnswersRequest"];
-            };
+        content: {
+          'application/json': components['schemas']['LoginResponseSchema'];
         };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SubmitClarificationAnswersResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
         };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
     };
-    skip_clarification_questions_api_v1_roadmaps_goals__goal_id__clarify_skip_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                goal_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["SkipClarificationRequest"] | null;
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SubmitClarificationAnswersResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
+  };
+  register_api_v1_auth_register_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    get_roadmap_detail_api_v1_roadmaps__roadmap_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                roadmap_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RoadmapDetailResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RegisterRequestSchema'];
+      };
     };
-    update_roadmap_api_v1_roadmaps__roadmap_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                roadmap_id: string;
-            };
-            cookie?: never;
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateRoadmapRequest"];
-            };
+        content: {
+          'application/json': components['schemas']['LoginResponseSchema'];
         };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RoadmapResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
         };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
     };
-    archive_roadmap_api_v1_roadmaps__roadmap_id__archive_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                roadmap_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RoadmapResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
+  };
+  request_register_otp_api_v1_auth_register_request_otp_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    initiate_milestone_generation_job_api_v1_roadmaps__roadmap_id__milestones_generate_jobs_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "Idempotency-Key"?: string | null;
-            };
-            path: {
-                roadmap_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SseJobTicketResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RegisterRequestSchema'];
+      };
     };
-    update_milestones_api_v1_roadmaps__roadmap_id__milestones_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                roadmap_id: string;
-            };
-            cookie?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateMilestonesRequest"];
-            };
+        content: {
+          'application/json': components['schemas']['MessageResponseSchema'];
         };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MilestoneListResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
         };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
     };
-    approve_milestones_api_v1_roadmaps__roadmap_id__milestones_approve_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                roadmap_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MilestoneListResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
+  };
+  resend_register_otp_api_v1_auth_register_resend_otp_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    initiate_schedule_proposal_generation_job_api_v1_roadmaps__roadmap_id__proposals_generate_jobs_post: {
-        parameters: {
-            query?: never;
-            header?: {
-                "Idempotency-Key"?: string | null;
-            };
-            path: {
-                roadmap_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SseJobTicketResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ResendRegisterOtpSchema'];
+      };
     };
-    get_current_schedule_proposal_api_v1_roadmaps__roadmap_id__proposals_current_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                roadmap_id: string;
-            };
-            cookie?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ScheduleProposalResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
+        content: {
+          'application/json': components['schemas']['MessageResponseSchema'];
         };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
     };
-    update_schedule_proposal_api_v1_roadmaps__roadmap_id__proposals__proposal_id__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                roadmap_id: string;
-                proposal_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateScheduleProposalRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ScheduleProposalResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
+  };
+  verify_register_otp_api_v1_auth_register_verify_otp_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    save_manual_roadmap_plan_api_v1_roadmaps__roadmap_id__proposals_manual_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                roadmap_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateManualRoadmapPlanRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ScheduleProposalResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['VerifyRegisterOtpSchema'];
+      };
     };
-    apply_schedule_proposal_api_v1_roadmaps__roadmap_id__proposals__proposal_id__apply_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                roadmap_id: string;
-                proposal_id: string;
-            };
-            cookie?: never;
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["ApplyScheduleProposalRequest"] | null;
-            };
+        content: {
+          'application/json': components['schemas']['LoginResponseSchema'];
         };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApplyScheduleProposalResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
         };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
     };
-    get_execution_context_status_api_v1_execution_status_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
-                };
-            };
-        };
+  };
+  request_password_reset_otp_api_v1_auth_password_reset_request_otp_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
     };
-    get_evaluation_context_status_api_v1_evaluation_status_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
-                };
-            };
-        };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RequestPasswordResetOtpSchema'];
+      };
     };
-    health_check_api_health_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
         };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
-                };
-            };
+        content: {
+          'application/json': components['schemas']['MessageResponseSchema'];
         };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
     };
+  };
+  verify_password_reset_otp_api_v1_auth_password_reset_verify_otp_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['VerifyPasswordResetOtpSchema'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['VerifyPasswordResetOtpResponseSchema'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  confirm_password_reset_api_v1_auth_password_reset_confirm_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ConfirmPasswordResetSchema'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MessageResponseSchema'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  refresh_token_api_v1_auth_refresh_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': components['schemas']['RefreshTokenRequestSchema'] | null;
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['LoginResponseSchema'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  get_current_user_profile_api_v1_auth_me_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['UserProfileSchema'];
+        };
+      };
+    };
+  };
+  logout_api_v1_auth_logout_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            [key: string]: string;
+          };
+        };
+      };
+    };
+  };
+  initiate_google_calendar_auth_api_v1_account_calendar_google_authorize_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['InitiateCalendarAuthRequestDTO'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['InitiateCalendarAuthResponseDTO'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  handle_google_calendar_callback_get_api_v1_account_calendar_google_callback_get: {
+    parameters: {
+      query: {
+        code: string;
+        state: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  handle_google_calendar_callback_post_api_v1_account_calendar_google_callback_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CalendarOAuthCallbackRequestDTO'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CalendarConnectionResponseDTO'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  get_calendar_status_api_v1_account_calendar_status_get: {
+    parameters: {
+      query?: {
+        provider?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CalendarConnectionResponseDTO'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  disconnect_calendar_api_v1_account_calendar_disconnect_post: {
+    parameters: {
+      query?: {
+        provider?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CalendarConnectionResponseDTO'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  handle_google_calendar_webhook_api_v1_calendar_webhooks_google_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        'X-Goog-Channel-ID'?: string | null;
+        'X-Goog-Resource-ID'?: string | null;
+        'X-Goog-Channel-Token'?: string | null;
+        'X-Goog-Resource-State'?: string | null;
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            [key: string]: string;
+          };
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  get_planning_context_status_api_v1_planning_status_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            [key: string]: string;
+          };
+        };
+      };
+    };
+  };
+  upload_knowledge_source_file_api_v1_planning_goals__goal_id__knowledge_sources_files_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        goal_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'multipart/form-data': components['schemas']['Body_upload_knowledge_source_file_api_v1_planning_goals__goal_id__knowledge_sources_files_post'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['KnowledgeSourceResponse'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  add_knowledge_source_url_api_v1_planning_goals__goal_id__knowledge_sources_urls_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        goal_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateKnowledgeUrlRequest'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['KnowledgeSourceResponse'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  list_knowledge_sources_api_v1_planning_goals__goal_id__knowledge_sources_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        goal_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['KnowledgeSourceResponse'][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  get_knowledge_source_api_v1_planning_knowledge_sources__source_id__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        source_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['KnowledgeSourceResponse'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  stream_ai_generation_job_api_v1_roadmaps_jobs__job_id__stream_get: {
+    parameters: {
+      query?: {
+        last_event_id?: number | null;
+      };
+      header?: {
+        'Last-Event-ID'?: string | null;
+      };
+      path: {
+        job_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': unknown;
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  list_roadmaps_api_v1_roadmaps_get: {
+    parameters: {
+      query?: {
+        status?: string | null;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RoadmapResponse'][];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  create_roadmap_api_v1_roadmaps_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateRoadmapRequest'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RoadmapResponse'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  generate_clarification_questions_api_v1_roadmaps_goals__goal_id__clarify_questions_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        goal_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ClarificationQuestionsResponse'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  submit_clarification_answers_api_v1_roadmaps_goals__goal_id__clarify_answers_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        goal_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SubmitClarificationAnswersRequest'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SubmitClarificationAnswersResponse'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  skip_clarification_questions_api_v1_roadmaps_goals__goal_id__clarify_skip_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        goal_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': components['schemas']['SkipClarificationRequest'] | null;
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SubmitClarificationAnswersResponse'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  get_roadmap_detail_api_v1_roadmaps__roadmap_id__get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        roadmap_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RoadmapDetailResponse'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  update_roadmap_api_v1_roadmaps__roadmap_id__patch: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        roadmap_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdateRoadmapRequest'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RoadmapResponse'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  archive_roadmap_api_v1_roadmaps__roadmap_id__archive_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        roadmap_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RoadmapResponse'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  initiate_milestone_generation_job_api_v1_roadmaps__roadmap_id__milestones_generate_jobs_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        'Idempotency-Key'?: string | null;
+      };
+      path: {
+        roadmap_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SseJobTicketResponse'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  update_milestones_api_v1_roadmaps__roadmap_id__milestones_put: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        roadmap_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdateMilestonesRequest'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MilestoneListResponse'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  approve_milestones_api_v1_roadmaps__roadmap_id__milestones_approve_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        roadmap_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MilestoneListResponse'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  initiate_schedule_proposal_generation_job_api_v1_roadmaps__roadmap_id__proposals_generate_jobs_post: {
+    parameters: {
+      query?: never;
+      header?: {
+        'Idempotency-Key'?: string | null;
+      };
+      path: {
+        roadmap_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SseJobTicketResponse'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  get_current_schedule_proposal_api_v1_roadmaps__roadmap_id__proposals_current_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        roadmap_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ScheduleProposalResponse'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  update_schedule_proposal_api_v1_roadmaps__roadmap_id__proposals__proposal_id__put: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        roadmap_id: string;
+        proposal_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['UpdateScheduleProposalRequest'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ScheduleProposalResponse'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  save_manual_roadmap_plan_api_v1_roadmaps__roadmap_id__proposals_manual_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        roadmap_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CreateManualRoadmapPlanRequest'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ScheduleProposalResponse'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  apply_schedule_proposal_api_v1_roadmaps__roadmap_id__proposals__proposal_id__apply_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        roadmap_id: string;
+        proposal_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': components['schemas']['ApplyScheduleProposalRequest'] | null;
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ApplyScheduleProposalResponse'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  get_execution_context_status_api_v1_execution_status_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            [key: string]: string;
+          };
+        };
+      };
+    };
+  };
+  get_evaluation_context_status_api_v1_evaluation_status_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            [key: string]: string;
+          };
+        };
+      };
+    };
+  };
+  generate_milestone_proof_api_v1_evaluation_milestones__milestone_id__proofs_generate_jobs_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        milestone_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['GenerateProofResponseDTO'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  submit_milestone_proof_api_v1_evaluation_milestones__milestone_id__proofs__proof_id__submit_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        milestone_id: string;
+        proof_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['SubmitProofRequestDTO'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['MilestoneProofResponseDTO'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  generate_weekly_review_api_v1_evaluation_weekly_reviews_generate_jobs_post: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['GenerateWeeklyReviewRequestDTO'];
+      };
+    };
+    responses: {
+      /** @description Successful Response */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['WeeklyReviewResponseDTO'];
+        };
+      };
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HTTPValidationError'];
+        };
+      };
+    };
+  };
+  latest_weekly_review_api_v1_evaluation_weekly_reviews_latest_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['WeeklyReviewResponseDTO'];
+        };
+      };
+    };
+  };
+  health_check_api_health_get: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            [key: string]: string;
+          };
+        };
+      };
+    };
+  };
 }
