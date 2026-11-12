@@ -9,7 +9,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { RoadmapService } from '../../services/roadmap.service';
 import { AvailabilityService } from '../../../../core/services/availability.service';
 import { BadgeDirective, BadgeVariant } from '../../../../shared/ui/badge/badge.directive';
@@ -35,6 +35,7 @@ import {
 export class RoadmapPageComponent implements OnInit {
   readonly roadmapService = inject(RoadmapService);
   readonly availabilityService = inject(AvailabilityService);
+  private readonly route = inject(ActivatedRoute);
   private readonly destroyRef = inject(DestroyRef);
 
   readonly Number = Number;
@@ -75,8 +76,54 @@ export class RoadmapPageComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    this.roadmapService.loadRoadmaps();
     this.availabilityService.loadMyAvailability();
+
+    // 1. Check Route Param (:id)
+    const routeId = this.route.snapshot.paramMap.get('id');
+    if (routeId && routeId !== 'new') {
+      this.roadmapService.loadRoadmapDetail(routeId);
+    } else {
+      this.roadmapService.loadRoadmaps();
+    }
+
+    if (routeId === 'new') {
+      this.showCreateForm.set(true);
+      this.roadmapService.setActiveStep(1);
+    }
+
+    // 2. Check Query Param (?goal=...)
+    const queryGoal = this.route.snapshot.queryParamMap.get('goal');
+    if (queryGoal) {
+      this.newGoalTitle.set(queryGoal);
+      const lower = queryGoal.toLowerCase();
+      const now = new Date();
+      if (lower.includes('fastapi')) {
+        this.newPriorKnowledgeLevel.set('INTERMEDIATE');
+        const targetDate = new Date(now.getTime() + 12 * 7 * 24 * 60 * 60 * 1000);
+        this.newTargetDate.set(targetDate.toISOString().split('T')[0]);
+      } else if (lower.includes('aws')) {
+        this.newPriorKnowledgeLevel.set('BEGINNER');
+        const targetDate = new Date(now.getTime() + 8 * 7 * 24 * 60 * 60 * 1000);
+        this.newTargetDate.set(targetDate.toISOString().split('T')[0]);
+      } else if (lower.includes('ielts')) {
+        this.newPriorKnowledgeLevel.set('INTERMEDIATE');
+        const targetDate = new Date(now.getTime() + 10 * 7 * 24 * 60 * 60 * 1000);
+        this.newTargetDate.set(targetDate.toISOString().split('T')[0]);
+      }
+      if (!this.newStartDate()) {
+        this.newStartDate.set(now.toISOString().split('T')[0]);
+      }
+      this.showCreateForm.set(true);
+      this.roadmapService.setActiveStep(1);
+    }
+
+    // React to route parameter changes if navigation happens within component
+    this.route.paramMap.subscribe(params => {
+      const id = params.get('id');
+      if (id && id !== 'new' && id !== this.roadmapService.selectedRoadmapDetail()?.id) {
+        this.roadmapService.loadRoadmapDetail(id);
+      }
+    });
   }
 
   toggleCreateForm(): void {

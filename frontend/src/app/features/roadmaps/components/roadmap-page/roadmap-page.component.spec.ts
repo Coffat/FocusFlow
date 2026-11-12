@@ -678,20 +678,31 @@ describe('RoadmapPageComponent (WBS 6.3 3-Step AI Planning & Approval Workspace)
       expect(component.showCreateForm()).toBe(true);
     });
 
-    it('hiển thị link tùy chỉnh dẫn sang /availability và đóng modal khi click', () => {
-      component.toggleCreateForm();
+    it('hiển thị nút quay lại Danh mục Lộ trình (/roadmaps)', () => {
+      const compiled = fixture.nativeElement as HTMLElement;
+      const backBtn = compiled.querySelector('[data-testid="back-to-roadmaps-hub"]') as HTMLAnchorElement;
+      expect(backBtn).toBeTruthy();
+      expect(backBtn.getAttribute('routerLink') || backBtn.getAttribute('href')).toContain('/roadmaps');
+      expect(backBtn.textContent).toContain('Danh mục Lộ trình');
+    });
+
+    it('hiển thị banner SSE tiến trình với 4 giai đoạn pipeline rõ ràng', () => {
+      service.sseProgress.set({
+        stage: 'STREAMING',
+        progress: 65,
+        message: 'Đang tạo kế hoạch bài học...',
+        retryCount: 0,
+        isStreaming: true,
+      });
       fixture.detectChanges();
 
       const compiled = fixture.nativeElement as HTMLElement;
-      const customLink = compiled.querySelector(
-        '[data-testid="onboard-custom-config-link"]'
-      ) as HTMLAnchorElement;
-      expect(customLink).toBeTruthy();
-      expect(customLink.getAttribute('routerLink') || customLink.getAttribute('href')).toContain('/availability');
-
-      customLink.click();
-      fixture.detectChanges();
-      expect(component.showOnboardingModal()).toBe(false);
+      const banner = compiled.querySelector('[data-testid="sse-progress-banner"]');
+      expect(banner).toBeTruthy();
+      expect(banner?.textContent).toContain('1. RESERVED');
+      expect(banner?.textContent).toContain('2. CHUNK STREAM');
+      expect(banner?.textContent).toContain('3. VALIDATING TIERS 1-3');
+      expect(banner?.textContent).toContain('4. COMPLETED');
     });
   });
 });
