@@ -19,6 +19,7 @@ import src.evaluation.infrastructure.orm  # noqa: F401
 import src.execution.infrastructure.orm  # noqa: F401
 import src.planning.infrastructure.orm  # noqa: F401
 import src.shared_kernel.infrastructure.outbox.models  # noqa: F401
+import src.shared_kernel.infrastructure.workflow.models  # noqa: F401
 from alembic import context
 from src.shared_kernel.config import get_settings
 from src.shared_kernel.infrastructure.database.session import Base
