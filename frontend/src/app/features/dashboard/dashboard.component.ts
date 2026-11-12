@@ -142,10 +142,7 @@ export class DashboardComponent implements OnInit {
 
     if (isInput || this.wizardOpen() || this.adaptationModalOpen()) return;
 
-    if (event.key === 'c' || event.key === 'C') {
-      event.preventDefault();
-      this.openCreateWizard(1);
-    } else if (event.code === 'Space' && !event.repeat) {
+    if (event.code === 'Space' && !event.repeat) {
       event.preventDefault();
       this.router.navigate(['/workspace']);
     }

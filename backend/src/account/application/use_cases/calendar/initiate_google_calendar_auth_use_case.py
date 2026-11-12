@@ -44,6 +44,7 @@ class InitiateGoogleCalendarAuthUseCase:
             "sync_type": sync_type,
             "nonce": csrf_token,
             "redirect_uri": redirect_uri,
+            "return_to": request.return_to or "/settings",
         }
         state_str = base64.urlsafe_b64encode(json.dumps(state_payload).encode("utf-8")).decode(
             "utf-8"

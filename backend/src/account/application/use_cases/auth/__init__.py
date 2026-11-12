@@ -18,11 +18,13 @@ from src.account.application.use_cases.auth.register_otp_use_case import (
 from src.account.application.use_cases.auth.register_use_case import (
     RegisterUseCase,
 )
+from src.account.domain.services.password_hasher import PasswordHasher
 
 __all__ = [
     "ConfirmPasswordResetUseCase",
     "GoogleAuthUseCase",
     "LoginUseCase",
+    "PasswordHasher",
     "RefreshTokenUseCase",
     "RegisterUseCase",
     "RequestPasswordResetOtpUseCase",

@@ -24,3 +24,15 @@ class UserRepositoryPort(Protocol):
     async def update_password(self, user_id: UUID, password_hash: str) -> None:
         """Update password hash for an existing user."""
         ...
+
+    async def update_profile(self, user_id: UUID, full_name: str, timezone: str) -> Any | None:
+        """Update full_name and timezone for an existing user."""
+        ...
+
+    async def get_quota_by_user_id(self, user_id: UUID) -> Any | None:
+        """Query AI quota record by user id."""
+        ...
+
+    async def create_or_init_quota(self, user_id: UUID, tier: str = "FREE") -> Any:
+        """Create and initialize default AI quota record for user."""
+        ...

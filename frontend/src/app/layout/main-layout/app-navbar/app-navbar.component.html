@@ -42,10 +42,10 @@
 
     <!-- Right: Utility Cluster -->
     <div class="flex items-center gap-2 sm:gap-2.5 shrink-0">
-      <!-- Quick Action "Vào học" (Obsidian Black Pill) -->
+      <!-- Quick Action "Vào học" (Deep Moss Green Pill) -->
       <a
         routerLink="/workspace"
-        class="hidden sm:inline-flex items-center gap-1.5 bg-[#111111] hover:bg-[#246B4A] text-white px-4 py-2 rounded-full text-xs font-semibold shadow-xs transition active:scale-95 no-underline shrink-0"
+        class="hidden sm:inline-flex items-center gap-1.5 bg-[#246B4A] hover:bg-[#1B5338] text-white px-4 py-2 rounded-full text-xs font-semibold shadow-xs transition active:scale-95 no-underline shrink-0"
         title="Bắt đầu phiên học với Pomodoro Timer"
       >
         <lucide-icon name="play" [size]="13" class="shrink-0 fill-current" aria-hidden="true"></lucide-icon>
@@ -136,13 +136,13 @@
 
             <!-- Navigation Links -->
             <a
-              routerLink="/settings"
+              routerLink="/profile"
               (click)="closeUserMenu()"
               class="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-neutral-700 hover:text-neutral-900 hover:bg-neutral-100/80 rounded-xl transition-colors no-underline cursor-pointer"
               role="menuitem"
             >
-              <lucide-icon name="settings" [size]="15" class="text-neutral-500 shrink-0" aria-hidden="true"></lucide-icon>
-              <span>Cài đặt & Hồ sơ</span>
+              <lucide-icon name="user" [size]="15" class="text-neutral-500 shrink-0" aria-hidden="true"></lucide-icon>
+              <span>Hồ sơ người học</span>
             </a>
 
             <a
@@ -151,8 +151,18 @@
               class="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-neutral-700 hover:text-neutral-900 hover:bg-neutral-100/80 rounded-xl transition-colors no-underline cursor-pointer"
               role="menuitem"
             >
-              <lucide-icon name="sparkles" [size]="15" class="text-[#246B4A] shrink-0" aria-hidden="true"></lucide-icon>
-              <span>Gói dịch vụ & Quota AI</span>
+              <lucide-icon name="settings" [size]="15" class="text-neutral-500 shrink-0" aria-hidden="true"></lucide-icon>
+              <span>Cài đặt hệ thống</span>
+            </a>
+
+            <a
+              routerLink="/availability"
+              (click)="closeUserMenu()"
+              class="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-neutral-700 hover:text-neutral-900 hover:bg-neutral-100/80 rounded-xl transition-colors no-underline cursor-pointer"
+              role="menuitem"
+            >
+              <lucide-icon name="clock" [size]="15" class="text-[#246B4A] shrink-0" aria-hidden="true"></lucide-icon>
+              <span>Thời gian rảnh</span>
             </a>
 
             <div class="border-t border-neutral-100 my-1"></div>
@@ -206,7 +216,7 @@
         <a
           routerLink="/workspace"
           (click)="closeMobileMenu()"
-          class="w-full bg-[#111111] hover:bg-[#246B4A] text-white px-4 py-2.5 rounded-full text-xs font-semibold shadow-xs transition active:scale-95 inline-flex items-center justify-center gap-2 no-underline"
+          class="w-full bg-[#246B4A] hover:bg-[#1B5338] text-white px-4 py-2.5 rounded-full text-xs font-semibold shadow-xs transition active:scale-95 inline-flex items-center justify-center gap-2 no-underline"
         >
           <lucide-icon name="play" [size]="14" class="shrink-0 fill-current" aria-hidden="true"></lucide-icon>
           <span>Vào học (Pomodoro Timer)</span>

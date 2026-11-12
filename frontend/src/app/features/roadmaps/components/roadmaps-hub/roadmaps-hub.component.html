@@ -27,16 +27,15 @@
         <span>Kích hoạt lại / Tái cân bằng Domino Shift</span>
       </button>
 
-      <!-- Primary Action: Obsidian Black Button -->
+      <!-- Primary Action: Forest Green Button -->
       <button
         type="button"
         (click)="openCreateWizard(1)"
         data-testid="hub-create-roadmap-btn"
-        class="w-full sm:w-auto justify-center bg-[#111111] hover:bg-[#246B4A] text-white px-5 py-2.5 rounded-full text-xs sm:text-sm font-semibold shadow-xs inline-flex items-center gap-2 transition active:scale-95 shrink-0 cursor-pointer group text-center"
+        class="w-full sm:w-auto justify-center bg-[#246B4A] hover:bg-[#1B5338] text-white px-5 py-2.5 rounded-full text-xs sm:text-sm font-semibold shadow-xs inline-flex items-center gap-2 transition active:scale-95 shrink-0 cursor-pointer group text-center"
       >
         <span class="material-symbols-outlined text-[18px] group-hover:rotate-90 transition-transform duration-200" aria-hidden="true">add</span>
         <span>Khởi tạo Lộ trình Mới với AI</span>
-        <kbd class="font-mono text-[10px] bg-neutral-700 text-neutral-200 px-1.5 py-0.2 rounded border border-neutral-600 hidden sm:inline-block">C</kbd>
       </button>
     </div>
   </div>
@@ -211,7 +210,6 @@
         description="Hãy bắt đầu hành trình tự học thích ứng bằng cách mô tả mục tiêu của bạn. FocusFlow sẽ phân rã thành các Milestone và đồng bộ thời khóa biểu tự động."
         ctaLabel="Tạo lộ trình học tập"
         ctaRoute="/roadmaps/new"
-        shortcutKey="C"
         (selectTemplate)="onSelectTemplate($event)"
         (createCustomRoadmap)="onCreateCustomRoadmap()"
       />

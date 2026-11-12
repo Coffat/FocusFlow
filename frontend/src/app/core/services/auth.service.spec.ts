@@ -171,6 +171,7 @@ describe('AuthService (Angular 21 Signals & State Reactivity)', () => {
     expect(service.isLoading()).toBe(false);
     expect(service.currentUser()?.fullName).toBe('Logged In User');
     expect(service.isAuthenticated()).toBe(true);
+    expect(localStorage.getItem('access_token')).toBe('fake-jwt');
   });
 
   it('handleSessionExpired() điều hướng người dùng về trang /sign-in với query param expired=1', () => {

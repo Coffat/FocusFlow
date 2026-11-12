@@ -53,6 +53,9 @@ class RefreshTokenRepository:
         # Register in family set
         await client.sadd(f"token_family:{family_id}", token_hash)
         await client.expire(f"token_family:{family_id}", ttl_seconds)
+        # Register family in user set
+        await client.sadd(f"user_families:{user_id}", family_id)
+        await client.expire(f"user_families:{user_id}", ttl_seconds)
 
     @staticmethod
     async def get_refresh_token(token_hash: str) -> dict[str, Any] | None:
@@ -80,3 +83,14 @@ class RefreshTokenRepository:
             t_str = t_hash.decode("utf-8") if isinstance(t_hash, bytes) else str(t_hash)
             await client.delete(f"refresh_token:{t_str}")
         await client.delete(family_key)
+
+    @staticmethod
+    async def revoke_all_for_user(user_id: str) -> None:
+        """Revoke all refresh tokens and active token families for a user."""
+        client = get_redis_client()
+        user_families_key = f"user_families:{user_id}"
+        families = await client.smembers(user_families_key)
+        for fam in families:
+            fam_str = fam.decode("utf-8") if isinstance(fam, bytes) else str(fam)
+            await RefreshTokenRepository.revoke_family(fam_str)
+        await client.delete(user_families_key)

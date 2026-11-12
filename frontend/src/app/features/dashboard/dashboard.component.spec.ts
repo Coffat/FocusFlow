@@ -76,12 +76,11 @@ describe('DashboardComponent', () => {
     expect(component.wizardStep()).toBe(1);
   });
 
-  it('mở RoadmapWizardHostComponent ở Bước 1 khi bấm phím C ngoài ô input hoặc bấm nút Khởi tạo Lộ trình Mới với AI', () => {
+  it('không mở wizard khi bấm phím C (đã loại bỏ phím tắt C theo yêu cầu UX)', () => {
     expect(component.wizardOpen()).toBe(false);
     const event = new KeyboardEvent('keydown', { key: 'c' });
     window.dispatchEvent(event);
-    expect(component.wizardOpen()).toBe(true);
-    expect(component.wizardStep()).toBe(1);
+    expect(component.wizardOpen()).toBe(false);
   });
 
   it('điều hướng tới /workspace khi bấm phím Space ngoài ô input', () => {

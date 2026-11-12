@@ -74,4 +74,10 @@ describe('SchedulePageComponent', () => {
     expect(el.textContent).toContain('Tạo Lộ trình mới với AI');
     expect(el.textContent).toContain('Cấu hình Giờ rảnh');
   });
+
+  it('xử lý kết nối Google Calendar từ thanh tác vụ schedule', () => {
+    const connectSpy = vi.spyOn(component.calendarService, 'connectGoogleCalendar').mockImplementation(() => {});
+    component.connectGoogleCalendar();
+    expect(connectSpy).toHaveBeenCalledWith('/schedule');
+  });
 });

@@ -1,7 +1,6 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  HostListener,
   OnInit,
   computed,
   inject,
@@ -116,22 +115,6 @@ export class RoadmapsHubComponent implements OnInit {
       return true;
     });
   });
-
-  @HostListener('window:keydown', ['$event'])
-  onGlobalKeydown(event: KeyboardEvent): void {
-    if (
-      (event.key === 'c' || event.key === 'C') &&
-      !['INPUT', 'TEXTAREA', 'SELECT'].includes((event.target as HTMLElement)?.tagName) &&
-      !event.ctrlKey &&
-      !event.metaKey &&
-      !event.altKey &&
-      !this.wizardOpen() &&
-      !this.adaptationModalOpen()
-    ) {
-      event.preventDefault();
-      this.openCreateWizard(1);
-    }
-  }
 
   ngOnInit(): void {
     this.roadmapService.loadRoadmaps();
