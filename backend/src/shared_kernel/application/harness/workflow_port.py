@@ -1,0 +1,16 @@
+from typing import Protocol
+from uuid import UUID
+
+from .models import WorkflowRun, WorkflowStepExecution
+
+
+class WorkflowRepositoryPort(Protocol):
+    async def add_run(self, run: WorkflowRun) -> None: ...
+
+    async def get_run(self, run_id: UUID, *, user_id: UUID | None = None) -> WorkflowRun | None: ...
+
+    async def save_run(self, run: WorkflowRun) -> None: ...
+
+    async def add_step(self, step: WorkflowStepExecution) -> None: ...
+
+    async def get_steps(self, run_id: UUID) -> list[WorkflowStepExecution]: ...
