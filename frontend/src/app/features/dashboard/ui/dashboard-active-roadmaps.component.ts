@@ -7,10 +7,11 @@ import { RoadmapCardComponent } from '../../../shared/components/roadmap-card/ro
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [RoadmapCardComponent],
+  styles: [':host { display: block; width: 100%; }'],
   template: `
-    <div class="bg-white border border-[#DCDCDC] rounded-xl p-5 shadow-xs">
+    <div class="bg-white border border-neutral-200/80 rounded-2xl p-6 shadow-xs">
       <!-- Section Header -->
-      <div class="flex items-center justify-between mb-4">
+      <div class="flex items-center justify-between mb-5">
         <div class="flex items-center gap-2">
           <span class="material-symbols-outlined text-[20px] text-emerald-800" aria-hidden="true">alt_route</span>
           <h3 class="font-bold text-base text-neutral-900 font-serif">
@@ -36,7 +37,7 @@ import { RoadmapCardComponent } from '../../../shared/components/roadmap-card/ro
             variant="compact"
           />
         } @empty {
-          <div class="p-6 text-center text-xs text-neutral-500 bg-[#FBF9F8] rounded-lg border border-dashed border-neutral-300">
+          <div class="p-6 text-center text-xs text-neutral-500 bg-neutral-50/60 rounded-xl border border-dashed border-neutral-200">
             Chưa có lộ trình nào đang hoạt động.
             <button
               type="button"

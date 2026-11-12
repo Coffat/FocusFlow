@@ -1,83 +1,81 @@
-<div class="dashboard-viewport min-h-full">
-  <!-- Page Content Container -->
-  <main class="max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8 space-y-6 flex-1">
-    <!-- Top Bar: State Switcher & Primary Create Roadmap CTA -->
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-      <app-dashboard-state-switcher
-        [activeState]="currentState()"
-        (stateChange)="onStateChange($event)"
-      />
-
-      <button
-        type="button"
-        data-testid="dashboard-create-roadmap-btn"
-        (click)="openCreateWizard(1)"
-        class="bg-[#111111] hover:bg-[#246B4A] text-white px-5 py-2.5 rounded-full text-xs sm:text-sm font-semibold shadow-xs inline-flex items-center gap-2 transition active:scale-95 shrink-0 cursor-pointer self-start sm:self-auto"
-      >
-        <span class="material-symbols-outlined text-[18px]" aria-hidden="true">add</span>
-        <span>Khởi tạo Lộ trình Mới với AI</span>
-        <kbd class="font-mono text-[10px] bg-neutral-700 text-neutral-200 px-1.5 py-0.2 rounded border border-neutral-600">C</kbd>
-      </button>
+<div class="dashboard-page-container max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex flex-col gap-8">
+  <!-- Top Bar: Title & Primary Create Roadmap CTA -->
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div>
+      <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-neutral-900 font-serif">Tổng quan học tập</h1>
+      <p class="text-xs sm:text-sm text-neutral-500 mt-0.5">Theo dõi tiến độ, hiệu suất và điều phối phiên học thông minh</p>
     </div>
 
-    <!-- When New User: Render Empty State -->
-    @if (currentState() === 'new-user') {
-      <app-dashboard-empty-state
-        (createCustomRoadmap)="openCreateWizard(1)"
-        (selectTemplate)="onSelectStarterTemplate($event)"
+    <button
+      type="button"
+      data-testid="dashboard-create-roadmap-btn"
+      (click)="openCreateWizard(1)"
+      class="bg-[#111111] hover:bg-[#246B4A] text-white px-5 py-2.5 rounded-full text-xs sm:text-sm font-semibold shadow-xs inline-flex items-center gap-2 transition active:scale-95 shrink-0 cursor-pointer self-start sm:self-auto"
+    >
+      <lucide-icon name="plus" [size]="18" class="shrink-0" aria-hidden="true"></lucide-icon>
+      <span>Khởi tạo Lộ trình Mới với AI</span>
+      <kbd class="font-mono text-[10px] bg-neutral-700 text-neutral-200 px-1.5 py-0.5 rounded border border-neutral-600">C</kbd>
+    </button>
+  </div>
+
+  <!-- When New User / Empty: Render Empty State -->
+  @if (isNewUser()) {
+    <app-dashboard-empty-state
+      (createCustomRoadmap)="openCreateWizard(1)"
+      (selectTemplate)="onSelectStarterTemplate($event)"
+    />
+  } @else {
+    @if (summary(); as s) {
+      <!-- KPI Cards Grid -->
+      <app-dashboard-kpi-grid [kpi]="s.kpi" />
+
+      <!-- Weekly Time-Grid -->
+      <app-dashboard-weekly-grid
+        [scheduleBlocks]="s.scheduleBlocks"
+        [currentState]="currentState()"
+        [weekOffset]="weekOffset()"
+        [hasDominoShift]="s.adaptationStatus.hasDominoShift"
+        (weekOffsetChange)="onWeekOffsetChange($event)"
       />
-    } @else {
-      @if (summary(); as s) {
-        <!-- KPI Cards Grid -->
-        <app-dashboard-kpi-grid [kpi]="s.kpi" />
 
-        <!-- Weekly Time-Grid -->
-        <app-dashboard-weekly-grid
-          [scheduleBlocks]="s.scheduleBlocks"
-          [currentState]="currentState()"
-          [weekOffset]="weekOffset()"
-          (weekOffsetChange)="onWeekOffsetChange($event)"
-        />
-
-        <!-- Lower Workspace 2-Column Split -->
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          <!-- Left Column (Span 7) -->
-          <div class="lg:col-span-7 space-y-6">
-            <app-dashboard-activity-chart [distribution]="s.studyDistribution" />
-            <app-dashboard-active-roadmaps
-              [roadmaps]="s.activeRoadmaps"
-              (createRoadmap)="openCreateWizard(1)"
-            />
-          </div>
-
-          <!-- Right Column (Span 5) -->
-          <div class="lg:col-span-5 space-y-6">
-            <app-dashboard-today-queue [tasks]="s.todayQueue" />
-            <app-dashboard-ai-insights
-              [insight]="s.aiInsight"
-              [adaptation]="s.adaptationStatus"
-              (openAdaptation)="openAdaptationModal()"
-            />
-          </div>
+      <!-- Lower Workspace 2-Column Split -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
+        <!-- Left Column (Span 7) -->
+        <div class="lg:col-span-7 flex flex-col gap-6 lg:gap-8">
+          <app-dashboard-activity-chart [distribution]="s.studyDistribution" />
+          <app-dashboard-active-roadmaps
+            [roadmaps]="s.activeRoadmaps"
+            (createRoadmap)="openCreateWizard(1)"
+          />
         </div>
-      }
+
+        <!-- Right Column (Span 5) -->
+        <div class="lg:col-span-5 flex flex-col gap-6 lg:gap-8">
+          <app-dashboard-today-queue [tasks]="s.todayQueue" />
+          <app-dashboard-ai-insights
+            [insight]="s.aiInsight"
+            [adaptation]="s.adaptationStatus"
+            (openAdaptation)="openAdaptationModal()"
+          />
+        </div>
+      </div>
     }
-
-    <!-- 4-STEP ROADMAP CREATION WIZARD DIALOG HOST -->
-    <app-roadmap-wizard-host
-      [open]="wizardOpen()"
-      [initialStep]="wizardStep()"
-      [initialTitle]="wizardInitialTitle()"
-      [initialLevel]="wizardInitialLevel()"
-      [initialWeeklyHours]="wizardInitialWeeklyHours()"
-      (closeWizard)="closeCreateWizard()"
-    />
-
-    <!-- SCR-08 ADAPTATION MODAL DIALOG -->
-    <app-adaptation-modal-dialog
-      [open]="adaptationModalOpen()"
-      (closeModal)="closeAdaptationModal()"
-      (confirmAdaptation)="closeAdaptationModal()"
-    />
-  </main>
+  }
 </div>
+
+<!-- 4-STEP ROADMAP CREATION WIZARD DIALOG HOST -->
+<app-roadmap-wizard-host
+  [open]="wizardOpen()"
+  [initialStep]="wizardStep()"
+  [initialTitle]="wizardInitialTitle()"
+  [initialLevel]="wizardInitialLevel()"
+  [initialWeeklyHours]="wizardInitialWeeklyHours()"
+  (closeWizard)="closeCreateWizard()"
+/>
+
+<!-- SCR-08 ADAPTATION MODAL DIALOG -->
+<app-adaptation-modal-dialog
+  [open]="adaptationModalOpen()"
+  (closeModal)="closeAdaptationModal()"
+  (confirmAdaptation)="closeAdaptationModal()"
+/>

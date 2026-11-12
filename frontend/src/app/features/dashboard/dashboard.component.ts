@@ -5,13 +5,19 @@ import {
   ChangeDetectionStrategy,
   HostListener,
   signal,
+  computed,
 } from '@angular/core';
 import { Router } from '@angular/router';
+import {
+  LucideAngularModule,
+  LUCIDE_ICONS,
+  LucideIconProvider,
+  Plus,
+} from 'lucide-angular';
 import { AuthService } from '../../core/services/auth.service';
 import { TranslationService } from '../../core/services/translation.service';
 import { DashboardService } from './services/dashboard.service';
 import { DashboardDataState } from './models/dashboard.model';
-import { DashboardStateSwitcherComponent } from './ui/dashboard-state-switcher.component';
 import { DashboardKpiGridComponent } from './ui/dashboard-kpi-grid.component';
 import { DashboardWeeklyGridComponent } from './ui/dashboard-weekly-grid.component';
 import { DashboardEmptyStateComponent } from './ui/dashboard-empty-state.component';
@@ -29,7 +35,7 @@ import { AdaptationModalDialogComponent } from '../roadmaps/components/dialogs/a
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
-    DashboardStateSwitcherComponent,
+    LucideAngularModule,
     DashboardKpiGridComponent,
     DashboardWeeklyGridComponent,
     DashboardEmptyStateComponent,
@@ -40,8 +46,15 @@ import { AdaptationModalDialogComponent } from '../roadmaps/components/dialogs/a
     RoadmapWizardHostComponent,
     AdaptationModalDialogComponent,
   ],
+  providers: [
+    {
+      provide: LUCIDE_ICONS,
+      multi: true,
+      useValue: new LucideIconProvider({ Plus }),
+    },
+  ],
   templateUrl: './dashboard.component.html',
-  styleUrl: './dashboard.component.scss',
+  styles: [':host { display: block; width: 100%; }'],
 })
 export class DashboardComponent implements OnInit {
   readonly authService = inject(AuthService);
@@ -54,6 +67,10 @@ export class DashboardComponent implements OnInit {
   readonly currentState = this.dashboardService.currentState;
   readonly isLoading = this.dashboardService.isLoading;
   readonly weekOffset = this.dashboardService.weekOffset;
+
+  readonly isNewUser = computed(() => {
+    return this.currentState() === 'new-user' || (this.summary()?.activeRoadmaps?.length ?? 0) === 0;
+  });
 
   // 4-Step Wizard Dialog State
   readonly wizardOpen = signal<boolean>(false);

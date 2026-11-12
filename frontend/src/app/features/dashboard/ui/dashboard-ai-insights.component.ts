@@ -7,8 +7,9 @@ import { AiInsightBannerComponent } from '../../../shared/components/ai-insight-
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [AiInsightBannerComponent],
+  styles: [':host { display: block; width: 100%; }'],
   template: `
-    <div class="space-y-4">
+    <div class="flex flex-col gap-6">
       @if (insight(); as ins) {
         <app-ai-insight-banner
           type="insight"

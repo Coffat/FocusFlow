@@ -29,12 +29,26 @@ describe('DashboardComponent', () => {
   it('khởi tạo thành công và hiển thị giao diện dashboard', () => {
     expect(component).toBeTruthy();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('.dashboard-viewport')).toBeTruthy();
-    expect(compiled.querySelector('app-dashboard-state-switcher')).toBeTruthy();
+    expect(compiled.querySelector('.dashboard-page-container')).toBeTruthy();
+    expect(compiled.querySelector('[data-testid="dashboard-create-roadmap-btn"]')).toBeTruthy();
   });
 
-  it('hiển thị KPI grid và Weekly grid khi ở trạng thái normal', () => {
-    service.setState('normal');
+  it('hiển thị KPI grid và Weekly grid khi có lộ trình học', () => {
+    service.summary.set({
+      ...service.summary(),
+      activeRoadmaps: [
+        {
+          id: 'rm-1',
+          title: 'IELTS Academic',
+          category: 'English',
+          progressPercentage: 40,
+          totalTasks: 20,
+          completedTasks: 8,
+          nextTaskTitle: 'Next',
+          deadline: '2026-12-31',
+        },
+      ],
+    });
     fixture.detectChanges();
 
     const compiled = fixture.nativeElement as HTMLElement;

@@ -7,14 +7,15 @@ import { KpiCardComponent } from '../../../shared/components/kpi-card/kpi-card.c
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [KpiCardComponent],
+  styles: [':host { display: block; width: 100%; }'],
   template: `
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
       <!-- Card 1: Tổng giờ tháng -->
       <app-kpi-card
         label="Tổng giờ tháng"
-        [value]="kpi().monthlyHours"
+        [value]="kpi().monthlyHours + 'h'"
         [target]="kpi().monthlyTarget + 'h'"
-        icon="schedule"
+        icon="clock"
         tone="moss"
         [progress]="monthlyPercent()"
         [subtitle]="monthlyPercent() + '% mục tiêu'"
@@ -25,10 +26,10 @@ import { KpiCardComponent } from '../../../shared/components/kpi-card/kpi-card.c
       <app-kpi-card
         label="Chuỗi liên tục"
         [value]="kpi().streakDays + ' ngày'"
-        icon="local_fire_department"
+        icon="flame"
         tone="amber"
         [subtitle]="'Kỷ lục: ' + kpi().streakRecord + ' ngày'"
-        footerText="Hôm nay: Đã học 🔥"
+        footerText="Hôm nay: Đã học"
       />
 
       <!-- Card 3: Tỷ lệ bám sát lịch -->
@@ -37,7 +38,7 @@ import { KpiCardComponent } from '../../../shared/components/kpi-card/kpi-card.c
         [value]="kpi().adherenceRate + '%'"
         [delta]="'+' + kpi().adherenceChange + '%'"
         trend="up"
-        icon="track_changes"
+        icon="target"
         tone="emerald"
         [progress]="kpi().adherenceRate"
         subtitle="Adaptive AI"
