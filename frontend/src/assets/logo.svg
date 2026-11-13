@@ -1,7 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" fill="none">
-  <!-- FocusFlow Brand Mark: Intersecting Continuous Flow & Intentional Focus Rings -->
-  <circle cx="24" cy="24" r="20" stroke="#005234" stroke-width="2.5" stroke-opacity="0.15"/>
-  <path d="M16 24C16 19.5817 19.5817 16 24 16C28.4183 16 32 19.5817 32 24C32 28.4183 28.4183 32 24 32" stroke="#005234" stroke-width="3" stroke-linecap="round"/>
-  <path d="M24 16C21.7909 16 20 17.7909 20 20C20 22.2091 21.7909 24 24 24C26.2091 24 28 25.7909 28 28C28 30.2091 26.2091 32 24 32" stroke="#246b4a" stroke-width="3" stroke-linecap="round"/>
-  <circle cx="24" cy="24" r="3" fill="#005234"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-labelledby="focusflow-logo-title focusflow-logo-description">
+  <title id="focusflow-logo-title">FocusFlow</title>
+  <desc id="focusflow-logo-description">Hai dải chữ F liên kết thành vòng lặp học tập thích ứng.</desc>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 30.5C5.7 21.1 10.1 10.5 20.4 7.4C30.2 4.5 40.2 10.1 42 19.2" stroke="#246B4A" stroke-width="6" />
+    <path d="M9.8 30.8C11.7 24.7 16.2 21.2 22.5 21H33.7C31.4 25.1 28.1 27 23.3 27H17.5" stroke="#246B4A" stroke-width="6" />
+    <path d="M19.1 41C20.7 33.4 25.4 28.8 33 27.6H41.5C39.5 31.7 36.3 33.7 31.6 33.7H27.2L25.7 41" stroke="#6D4C8D" stroke-width="6" />
+  </g>
 </svg>

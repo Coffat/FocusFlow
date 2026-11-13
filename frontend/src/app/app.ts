@@ -8,6 +8,6 @@ import { RouterOutlet } from '@angular/router';
   styleUrl: './app.scss'
 })
 export class App {
-  title = signal('focusflow-frontend');
+  title = signal('FocusFlow');
 
 }
