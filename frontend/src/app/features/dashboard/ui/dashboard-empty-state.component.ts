@@ -15,7 +15,6 @@ import {
       description="Hãy bắt đầu bằng cách mô tả mục tiêu học tập hoặc tài liệu bạn muốn chinh phục. AI Harness sẽ phân tích, chia nhỏ thành các cột mốc và tự động tối ưu hóa theo quỹ thời gian của bạn."
       ctaLabel="Tạo Lộ trình Học tập Đầu tiên với AI"
       ctaRoute="/roadmaps"
-      shortcutKey="C"
       (selectTemplate)="onSelectTemplate($event)"
       (createCustomRoadmap)="onCreateCustom()"
     />

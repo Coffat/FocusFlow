@@ -162,9 +162,9 @@ test.describe('FR-AVAIL v2.0 — Hybrid Availability End-to-End Verification (E2
     await setupLearnerSession(page, request);
 
     // =========================================================================
-    // E2E-PW-01: Đăng ký người học mới & Điều hướng tới /settings
+    // E2E-PW-01: Đăng ký người học mới & Điều hướng tới /availability
     // =========================================================================
-    await page.goto('/settings');
+    await page.goto('/availability');
 
     await expect(
       page.getByRole('heading', { name: /Cấu Hình Thời Gian Rảnh Lai/i })
@@ -299,8 +299,8 @@ test.describe('FR-AVAIL v2.0 — Hybrid Availability End-to-End Verification (E2
     await expect(page.getByTestId('quick-drawer-notification')).toContainText('Domino Shift');
     expect(putAvailabilityCount).toBe(0);
 
-    // Quay lại /settings kiểm tra khuôn mẫu tuần vẫn nguyên vẹn 100%
-    await page.goto('/settings');
+    // Quay lại /availability kiểm tra khuôn mẫu tuần vẫn nguyên vẹn 100%
+    await page.goto('/availability');
     await expect(page.getByTestId('mode-b-tab')).toHaveAttribute('aria-selected', 'true');
     await expect(page.getByTestId('total-weekly-hours')).toContainText('13.5 giờ / tuần');
   });
@@ -310,7 +310,7 @@ test.describe('FR-AVAIL v2.0 — Hybrid Availability End-to-End Verification (E2
     request
   }) => {
     await setupLearnerSession(page, request);
-    await page.goto('/settings');
+    await page.goto('/availability');
 
     await expect(
       page.getByRole('heading', { name: /Cấu Hình Thời Gian Rảnh Lai/i })

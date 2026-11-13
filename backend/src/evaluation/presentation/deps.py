@@ -23,9 +23,15 @@ from src.evaluation.application.use_cases.intelligence import (
 from src.evaluation.infrastructure.repositories.intelligence_repository import (
     SqlAlchemyEvaluationIntelligenceRepository,
 )
+from src.execution.public_api import (
+    ExecutionDashboardQueryPort,
+    create_execution_dashboard_query_port,
+)
 from src.planning.public_api import (
     MilestoneOwnershipQueryPort,
+    PlanningDashboardQueryPort,
     create_milestone_ownership_port,
+    create_planning_dashboard_query_port,
 )
 from src.shared_kernel.application.uow import AsyncUnitOfWork
 from src.shared_kernel.config import get_settings
@@ -118,5 +124,21 @@ def get_latest_weekly_review_use_case(
     return GetLatestWeeklyReviewUseCase(repository)
 
 
-def get_dashboard_summary_use_case() -> GetDashboardSummaryUseCase:
-    return GetDashboardSummaryUseCase()
+def get_planning_dashboard_port(
+    session: AsyncSession = Depends(get_evaluation_db_session),
+) -> PlanningDashboardQueryPort:
+    return create_planning_dashboard_query_port(session)
+
+
+def get_execution_dashboard_port(
+    session: AsyncSession = Depends(get_evaluation_db_session),
+) -> ExecutionDashboardQueryPort:
+    return create_execution_dashboard_query_port(session)
+
+
+def get_dashboard_summary_use_case(
+    planning_port: PlanningDashboardQueryPort = Depends(get_planning_dashboard_port),
+    execution_port: ExecutionDashboardQueryPort = Depends(get_execution_dashboard_port),
+    intelligence_repo: EvaluationIntelligenceRepositoryPort = Depends(get_intelligence_repository),
+) -> GetDashboardSummaryUseCase:
+    return GetDashboardSummaryUseCase(planning_port, execution_port, intelligence_repo)

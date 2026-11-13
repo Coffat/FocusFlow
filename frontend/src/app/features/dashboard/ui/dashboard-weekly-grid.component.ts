@@ -242,19 +242,19 @@ function formatDayMonth(d: Date): string {
                 >
                   @for (block of getBlocksForDay(day.dayOfWeek); track block.id) {
                     <div
-                      class="absolute inset-x-1.5 rounded-lg p-2 sm:p-2.5 text-xs transition-all duration-150 select-none cursor-pointer flex flex-col gap-1 items-start justify-start overflow-hidden shadow-2xs hover:shadow-xs active:scale-[0.99] border border-l-[3.5px]"
+                      class="absolute inset-x-1.5 rounded-lg p-1.5 sm:p-2 text-xs transition-all duration-150 select-none cursor-pointer flex flex-col gap-0.5 sm:gap-1 items-start justify-start overflow-hidden shadow-2xs hover:shadow-xs active:scale-[0.99] border border-l-[3.5px]"
                       [style.top.px]="calculateTop(block.startTime)"
                       [style.height.px]="calculateHeight(block.startTime, block.endTime)"
                       [class]="getBlockClass(block)"
                       (click)="openBlockDetail(block)"
                     >
-                      <!-- Line 1: Title (most prominent, clean line clamp) -->
-                      <div class="font-semibold text-xs text-neutral-900 leading-snug line-clamp-2 w-full">
+                      <!-- Line 1: Title (most prominent, shrink-0 prevents flex shrinkage clipping) -->
+                      <div class="font-semibold text-xs text-neutral-900 leading-snug line-clamp-2 w-full shrink-0">
                         {{ block.title }}
                       </div>
 
                       <!-- Line 2: Time & Status Symbol (pure symbols, no text) -->
-                      <div class="w-full flex items-center justify-between gap-1 text-[10px] font-mono text-neutral-500">
+                      <div class="w-full flex items-center justify-between gap-1 text-[10px] font-mono text-neutral-500 shrink-0">
                         <!-- Left: Start - End Time -->
                         <span class="flex items-center gap-1 shrink-0">
                           {{ block.startTime }} – {{ block.endTime }}
@@ -276,15 +276,15 @@ function formatDayMonth(d: Date): string {
                         </div>
                       </div>
 
-                      <!-- Tier 3: Very Tall Blocks (duration >= 120 mins) -->
+                      <!-- Tier 3: Very Tall Blocks (duration >= 120 mins) - Compact single row -->
                       @if (getDurationMinutes(block) >= 120) {
-                        <div class="w-full flex items-center flex-wrap gap-1.5 mt-0.5 pt-1 border-t border-neutral-200/50">
+                        <div class="w-full flex items-center justify-between gap-1 mt-auto pt-1 border-t border-neutral-200/50 shrink-0 text-[10px] font-mono overflow-hidden">
                           @if (block.code) {
-                            <span class="inline-block px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-700 font-mono text-[9px] font-semibold border border-neutral-200/70">
+                            <span class="truncate px-1 py-0.5 rounded bg-neutral-100 text-neutral-700 text-[9px] font-semibold border border-neutral-200/70 max-w-[85px]" [title]="block.code">
                               {{ block.code }}
                             </span>
                           }
-                          <span class="inline-flex items-center gap-1 text-[10px] text-neutral-600 font-mono">
+                          <span class="inline-flex items-center gap-1 text-[9px] sm:text-[10px] text-neutral-600 shrink-0 whitespace-nowrap">
                             <lucide-icon name="timer" [size]="11" class="text-emerald-700 shrink-0" aria-hidden="true"></lucide-icon>
                             <span>{{ getPomodoroEstimate(block) }} phiên</span>
                           </span>

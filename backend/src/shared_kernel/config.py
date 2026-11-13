@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     environment: str = "development"
     debug: bool = True
     backend_cors_origins: str = '["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:4200", "http://127.0.0.1:4200"]'
+    frontend_url: str = "http://localhost:4200"
 
     # PostgreSQL 16 (Asyncpg)
     database_url: str = (

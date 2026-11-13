@@ -67,6 +67,12 @@ from src.account.application.use_cases.learner_memory import (
     ResetLearnerMemoryUseCase,
     UpdateLearnerMemoryUseCase,
 )
+from src.account.application.use_cases.profile import (
+    ChangePasswordUseCase,
+    GetProfileUseCase,
+    GetQuotaUseCase,
+    UpdateProfileUseCase,
+)
 from src.account.domain.exceptions.auth_exceptions import (
     InvalidTokenError,
     TokenExpiredError,
@@ -536,4 +542,37 @@ def get_reconcile_calendar_connections_use_case(
         process_webhook_use_case=process_webhook_uc,
         renew_webhooks_use_case=renew_webhooks_uc,
         uow=uow,
+    )
+
+
+# --- Profile, Quota & Password Dependencies ---
+def get_update_profile_use_case(
+    user_repo: UserRepositoryPort = Depends(get_user_repository),
+    uow: AsyncUnitOfWork = Depends(get_account_uow),
+) -> UpdateProfileUseCase:
+    return UpdateProfileUseCase(user_repo=user_repo, uow=uow)
+
+
+def get_get_profile_use_case(
+    user_repo: UserRepositoryPort = Depends(get_user_repository),
+) -> GetProfileUseCase:
+    return GetProfileUseCase(user_repo=user_repo)
+
+
+def get_get_quota_use_case(
+    user_repo: UserRepositoryPort = Depends(get_user_repository),
+    uow: AsyncUnitOfWork = Depends(get_account_uow),
+) -> GetQuotaUseCase:
+    return GetQuotaUseCase(user_repo=user_repo, uow=uow)
+
+
+def get_change_password_use_case(
+    user_repo: UserRepositoryPort = Depends(get_user_repository),
+    uow: AsyncUnitOfWork = Depends(get_account_uow),
+    refresh_token_repo: RefreshTokenRepositoryPort = Depends(get_refresh_token_repository),
+) -> ChangePasswordUseCase:
+    return ChangePasswordUseCase(
+        user_repo=user_repo,
+        uow=uow,
+        refresh_token_repo=refresh_token_repo,
     )

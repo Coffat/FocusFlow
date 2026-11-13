@@ -1,4 +1,5 @@
-from uuid import UUID, uuid5
+from datetime import date, timedelta
+from uuid import UUID
 
 from src.evaluation.application.dtos.dashboard_dtos import (
     DashboardActiveRoadmapDTO,
@@ -10,226 +11,171 @@ from src.evaluation.application.dtos.dashboard_dtos import (
     DashboardTodayQueueItemDTO,
     DayStudyDistributionDTO,
 )
+from src.evaluation.application.ports.intelligence_repository_port import (
+    EvaluationIntelligenceRepositoryPort,
+)
+from src.execution.public_api import ExecutionDashboardQueryPort
+from src.planning.public_api import PlanningDashboardQueryPort
 
 
 class GetDashboardSummaryUseCase:
-    """Use case cung cấp dữ liệu tổng quan bảng điều khiển (User Dashboard).
+    """Use case cung cấp dữ liệu tổng quan bảng điều khiển (User Dashboard) từ dữ liệu thực tế."""
 
-    Trả về các chỉ số học tập trọng yếu (KPIs), phân bổ giờ học, danh sách lộ trình đang kích hoạt
-    (IELTS Academic 7.5, Go Hexagonal Backend), hàng đợi nhiệm vụ hôm nay và lịch học phân bổ.
-    """
-
-    def __init__(self) -> None:
-        pass
+    def __init__(
+        self,
+        planning_port: PlanningDashboardQueryPort,
+        execution_port: ExecutionDashboardQueryPort,
+        intelligence_repo: EvaluationIntelligenceRepositoryPort,
+    ) -> None:
+        self._planning_port = planning_port
+        self._execution_port = execution_port
+        self._intelligence_repo = intelligence_repo
 
     async def execute(self, user_id: UUID) -> DashboardSummaryResponseDTO:
-        # 1. Core KPIs
-        kpi = DashboardKpiDTO(
-            monthly_hours=42.5,
-            target_hours=50.0,
-            monthly_progress_pct=85.0,
-            streak_days=12,
-            personal_best_streak=18,
-            streak_history_last_7_days=[True, True, True, True, True, True, True],
-            adherence_rate_pct=91.2,
-            adherence_delta_pct=4.5,
-            completed_pomodoro_count=85,
-            deep_work_hours=36.0,
+        today = date.today()
+        start_of_week = today - timedelta(days=today.weekday())
+        end_of_week = start_of_week + timedelta(days=6)
+
+        # 1. Fetch data from Planning & Execution ports concurrently or sequentially
+        active_roadmaps_raw = await self._planning_port.get_active_roadmaps_for_user(user_id)
+        target_hours = await self._planning_port.get_monthly_target_hours(user_id)
+        schedule_blocks_raw = await self._planning_port.get_week_schedule_blocks(
+            user_id, start_of_week, end_of_week
         )
 
-        # 2. 7-Day Study Distribution
+        today_queue_raw = await self._execution_port.get_today_queue(user_id, today)
+        study_distribution_raw = await self._execution_port.get_7day_study_distribution(
+            user_id, today
+        )
+        kpi_stats = await self._execution_port.get_execution_kpis(user_id, today)
+
+        latest_weekly_review = await self._intelligence_repo.latest_weekly_review(user_id)
+
+        # 2. Build Core KPIs
+        monthly_hours = round(kpi_stats.monthly_study_seconds / 3600.0, 1)
+        deep_work_hours = round(kpi_stats.deep_work_seconds / 3600.0, 1)
+        monthly_progress_pct = (
+            round((monthly_hours / target_hours) * 100.0, 1) if target_hours > 0.0 else 0.0
+        )
+
+        kpi = DashboardKpiDTO(
+            monthly_hours=monthly_hours,
+            target_hours=target_hours,
+            monthly_progress_pct=monthly_progress_pct,
+            streak_days=kpi_stats.streak_days,
+            personal_best_streak=kpi_stats.personal_best_streak,
+            streak_history_last_7_days=kpi_stats.streak_history_last_7_days,
+            adherence_rate_pct=kpi_stats.adherence_rate_pct,
+            adherence_delta_pct=kpi_stats.adherence_delta_pct,
+            completed_pomodoro_count=kpi_stats.completed_pomodoro_count,
+            deep_work_hours=deep_work_hours,
+        )
+
+        # 3. Build 7-Day Study Distribution
         study_distribution = [
-            DayStudyDistributionDTO(day_label="Mon", hours=2.5, is_today=False),
-            DayStudyDistributionDTO(day_label="Tue", hours=3.0, is_today=False),
-            DayStudyDistributionDTO(day_label="Wed", hours=3.5, is_today=True),
-            DayStudyDistributionDTO(day_label="Thu", hours=2.0, is_today=False),
-            DayStudyDistributionDTO(day_label="Fri", hours=3.0, is_today=False),
-            DayStudyDistributionDTO(day_label="Sat", hours=4.5, is_today=False),
-            DayStudyDistributionDTO(day_label="Sun", hours=4.0, is_today=False),
+            DayStudyDistributionDTO(
+                day_label=d.day_label,
+                hours=d.study_hours,
+                is_today=d.is_today,
+            )
+            for d in study_distribution_raw
         ]
 
-        # 3. Active Roadmaps
-        ielts_id = uuid5(user_id, "roadmap-ielts-75")
-        go_id = uuid5(user_id, "roadmap-go-hex")
-
+        # 4. Build Active Roadmaps
         active_roadmaps = [
             DashboardActiveRoadmapDTO(
-                id=ielts_id,
-                code="RD-IELTS-75",
-                title="IELTS Academic 7.5 - Target Band Mastery",
-                commitment_hours_per_week=12.0,
-                deadline="2026-12-20",
-                completed_tasks=28,
-                total_tasks=40,
-                progress_pct=70.0,
-                next_task_code="TSK-WRT-02",
-                next_task_title="Task 2 Academic Essay: Causes and Solutions",
-            ),
-            DashboardActiveRoadmapDTO(
-                id=go_id,
-                code="RD-GO-HEX",
-                title="Go Hexagonal Architecture & High-Throughput Microservices",
-                commitment_hours_per_week=10.0,
-                deadline="2027-01-15",
-                completed_tasks=14,
-                total_tasks=35,
-                progress_pct=40.0,
-                next_task_code="TSK-GOLANG-08",
-                next_task_title="Implement Domain Events and Outbox Worker in Go",
-            ),
+                id=r.id,
+                code=r.code,
+                title=r.title,
+                commitment_hours_per_week=r.commitment_hours_per_week,
+                deadline=r.deadline or "",
+                completed_tasks=r.completed_tasks,
+                total_tasks=r.total_tasks,
+                progress_pct=r.progress_pct,
+                next_task_code=r.next_task_code or "",
+                next_task_title=r.next_task_title or "",
+            )
+            for r in active_roadmaps_raw
         ]
 
-        # 4. Today Queue Items
+        # 5. Build Today Queue Items
         today_queue = [
             DashboardTodayQueueItemDTO(
-                id=uuid5(user_id, "task-queue-1"),
-                task_code="TSK-WRT-02",
-                title="Task 2 Academic Essay: Causes and Solutions",
-                roadmap_title="IELTS Academic 7.5 - Target Band Mastery",
-                scheduled_time="08:30 - 10:00",
-                pomodoro_estimate=3,
-                duration_minutes=90,
-                status="READY",
-            ),
-            DashboardTodayQueueItemDTO(
-                id=uuid5(user_id, "task-queue-2"),
-                task_code="TSK-GOLANG-08",
-                title="Implement Domain Events and Outbox Worker in Go",
-                roadmap_title="Go Hexagonal Architecture & High-Throughput Microservices",
-                scheduled_time="14:00 - 15:30",
-                pomodoro_estimate=3,
-                duration_minutes=90,
-                status="SCHEDULED",
-            ),
-            DashboardTodayQueueItemDTO(
-                id=uuid5(user_id, "task-queue-3"),
-                task_code="TSK-VOCAB-04",
-                title="Lexical Resource Drill: Education & Society Topic",
-                roadmap_title="IELTS Academic 7.5 - Target Band Mastery",
-                scheduled_time="19:30 - 20:30",
-                pomodoro_estimate=2,
-                duration_minutes=60,
-                status="SCHEDULED",
-            ),
+                id=q.id,
+                task_code=q.task_code,
+                title=q.title,
+                roadmap_title=q.roadmap_title,
+                scheduled_time=q.scheduled_time,
+                pomodoro_estimate=q.pomodoro_estimate,
+                duration_minutes=q.duration_minutes,
+                status=q.status,
+            )
+            for q in today_queue_raw
         ]
 
-        # 5. AI Insight
-        ai_insight = DashboardAiInsightDTO(
-            model_version="FocusFlow AI v2.4 (Gemini Pro H-SRL)",
-            message=(
-                "Khả năng tập trung đạt đỉnh trong khung 08:30 - 10:30 sáng. "
-                "Tỷ lệ hoàn thành Pomodoro tăng 18.5% khi ôn tập IELTS trước giờ lập trình."
-            ),
-            peak_hours="08:30 - 10:30",
-            efficiency_growth_pct=14.8,
-        )
+        # 6. Build AI Insight
+        if latest_weekly_review is not None:
+            message = (
+                latest_weekly_review.strengths_feedback
+                or "Tiến độ học tập đang được duy trì ổn định."
+            )
+            efficiency_growth_pct = float(
+                latest_weekly_review.quantitative_summary.get("efficiency_growth_pct", 10.0)
+            )
+            peak_hours = str(
+                latest_weekly_review.quantitative_summary.get("peak_hours", "08:30 - 10:30")
+            )
+            ai_insight = DashboardAiInsightDTO(
+                model_version="FocusFlow AI v2.4 (Gemini Pro H-SRL)",
+                message=message,
+                peak_hours=peak_hours,
+                efficiency_growth_pct=efficiency_growth_pct,
+            )
+        else:
+            ai_insight = DashboardAiInsightDTO(
+                model_version="FocusFlow AI v2.4 (Gemini Pro H-SRL)",
+                message=(
+                    "Chưa đủ dữ liệu học tập (yêu cầu hoàn thành tối thiểu "
+                    "buổi học đầu tiên để kích hoạt AI Insight)"
+                ),
+                peak_hours="--:--",
+                efficiency_growth_pct=0.0,
+            )
 
-        # 6. Adaptation Status
-        adaptation_status = DashboardAdaptationStatusDTO(
-            is_balanced=True,
-            message="Lộ trình đang cân bằng tối ưu. Không có khối học bị xung đột hoặc trễ hạn.",
-            domino_shift_ready=True,
-        )
+        # 7. Build Adaptation Status
+        if kpi_stats.overdue_tasks_count > 0:
+            adaptation_status = DashboardAdaptationStatusDTO(
+                is_balanced=False,
+                message=(
+                    f"Có {kpi_stats.overdue_tasks_count} nhiệm vụ trễ hạn, "
+                    f"cần điều chỉnh lịch (Domino Shift)."
+                ),
+                domino_shift_ready=True,
+            )
+        else:
+            adaptation_status = DashboardAdaptationStatusDTO(
+                is_balanced=True,
+                message="Lộ trình đang cân bằng tối ưu. Không có khối học bị xung đột hoặc trễ hạn.",
+                domino_shift_ready=False,
+            )
 
-        # 7. Visual Schedule Blocks
+        # 8. Build Visual Schedule Blocks
         schedule_blocks = [
             DashboardScheduleBlockDTO(
-                id=uuid5(user_id, "block-mon-1"),
-                day_of_week=1,
-                day_label="Thứ Hai",
-                start_time="08:30",
-                end_time="10:00",
-                title="IELTS Reading Passage 3 Analysis",
-                category="Language",
-                status="COMPLETED",
-                pomodoro_count=3,
-                duration_minutes=90,
-                roadmap_code="RD-IELTS-75",
-            ),
-            DashboardScheduleBlockDTO(
-                id=uuid5(user_id, "block-tue-1"),
-                day_of_week=2,
-                day_label="Thứ Ba",
-                start_time="14:00",
-                end_time="15:30",
-                title="Go Interfaces & Mocking Patterns",
-                category="Engineering",
-                status="COMPLETED",
-                pomodoro_count=3,
-                duration_minutes=90,
-                roadmap_code="RD-GO-HEX",
-                description="Thực hành thiết kế interface và unit test mock pattern",
-            ),
-            DashboardScheduleBlockDTO(
-                id=uuid5(user_id, "block-wed-1"),
-                day_of_week=3,
-                day_label="Thứ Tư",
-                start_time="08:30",
-                end_time="10:00",
-                title="Task 2 Academic Essay: Causes and Solutions",
-                category="Language",
-                status="IN_PROGRESS",
-                pomodoro_count=3,
-                duration_minutes=90,
-                roadmap_code="RD-IELTS-75",
-                description="Lập dàn ý và hoàn thiện bài luận Task 2 chuyên sâu",
-            ),
-            DashboardScheduleBlockDTO(
-                id=uuid5(user_id, "block-wed-2"),
-                day_of_week=3,
-                day_label="Thứ Tư",
-                start_time="14:00",
-                end_time="15:30",
-                title="Implement Domain Events and Outbox Worker in Go",
-                category="Engineering",
-                status="SCHEDULED",
-                pomodoro_count=3,
-                duration_minutes=90,
-                roadmap_code="RD-GO-HEX",
-                description="Triển khai bảng outbox_events và worker xử lý sự kiện trong Go",
-            ),
-            DashboardScheduleBlockDTO(
-                id=uuid5(user_id, "block-thu-1"),
-                day_of_week=4,
-                day_label="Thứ Năm",
-                start_time="09:00",
-                end_time="10:30",
-                title="Listening Part 4 Monologues Practice",
-                category="Language",
-                status="SCHEDULED",
-                pomodoro_count=3,
-                duration_minutes=90,
-                roadmap_code="RD-IELTS-75",
-                description="Luyện nghe bài độc thoại học thuật và ghi chép từ vựng chuyên ngành",
-            ),
-            DashboardScheduleBlockDTO(
-                id=uuid5(user_id, "block-fri-1"),
-                day_of_week=5,
-                day_label="Thứ Sáu",
-                start_time="15:00",
-                end_time="17:00",
-                title="PostgreSQL pgvector & Semantic Search in Go",
-                category="Engineering",
-                status="SCHEDULED",
-                pomodoro_count=4,
-                duration_minutes=120,
-                roadmap_code="RD-GO-HEX",
-                description="Tìm hiểu HNSW index và viết API truy vấn similarity vector",
-            ),
-            DashboardScheduleBlockDTO(
-                id=uuid5(user_id, "block-sat-1"),
-                day_of_week=6,
-                day_label="Thứ Bảy",
-                start_time="08:30",
-                end_time="11:30",
-                title="Full IELTS Mock Test & Error Log Review",
-                category="Assessment",
-                status="SCHEDULED",
-                pomodoro_count=6,
-                duration_minutes=180,
-                roadmap_code="RD-IELTS-75",
-                description="Luyện đề 4 kỹ năng & phân tích nhật ký lỗi sai chi tiết",
-            ),
+                id=b.id,
+                day_of_week=b.day_of_week,
+                day_label=b.day_label,
+                start_time=b.start_time,
+                end_time=b.end_time,
+                title=b.title,
+                category=b.category,
+                status=b.status,
+                pomodoro_count=b.pomodoro_count,
+                duration_minutes=b.duration_minutes,
+                roadmap_code=b.roadmap_code,
+                description=b.description,
+            )
+            for b in schedule_blocks_raw
         ]
 
         return DashboardSummaryResponseDTO(

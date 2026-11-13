@@ -148,3 +148,64 @@ def create_schedule_block_sync_port(session: Any) -> ScheduleBlockSyncPort:
     assert callable(_schedule_block_sync_factory)
     res: ScheduleBlockSyncPort = _schedule_block_sync_factory(session)
     return res
+
+
+@dataclass(frozen=True, slots=True)
+class PlanningActiveRoadmapDTO:
+    id: UUID
+    code: str
+    title: str
+    commitment_hours_per_week: float
+    deadline: str | None
+    completed_tasks: int
+    total_tasks: int
+    progress_pct: float
+    next_task_code: str | None
+    next_task_title: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class PlanningDashboardScheduleBlockDTO:
+    id: UUID
+    day_of_week: int
+    day_label: str
+    start_time: str
+    end_time: str
+    title: str
+    category: str
+    status: str
+    pomodoro_count: int
+    duration_minutes: int
+    roadmap_code: str
+    description: str | None = None
+
+
+class PlanningDashboardQueryPort(Protocol):
+    async def get_active_roadmaps_for_user(
+        self, user_id: UUID
+    ) -> list[PlanningActiveRoadmapDTO]: ...
+
+    async def get_week_schedule_blocks(
+        self, user_id: UUID, start_date: date, end_date: date
+    ) -> list[PlanningDashboardScheduleBlockDTO]: ...
+
+    async def get_monthly_target_hours(self, user_id: UUID) -> float: ...
+
+
+_planning_dashboard_factory: Any = None
+
+
+def register_planning_dashboard_factory(factory: Any) -> None:
+    global _planning_dashboard_factory
+    _planning_dashboard_factory = factory
+
+
+def create_planning_dashboard_query_port(session: Any) -> PlanningDashboardQueryPort:
+    global _planning_dashboard_factory
+    if _planning_dashboard_factory is None:
+        import importlib
+
+        importlib.import_module("src.planning.infrastructure.adapters.planning_dashboard_adapter")
+    assert callable(_planning_dashboard_factory)
+    res: PlanningDashboardQueryPort = _planning_dashboard_factory(session)
+    return res
