@@ -1952,6 +1952,7 @@
         <div class="custom-link-box">
           <a
             routerLink="/availability"
+            [queryParams]="{ returnUrl: '/roadmaps/new', autoOpen: 'true' }"
             data-testid="onboard-custom-config-link"
             (click)="closeOnboardingModal()"
             class="custom-config-link"

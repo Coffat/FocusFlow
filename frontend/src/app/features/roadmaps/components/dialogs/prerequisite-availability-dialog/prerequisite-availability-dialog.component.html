@@ -1,0 +1,215 @@
+@if (open()) {
+  <div
+    class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-[#111111]/40 backdrop-blur-md overflow-y-auto"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="prerequisite-dialog-title"
+    aria-describedby="prerequisite-dialog-desc"
+    data-testid="prerequisite-dialog-backdrop"
+    (click)="onBackdropClick($event)"
+  >
+    <div
+      class="w-full max-w-2xl bg-[#FFFFFF] dark:bg-[#1E1E1E] border border-[#DCDCDC] dark:border-[#333333] rounded-xl shadow-[0_24px_48px_-12px_rgba(17,17,17,0.12)] p-6 sm:p-8 relative my-auto text-[#111111] dark:text-[#E0E0E0]"
+      data-testid="prerequisite-dialog-container"
+    >
+      <!-- Close Button -->
+      <button
+        type="button"
+        (click)="onClose()"
+        aria-label="Đóng hộp thoại"
+        data-testid="prerequisite-close-btn"
+        class="absolute top-5 right-5 w-8 h-8 rounded-full text-[#555555] dark:text-[#AAAAAA] hover:text-[#111111] dark:hover:text-[#FFFFFF] hover:bg-[#F3F3F1] dark:hover:bg-[#333333] flex items-center justify-center transition-colors cursor-pointer"
+      >
+        <span class="material-symbols-outlined text-[18px]" aria-hidden="true">close</span>
+      </button>
+
+      <!-- Header -->
+      <div class="pr-8 space-y-2.5">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#FDF6E7] dark:bg-[#78350F]/20 text-[#B45309] dark:text-[#FBBF24] border border-[#B45309]/30 dark:border-[#FBBF24]/30 font-mono text-[11px] font-semibold uppercase tracking-wider">
+            <span class="w-1.5 h-1.5 rounded-full bg-[#B45309] dark:bg-[#FBBF24]" aria-hidden="true"></span>
+            <span>Tiền điều kiện AI Planning</span>
+          </span>
+
+          <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#EBF3EE] dark:bg-[#064E3B]/20 text-[#246B4A] dark:text-[#34D399] border border-[#246B4A]/20 dark:border-[#34D399]/30 text-[11px] font-medium">
+            <span>Zimmerman SRL: Forethought Phase</span>
+          </span>
+        </div>
+
+        <h2
+          id="prerequisite-dialog-title"
+          class="font-serif text-2xl sm:text-[26px] font-medium tracking-tight text-[#111111] dark:text-[#FFFFFF]"
+        >
+          Cần thiết lập Nguồn Thời gian Rảnh cho AI
+        </h2>
+
+        <p id="prerequisite-dialog-desc" class="text-xs sm:text-sm text-[#555555] dark:text-[#AAAAAA] leading-relaxed">
+          Để AI có thể tính toán dung lượng học tập và phân bổ lịch học thích ứng chính xác không trùng lịch, bạn cần thiết lập ít nhất một nguồn thời gian rảnh hợp lệ trước khi khởi tạo lộ trình.
+        </p>
+      </div>
+
+      <!-- 2 Action Cards in Radio Group -->
+      <div class="mt-6 space-y-3.5" role="radiogroup" aria-label="Phương thức thiết lập thời gian rảnh">
+        <!-- Card 1: Hybrid Availability (Mode A / Mode B) -->
+        <div
+          role="radio"
+          tabindex="0"
+          [attr.aria-checked]="selectedOption() === 'hybrid'"
+          data-testid="option-card-hybrid"
+          (click)="selectOption('hybrid')"
+          (keydown.enter)="selectOption('hybrid')"
+          (keydown.space)="selectOption('hybrid'); $event.preventDefault()"
+          class="w-full text-left rounded-xl p-4 sm:p-5 transition-all cursor-pointer block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#246B4A]"
+          [class.border-2]="selectedOption() === 'hybrid'"
+          [class.border-[#246B4A]]="selectedOption() === 'hybrid'"
+          [class.bg-[#EBF3EE]/40]="selectedOption() === 'hybrid'"
+          [class.dark:bg-[#064E3B]/10]="selectedOption() === 'hybrid'"
+          [class.border]="selectedOption() !== 'hybrid'"
+          [class.border-[#DCDCDC]]="selectedOption() !== 'hybrid'"
+          [class.dark:border-[#333333]]="selectedOption() !== 'hybrid'"
+          [class.bg-[#FFFFFF]]="selectedOption() !== 'hybrid'"
+          [class.dark:bg-[#252525]]="selectedOption() !== 'hybrid'"
+        >
+          <div class="flex items-start gap-3.5">
+            <span
+              class="mt-1 w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-[11px] font-bold"
+              [class.bg-[#246B4A]]="selectedOption() === 'hybrid'"
+              [class.text-white]="selectedOption() === 'hybrid'"
+              [class.border]="selectedOption() !== 'hybrid'"
+              [class.border-[#DCDCDC]]="selectedOption() !== 'hybrid'"
+              [class.dark:border-[#555555]]="selectedOption() !== 'hybrid'"
+            >
+              @if (selectedOption() === 'hybrid') {
+                ✓
+              }
+            </span>
+
+            <div class="flex-1 space-y-2">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <div class="flex items-center gap-2">
+                  <span class="material-symbols-outlined text-[#246B4A] dark:text-[#34D399] text-[20px]" aria-hidden="true">tune</span>
+                  <span class="text-sm sm:text-base font-bold text-[#111111] dark:text-[#FFFFFF]">
+                    Cấu hình Lịch rảnh lai (Mode A / Mode B)
+                  </span>
+                </div>
+                <span class="px-2.5 py-0.5 rounded-full bg-[#EBF3EE] dark:bg-[#064E3B]/30 text-[#246B4A] dark:text-[#34D399] border border-[#246B4A]/30 text-[10px] font-mono font-bold uppercase">
+                  Khuyên dùng
+                </span>
+              </div>
+
+              <p class="text-xs sm:text-sm text-[#555555] dark:text-[#AAAAAA] leading-relaxed">
+                Tự định nghĩa tổng giờ học theo ngày (Mode A: Quỹ giờ linh hoạt) hoặc các khung giờ cố định cụ thể trong tuần (Mode B: Khung giờ cố định).
+              </p>
+
+              <div class="pt-1 flex items-center justify-between">
+                <span class="text-[11px] text-[#8E8E8A] dark:text-[#777777]">
+                  Hỗ trợ Preset người đi làm, sinh viên, bootcamp &copy; FocusFlow
+                </span>
+                <button
+                  type="button"
+                  data-testid="direct-hybrid-btn"
+                  (click)="directNavigate('hybrid'); $event.stopPropagation()"
+                  class="text-xs font-semibold text-[#246B4A] dark:text-[#34D399] hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <span>Thiết lập ngay</span>
+                  <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 2: Google Calendar -->
+        <div
+          role="radio"
+          tabindex="0"
+          [attr.aria-checked]="selectedOption() === 'calendar'"
+          data-testid="option-card-calendar"
+          (click)="selectOption('calendar')"
+          (keydown.enter)="selectOption('calendar')"
+          (keydown.space)="selectOption('calendar'); $event.preventDefault()"
+          class="w-full text-left rounded-xl p-4 sm:p-5 transition-all cursor-pointer block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#246B4A]"
+          [class.border-2]="selectedOption() === 'calendar'"
+          [class.border-[#246B4A]]="selectedOption() === 'calendar'"
+          [class.bg-[#EBF3EE]/40]="selectedOption() === 'calendar'"
+          [class.dark:bg-[#064E3B]/10]="selectedOption() === 'calendar'"
+          [class.border]="selectedOption() !== 'calendar'"
+          [class.border-[#DCDCDC]]="selectedOption() !== 'calendar'"
+          [class.dark:border-[#333333]]="selectedOption() !== 'calendar'"
+          [class.bg-[#FFFFFF]]="selectedOption() !== 'calendar'"
+          [class.dark:bg-[#252525]]="selectedOption() !== 'calendar'"
+        >
+          <div class="flex items-start gap-3.5">
+            <span
+              class="mt-1 w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-[11px] font-bold"
+              [class.bg-[#246B4A]]="selectedOption() === 'calendar'"
+              [class.text-white]="selectedOption() === 'calendar'"
+              [class.border]="selectedOption() !== 'calendar'"
+              [class.border-[#DCDCDC]]="selectedOption() !== 'calendar'"
+              [class.dark:border-[#555555]]="selectedOption() !== 'calendar'"
+            >
+              @if (selectedOption() === 'calendar') {
+                ✓
+              }
+            </span>
+
+            <div class="flex-1 space-y-2">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <div class="flex items-center gap-2">
+                  <span class="material-symbols-outlined text-[#2563EB] dark:text-[#60A5FA] text-[20px]" aria-hidden="true">calendar_month</span>
+                  <span class="text-sm sm:text-base font-bold text-[#111111] dark:text-[#FFFFFF]">
+                    Liên kết Google Calendar
+                  </span>
+                </div>
+                <span class="px-2.5 py-0.5 rounded-full bg-[#EFF6FF] dark:bg-[#1E3A8A]/30 text-[#2563EB] dark:text-[#60A5FA] border border-[#2563EB]/30 text-[10px] font-mono font-bold uppercase">
+                  Tự động 2 chiều
+                </span>
+              </div>
+
+              <p class="text-xs sm:text-sm text-[#555555] dark:text-[#AAAAAA] leading-relaxed">
+                Tự động đọc trạng thái rảnh/bận từ tài khoản Google Calendar của bạn để AI tự động né các cuộc họp, giờ học chính khóa và lịch bận thực tế.
+              </p>
+
+              <div class="pt-1 flex items-center justify-between">
+                <span class="text-[11px] text-[#8E8E8A] dark:text-[#777777]">
+                  Bảo mật OAuth2 &bull; Chỉ đọc Free/Busy
+                </span>
+                <button
+                  type="button"
+                  data-testid="direct-calendar-btn"
+                  (click)="directNavigate('calendar'); $event.stopPropagation()"
+                  class="text-xs font-semibold text-[#2563EB] dark:text-[#60A5FA] hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <span>Liên kết ngay</span>
+                  <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Footer -->
+      <div class="mt-8 pt-4 border-t border-[#DCDCDC] dark:border-[#333333] flex flex-col-reverse sm:flex-row items-center justify-between gap-3">
+        <button
+          type="button"
+          (click)="onClose()"
+          data-testid="prerequisite-cancel-btn"
+          class="w-full sm:w-auto px-5 py-2.5 rounded-lg border border-[#DCDCDC] dark:border-[#444444] text-xs sm:text-sm font-medium text-[#555555] dark:text-[#CCCCCC] hover:bg-[#F3F3F1] dark:hover:bg-[#2C2C2C] hover:text-[#111111] dark:hover:text-[#FFFFFF] transition-colors cursor-pointer"
+        >
+          Để sau / Đóng
+        </button>
+
+        <button
+          type="button"
+          (click)="proceed()"
+          data-testid="prerequisite-proceed-btn"
+          class="w-full sm:w-auto px-6 py-2.5 rounded-lg bg-[#246B4A] hover:bg-[#1E573C] text-white text-xs sm:text-sm font-semibold shadow-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+        >
+          <span>Tiến hành thiết lập</span>
+          <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+        </button>
+      </div>
+    </div>
+  </div>
+}

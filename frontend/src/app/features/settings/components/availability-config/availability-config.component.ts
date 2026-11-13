@@ -6,6 +6,8 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, Router } from '@angular/router';
+import { MessageService } from 'primeng/api';
 import {
   AvailabilityService,
   DAYS_OF_WEEK,
@@ -36,6 +38,9 @@ import { BadgeDirective } from '../../../../shared/ui/badge/badge.directive';
 })
 export class AvailabilityConfigComponent implements OnInit {
   readonly service = inject(AvailabilityService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+  private readonly messageService = inject(MessageService, { optional: true });
 
   readonly daysOfWeek = DAYS_OF_WEEK;
   readonly dayLabels = DAY_LABELS;
@@ -43,6 +48,15 @@ export class AvailabilityConfigComponent implements OnInit {
 
   ngOnInit(): void {
     this.service.loadMyAvailability();
+
+    const focus = this.route.snapshot.queryParamMap.get('focus');
+    if (focus === 'calendar') {
+      setTimeout(() => {
+        const el = document.getElementById('calendar-sync-section') || document.getElementById('calendar-mode-select');
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        (document.getElementById('calendar-mode-select') as HTMLElement)?.focus?.();
+      }, 150);
+    }
   }
 
   setMode(mode: AvailabilityMode): void {
@@ -97,6 +111,28 @@ export class AvailabilityConfigComponent implements OnInit {
   getDaySlotHours(slots: TimeSlotDTO[]): number {
     const minutes = slots.reduce((acc, s) => acc + calculateDurationMinutes(s.start, s.end, s.end_day_offset), 0);
     return Math.round((minutes / 60) * 10) / 10;
+  }
+
+  onSaveAvailability(): void {
+    this.service.saveMyAvailability((res) => {
+      if (res) {
+        const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
+        if (returnUrl) {
+          this.messageService?.add({
+            severity: 'success',
+            summary: 'Thành công',
+            detail: 'Đã lưu cấu hình thời gian rảnh thành công!',
+          });
+          const autoOpen = this.route.snapshot.queryParamMap.get('autoOpen');
+          let targetUrl = returnUrl;
+          if (autoOpen === 'true' && !targetUrl.includes('autoOpen=')) {
+            const separator = targetUrl.includes('?') ? '&' : '?';
+            targetUrl = `${targetUrl}${separator}autoOpen=true`;
+          }
+          this.router.navigateByUrl(targetUrl);
+        }
+      }
+    });
   }
 
   clearError(): void {

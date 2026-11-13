@@ -249,7 +249,7 @@
           </select>
         </div>
 
-        <div class="field-group">
+        <div class="field-group" id="calendar-sync-section">
           <label for="calendar-mode-select" class="field-label">
             <span class="material-symbols-outlined">sync</span>
             <span>Đồng bộ Lịch ngoại vi (Calendar Sync)</span>
@@ -691,7 +691,7 @@
         size="lg"
         data-testid="save-availability-btn"
         [disabled]="!service.isWeeklyValid() || service.saving()"
-        (click)="service.saveMyAvailability()"
+        (click)="onSaveAvailability()"
         class="save-cta-button"
       >
         @if (service.saving()) {

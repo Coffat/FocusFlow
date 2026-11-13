@@ -9,9 +9,11 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, Router } from '@angular/router';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { RoadmapService } from '../../services/roadmap.service';
 import { AuthService } from '../../../../core/services/auth.service';
+import { AvailabilityService } from '../../../../core/services/availability.service';
 import { PriorKnowledgeLevel, RoadmapResponse } from '../../models/roadmap.model';
 import { KpiCardComponent } from '../../../../shared/components/kpi-card/kpi-card.component';
 import { RoadmapCardComponent } from '../../../../shared/components/roadmap-card/roadmap-card.component';
@@ -25,6 +27,7 @@ import {
   AdaptationConfirmEvent,
   AdaptationModalDialogComponent,
 } from '../dialogs/adaptation-modal-dialog/adaptation-modal-dialog.component';
+import { PrerequisiteAvailabilityDialogComponent } from '../dialogs/prerequisite-availability-dialog/prerequisite-availability-dialog.component';
 
 export type RoadmapStatusFilter = 'ALL' | 'ACTIVE' | 'PAUSED' | 'COMPLETED';
 export type ViewMode = 'grid' | 'list';
@@ -40,6 +43,7 @@ export type ViewMode = 'grid' | 'list';
     BlueprintEmptyStateComponent,
     RoadmapWizardHostComponent,
     AdaptationModalDialogComponent,
+    PrerequisiteAvailabilityDialogComponent,
   ],
   templateUrl: './roadmaps-hub.component.html',
   styleUrl: './roadmaps-hub.component.scss',
@@ -48,12 +52,18 @@ export type ViewMode = 'grid' | 'list';
 export class RoadmapsHubComponent implements OnInit {
   readonly roadmapService = inject(RoadmapService);
   readonly authService = inject(AuthService);
+  readonly availabilityService = inject(AvailabilityService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   private readonly confirmationService = inject(ConfirmationService, { optional: true });
   private readonly messageService = inject(MessageService, { optional: true });
 
   readonly activeFilter = signal<RoadmapStatusFilter>('ALL');
   readonly searchQuery = signal<string>('');
   readonly viewMode = signal<ViewMode>('grid');
+
+  // Prerequisite Availability Dialog State
+  readonly prerequisiteDialogOpen = signal<boolean>(false);
 
   // 4-Step Wizard Dialog State
   readonly wizardOpen = signal<boolean>(false);
@@ -135,6 +145,40 @@ export class RoadmapsHubComponent implements OnInit {
 
   ngOnInit(): void {
     this.roadmapService.loadRoadmaps();
+
+    const autoOpen = this.route.snapshot.queryParamMap.get('autoOpen');
+    if (autoOpen === 'true') {
+      this.openCreateWizard(1);
+      const queryParams = { ...this.route.snapshot.queryParams };
+      delete queryParams['autoOpen'];
+      this.router.navigate([], {
+        relativeTo: this.route,
+        queryParams,
+        replaceUrl: true,
+      });
+    }
+  }
+
+  checkAvailabilityAndProceed(action: () => void): void {
+    const proceed = () => {
+      if (!this.availabilityService.hasConfiguredAvailability()) {
+        this.prerequisiteDialogOpen.set(true);
+      } else {
+        action();
+      }
+    };
+
+    if (!this.availabilityService.profile()) {
+      this.availabilityService.loadMyAvailability(() => {
+        proceed();
+      });
+    } else {
+      proceed();
+    }
+  }
+
+  closePrerequisiteDialog(): void {
+    this.prerequisiteDialogOpen.set(false);
   }
 
   setFilter(filter: RoadmapStatusFilter): void {
@@ -167,11 +211,13 @@ export class RoadmapsHubComponent implements OnInit {
   }
 
   openCreateWizard(step: 1 | 2 | 3 | 4 = 1): void {
-    this.wizardInitialTitle.set('');
-    this.wizardInitialLevel.set('BEGINNER');
-    this.wizardInitialWeeklyHours.set(12);
-    this.wizardStep.set(step);
-    this.wizardOpen.set(true);
+    this.checkAvailabilityAndProceed(() => {
+      this.wizardInitialTitle.set('');
+      this.wizardInitialLevel.set('BEGINNER');
+      this.wizardInitialWeeklyHours.set(12);
+      this.wizardStep.set(step);
+      this.wizardOpen.set(true);
+    });
   }
 
   closeCreateWizard(): void {
@@ -179,11 +225,13 @@ export class RoadmapsHubComponent implements OnInit {
   }
 
   onSelectTemplate(tpl: StarterTemplate): void {
-    this.wizardInitialTitle.set(tpl.title);
-    this.wizardInitialLevel.set(tpl.knowledgeLevel ?? 'BEGINNER');
-    this.wizardInitialWeeklyHours.set(tpl.hoursPerWeek ?? 12);
-    this.wizardStep.set(1);
-    this.wizardOpen.set(true);
+    this.checkAvailabilityAndProceed(() => {
+      this.wizardInitialTitle.set(tpl.title);
+      this.wizardInitialLevel.set(tpl.knowledgeLevel ?? 'BEGINNER');
+      this.wizardInitialWeeklyHours.set(tpl.hoursPerWeek ?? 12);
+      this.wizardStep.set(1);
+      this.wizardOpen.set(true);
+    });
   }
 
   onCreateCustomRoadmap(): void {
