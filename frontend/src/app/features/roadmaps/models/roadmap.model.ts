@@ -41,6 +41,18 @@ export type ClarificationAnswerItem = components['schemas']['ClarificationAnswer
 export type SubmitClarificationAnswersRequest = components['schemas']['SubmitClarificationAnswersRequest'];
 export type SubmitClarificationAnswersResponse = components['schemas']['SubmitClarificationAnswersResponse'];
 
+export type KnowledgeSourceResponse = components['schemas']['KnowledgeSourceResponse'];
+export type CreateKnowledgeUrlRequest = components['schemas']['CreateKnowledgeUrlRequest'];
+
+export interface DraftKnowledgeAttachment {
+  id: string;
+  kind: 'FILE' | 'URL';
+  title: string;
+  file?: File;
+  sizeBytes?: number;
+  url?: string;
+}
+
 export type PlanningStep = 1 | 2 | 3 | 4;
 
 export interface SseProgressState {

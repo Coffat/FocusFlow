@@ -13,6 +13,7 @@ import { RoadmapService } from '../../../services/roadmap.service';
 import {
   ClarificationAnswerItem,
   CreateRoadmapRequest,
+  DraftKnowledgeAttachment,
   MilestoneUpsertItemSchema,
   PriorKnowledgeLevel,
 } from '../../../models/roadmap.model';
@@ -59,8 +60,6 @@ export class RoadmapWizardHostComponent {
   readonly draftDeadline = signal<string>('');
 
   readonly shellMaxWidthClass = computed<string>(() => {
-    const step = this.currentStep();
-    if (step === 1) return 'max-w-[780px]';
     return 'max-w-[1040px]';
   });
 
@@ -129,12 +128,25 @@ export class RoadmapWizardHostComponent {
   // =========================================================================
   // Step 1 -> Step 2 (POST /api/v1/roadmaps)
   // =========================================================================
+  onAttachmentsSelected(items: DraftKnowledgeAttachment[]): void {
+    this.roadmapService.draftAttachments?.set(items);
+  }
+
   onGoalSubmit(payload: CreateRoadmapRequest): void {
     this.draftTitle.set(payload.title);
     this.draftLevel.set((payload.prior_knowledge_level as PriorKnowledgeLevel) || 'BEGINNER');
     this.draftDeadline.set(payload.target_date ?? '');
 
-    this.roadmapService.createRoadmap(payload, () => {
+    this.roadmapService.createRoadmap(payload, created => {
+      const pendingAttachments =
+        typeof this.roadmapService.draftAttachments === 'function'
+          ? this.roadmapService.draftAttachments()
+          : [];
+      if (created?.goal_id && pendingAttachments.length > 0) {
+        this.roadmapService
+          .uploadKnowledgeAttachments?.(created.goal_id, pendingAttachments)
+          .subscribe();
+      }
       this.currentStep.set(2);
     });
   }

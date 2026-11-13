@@ -9,7 +9,11 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { CreateRoadmapRequest, PriorKnowledgeLevel } from '../../../models/roadmap.model';
+import {
+  CreateRoadmapRequest,
+  DraftKnowledgeAttachment,
+  PriorKnowledgeLevel,
+} from '../../../models/roadmap.model';
 
 export interface BaselineLevelOption {
   value: PriorKnowledgeLevel;
@@ -43,13 +47,26 @@ export class GoalSetupDialogComponent {
   readonly isSubmitting = input<boolean>(false);
 
   readonly submitGoal = output<CreateRoadmapRequest>();
+  readonly submitAttachments = output<DraftKnowledgeAttachment[]>();
   readonly canceled = output<void>();
+
+  readonly maxAttachments = 3;
+  readonly maxFileSizeBytes = 5 * 1024 * 1024; // 5 MB
+  readonly allowedExtensions: readonly string[] = ['.pdf', '.md', '.txt'];
 
   readonly goalTitle = signal<string>('');
   readonly currentLevel = signal<PriorKnowledgeLevel>('BEGINNER');
   readonly weeklyHours = signal<number>(12);
   readonly targetDeadline = signal<string>(getDefaultDeadlineIso(12));
   readonly validationError = signal<string | null>(null);
+
+  readonly attachments = signal<DraftKnowledgeAttachment[]>([]);
+  readonly showUrlInput = signal<boolean>(false);
+  readonly urlInputValue = signal<string>('');
+  readonly attachmentError = signal<string | null>(null);
+  readonly isAttachmentLimitReached = computed<boolean>(
+    () => this.attachments().length >= this.maxAttachments
+  );
 
   readonly quickSuggestions: readonly string[] = [
     'Chứng chỉ AWS Solutions Architect',
@@ -63,19 +80,19 @@ export class GoalSetupDialogComponent {
       value: 'BEGINNER',
       title: 'Mới bắt đầu',
       badge: 'BEGINNER',
-      description: 'Chưa có kiến thức nền, cần đi từ khái niệm cơ bản và lộ trình nhập môn bài bản.',
+      description: 'Chưa có nền tảng, đi bài bản từ các khái niệm cơ bản.',
     },
     {
       value: 'INTERMEDIATE',
       title: 'Đã có nền tảng',
       badge: 'INTERMEDIATE',
-      description: 'Đã nắm lý thuyết cơ bản, muốn đi sâu thực hành, giải đề và xây dựng dự án.',
+      description: 'Đã nắm lý thuyết cơ bản, tập trung thực hành và làm dự án.',
     },
     {
       value: 'ADVANCED',
-      title: 'Nâng cao / Chuyên sâu',
+      title: 'Nâng cao',
       badge: 'ADVANCED',
-      description: 'Tối ưu hóa kiến trúc, giải quyết các bài toán hệ thống phức tạp chuyên sâu.',
+      description: 'Đi sâu tối ưu hóa kiến trúc và giải quyết bài toán phức tạp.',
     },
   ];
 
@@ -152,6 +169,124 @@ export class GoalSetupDialogComponent {
     this.targetDeadline.set(value);
   }
 
+  toggleUrlInput(): void {
+    this.showUrlInput.update(prev => !prev);
+    this.attachmentError.set(null);
+  }
+
+  onUrlInputChange(val: string): void {
+    this.urlInputValue.set(val);
+    this.attachmentError.set(null);
+  }
+
+  addUrlAttachment(): void {
+    if (this.attachments().length >= this.maxAttachments) {
+      this.attachmentError.set(
+        'Chỉ được đính kèm tối đa 3 nguồn (tệp + URL) để tránh tràn ngữ cảnh AI.'
+      );
+      return;
+    }
+
+    const trimmed = this.urlInputValue().trim();
+    if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+      this.attachmentError.set(
+        'Vui lòng nhập đường dẫn URL hợp lệ (bắt đầu bằng http:// hoặc https://).'
+      );
+      return;
+    }
+
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(trimmed);
+    } catch {
+      this.attachmentError.set(
+        'Vui lòng nhập đường dẫn URL hợp lệ (bắt đầu bằng http:// hoặc https://).'
+      );
+      return;
+    }
+
+    const isDuplicate = this.attachments().some(
+      item => item.kind === 'URL' && item.url?.toLowerCase() === trimmed.toLowerCase()
+    );
+    if (isDuplicate) {
+      this.attachmentError.set('Đường dẫn URL này đã có trong danh sách đính kèm.');
+      return;
+    }
+
+    const displayTitle =
+      parsedUrl.hostname + (parsedUrl.pathname && parsedUrl.pathname !== '/' ? parsedUrl.pathname : '') ||
+      trimmed;
+
+    const newItem: DraftKnowledgeAttachment = {
+      id: `url-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      kind: 'URL',
+      title: displayTitle,
+      url: trimmed,
+    };
+
+    this.attachments.update(list => [...list, newItem]);
+    this.urlInputValue.set('');
+    this.showUrlInput.set(false);
+    this.attachmentError.set(null);
+  }
+
+  onFilesSelected(event: Event): void {
+    const inputEl = event.target as HTMLInputElement | null;
+    if (!inputEl?.files || inputEl.files.length === 0) {
+      return;
+    }
+    this.addFiles(inputEl.files);
+    inputEl.value = '';
+  }
+
+  addFiles(files: FileList | File[]): void {
+    const fileArray = Array.from(files);
+    this.attachmentError.set(null);
+
+    for (const file of fileArray) {
+      if (this.attachments().length >= this.maxAttachments) {
+        this.attachmentError.set(
+          'Chỉ được đính kèm tối đa 3 nguồn (tệp + URL) để tránh tràn ngữ cảnh AI.'
+        );
+        break;
+      }
+
+      const lowerName = file.name.toLowerCase();
+      const hasValidExt = this.allowedExtensions.some(ext => lowerName.endsWith(ext));
+      if (!hasValidExt) {
+        this.attachmentError.set('Chỉ hỗ trợ tệp định dạng .pdf, .md hoặc .txt.');
+        continue;
+      }
+
+      if (file.size > this.maxFileSizeBytes) {
+        this.attachmentError.set('Dung lượng tệp vượt quá giới hạn 5 MB cho phép.');
+        continue;
+      }
+
+      const newItem: DraftKnowledgeAttachment = {
+        id: `file-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        kind: 'FILE',
+        title: file.name,
+        file,
+        sizeBytes: file.size,
+      };
+      this.attachments.update(list => [...list, newItem]);
+    }
+  }
+
+  removeAttachment(id: string): void {
+    this.attachments.update(list => list.filter(item => item.id !== id));
+    this.attachmentError.set(null);
+  }
+
+  formatFileSize(bytes?: number): string {
+    if (!bytes || bytes <= 0) return '0 KB';
+    if (bytes >= 1024 * 1024) {
+      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+    return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  }
+
   onSubmit(): void {
     const trimmed = this.goalTitle().trim();
     if (!trimmed) {
@@ -160,7 +295,13 @@ export class GoalSetupDialogComponent {
     }
 
     this.validationError.set(null);
-    const description = `Cam kết ${this.weeklyHours()} giờ/tuần (~${this.dailyHoursEstimate()}h/ngày) • Tổng ước tính ${this.totalEstimatedHours()} giờ (${this.estimatedPomodoros()} phiên Pomodoro).`;
+    const attachedSummary =
+      this.attachments().length > 0
+        ? ` • Tài liệu đính kèm (${this.attachments().length}/3): ${this.attachments()
+            .map(a => a.title)
+            .join(', ')}`
+        : '';
+    const description = `Cam kết ${this.weeklyHours()} giờ/tuần (~${this.dailyHoursEstimate()}h/ngày) • Tổng ước tính ${this.totalEstimatedHours()} giờ (${this.estimatedPomodoros()} phiên Pomodoro).${attachedSummary}`;
 
     const payload: CreateRoadmapRequest = {
       title: trimmed,
@@ -172,6 +313,7 @@ export class GoalSetupDialogComponent {
       target_date: this.targetDeadline() || getDefaultDeadlineIso(12),
     };
 
+    this.submitAttachments.emit(this.attachments());
     this.submitGoal.emit(payload);
   }
 

@@ -1,33 +1,36 @@
-<div class="bg-[#FFFFFF] text-[#111111]">
-  <!-- TOP INTERVIEWER INTRO BANNER -->
-  <div class="p-6 sm:px-8 sm:py-6 border-b border-[#EAEAE6] bg-[#FAFAFA]">
-    <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
-      <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#EBF3EE] text-[#246B4A] border border-[#246B4A]/20 text-[11px] font-mono font-semibold uppercase tracking-wider">
+<div class="flex-1 min-h-0 flex flex-col bg-[#FFFFFF] text-[#111111] overflow-hidden">
+  <!-- PART A: PINNED STEP SUB-HEADER BANNER -->
+  <div class="px-6 sm:px-8 py-4 border-b border-[#EAEAE6] bg-[#FAFAFA] flex flex-wrap items-center justify-between gap-3 shrink-0">
+    <div class="min-w-0 flex-1">
+      <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#EBF3EE] text-[#246B4A] border border-[#246B4A]/20 font-mono text-[11px] font-semibold uppercase tracking-wider mb-1">
         <span class="material-symbols-outlined text-[13px]" aria-hidden="true">psychology_alt</span>
         <span>BƯỚC 2 / 4 • FOCUSAI PEDAGOGICAL INTERVIEWER (GRILL-ME)</span>
-      </span>
-      <span class="text-[11px] font-mono text-[#555555]">
+      </div>
+      <h2 class="font-serif text-xl sm:text-2xl text-[#111111] font-medium tracking-tight">
+        Để tạo lộ trình chính xác nhất, FocusAI cần làm rõ một vài điểm then chốt cùng bạn.
+      </h2>
+      <p class="text-xs text-[#555555] mt-0.5 leading-relaxed">
+        Trả lời nhanh các câu hỏi chẩn đoán sư phạm dưới đây để hệ thống đo ni đóng giày từng cột mốc và phiên Pomodoro.
+      </p>
+    </div>
+
+    <div class="flex items-center gap-2 font-mono text-xs bg-[#FFFFFF] px-3.5 py-2 rounded-lg border border-[#DCDCDC] shrink-0">
+      <span class="text-[#555555]">Tiến độ làm rõ:</span>
+      <span class="font-bold text-[#246B4A]">
         {{ answeredCount() }}/{{ questions().length }} câu hỏi đã trả lời
       </span>
     </div>
-
-    <h2 class="font-serif text-xl sm:text-2xl text-[#111111] font-medium tracking-tight">
-      Để tạo lộ trình chính xác nhất, FocusAI cần làm rõ một vài điểm then chốt cùng bạn.
-    </h2>
-    <p class="text-xs sm:text-sm text-[#555555] mt-1 leading-relaxed">
-      Trả lời nhanh các câu hỏi chẩn đoán sư phạm dưới đây để hệ thống đo ni đóng giày từng cột mốc và phiên Pomodoro.
-    </p>
   </div>
 
-  <!-- ASYMMETRIC 7/5 TWO-COLUMN BODY -->
-  <div class="grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-[#EAEAE6]">
+  <!-- PART B: 7/5 TWO-COLUMN SPLIT WORKSPACE -->
+  <div class="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-[#EAEAE6]">
     <!-- LEFT COLUMN (7 COLS): AI PEDAGOGICAL QUESTIONS -->
-    <div class="lg:col-span-7 p-6 sm:p-8 space-y-6">
+    <div class="lg:col-span-7 lg:h-full lg:overflow-y-auto p-6 sm:p-7 bg-[#FFFFFF] flex flex-col">
       @if (questions().length === 0) {
         <!-- EMPTY QUESTIONS STATE -->
         <div
           data-testid="grill-me-empty-state"
-          class="rounded-xl border border-dashed border-[#DCDCDC] bg-[#FAFAFA] p-6 text-center space-y-4"
+          class="flex-1 min-h-[280px] flex flex-col items-center justify-center rounded-xl border border-dashed border-[#DCDCDC] bg-[#FAFAFA] p-6 text-center space-y-4"
         >
           <div class="w-11 h-11 rounded-full bg-[#EBF3EE] text-[#246B4A] mx-auto flex items-center justify-center">
             <span class="material-symbols-outlined text-[22px]" aria-hidden="true">quiz</span>
@@ -75,7 +78,7 @@
         </div>
       } @else {
         <!-- QUESTIONS LIST -->
-        <div class="space-y-6">
+        <div class="space-y-4">
           @for (q of questions(); track getQuestionId(q, idx); let idx = $index) {
             <div
               [attr.data-testid]="'clarification-question-item-' + idx"
@@ -144,105 +147,127 @@
     </div>
 
     <!-- RIGHT COLUMN (5 COLS): CONTEXT UNDERSTANDING METER & LIVE LEARNER PROFILE -->
-    <div class="lg:col-span-5 p-6 sm:p-8 bg-[#FAFAFA] flex flex-col justify-between space-y-5">
-      <div class="space-y-5">
-        <!-- Context Understanding Meter Card -->
-        <div
-          data-testid="context-understanding-meter"
-          class="bg-[#FFFFFF] rounded-xl p-5 border border-[#DCDCDC] space-y-3"
-        >
-          <div class="flex items-center justify-between">
-            <span class="text-[11px] font-mono font-semibold uppercase tracking-wider text-[#555555]">
-              Độ Thấu Hiểu Ngữ Cảnh
-            </span>
-            <span class="font-mono text-xs font-bold text-[#246B4A] bg-[#EBF3EE] px-2 py-0.5 rounded-full border border-[#246B4A]/20">
-              {{ contextUnderstandingPercent() }}%
-            </span>
-          </div>
-
-          <div class="flex items-baseline justify-between">
-            <div class="text-3xl font-serif font-medium text-[#111111] font-mono">
-              {{ contextUnderstandingPercent() }}%
-            </div>
-            <span class="text-xs text-[#555555]">
-              {{ answeredCount() }}/{{ questions().length }} điểm làm rõ
-            </span>
-          </div>
-
-          <div class="w-full h-2 rounded-full bg-[#EAEAE6] overflow-hidden">
-            <div
-              class="h-full rounded-full bg-[#246B4A] transition-all duration-300"
-              [style.width.%]="contextUnderstandingPercent()"
-            ></div>
-          </div>
-
-          <p class="text-[11px] text-[#555555] leading-relaxed">
-            Càng nhiều câu hỏi được trả lời, AI càng phân bổ chính xác thời lượng Pomodoro và độ khó của từng cột mốc.
-          </p>
+    <div class="lg:col-span-5 lg:h-full lg:overflow-y-auto p-6 sm:p-7 bg-[#FAFAFA] space-y-5">
+      <!-- Context Understanding Meter Card -->
+      <div
+        data-testid="context-understanding-meter"
+        class="bg-[#FFFFFF] rounded-xl p-5 border border-[#DCDCDC] space-y-3"
+      >
+        <div class="flex items-center justify-between">
+          <span class="text-[11px] font-mono font-semibold uppercase tracking-wider text-[#555555]">
+            Độ Thấu Hiểu Ngữ Cảnh
+          </span>
+          <span class="font-mono text-xs font-bold text-[#246B4A] bg-[#EBF3EE] px-2 py-0.5 rounded-full border border-[#246B4A]/20">
+            {{ contextUnderstandingPercent() }}%
+          </span>
         </div>
 
-        <!-- Live Learner Profile Card -->
-        <div
-          data-testid="live-learner-profile-card"
-          class="bg-[#FFFFFF] rounded-xl p-5 border border-[#DCDCDC] space-y-3.5"
-        >
-          <div class="flex items-center justify-between border-b border-[#EAEAE6] pb-2.5">
-            <h4 class="text-xs font-mono font-bold uppercase tracking-wider text-[#111111] flex items-center gap-1.5">
-              <span class="material-symbols-outlined text-[16px] text-[#246B4A]" aria-hidden="true">badge</span>
-              <span>Chân Dung Người Học (Live Profile)</span>
-            </h4>
-            <span class="text-[10px] font-mono text-[#8E8E8A]">SRL FORE-THOUGHT</span>
+        <div class="flex items-baseline justify-between">
+          <div class="text-3xl font-serif font-medium text-[#111111] font-mono">
+            {{ contextUnderstandingPercent() }}%
+          </div>
+          <span class="text-xs text-[#555555]">
+            {{ answeredCount() }}/{{ questions().length }} điểm làm rõ
+          </span>
+        </div>
+
+        <div class="w-full h-2 rounded-full bg-[#EAEAE6] overflow-hidden">
+          <div
+            class="h-full rounded-full bg-[#246B4A] transition-all duration-300"
+            [style.width.%]="contextUnderstandingPercent()"
+          ></div>
+        </div>
+
+        <p class="text-[11px] text-[#555555] leading-relaxed">
+          Càng nhiều câu hỏi được trả lời, AI càng phân bổ chính xác thời lượng Pomodoro và độ khó của từng cột mốc.
+        </p>
+      </div>
+
+      <!-- Live Learner Profile Card -->
+      <div
+        data-testid="live-learner-profile-card"
+        class="bg-[#FFFFFF] rounded-xl p-5 border border-[#DCDCDC] space-y-3.5"
+      >
+        <div class="flex items-center justify-between border-b border-[#EAEAE6] pb-2.5">
+          <h4 class="text-xs font-mono font-bold uppercase tracking-wider text-[#111111] flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[16px] text-[#246B4A]" aria-hidden="true">badge</span>
+            <span>Chân Dung Người Học (Live Profile)</span>
+          </h4>
+          <span class="text-[10px] font-mono text-[#8E8E8A]">SRL FORE-THOUGHT</span>
+        </div>
+
+        <div class="space-y-2.5 text-xs">
+          <div class="flex items-center justify-between gap-2 py-1 border-b border-[#F3F3F1]">
+            <span class="text-[#555555]">Mục tiêu:</span>
+            <span class="font-semibold text-[#111111] text-right truncate max-w-[200px]">
+              {{ displayGoalTitle() }}
+            </span>
           </div>
 
-          <div class="space-y-2.5 text-xs">
-            <div class="flex items-center justify-between gap-2 py-1 border-b border-[#F3F3F1]">
-              <span class="text-[#555555]">Mục tiêu:</span>
-              <span class="font-semibold text-[#111111] text-right truncate max-w-[200px]">
-                {{ displayGoalTitle() }}
-              </span>
-            </div>
-
-            <div class="flex items-center justify-between gap-2 py-1 border-b border-[#F3F3F1]">
-              <span class="text-[#555555]">Trình độ nền:</span>
-              <span class="font-mono font-semibold text-[#246B4A] bg-[#EBF3EE] px-2 py-0.5 rounded text-[11px]">
-                {{ displayLevel() }}
-              </span>
-            </div>
-
-            <div class="flex items-center justify-between gap-2 py-1 border-b border-[#F3F3F1]">
-              <span class="text-[#555555]">Quỹ thời gian:</span>
-              <span class="font-mono font-semibold text-[#111111]">
-                {{ weeklyHours() }} giờ / tuần
-              </span>
-            </div>
-
-            <div class="flex items-center justify-between gap-2 py-1">
-              <span class="text-[#555555]">Hạn chót mục tiêu:</span>
-              <span class="font-mono text-[#111111]">
-                {{ displayDeadline() }}
-              </span>
-            </div>
+          <div class="flex items-center justify-between gap-2 py-1 border-b border-[#F3F3F1]">
+            <span class="text-[#555555]">Trình độ nền:</span>
+            <span class="font-mono font-semibold text-[#246B4A] bg-[#EBF3EE] px-2 py-0.5 rounded text-[11px]">
+              {{ displayLevel() }}
+            </span>
           </div>
 
-          @if (answeredEntries().length > 0) {
-            <div class="pt-3 border-t border-[#EAEAE6] space-y-1.5">
-              <span class="block text-[10px] font-mono uppercase tracking-wider text-[#555555]">
-                Ngữ cảnh vừa trích xuất:
-              </span>
-              @for (entry of answeredEntries(); track entry.id) {
-                <div class="text-[11px] bg-[#EBF3EE]/60 text-[#246B4A] px-2.5 py-1.5 rounded border border-[#246B4A]/20 truncate">
-                  ✓ {{ entry.answer }}
-                </div>
+          <div class="flex items-center justify-between gap-2 py-1 border-b border-[#F3F3F1]">
+            <span class="text-[#555555]">Quỹ thời gian:</span>
+            <span class="font-mono font-semibold text-[#111111]">
+              {{ weeklyHours() }} giờ / tuần
+            </span>
+          </div>
+
+          <div class="flex items-center justify-between gap-2 py-1">
+            <span class="text-[#555555]">Hạn chót mục tiêu:</span>
+            <span class="font-mono text-[#111111]">
+              {{ displayDeadline() }}
+            </span>
+          </div>
+        </div>
+
+        @if (attachedSources().length > 0) {
+          <div
+            data-testid="live-profile-knowledge-sources"
+            class="pt-3 border-t border-[#EAEAE6] space-y-1.5"
+          >
+            <span class="block text-[10px] font-mono uppercase tracking-wider text-[#555555]">
+              Tài liệu tham khảo ({{ attachedSources().length }}/3):
+            </span>
+            <div class="flex flex-wrap gap-1.5">
+              @for (src of attachedSources(); track src.id) {
+                <span
+                  class="inline-flex items-center gap-1 text-[11px] bg-[#F3F3F1] text-[#111111] px-2.5 py-1 rounded-md border border-[#DCDCDC] max-w-full truncate"
+                  [title]="src.url || src.title"
+                >
+                  <span class="material-symbols-outlined text-[13px] text-[#246B4A] shrink-0" aria-hidden="true">
+                    {{ src.kind === 'FILE' ? 'description' : 'link' }}
+                  </span>
+                  <span class="truncate max-w-[180px]">{{ src.title }}</span>
+                </span>
               }
             </div>
-          }
-        </div>
+          </div>
+        }
+
+        @if (answeredEntries().length > 0) {
+          <div class="pt-3 border-t border-[#EAEAE6] space-y-1.5">
+            <span class="block text-[10px] font-mono uppercase tracking-wider text-[#555555]">
+              Ngữ cảnh vừa trích xuất:
+            </span>
+            @for (entry of answeredEntries(); track entry.id) {
+              <div class="text-[11px] bg-[#EBF3EE]/60 text-[#246B4A] px-2.5 py-1.5 rounded border border-[#246B4A]/20 truncate">
+                ✓ {{ entry.answer }}
+              </div>
+            }
+          </div>
+        }
       </div>
     </div>
   </div>
 
-  <!-- FOOTER ACTIONS -->
-  <div class="p-4 sm:px-8 sm:py-4 bg-[#FFFFFF] border-t border-[#EAEAE6] flex flex-col sm:flex-row items-center justify-between gap-3">
+  <!-- PART C: PINNED STICKY ACTION FOOTER -->
+  <div class="px-6 sm:px-8 py-3.5 bg-[#FFFFFF] border-t border-[#EAEAE6] flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
     <button
       type="button"
       (click)="onBack()"

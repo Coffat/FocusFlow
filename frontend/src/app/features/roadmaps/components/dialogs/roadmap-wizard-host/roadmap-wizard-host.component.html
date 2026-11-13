@@ -16,6 +16,7 @@
         [initialLevel]="draftLevel()"
         [initialWeeklyHours]="draftWeeklyHours()"
         [isSubmitting]="isSaving()"
+        (submitAttachments)="onAttachmentsSelected($event)"
         (submitGoal)="onGoalSubmit($event)"
         (canceled)="onClose()"
       />
