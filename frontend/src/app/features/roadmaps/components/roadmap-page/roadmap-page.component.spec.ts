@@ -1,7 +1,8 @@
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Router, ActivatedRoute } from '@angular/router';
 import { RoadmapPageComponent } from './roadmap-page.component';
 import { RoadmapService } from '../../services/roadmap.service';
 import { API_ENDPOINTS } from '../../../../core/constants/api-endpoints';
@@ -686,23 +687,39 @@ describe('RoadmapPageComponent (WBS 6.3 3-Step AI Planning & Approval Workspace)
       expect(backBtn.textContent).toContain('Danh mục Lộ trình');
     });
 
-    it('hiển thị banner SSE tiến trình với 4 giai đoạn pipeline rõ ràng', () => {
-      service.sseProgress.set({
-        stage: 'STREAMING',
-        progress: 65,
-        message: 'Đang tạo kế hoạch bài học...',
-        retryCount: 0,
-        isStreaming: true,
-      });
-      fixture.detectChanges();
+    it('tự động mở form tạo lộ trình và dọn query param khi queryParam có autoOpen=true', () => {
+      const route = TestBed.inject(ActivatedRoute);
+      const router = TestBed.inject(Router);
+      const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
 
-      const compiled = fixture.nativeElement as HTMLElement;
-      const banner = compiled.querySelector('[data-testid="sse-progress-banner"]');
-      expect(banner).toBeTruthy();
-      expect(banner?.textContent).toContain('1. RESERVED');
-      expect(banner?.textContent).toContain('2. CHUNK STREAM');
-      expect(banner?.textContent).toContain('3. VALIDATING TIERS 1-3');
-      expect(banner?.textContent).toContain('4. COMPLETED');
+      vi.spyOn(route.snapshot.queryParamMap, 'get').mockImplementation((k: string) => {
+        if (k === 'autoOpen') return 'true';
+        return null;
+      });
+      route.snapshot.queryParams = { autoOpen: 'true' };
+
+      vi.spyOn(component.availabilityService, 'hasConfiguredAvailability').mockReturnValue(true);
+
+      component.ngOnInit();
+
+      httpTesting.expectOne(API_ENDPOINTS.ROADMAPS.BASE).flush([mockDetail]);
+      httpTesting.expectOne(API_ENDPOINTS.SETTINGS.AVAILABILITY).flush({
+        id: '018f0000-0000-7000-8000-000000000055',
+        user_id: mockDetail.user_id,
+        mode: 'MODE_A',
+        calendar_integration_mode: 'NONE',
+        min_session_minutes: 30,
+        weekly_schedule: createDefaultSchedule(),
+        total_weekly_hours: 16.0,
+        updated_at: '2026-10-30T08:00:00Z',
+      });
+
+      expect(component.showCreateForm()).toBe(true);
+      expect(navigateSpy).toHaveBeenCalledWith([], {
+        relativeTo: route,
+        queryParams: {},
+        replaceUrl: true,
+      });
     });
   });
 });

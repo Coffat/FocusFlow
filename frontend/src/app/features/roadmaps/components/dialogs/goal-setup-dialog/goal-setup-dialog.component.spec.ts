@@ -59,4 +59,71 @@ describe('GoalSetupDialogComponent', () => {
     expect(payload.title).toBe('Luyện thi IELTS 7.5 Academic');
     expect(payload.prior_knowledge_level).toBe('INTERMEDIATE');
   });
+
+  it('cho phép đính kèm đường dẫn URL hợp lệ và tệp .pdf hợp lệ, đồng thời hiển thị chip tài liệu', () => {
+    component.toggleUrlInput();
+    component.onUrlInputChange('https://docs.aws.amazon.com/wellarchitected/latest/framework/welcome.html');
+    component.addUrlAttachment();
+
+    const pdfFile = new File(['dummy pdf content'], 'aws-study-guide.pdf', {
+      type: 'application/pdf',
+    });
+    component.addFiles([pdfFile]);
+    fixture.detectChanges();
+
+    expect(component.attachments().length).toBe(2);
+    expect(component.attachments()[0].kind).toBe('URL');
+    expect(component.attachments()[1].kind).toBe('FILE');
+    expect(component.attachments()[1].title).toBe('aws-study-guide.pdf');
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.querySelector('[data-testid="goal-attachment-chip-0"]')).toBeTruthy();
+    expect(compiled.querySelector('[data-testid="goal-attachment-chip-1"]')).toBeTruthy();
+  });
+
+  it('giới hạn tối đa 3 nguồn đính kèm (tệp + URL) để bảo vệ ngữ cảnh AI', () => {
+    const file1 = new File(['# Notes 1'], 'note-1.md', { type: 'text/markdown' });
+    const file2 = new File(['Notes 2'], 'note-2.txt', { type: 'text/plain' });
+    component.addFiles([file1, file2]);
+
+    component.onUrlInputChange('https://roadmap.sh/aws');
+    component.addUrlAttachment();
+    expect(component.attachments().length).toBe(3);
+    expect(component.isAttachmentLimitReached()).toBe(true);
+
+    // Thử thêm nguồn thứ 4
+    component.onUrlInputChange('https://aws.amazon.com/certification/');
+    component.addUrlAttachment();
+    fixture.detectChanges();
+
+    expect(component.attachments().length).toBe(3);
+    const compiled = fixture.nativeElement as HTMLElement;
+    const errEl = compiled.querySelector('[data-testid="goal-attachment-error"]');
+    expect(errEl).toBeTruthy();
+    expect(errEl?.textContent).toContain('tối đa 3 nguồn');
+  });
+
+  it('từ chối tệp vượt quá 5 MB hoặc định dạng không hỗ trợ (.exe)', () => {
+    const invalidExtFile = new File(['binary'], 'installer.exe', {
+      type: 'application/octet-stream',
+    });
+    component.addFiles([invalidExtFile]);
+    fixture.detectChanges();
+
+    expect(component.attachments().length).toBe(0);
+    expect(component.attachmentError()).toContain('.pdf, .md hoặc .txt');
+
+    const oversizedBuffer = new Uint8Array(5 * 1024 * 1024 + 1024);
+    const oversizedFile = new File([oversizedBuffer], 'huge-book.pdf', {
+      type: 'application/pdf',
+    });
+    component.addFiles([oversizedFile]);
+    fixture.detectChanges();
+
+    expect(component.attachments().length).toBe(0);
+    const compiled = fixture.nativeElement as HTMLElement;
+    const errEl = compiled.querySelector('[data-testid="goal-attachment-error"]');
+    expect(errEl).toBeTruthy();
+    expect(errEl?.textContent).toContain('5 MB');
+  });
 });

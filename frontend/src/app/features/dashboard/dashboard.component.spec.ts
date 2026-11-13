@@ -1,21 +1,39 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideRouter, Router } from '@angular/router';
+import { provideRouter, Router, ActivatedRoute } from '@angular/router';
+import { signal } from '@angular/core';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { DashboardComponent } from './dashboard.component';
 import { DashboardService } from './services/dashboard.service';
+import { AvailabilityService } from '../../core/services/availability.service';
 
 describe('DashboardComponent', () => {
   let component: DashboardComponent;
   let fixture: ComponentFixture<DashboardComponent>;
   let router: Router;
   let service: DashboardService;
+  let mockAvailabilityService: {
+    profile: ReturnType<typeof signal<any>>;
+    hasConfiguredAvailability: ReturnType<typeof vi.fn>;
+    loadMyAvailability: ReturnType<typeof vi.fn>;
+  };
 
   beforeEach(async () => {
+    mockAvailabilityService = {
+      profile: signal({ id: 'avail-1', user_id: 'usr-1' }),
+      hasConfiguredAvailability: vi.fn().mockReturnValue(true),
+      loadMyAvailability: vi.fn((cb) => cb?.({ id: 'avail-1' })),
+    };
+
     await TestBed.configureTestingModule({
       imports: [DashboardComponent],
-      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: AvailabilityService, useValue: mockAvailabilityService },
+      ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(DashboardComponent);
@@ -76,12 +94,11 @@ describe('DashboardComponent', () => {
     expect(component.wizardStep()).toBe(1);
   });
 
-  it('mở RoadmapWizardHostComponent ở Bước 1 khi bấm phím C ngoài ô input hoặc bấm nút Khởi tạo Lộ trình Mới với AI', () => {
+  it('không mở wizard khi bấm phím C (đã loại bỏ phím tắt C theo yêu cầu UX)', () => {
     expect(component.wizardOpen()).toBe(false);
     const event = new KeyboardEvent('keydown', { key: 'c' });
     window.dispatchEvent(event);
-    expect(component.wizardOpen()).toBe(true);
-    expect(component.wizardStep()).toBe(1);
+    expect(component.wizardOpen()).toBe(false);
   });
 
   it('điều hướng tới /workspace khi bấm phím Space ngoài ô input', () => {
@@ -101,5 +118,68 @@ describe('DashboardComponent', () => {
 
     expect(component.wizardOpen()).toBe(false);
     document.body.removeChild(inputEl);
+  });
+
+  describe('Kiểm tra tiền điều kiện Thời gian rảnh & Auto-open', () => {
+    it('bật PrerequisiteAvailabilityDialogComponent khi chưa có thời gian rảnh và bấm Tạo lộ trình mới', () => {
+      mockAvailabilityService.hasConfiguredAvailability.mockReturnValue(false);
+
+      component.openCreateWizard(1);
+
+      expect(component.prerequisiteDialogOpen()).toBe(true);
+      expect(component.wizardOpen()).toBe(false);
+    });
+
+    it('bật PrerequisiteAvailabilityDialogComponent khi chưa có thời gian rảnh và chọn Starter Template', () => {
+      mockAvailabilityService.hasConfiguredAvailability.mockReturnValue(false);
+
+      component.onSelectStarterTemplate({
+        id: 'tpl-1',
+        title: 'Python Core',
+        subtitle: 'From zero to hero',
+        categoryTag: 'Backend',
+        weeksCount: 8,
+        tasksCount: 20,
+        tags: ['Python'],
+        hoursPerWeek: 10,
+        knowledgeLevel: 'BEGINNER',
+      });
+
+      expect(component.prerequisiteDialogOpen()).toBe(true);
+      expect(component.wizardOpen()).toBe(false);
+    });
+
+    it('gọi loadMyAvailability nếu profile() là null trước khi kiểm tra tiền điều kiện', () => {
+      mockAvailabilityService.profile.set(null);
+      mockAvailabilityService.hasConfiguredAvailability.mockReturnValue(false);
+
+      component.openCreateWizard(1);
+
+      expect(mockAvailabilityService.loadMyAvailability).toHaveBeenCalled();
+      expect(component.prerequisiteDialogOpen()).toBe(true);
+      expect(component.wizardOpen()).toBe(false);
+    });
+
+    it('tự động mở Wizard và dọn query param khi queryParam có autoOpen=true', () => {
+      const route = TestBed.inject(ActivatedRoute);
+      const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+
+      vi.spyOn(route.snapshot.queryParamMap, 'get').mockImplementation((k: string) => {
+        if (k === 'autoOpen') return 'true';
+        return null;
+      });
+      route.snapshot.queryParams = { autoOpen: 'true' };
+
+      mockAvailabilityService.hasConfiguredAvailability.mockReturnValue(true);
+
+      component.ngOnInit();
+
+      expect(component.wizardOpen()).toBe(true);
+      expect(navigateSpy).toHaveBeenCalledWith([], {
+        relativeTo: route,
+        queryParams: {},
+        replaceUrl: true,
+      });
+    });
   });
 });

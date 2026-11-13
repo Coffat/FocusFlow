@@ -9,7 +9,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { RoadmapService } from '../../services/roadmap.service';
 import { AvailabilityService } from '../../../../core/services/availability.service';
 import { BadgeDirective, BadgeVariant } from '../../../../shared/ui/badge/badge.directive';
@@ -36,6 +36,7 @@ export class RoadmapPageComponent implements OnInit {
   readonly roadmapService = inject(RoadmapService);
   readonly availabilityService = inject(AvailabilityService);
   private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
 
   readonly Number = Number;
@@ -86,9 +87,34 @@ export class RoadmapPageComponent implements OnInit {
       this.roadmapService.loadRoadmaps();
     }
 
-    if (routeId === 'new') {
-      this.showCreateForm.set(true);
-      this.roadmapService.setActiveStep(1);
+    const autoOpen = this.route.snapshot.queryParamMap.get('autoOpen');
+    if (routeId === 'new' || autoOpen === 'true') {
+      const checkAndOpen = () => {
+        if (!this.availabilityService.hasConfiguredAvailability()) {
+          this.showOnboardingModal.set(true);
+        } else {
+          this.showCreateForm.set(true);
+          this.roadmapService.setActiveStep(1);
+        }
+      };
+
+      if (!this.availabilityService.profile()) {
+        this.availabilityService.loadMyAvailability(() => {
+          checkAndOpen();
+        });
+      } else {
+        checkAndOpen();
+      }
+
+      if (autoOpen === 'true') {
+        const queryParams = { ...this.route.snapshot.queryParams };
+        delete queryParams['autoOpen'];
+        this.router.navigate([], {
+          relativeTo: this.route,
+          queryParams,
+          replaceUrl: true,
+        });
+      }
     }
 
     // 2. Check Query Param (?goal=...)

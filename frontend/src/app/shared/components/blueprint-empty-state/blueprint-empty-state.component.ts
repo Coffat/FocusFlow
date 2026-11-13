@@ -74,7 +74,7 @@ export class BlueprintEmptyStateComponent {
   readonly showTemplates = input<boolean>(true);
   readonly ctaLabel = input<string>('Tạo lộ trình học tập');
   readonly ctaRoute = input<string>('/roadmaps/new');
-  readonly shortcutKey = input<string>('C');
+  readonly shortcutKey = input<string | null>(null);
 
   readonly selectTemplate = output<StarterTemplate>();
   readonly createCustomRoadmap = output<void>();

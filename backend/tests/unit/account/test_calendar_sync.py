@@ -21,6 +21,7 @@ from src.account.application.use_cases.calendar import (
 )
 from src.account.domain.models.calendar_connection import CalendarConnection
 from src.account.domain.ports.calendar_provider_port import (
+    CalendarAuthError,
     CalendarConflictError,
     CalendarEventDTO,
     CalendarPreconditionFailedError,
@@ -368,6 +369,16 @@ async def test_initiate_google_calendar_auth_use_case() -> None:
     )
     assert decoded_state["user_id"] == str(user_id)
     assert decoded_state["sync_type"] == "inbound"
+    assert decoded_state["return_to"] == "/settings"
+
+    # Custom return_to
+    resp_custom = await use_case.execute(
+        user_id, InitiateCalendarAuthRequestDTO(sync_type="two_way", return_to="/schedule")
+    )
+    decoded_custom = json.loads(
+        base64.urlsafe_b64decode(resp_custom.state.encode("utf-8")).decode("utf-8")
+    )
+    assert decoded_custom["return_to"] == "/schedule"
 
     # 2. Two-way sync flow
     resp_two_way = await use_case.execute(
@@ -410,6 +421,65 @@ async def test_handle_google_calendar_oauth_callback_use_case() -> None:
     # Verify token is encrypted and can be decrypted back
     decrypted_token = decrypt_token(saved_conn.oauth_refresh_token_encrypted, key=key)
     assert decrypted_token.startswith("mock_refresh_token_")
+
+
+@pytest.mark.asyncio
+async def test_handle_google_calendar_callback_get_redirect() -> None:
+    from starlette.requests import Request
+
+    from src.account.presentation.calendar_router import handle_google_calendar_callback_get
+
+    key = generate_fernet_key()
+    settings = Settings(
+        calendar_provider="mock",
+        calendar_encryption_key=key,
+        frontend_url="http://localhost:4200",
+    )
+    repo = InMemoryCalendarConnectionRepository()
+    adapter = MockCalendarAdapter()
+    use_case = HandleGoogleCalendarOAuthCallbackUseCase(
+        repository=repo,
+        calendar_provider=adapter,
+        settings=settings,
+    )
+
+    user_id = uuid4()
+    state_payload = {
+        "user_id": str(user_id),
+        "sync_type": "two_way",
+        "return_to": "/schedule",
+    }
+    state_str = base64.urlsafe_b64encode(json.dumps(state_payload).encode("utf-8")).decode("utf-8")
+    scope = {"type": "http", "method": "GET", "headers": []}
+    req = Request(scope)
+
+    # 1. Success case -> 302 redirect with ?calendar_connected=success
+    response = await handle_google_calendar_callback_get(
+        request=req,
+        code="mock_auth_code",
+        state=state_str,
+        use_case=use_case,
+    )
+    assert response.status_code == 302
+    assert (
+        response.headers["location"] == "http://localhost:4200/schedule?calendar_connected=success"
+    )
+
+    # 2. Error case (e.g. invalid code triggering CalendarAuthError) -> 302 redirect with ?calendar_connected=error
+    from unittest.mock import AsyncMock
+
+    error_use_case = AsyncMock()
+    error_use_case.execute.side_effect = CalendarAuthError("Invalid auth code")
+    err_response = await handle_google_calendar_callback_get(
+        request=req,
+        code="bad_code",
+        state=state_str,
+        use_case=error_use_case,
+    )
+    assert err_response.status_code == 302
+    assert "calendar_connected=error" in err_response.headers["location"]
+    assert "error_detail=" in err_response.headers["location"]
+    assert "http://localhost:4200/schedule" in err_response.headers["location"]
 
 
 @pytest.mark.asyncio

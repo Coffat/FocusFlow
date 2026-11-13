@@ -57,6 +57,7 @@ describe('AppNavbarComponent', () => {
 
   it('hiển thị thương hiệu FocusFlow và khẩu hiệu', () => {
     const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector<HTMLImageElement>('a[aria-label="FocusFlow Home"] img')?.getAttribute('src')).toBe('assets/logo.svg');
     expect(el.querySelector('.brand-title')?.textContent).toContain('FocusFlow');
     expect(el.textContent).toContain('Plan Smarter • Do Better');
   });

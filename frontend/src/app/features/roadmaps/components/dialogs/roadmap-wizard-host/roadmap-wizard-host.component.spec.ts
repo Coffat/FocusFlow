@@ -103,4 +103,12 @@ describe('RoadmapWizardHostComponent', () => {
     fixture.detectChanges();
     expect(component.currentStep()).toBe(4);
   });
+
+  it('giữ cố định shellMaxWidthClass là max-w-[1040px] xuyên suốt cả 4 bước để hộp thoại không nhảy kích thước', () => {
+    for (const step of [1, 2, 3, 4] as const) {
+      component.onStepChange(step);
+      fixture.detectChanges();
+      expect(component.shellMaxWidthClass()).toBe('max-w-[1040px]');
+    }
+  });
 });

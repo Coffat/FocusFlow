@@ -1,6 +1,6 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { Observable, Subscription, catchError, finalize, of, tap } from 'rxjs';
+import { Observable, Subscription, catchError, finalize, forkJoin, map, of, tap } from 'rxjs';
 import { API_ENDPOINTS } from '../../../core/constants/api-endpoints';
 import { AiSseService, AiStreamChunkEvent } from '../../../core/services/ai-sse.service';
 import {
@@ -10,8 +10,11 @@ import {
   ClarificationQuestion,
   ClarificationQuestionsResponse,
   ConstraintViolationSchema,
+  CreateKnowledgeUrlRequest,
   CreateManualRoadmapPlanRequest,
   CreateRoadmapRequest,
+  DraftKnowledgeAttachment,
+  KnowledgeSourceResponse,
   MilestoneListResponse,
   MilestoneResponse,
   MilestoneUpsertItemSchema,
@@ -180,6 +183,8 @@ export class RoadmapService {
   readonly isGeneratingQuestions = signal<boolean>(false);
   readonly isSubmittingAnswers = signal<boolean>(false);
   readonly clarificationContext = signal<string | null>(null);
+  readonly draftAttachments = signal<DraftKnowledgeAttachment[]>([]);
+  readonly knowledgeSources = signal<KnowledgeSourceResponse[]>([]);
 
   readonly sseProgress = signal<SseProgressState>({
     stage: 'IDLE',
@@ -730,6 +735,52 @@ export class RoadmapService {
         })
       )
       .subscribe();
+  }
+
+  uploadKnowledgeAttachments(
+    goalId: string,
+    items: DraftKnowledgeAttachment[]
+  ): Observable<KnowledgeSourceResponse[]> {
+    if (!goalId || items.length === 0) {
+      return of([]);
+    }
+    const requests = items.slice(0, 3).map(item => {
+      if (item.kind === 'FILE' && item.file) {
+        const formData = new FormData();
+        formData.append('file', item.file);
+        formData.append('title', item.title);
+        return this.http
+          .post<KnowledgeSourceResponse>(
+            API_ENDPOINTS.ROADMAPS.KNOWLEDGE_FILES(goalId),
+            formData,
+            { withCredentials: true }
+          )
+          .pipe(catchError(() => of(null)));
+      }
+      if (item.kind === 'URL' && item.url) {
+        const payload: CreateKnowledgeUrlRequest = {
+          title: item.title,
+          url: item.url,
+        };
+        return this.http
+          .post<KnowledgeSourceResponse>(
+            API_ENDPOINTS.ROADMAPS.KNOWLEDGE_URLS(goalId),
+            payload,
+            { withCredentials: true }
+          )
+          .pipe(catchError(() => of(null)));
+      }
+      return of(null);
+    });
+
+    return forkJoin(requests).pipe(
+      map(results => results.filter((r): r is KnowledgeSourceResponse => r !== null)),
+      tap(uploaded => {
+        if (uploaded.length > 0) {
+          this.knowledgeSources.set(uploaded);
+        }
+      })
+    );
   }
 
   generateClarificationQuestions(goalId: string): void {

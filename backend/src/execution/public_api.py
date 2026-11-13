@@ -14,7 +14,11 @@ __all__ = [
     "DagTemporalViolation",
     "DagValidationError",
     "DagValidationResult",
+    "ExecutionDashboardQueryPort",
+    "ExecutionDayStudyDTO",
+    "ExecutionKpiStatsDTO",
     "ExecutionScheduleSyncPort",
+    "ExecutionTodayTaskDTO",
     "ExistingScheduledTaskDTO",
     "ExternalCalendarBusyUpdatedEvent",
     "ProposedDependencySyncItemDTO",
@@ -24,7 +28,9 @@ __all__ = [
     "StudyExecutionStatsDTO",
     "StudySessionAbandonedEvent",
     "StudySessionCompletedEvent",
+    "create_execution_dashboard_query_port",
     "create_execution_schedule_sync_port",
+    "register_execution_dashboard_factory",
     "register_execution_sync_factory",
 ]
 
@@ -394,4 +400,66 @@ def create_execution_schedule_sync_port(session: object) -> ExecutionScheduleSyn
         importlib.import_module("src.execution.infrastructure.adapters")
     assert callable(_execution_sync_factory)
     res: ExecutionScheduleSyncPort = _execution_sync_factory(session)
+    return res
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionTodayTaskDTO:
+    id: UUID
+    task_code: str
+    title: str
+    roadmap_title: str
+    scheduled_time: str
+    pomodoro_estimate: int
+    duration_minutes: int
+    status: str
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionKpiStatsDTO:
+    monthly_study_seconds: int
+    deep_work_seconds: int
+    completed_pomodoro_count: int
+    streak_days: int
+    personal_best_streak: int
+    streak_history_last_7_days: list[bool]
+    adherence_rate_pct: float
+    adherence_delta_pct: float
+    overdue_tasks_count: int
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionDayStudyDTO:
+    day_date: date
+    day_label: str
+    study_hours: float
+    is_today: bool
+
+
+class ExecutionDashboardQueryPort(Protocol):
+    async def get_today_queue(self, user_id: UUID, today: date) -> list[ExecutionTodayTaskDTO]: ...
+
+    async def get_7day_study_distribution(
+        self, user_id: UUID, today: date
+    ) -> list[ExecutionDayStudyDTO]: ...
+
+    async def get_execution_kpis(self, user_id: UUID, today: date) -> ExecutionKpiStatsDTO: ...
+
+
+_execution_dashboard_factory: object = None
+
+
+def register_execution_dashboard_factory(factory: object) -> None:
+    global _execution_dashboard_factory
+    _execution_dashboard_factory = factory
+
+
+def create_execution_dashboard_query_port(session: object) -> ExecutionDashboardQueryPort:
+    global _execution_dashboard_factory
+    if _execution_dashboard_factory is None:
+        import importlib
+
+        importlib.import_module("src.execution.infrastructure.adapters.execution_dashboard_adapter")
+    assert callable(_execution_dashboard_factory)
+    res: ExecutionDashboardQueryPort = _execution_dashboard_factory(session)
     return res

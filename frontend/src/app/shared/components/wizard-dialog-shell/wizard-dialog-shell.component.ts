@@ -32,7 +32,7 @@ export class WizardDialogShellComponent {
   readonly open = input<boolean>(false);
   readonly activeStep = input<1 | 2 | 3 | 4>(1);
   readonly title = input<string>('WIZARD KHỞI TẠO LỘ TRÌNH HỌC TẬP');
-  readonly maxWidthClass = input<string>('max-w-[920px]');
+  readonly maxWidthClass = input<string>('max-w-[1040px]');
   readonly errorMessage = input<string | null>(null);
   readonly sseProgress = input<WizardSseProgressBannerState | null>(null);
 

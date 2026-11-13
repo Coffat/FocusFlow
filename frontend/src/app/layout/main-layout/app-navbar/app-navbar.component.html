@@ -5,17 +5,13 @@
     <div class="flex items-center gap-3 shrink-0">
       <a routerLink="/dashboard" class="flex items-center gap-2.5 no-underline group" aria-label="FocusFlow Home">
         <div class="bg-neutral-50/80 border border-neutral-200/60 rounded-xl p-1.5 flex items-center justify-center shrink-0 shadow-2xs group-hover:border-neutral-300 transition-colors">
-          <svg class="w-6 h-6 sm:w-7 sm:h-7 shrink-0 transition-transform group-hover:scale-105" fill="none" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="18" cy="18" fill="#10B981" r="4"></circle>
-            <path d="M6 18C6 11.3726 11.3726 6 18 6C23 6 27.5 9 29.5 13.5C28 12.5 25.5 12 23 13C19.5 14.5 17 18 13.5 21.5C11 24 8 23 6 18Z" fill="#0F172A"></path>
-            <path d="M30 18C30 24.6274 24.6274 30 18 30C13 30 8.5 27 6.5 22.5C8 23.5 10.5 24 13 23C16.5 21.5 19 18 22.5 14.5C25 12 28 13 30 18Z" fill="url(#emerald-grad-nav)"></path>
-            <defs>
-              <linearGradient id="emerald-grad-nav" x1="18" y1="14" x2="30" y2="30" gradientUnits="userSpaceOnUse">
-                <stop stop-color="#246B4A"></stop>
-                <stop offset="1" stop-color="#10B981"></stop>
-              </linearGradient>
-            </defs>
-          </svg>
+          <img
+            src="assets/logo.svg"
+            alt=""
+            width="28"
+            height="28"
+            class="w-6 h-6 sm:w-7 sm:h-7 shrink-0 transition-transform group-hover:scale-105"
+          />
         </div>
         <div>
           <div class="flex items-center text-base sm:text-lg font-bold tracking-tight leading-none brand-title">
@@ -42,10 +38,10 @@
 
     <!-- Right: Utility Cluster -->
     <div class="flex items-center gap-2 sm:gap-2.5 shrink-0">
-      <!-- Quick Action "Vào học" (Obsidian Black Pill) -->
+      <!-- Quick Action "Vào học" (Deep Moss Green Pill) -->
       <a
         routerLink="/workspace"
-        class="hidden sm:inline-flex items-center gap-1.5 bg-[#111111] hover:bg-[#246B4A] text-white px-4 py-2 rounded-full text-xs font-semibold shadow-xs transition active:scale-95 no-underline shrink-0"
+        class="hidden sm:inline-flex items-center gap-1.5 bg-[#246B4A] hover:bg-[#1B5338] text-white px-4 py-2 rounded-full text-xs font-semibold shadow-xs transition active:scale-95 no-underline shrink-0"
         title="Bắt đầu phiên học với Pomodoro Timer"
       >
         <lucide-icon name="play" [size]="13" class="shrink-0 fill-current" aria-hidden="true"></lucide-icon>
@@ -136,13 +132,13 @@
 
             <!-- Navigation Links -->
             <a
-              routerLink="/settings"
+              routerLink="/profile"
               (click)="closeUserMenu()"
               class="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-neutral-700 hover:text-neutral-900 hover:bg-neutral-100/80 rounded-xl transition-colors no-underline cursor-pointer"
               role="menuitem"
             >
-              <lucide-icon name="settings" [size]="15" class="text-neutral-500 shrink-0" aria-hidden="true"></lucide-icon>
-              <span>Cài đặt & Hồ sơ</span>
+              <lucide-icon name="user" [size]="15" class="text-neutral-500 shrink-0" aria-hidden="true"></lucide-icon>
+              <span>Hồ sơ người học</span>
             </a>
 
             <a
@@ -151,8 +147,18 @@
               class="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-neutral-700 hover:text-neutral-900 hover:bg-neutral-100/80 rounded-xl transition-colors no-underline cursor-pointer"
               role="menuitem"
             >
-              <lucide-icon name="sparkles" [size]="15" class="text-[#246B4A] shrink-0" aria-hidden="true"></lucide-icon>
-              <span>Gói dịch vụ & Quota AI</span>
+              <lucide-icon name="settings" [size]="15" class="text-neutral-500 shrink-0" aria-hidden="true"></lucide-icon>
+              <span>Cài đặt hệ thống</span>
+            </a>
+
+            <a
+              routerLink="/availability"
+              (click)="closeUserMenu()"
+              class="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-neutral-700 hover:text-neutral-900 hover:bg-neutral-100/80 rounded-xl transition-colors no-underline cursor-pointer"
+              role="menuitem"
+            >
+              <lucide-icon name="clock" [size]="15" class="text-[#246B4A] shrink-0" aria-hidden="true"></lucide-icon>
+              <span>Thời gian rảnh</span>
             </a>
 
             <div class="border-t border-neutral-100 my-1"></div>
@@ -206,7 +212,7 @@
         <a
           routerLink="/workspace"
           (click)="closeMobileMenu()"
-          class="w-full bg-[#111111] hover:bg-[#246B4A] text-white px-4 py-2.5 rounded-full text-xs font-semibold shadow-xs transition active:scale-95 inline-flex items-center justify-center gap-2 no-underline"
+          class="w-full bg-[#246B4A] hover:bg-[#1B5338] text-white px-4 py-2.5 rounded-full text-xs font-semibold shadow-xs transition active:scale-95 inline-flex items-center justify-center gap-2 no-underline"
         >
           <lucide-icon name="play" [size]="14" class="shrink-0 fill-current" aria-hidden="true"></lucide-icon>
           <span>Vào học (Pomodoro Timer)</span>

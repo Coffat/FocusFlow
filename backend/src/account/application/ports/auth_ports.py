@@ -39,6 +39,8 @@ class RefreshTokenRepositoryPort(Protocol):
 
     async def revoke_family(self, family_id: str) -> None: ...
 
+    async def revoke_all_for_user(self, user_id: str) -> None: ...
+
 
 class OtpRepositoryPort(Protocol):
     """Protocol for OTP lifecycle management in Redis."""

@@ -23,6 +23,9 @@ import {
   ChevronDown,
   Menu,
   X,
+  User,
+  Clock,
+  Shield,
 } from 'lucide-angular';
 import { AuthService } from '../../../core/services/auth.service';
 
@@ -49,6 +52,9 @@ export interface NavItem {
         ChevronDown,
         Menu,
         X,
+        User,
+        Clock,
+        Shield,
       }),
     },
   ],

@@ -13,6 +13,7 @@ import { RoadmapService } from '../../../services/roadmap.service';
 import {
   ClarificationAnswerItem,
   ClarificationQuestion,
+  DraftKnowledgeAttachment,
   PriorKnowledgeLevel,
 } from '../../../models/roadmap.model';
 
@@ -119,6 +120,12 @@ export class AiGrillMeDialogComponent {
       this.roadmapService.selectedRoadmapDetail()?.target_date ||
       '12 tuần'
     );
+  });
+
+  readonly attachedSources = computed<DraftKnowledgeAttachment[]>(() => {
+    return typeof this.roadmapService.draftAttachments === 'function'
+      ? this.roadmapService.draftAttachments()
+      : [];
   });
 
   readonly answeredCount = computed<number>(() => {

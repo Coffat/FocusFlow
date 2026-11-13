@@ -1,221 +1,362 @@
-<div class="p-6 sm:p-8 space-y-6 bg-[#FFFFFF] text-[#111111]">
-  <!-- STEP HEADER -->
-  <div>
-    <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#EBF3EE] text-[#246B4A] border border-[#246B4A]/20 font-mono text-[11px] font-semibold uppercase tracking-wider mb-2.5">
-      <span class="w-1.5 h-1.5 rounded-full bg-[#246B4A]" aria-hidden="true"></span>
-      <span>BƯỚC 1 / 4 • THIẾT LẬP MỤC TIÊU &amp; QUỸ THỜI GIAN</span>
-    </div>
-    <h2 class="font-serif text-2xl sm:text-[28px] leading-tight text-[#111111] font-medium tracking-tight">
-      Bạn dự định chinh phục mục tiêu học tập nào?
-    </h2>
-    <p class="text-xs sm:text-sm text-[#555555] mt-1.5 leading-relaxed">
-      Hệ thống FocusAI sẽ phân rã mục tiêu của bạn thành các cột mốc kiến thức (Milestones) và phiên Pomodoro thích ứng.
-    </p>
-  </div>
-
-  <!-- SECTION 1: CORE LEARNING GOAL TEXTAREA & QUICK CHIPS -->
-  <div class="space-y-2.5">
-    <div class="flex items-baseline justify-between gap-2">
-      <label
-        for="wizard-goal-title-input"
-        class="text-xs font-semibold uppercase tracking-wider text-[#111111]"
-      >
-        1. Mục tiêu học tập cốt lõi <span class="text-[#246B4A]">*</span>
-      </label>
-      <span
-        data-testid="goal-char-counter"
-        class="text-[11px] font-mono text-[#555555]"
-      >
-        {{ charCount() }}/250
-      </span>
-    </div>
-
-    <div class="relative">
-      <textarea
-        id="wizard-goal-title-input"
-        data-testid="goal-title-textarea"
-        rows="3"
-        maxlength="250"
-        [ngModel]="goalTitle()"
-        (ngModelChange)="onTitleInput($event)"
-        placeholder="Ví dụ: Chứng chỉ AWS Solutions Architect Associate trong 12 tuần, Luyện thi IELTS Academic đạt Target 7.5..."
-        class="w-full rounded-lg border border-[#DCDCDC] bg-[#FAFAFA] p-3.5 pb-9 text-sm text-[#111111] placeholder-[#8E8E8A] focus:bg-[#FFFFFF] focus:border-[#246B4A] focus:outline-none focus:ring-2 focus:ring-[#246B4A]/20 transition-all resize-none leading-relaxed"
-      ></textarea>
-
-      <div class="absolute bottom-2.5 right-3 inline-flex items-center gap-1 text-[11px] font-mono font-medium text-[#246B4A] bg-[#EBF3EE] px-2.5 py-0.5 rounded-full border border-[#246B4A]/20">
-        <span class="material-symbols-outlined text-[13px]" aria-hidden="true">auto_awesome</span>
-        <span>AI Prompt Ready</span>
+<div class="flex-1 min-h-0 flex flex-col bg-[#FFFFFF] text-[#111111] overflow-hidden">
+  <!-- PART A: PINNED STEP SUB-HEADER BANNER -->
+  <div class="px-6 sm:px-8 py-4 border-b border-[#EAEAE6] bg-[#FAFAFA] flex flex-wrap items-center justify-between gap-3 shrink-0">
+    <div class="min-w-0 flex-1">
+      <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#EBF3EE] text-[#246B4A] border border-[#246B4A]/20 text-[11px] font-semibold mb-1">
+        <span class="w-1.5 h-1.5 rounded-full bg-[#246B4A]" aria-hidden="true"></span>
+        <span>Bước 1 / 4 • Thiết lập mục tiêu</span>
       </div>
-    </div>
-
-    @if (validationError(); as err) {
-      <p
-        role="alert"
-        data-testid="goal-validation-error"
-        class="text-xs font-medium text-[#B91C1C] flex items-center gap-1.5"
-      >
-        <span class="material-symbols-outlined text-[15px]" aria-hidden="true">warning</span>
-        <span>{{ err }}</span>
+      <h2 class="font-serif text-xl sm:text-2xl text-[#111111] font-medium tracking-tight">
+        Bạn dự định chinh phục mục tiêu học tập nào?
+      </h2>
+      <p class="text-xs text-[#555555] mt-0.5 leading-relaxed">
+        Cho FocusAI biết mục tiêu và quỹ thời gian của bạn để thiết kế lộ trình vừa sức, hiệu quả nhất.
       </p>
-    }
-
-    <!-- Quick Suggestion Chips -->
-    <div class="flex flex-wrap items-center gap-1.5 pt-1">
-      <span class="text-[11px] font-mono text-[#8E8E8A] mr-1">Gợi ý nhanh:</span>
-      @for (chip of quickSuggestions; track chip; let idx = $index) {
-        <button
-          type="button"
-          [attr.data-testid]="'goal-suggestion-chip-' + idx"
-          (click)="selectSuggestion(chip)"
-          class="text-[11px] font-medium text-[#555555] hover:text-[#111111] bg-[#F3F3F1] hover:bg-[#EAEAE6] border border-[#DCDCDC] px-2.5 py-1 rounded-full transition-colors cursor-pointer"
-        >
-          {{ chip }}
-        </button>
-      }
     </div>
   </div>
 
-  <!-- SECTION 2: BASELINE LEVEL (3 INTERACTIVE RADIO CARDS) -->
-  <div class="space-y-2.5">
-    <span class="block text-xs font-semibold uppercase tracking-wider text-[#111111]">
-      2. Trình độ nền tảng hiện tại (Baseline Level) <span class="text-[#246B4A]">*</span>
-    </span>
+  <!-- PART B: CENTERED SPACIOUS SINGLE-FLOW WORKSPACE -->
+  <div class="flex-1 min-h-0 overflow-y-auto bg-[#FFFFFF]">
+    <div class="max-w-[840px] mx-auto px-6 sm:px-8 py-6 space-y-6">
+      <!-- SECTION 1: CORE LEARNING GOAL TEXTAREA & QUICK CHIPS -->
+      <div class="space-y-2">
+        <div class="flex items-baseline justify-between gap-2">
+          <label
+            for="wizard-goal-title-input"
+            class="text-sm font-semibold text-[#111111]"
+          >
+            Mục tiêu học tập của bạn <span class="text-[#246B4A]">*</span>
+          </label>
+          <span
+            data-testid="goal-char-counter"
+            class="text-xs font-mono text-[#8E8E8A]"
+          >
+            {{ charCount() }}/250
+          </span>
+        </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-3" role="radiogroup" aria-label="Trình độ nền tảng">
-      @for (opt of levelOptions; track opt.value) {
-        <button
-          type="button"
-          role="radio"
-          [attr.aria-checked]="currentLevel() === opt.value"
-          [attr.data-testid]="'goal-level-card-' + opt.value"
-          (click)="selectLevel(opt.value)"
-          class="text-left p-4 rounded-lg transition-all cursor-pointer flex flex-col justify-between focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#246B4A]"
-          [class.border-2]="currentLevel() === opt.value"
-          [class.border-[#246B4A]]="currentLevel() === opt.value"
-          [class.bg-[#EBF3EE]/40]="currentLevel() === opt.value"
-          [class.border]="currentLevel() !== opt.value"
-          [class.border-[#DCDCDC]]="currentLevel() !== opt.value"
-          [class.bg-[#FFFFFF]]="currentLevel() !== opt.value"
-          [class.hover:border-[#8E8E8A]]="currentLevel() !== opt.value"
-        >
-          <div>
-            <div class="flex items-center justify-between gap-2 mb-1.5">
-              <span
-                class="text-xs font-semibold"
-                [class.text-[#246B4A]]="currentLevel() === opt.value"
-                [class.text-[#111111]]="currentLevel() !== opt.value"
+        <textarea
+          id="wizard-goal-title-input"
+          data-testid="goal-title-textarea"
+          rows="2"
+          maxlength="250"
+          [ngModel]="goalTitle()"
+          (ngModelChange)="onTitleInput($event)"
+          placeholder="Ví dụ: Chứng chỉ AWS Solutions Architect Associate trong 12 tuần, hoặc IELTS Academic 7.5..."
+          class="w-full rounded-xl border border-[#DCDCDC] bg-[#FAFAFA] px-4 py-3 text-sm text-[#111111] placeholder-[#8E8E8A] focus:bg-[#FFFFFF] focus:border-[#246B4A] focus:outline-none focus:ring-2 focus:ring-[#246B4A]/20 transition-all resize-none leading-relaxed"
+        ></textarea>
+
+        @if (validationError(); as err) {
+          <p
+            role="alert"
+            data-testid="goal-validation-error"
+            class="text-xs font-medium text-[#B91C1C] flex items-center gap-1.5"
+          >
+            <span class="material-symbols-outlined text-[15px]" aria-hidden="true">warning</span>
+            <span>{{ err }}</span>
+          </p>
+        }
+
+        <!-- Quick Suggestion Chips -->
+        <div class="flex flex-wrap items-center gap-2 pt-0.5">
+          <span class="text-xs text-[#8E8E8A]">Gợi ý nhanh:</span>
+          @for (chip of quickSuggestions; track chip; let idx = $index) {
+            <button
+              type="button"
+              [attr.data-testid]="'goal-suggestion-chip-' + idx"
+              (click)="selectSuggestion(chip)"
+              class="text-xs font-medium text-[#555555] hover:text-[#111111] bg-[#F3F3F1] hover:bg-[#EAEAE6] border border-[#DCDCDC] px-3 py-1 rounded-full transition-colors cursor-pointer"
+            >
+              {{ chip }}
+            </button>
+          }
+        </div>
+
+        <!-- Compact Knowledge Source Attachments Toolbar (Files + URLs, Max 3, Max 5MB) -->
+        <div class="pt-2.5 border-t border-[#F3F3F1] space-y-2.5">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="flex flex-wrap items-center gap-2">
+              <input
+                #knowledgeFileInput
+                type="file"
+                accept=".pdf,.md,.txt,application/pdf,text/markdown,text/plain"
+                multiple
+                class="hidden"
+                data-testid="goal-attachment-file-input"
+                (change)="onFilesSelected($event)"
+              />
+
+              <button
+                type="button"
+                data-testid="goal-attach-file-btn"
+                [disabled]="isAttachmentLimitReached()"
+                (click)="knowledgeFileInput.click()"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#111111] bg-[#FAFAFA] hover:bg-[#F3F3F1] border border-[#DCDCDC] disabled:opacity-45 disabled:cursor-not-allowed transition-colors cursor-pointer"
               >
-                {{ opt.title }}
-              </span>
-              <span
-                class="w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold"
-                [class.bg-[#246B4A]]="currentLevel() === opt.value"
-                [class.text-white]="currentLevel() === opt.value"
-                [class.border]="currentLevel() !== opt.value"
-                [class.border-[#DCDCDC]]="currentLevel() !== opt.value"
+                <span class="material-symbols-outlined text-[15px] text-[#246B4A]" aria-hidden="true">attach_file</span>
+                <span>Đính kèm tệp (.pdf, .md, .txt)</span>
+              </button>
+
+              <button
+                type="button"
+                data-testid="goal-toggle-url-btn"
+                [disabled]="isAttachmentLimitReached()"
+                (click)="toggleUrlInput()"
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#111111] bg-[#FAFAFA] hover:bg-[#F3F3F1] border border-[#DCDCDC] disabled:opacity-45 disabled:cursor-not-allowed transition-colors cursor-pointer"
               >
-                @if (currentLevel() === opt.value) {
-                  ✓
-                }
-              </span>
+                <span class="material-symbols-outlined text-[15px] text-[#246B4A]" aria-hidden="true">add_link</span>
+                <span>Thêm link URL</span>
+              </button>
             </div>
-            <div class="text-[10px] font-mono uppercase tracking-wider text-[#8E8E8A] mb-1.5">
-              {{ opt.badge }}
-            </div>
-            <p class="text-xs text-[#555555] leading-relaxed">
-              {{ opt.description }}
-            </p>
+
+            <span
+              data-testid="goal-attachment-counter"
+              class="font-mono text-[11px] font-medium text-[#555555] bg-[#F3F3F1] px-2.5 py-1 rounded-full border border-[#EAEAE6]"
+            >
+              {{ attachments().length }}/{{ maxAttachments }} nguồn (≤ 5MB/tệp)
+            </span>
           </div>
-        </button>
-      }
-    </div>
-  </div>
 
-  <!-- SECTION 3: WEEKLY STUDY HOURS SLIDER & TARGET DEADLINE -->
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-3 border-t border-[#EAEAE6]">
-    <!-- Weekly Hours Slider -->
-    <div class="space-y-2.5">
-      <div class="flex items-baseline justify-between gap-2">
-        <label
-          for="wizard-weekly-hours-slider"
-          class="text-xs font-semibold uppercase tracking-wider text-[#111111]"
-        >
-          3. Quỹ thời gian cam kết
-        </label>
-        <span
-          data-testid="weekly-hours-badge"
-          class="font-mono text-xs font-bold text-[#246B4A] bg-[#EBF3EE] px-2.5 py-0.5 rounded-full border border-[#246B4A]/20"
-        >
-          {{ weeklyHours() }} giờ / tuần
+          @if (showUrlInput()) {
+            <div
+              data-testid="goal-url-input-row"
+              class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 p-2.5 rounded-xl bg-[#FAFAFA] border border-[#DCDCDC]"
+            >
+              <input
+                type="url"
+                data-testid="goal-url-input"
+                [ngModel]="urlInputValue()"
+                (ngModelChange)="onUrlInputChange($event)"
+                (keydown.enter)="$event.preventDefault(); addUrlAttachment()"
+                placeholder="Dán đường dẫn tài liệu hoặc giáo trình (https://...)..."
+                class="flex-1 rounded-lg border border-[#DCDCDC] bg-[#FFFFFF] px-3 py-1.5 text-xs text-[#111111] placeholder-[#8E8E8A] focus:border-[#246B4A] focus:outline-none focus:ring-2 focus:ring-[#246B4A]/20"
+              />
+              <div class="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  data-testid="goal-add-url-btn"
+                  (click)="addUrlAttachment()"
+                  class="px-3 py-1.5 rounded-lg bg-[#246B4A] hover:bg-[#1D583C] text-white text-xs font-semibold transition-colors cursor-pointer"
+                >
+                  Thêm URL
+                </button>
+                <button
+                  type="button"
+                  data-testid="goal-close-url-btn"
+                  (click)="toggleUrlInput()"
+                  class="px-2.5 py-1.5 rounded-lg text-xs font-medium text-[#555555] hover:text-[#111111] hover:bg-[#EAEAE6] transition-colors cursor-pointer"
+                >
+                  Đóng
+                </button>
+              </div>
+            </div>
+          }
+
+          @if (attachmentError(); as attErr) {
+            <p
+              role="alert"
+              data-testid="goal-attachment-error"
+              class="text-xs font-medium text-[#B91C1C] flex items-center gap-1.5"
+            >
+              <span class="material-symbols-outlined text-[15px]" aria-hidden="true">error</span>
+              <span>{{ attErr }}</span>
+            </p>
+          }
+
+          @if (attachments().length > 0) {
+            <div
+              data-testid="goal-attachment-list"
+              class="flex flex-wrap items-center gap-2"
+            >
+              @for (item of attachments(); track item.id; let idx = $index) {
+                <div
+                  [attr.data-testid]="'goal-attachment-chip-' + idx"
+                  class="inline-flex items-center gap-2 max-w-full px-3 py-1.5 rounded-lg bg-[#EBF3EE]/60 border border-[#246B4A]/25 text-xs text-[#111111]"
+                >
+                  <span
+                    class="material-symbols-outlined text-[15px] text-[#246B4A] shrink-0"
+                    aria-hidden="true"
+                  >
+                    {{ item.kind === 'FILE' ? 'description' : 'link' }}
+                  </span>
+                  <span class="font-medium truncate max-w-[200px]" [title]="item.url || item.title">
+                    {{ item.title }}
+                  </span>
+                  <span class="font-mono text-[10px] text-[#246B4A] bg-[#FFFFFF] px-1.5 py-0.5 rounded border border-[#246B4A]/20 shrink-0">
+                    {{ item.kind === 'FILE' ? formatFileSize(item.sizeBytes) : 'URL' }}
+                  </span>
+                  <button
+                    type="button"
+                    [attr.data-testid]="'goal-remove-attachment-' + idx"
+                    (click)="removeAttachment(item.id)"
+                    class="text-[#555555] hover:text-[#B91C1C] font-bold leading-none px-1 cursor-pointer"
+                    aria-label="Xóa tài liệu đính kèm"
+                  >
+                    ✕
+                  </button>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      </div>
+
+      <!-- SECTION 2: BASELINE LEVEL (3 CLEAN RADIO CARDS) -->
+      <div class="space-y-2.5">
+        <span class="block text-sm font-semibold text-[#111111]">
+          Trình độ hiện tại của bạn <span class="text-[#246B4A]">*</span>
         </span>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5" role="radiogroup" aria-label="Trình độ nền tảng">
+          @for (opt of levelOptions; track opt.value) {
+            <button
+              type="button"
+              role="radio"
+              [attr.aria-checked]="currentLevel() === opt.value"
+              [attr.data-testid]="'goal-level-card-' + opt.value"
+              (click)="selectLevel(opt.value)"
+              class="text-left p-4 rounded-xl transition-all cursor-pointer flex flex-col justify-between focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#246B4A]"
+              [class.border-2]="currentLevel() === opt.value"
+              [class.border-[#246B4A]]="currentLevel() === opt.value"
+              [class.bg-[#EBF3EE]/40]="currentLevel() === opt.value"
+              [class.border]="currentLevel() !== opt.value"
+              [class.border-[#DCDCDC]]="currentLevel() !== opt.value"
+              [class.bg-[#FFFFFF]]="currentLevel() !== opt.value"
+              [class.hover:border-[#8E8E8A]]="currentLevel() !== opt.value"
+            >
+              <div class="space-y-1.5">
+                <div class="flex items-center justify-between gap-2">
+                  <span
+                    class="text-sm font-semibold"
+                    [class.text-[#246B4A]]="currentLevel() === opt.value"
+                    [class.text-[#111111]]="currentLevel() !== opt.value"
+                  >
+                    {{ opt.title }}
+                  </span>
+                  <span
+                    class="w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
+                    [class.bg-[#246B4A]]="currentLevel() === opt.value"
+                    [class.text-white]="currentLevel() === opt.value"
+                    [class.border]="currentLevel() !== opt.value"
+                    [class.border-[#DCDCDC]]="currentLevel() !== opt.value"
+                  >
+                    @if (currentLevel() === opt.value) {
+                      ✓
+                    }
+                  </span>
+                </div>
+                <p class="text-xs text-[#555555] leading-relaxed">
+                  {{ opt.description }}
+                </p>
+              </div>
+            </button>
+          }
+        </div>
       </div>
 
-      <input
-        id="wizard-weekly-hours-slider"
-        data-testid="weekly-hours-slider"
-        type="range"
-        min="3"
-        max="40"
-        [ngModel]="weeklyHours()"
-        (ngModelChange)="onWeeklyHoursChange($event)"
-        class="w-full h-2 bg-[#EAEAE6] rounded-lg appearance-none cursor-pointer accent-[#246B4A]"
-      />
+      <!-- SECTION 3: WEEKLY STUDY HOURS SLIDER & TARGET DEADLINE -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2">
+        <!-- Weekly Hours Slider -->
+        <div class="p-4 rounded-xl border border-[#EAEAE6] bg-[#FAFAFA] space-y-3">
+          <div class="flex items-center justify-between gap-2">
+            <label
+              for="wizard-weekly-hours-slider"
+              class="text-sm font-semibold text-[#111111]"
+            >
+              Thời gian dành cho việc học
+            </label>
+            <span
+              data-testid="weekly-hours-badge"
+              class="font-mono text-xs font-bold text-[#246B4A] bg-[#EBF3EE] px-2.5 py-1 rounded-full border border-[#246B4A]/20"
+            >
+              {{ weeklyHours() }} giờ / tuần
+            </span>
+          </div>
 
-      <div class="flex items-center justify-between text-[11px] font-mono text-[#555555]">
-        <span>Min: 3 giờ</span>
-        <span class="font-semibold text-[#111111]">~{{ dailyHoursEstimate() }} giờ/ngày</span>
-        <span>Max: 40 giờ</span>
+          <input
+            id="wizard-weekly-hours-slider"
+            data-testid="weekly-hours-slider"
+            type="range"
+            min="3"
+            max="40"
+            [ngModel]="weeklyHours()"
+            (ngModelChange)="onWeeklyHoursChange($event)"
+            class="w-full h-2 bg-[#DCDCDC] rounded-lg appearance-none cursor-pointer accent-[#246B4A]"
+          />
+
+          <div class="flex items-center justify-between text-xs text-[#555555]">
+            <span>3h/tuần</span>
+            <span class="font-medium text-[#111111]">Trung bình ~{{ dailyHoursEstimate() }} giờ/ngày</span>
+            <span>40h/tuần</span>
+          </div>
+        </div>
+
+        <!-- Target Deadline Date Picker -->
+        <div class="p-4 rounded-xl border border-[#EAEAE6] bg-[#FAFAFA] space-y-3 flex flex-col justify-between">
+          <div class="flex items-center justify-between gap-2">
+            <label
+              for="wizard-target-deadline"
+              class="text-sm font-semibold text-[#111111]"
+            >
+              Ngày muốn hoàn thành
+            </label>
+            <span
+              data-testid="deadline-remaining-badge"
+              class="font-mono text-xs font-semibold text-[#246B4A] bg-[#EBF3EE] px-2.5 py-1 rounded-full border border-[#246B4A]/20"
+            >
+              ~{{ remainingWeeks() }} tuần ({{ remainingDays() }} ngày)
+            </span>
+          </div>
+
+          <input
+            id="wizard-target-deadline"
+            data-testid="target-deadline-input"
+            type="date"
+            [ngModel]="targetDeadline()"
+            (ngModelChange)="onDeadlineChange($event)"
+            class="w-full px-3.5 py-2 text-sm font-mono font-medium text-[#111111] bg-[#FFFFFF] border border-[#DCDCDC] rounded-lg focus:border-[#246B4A] focus:outline-none focus:ring-2 focus:ring-[#246B4A]/20"
+          />
+        </div>
       </div>
-    </div>
 
-    <!-- Target Deadline Date Picker -->
-    <div class="space-y-2.5">
-      <div class="flex items-baseline justify-between gap-2">
-        <label
-          for="wizard-target-deadline"
-          class="text-xs font-semibold uppercase tracking-wider text-[#111111]"
-        >
-          4. Hạn chót mục tiêu (Deadline)
-        </label>
-        <span
-          data-testid="deadline-remaining-badge"
-          class="font-mono text-[11px] font-semibold text-[#246B4A] bg-[#EBF3EE] px-2.5 py-0.5 rounded-full border border-[#246B4A]/20"
-        >
-          ~{{ remainingWeeks() }} Tuần — {{ remainingDays() }} Ngày
-        </span>
+      <!-- COMPACT HORIZONTAL SUMMARY BAR -->
+      <div
+        data-testid="ai-cognitive-estimate-box"
+        class="rounded-xl bg-[#EBF3EE]/60 border border-[#246B4A]/20 px-5 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+      >
+        <div class="flex items-center gap-2.5">
+          <span class="material-symbols-outlined text-[#246B4A] text-[20px] shrink-0" aria-hidden="true">
+            auto_awesome
+          </span>
+          <span class="text-xs sm:text-sm font-semibold text-[#111111]">
+            Khối lượng lộ trình dự kiến:
+          </span>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3 sm:gap-5 text-xs sm:text-sm text-[#555555]">
+          <div class="flex items-center gap-1.5">
+            <span class="w-1.5 h-1.5 rounded-full bg-[#246B4A]" aria-hidden="true"></span>
+            <span>Tổng <strong class="font-mono text-[#111111]">{{ totalEstimatedHours() }} giờ học</strong></span>
+          </div>
+
+          <span class="text-[#DCDCDC] hidden sm:inline" aria-hidden="true">|</span>
+
+          <div class="flex items-center gap-1.5">
+            <span>Tương đương <strong class="font-mono text-[#246B4A]">{{ estimatedPomodoros() }} phiên Pomodoro</strong></span>
+          </div>
+
+          <span class="text-[#DCDCDC] hidden sm:inline" aria-hidden="true">|</span>
+
+          <div class="flex items-center gap-1.5">
+            <span>Chia thành <strong class="font-mono text-[#111111]">{{ estimatedMilestones() }} cột mốc kiến thức</strong></span>
+          </div>
+        </div>
       </div>
-
-      <input
-        id="wizard-target-deadline"
-        data-testid="target-deadline-input"
-        type="date"
-        [ngModel]="targetDeadline()"
-        (ngModelChange)="onDeadlineChange($event)"
-        class="w-full px-3.5 py-2 text-xs font-mono font-medium text-[#111111] bg-[#FAFAFA] border border-[#DCDCDC] rounded-lg focus:bg-[#FFFFFF] focus:border-[#246B4A] focus:outline-none focus:ring-2 focus:ring-[#246B4A]/20"
-      />
     </div>
   </div>
 
-  <!-- AI COGNITIVE ESTIMATE PREVIEW BOX -->
-  <div
-    data-testid="ai-cognitive-estimate-box"
-    class="bg-[#F3F3F1]/70 border border-[#DCDCDC] rounded-lg p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-  >
-    <div class="flex items-start gap-3">
-      <span class="material-symbols-outlined text-[#246B4A] text-[20px] shrink-0 mt-0.5" aria-hidden="true">
-        psychology
-      </span>
-      <div class="text-xs text-[#555555] leading-relaxed">
-        <span class="font-semibold text-[#111111]">Ước tính Nhận thức AI (Cognitive Estimate):</span>
-        Tổng tích lũy <strong class="font-mono text-[#111111]">{{ totalEstimatedHours() }} giờ học</strong>
-        • Tương đương <strong class="font-mono text-[#246B4A]">{{ estimatedPomodoros() }} phiên Pomodoro</strong> (25p tập trung)
-        • Phân rã thành <strong class="font-mono text-[#111111]">{{ estimatedMilestones() }} cột mốc kiến thức</strong>.
-      </div>
-    </div>
-  </div>
-
-  <!-- FOOTER ACTIONS -->
-  <div class="pt-4 border-t border-[#EAEAE6] flex flex-col sm:flex-row items-center justify-between gap-3">
+  <!-- PART C: PINNED STICKY ACTION FOOTER -->
+  <div class="px-6 sm:px-8 py-3.5 bg-[#FFFFFF] border-t border-[#EAEAE6] flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
     <button
       type="button"
       (click)="onCancel()"
@@ -230,7 +371,7 @@
       (click)="onSubmit()"
       [disabled]="isSubmitting()"
       data-testid="goal-submit-btn"
-      class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-full bg-[#111111] hover:bg-[#246B4A] disabled:opacity-50 text-white text-xs sm:text-sm font-semibold transition-colors cursor-pointer"
+      class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-full bg-[#246B4A] hover:bg-[#1B5338] disabled:opacity-50 text-white text-xs sm:text-sm font-semibold transition-colors cursor-pointer"
     >
       @if (isSubmitting()) {
         <span class="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" aria-hidden="true"></span>
