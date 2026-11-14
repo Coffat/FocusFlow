@@ -693,7 +693,8 @@ export class RoadmapService {
 
   createRoadmap(
     payload: CreateRoadmapRequest,
-    onSuccess?: (created: RoadmapResponse) => void
+    onSuccess?: (created: RoadmapResponse) => void,
+    options?: { skipAutoClarify?: boolean }
   ): void {
     this.saving.set(true);
     this.errorMessage.set(null);
@@ -719,7 +720,7 @@ export class RoadmapService {
           this.activeStep.set(1);
           this.successMessage.set('Đã khởi tạo mục tiêu và lộ trình học tập mới!');
 
-          if (created.goal_id) {
+          if (created.goal_id && !options?.skipAutoClarify) {
             this.generateClarificationQuestions(created.goal_id);
           }
           onSuccess?.(created);
@@ -1412,6 +1413,22 @@ export class RoadmapService {
     return this.http
       .post<Roadmap>(API_ENDPOINTS.ROADMAPS.RESUME(id), {}, { withCredentials: true })
       .pipe(tap(updated => this.currentRoadmap.set(updated)));
+  }
+
+  reoptimizeSchedule(id: string): Observable<unknown> {
+    return this.http.post(
+      API_ENDPOINTS.ROADMAPS.REOPTIMIZE_SCHEDULE(id),
+      {},
+      { withCredentials: true }
+    );
+  }
+
+  triggerOverdueRecovery(id: string): Observable<unknown> {
+    return this.http.post(
+      API_ENDPOINTS.ROADMAPS.OVERDUE_REVISE(id),
+      {},
+      { withCredentials: true }
+    );
   }
 }
 

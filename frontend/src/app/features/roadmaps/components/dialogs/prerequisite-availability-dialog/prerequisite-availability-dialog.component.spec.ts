@@ -246,7 +246,7 @@ describe('PrerequisiteAvailabilityDialogComponent', () => {
     });
   });
 
-  it('điều hướng sang /availability với query params và focus=calendar khi chọn Google Calendar và bấm Tiến hành thiết lập', () => {
+  it('điều hướng sang /settings với query params và tab=calendar, focus=calendar khi chọn Google Calendar và bấm Tiến hành thiết lập', () => {
     componentRef.setInput('open', true);
     componentRef.setInput('returnUrl', '/dashboard');
     component.selectOption('calendar');
@@ -260,8 +260,9 @@ describe('PrerequisiteAvailabilityDialogComponent', () => {
     proceedBtn.click();
 
     expect(actionSpy).toHaveBeenCalledWith('calendar');
-    expect(mockRouter.navigate).toHaveBeenCalledWith(['/availability'], {
+    expect(mockRouter.navigate).toHaveBeenCalledWith(['/settings'], {
       queryParams: {
+        tab: 'calendar',
         focus: 'calendar',
         returnUrl: '/dashboard',
         autoOpen: 'true',
@@ -283,8 +284,9 @@ describe('PrerequisiteAvailabilityDialogComponent', () => {
 
     expect(actionSpy).toHaveBeenCalledWith('calendar');
     expect(closeSpy).toHaveBeenCalled();
-    expect(mockRouter.navigate).toHaveBeenCalledWith(['/availability'], {
+    expect(mockRouter.navigate).toHaveBeenCalledWith(['/settings'], {
       queryParams: {
+        tab: 'calendar',
         focus: 'calendar',
         returnUrl: '/roadmaps',
         autoOpen: 'true',

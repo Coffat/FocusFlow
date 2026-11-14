@@ -683,6 +683,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/roadmaps/{roadmap_id}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pause an ACTIVE Roadmap (`ACTIVE -> PAUSED`, UC-22) */
+        post: operations["pause_roadmap_api_v1_roadmaps__roadmap_id__pause_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/roadmaps/{roadmap_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resume a PAUSED Roadmap (`PAUSED -> ACTIVE`) applying Domino Shift (UC-22) */
+        post: operations["resume_roadmap_api_v1_roadmaps__roadmap_id__resume_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/roadmaps/{roadmap_id}/reoptimize-schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deterministic schedule-only re-optimization (0 AI credit) creating a DRAFT proposal */
+        post: operations["reoptimize_schedule_proposal_api_v1_roadmaps__roadmap_id__reoptimize_schedule_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/roadmaps/{roadmap_id}/overdue-revise-jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Initiate deterministic overdue-recovery DRAFT proposal job (UC-23) */
+        post: operations["initiate_overdue_recovery_job_api_v1_roadmaps__roadmap_id__overdue_revise_jobs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/roadmaps/{roadmap_id}/milestones/generate-jobs": {
         parameters: {
             query?: never;
@@ -1923,6 +1991,26 @@ export interface components {
             total_sessions: number;
             /** Total Planned Minutes */
             total_planned_minutes: number;
+            /**
+             * Buffer Minutes Per Week
+             * @default 60
+             */
+            buffer_minutes_per_week: number;
+            /**
+             * Recovery Window Days
+             * @default 7
+             */
+            recovery_window_days: number;
+            /**
+             * Daily Workload Cap Minutes
+             * @default 180
+             */
+            daily_workload_cap_minutes: number;
+            /**
+             * Stability Weight
+             * @default 0.8
+             */
+            stability_weight: number;
             /**
              * Activated At
              * Format: date-time
@@ -3821,6 +3909,132 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RoadmapResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pause_roadmap_api_v1_roadmaps__roadmap_id__pause_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                roadmap_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoadmapResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resume_roadmap_api_v1_roadmaps__roadmap_id__resume_post: {
+        parameters: {
+            query?: {
+                shift_days?: number | null;
+            };
+            header?: never;
+            path: {
+                roadmap_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoadmapResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reoptimize_schedule_proposal_api_v1_roadmaps__roadmap_id__reoptimize_schedule_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                roadmap_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleProposalResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    initiate_overdue_recovery_job_api_v1_roadmaps__roadmap_id__overdue_revise_jobs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                roadmap_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SseJobTicketResponse"];
                 };
             };
             /** @description Validation Error */

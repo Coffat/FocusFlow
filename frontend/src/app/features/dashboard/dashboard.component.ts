@@ -110,21 +110,13 @@ export class DashboardComponent implements OnInit {
   }
 
   checkAvailabilityAndProceed(action: () => void): void {
-    const proceed = () => {
-      if (!this.availabilityService.hasConfiguredAvailability()) {
+    this.availabilityService.checkPrerequisites((ready) => {
+      if (!ready) {
         this.prerequisiteDialogOpen.set(true);
       } else {
         action();
       }
-    };
-
-    if (!this.availabilityService.profile()) {
-      this.availabilityService.loadMyAvailability(() => {
-        proceed();
-      });
-    } else {
-      proceed();
-    }
+    });
   }
 
   closePrerequisiteDialog(): void {

@@ -65,14 +65,22 @@ export class PrerequisiteAvailabilityDialogComponent {
     this.setupOptionSelected.emit(option);
     this.closeDialog.emit();
 
-    const queryParams: Record<string, string> = {
-      returnUrl: this.returnUrl(),
-      autoOpen: 'true',
-    };
     if (option === 'calendar') {
-      queryParams['focus'] = 'calendar';
+      this.router.navigate(['/settings'], {
+        queryParams: {
+          tab: 'calendar',
+          focus: 'calendar',
+          returnUrl: this.returnUrl(),
+          autoOpen: 'true',
+        },
+      });
+    } else {
+      this.router.navigate(['/availability'], {
+        queryParams: {
+          returnUrl: this.returnUrl(),
+          autoOpen: 'true',
+        },
+      });
     }
-
-    this.router.navigate(['/availability'], { queryParams });
   }
 }

@@ -32,6 +32,7 @@ export const API_ENDPOINTS = {
     PAUSE: (id: string) => `/api/v1/roadmaps/${id}/pause`,
     RESUME: (id: string) => `/api/v1/roadmaps/${id}/resume`,
     OVERDUE_REVISE: (id: string) => `/api/v1/roadmaps/${id}/overdue-revise-jobs`,
+    REOPTIMIZE_SCHEDULE: (id: string) => `/api/v1/roadmaps/${id}/reoptimize-schedule`,
     CLARIFY_QUESTIONS: (goalId: string) => `/api/v1/roadmaps/goals/${goalId}/clarify-questions`,
     CLARIFY_ANSWERS: (goalId: string) => `/api/v1/roadmaps/goals/${goalId}/clarify-answers`,
     CLARIFY_SKIP: (goalId: string) => `/api/v1/roadmaps/goals/${goalId}/clarify-skip`,

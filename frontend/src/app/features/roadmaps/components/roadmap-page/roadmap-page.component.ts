@@ -89,22 +89,14 @@ export class RoadmapPageComponent implements OnInit {
 
     const autoOpen = this.route.snapshot.queryParamMap.get('autoOpen');
     if (routeId === 'new' || autoOpen === 'true') {
-      const checkAndOpen = () => {
-        if (!this.availabilityService.hasConfiguredAvailability()) {
+      this.availabilityService.checkPrerequisites((ready) => {
+        if (!ready) {
           this.showOnboardingModal.set(true);
         } else {
           this.showCreateForm.set(true);
           this.roadmapService.setActiveStep(1);
         }
-      };
-
-      if (!this.availabilityService.profile()) {
-        this.availabilityService.loadMyAvailability(() => {
-          checkAndOpen();
-        });
-      } else {
-        checkAndOpen();
-      }
+      });
 
       if (autoOpen === 'true') {
         const queryParams = { ...this.route.snapshot.queryParams };
@@ -158,21 +150,13 @@ export class RoadmapPageComponent implements OnInit {
       return;
     }
 
-    const checkAndOpen = () => {
-      if (!this.availabilityService.hasConfiguredAvailability()) {
+    this.availabilityService.checkPrerequisites((ready) => {
+      if (!ready) {
         this.showOnboardingModal.set(true);
       } else {
         this.showCreateForm.set(true);
       }
-    };
-
-    if (!this.availabilityService.profile()) {
-      this.availabilityService.loadMyAvailability(() => {
-        checkAndOpen();
-      });
-    } else {
-      checkAndOpen();
-    }
+    });
   }
 
   closeOnboardingModal(): void {

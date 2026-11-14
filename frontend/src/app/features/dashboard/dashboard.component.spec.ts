@@ -3,27 +3,50 @@ import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter, Router, ActivatedRoute } from '@angular/router';
 import { signal } from '@angular/core';
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { of } from 'rxjs';
+import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { DashboardComponent } from './dashboard.component';
 import { DashboardService } from './services/dashboard.service';
 import { AvailabilityService } from '../../core/services/availability.service';
+import { CalendarIntegrationService } from '../../core/services/calendar-integration.service';
 
 describe('DashboardComponent', () => {
   let component: DashboardComponent;
   let fixture: ComponentFixture<DashboardComponent>;
   let router: Router;
   let service: DashboardService;
+  let mockCalendarService: {
+    connection: ReturnType<typeof signal<any>>;
+    isConnected: ReturnType<typeof signal<boolean>>;
+    isLoading: ReturnType<typeof signal<boolean>>;
+    loadStatus: Mock<() => any>;
+  };
   let mockAvailabilityService: {
     profile: ReturnType<typeof signal<any>>;
-    hasConfiguredAvailability: ReturnType<typeof vi.fn>;
-    loadMyAvailability: ReturnType<typeof vi.fn>;
+    hasConfiguredAvailability: Mock<() => boolean>;
+    loadMyAvailability: Mock<(cb?: any) => void>;
+    checkPrerequisites: Mock<(cb: (ready: boolean) => void) => void>;
   };
 
   beforeEach(async () => {
+    mockCalendarService = {
+      connection: signal({ connected: false, provider: 'GOOGLE', sync_status: 'IDLE' }),
+      isConnected: signal(false),
+      isLoading: signal(false),
+      loadStatus: vi.fn().mockReturnValue(of({ connected: false, provider: 'GOOGLE', sync_status: 'IDLE' })),
+    };
+
     mockAvailabilityService = {
       profile: signal({ id: 'avail-1', user_id: 'usr-1' }),
       hasConfiguredAvailability: vi.fn().mockReturnValue(true),
       loadMyAvailability: vi.fn((cb) => cb?.({ id: 'avail-1' })),
+      checkPrerequisites: vi.fn((cb: (ready: boolean) => void) => {
+        if (!mockAvailabilityService.profile()) {
+          mockAvailabilityService.loadMyAvailability();
+        }
+        const ready = mockCalendarService.isConnected() || mockAvailabilityService.hasConfiguredAvailability();
+        cb(ready);
+      }),
     };
 
     await TestBed.configureTestingModule({
@@ -33,6 +56,7 @@ describe('DashboardComponent', () => {
         provideHttpClientTesting(),
         provideRouter([]),
         { provide: AvailabilityService, useValue: mockAvailabilityService },
+        { provide: CalendarIntegrationService, useValue: mockCalendarService },
       ],
     }).compileComponents();
 
@@ -180,6 +204,17 @@ describe('DashboardComponent', () => {
         queryParams: {},
         replaceUrl: true,
       });
+    });
+
+    it('khi Google Calendar isConnected === true (dù chưa có profile lịch rảnh), checkPrerequisites trả về true và mở thẳng Wizard tạo lộ trình', () => {
+      mockAvailabilityService.profile.set(null);
+      mockCalendarService.isConnected.set(true);
+      mockAvailabilityService.hasConfiguredAvailability.mockReturnValue(false);
+
+      component.openCreateWizard(1);
+
+      expect(component.prerequisiteDialogOpen()).toBe(false);
+      expect(component.wizardOpen()).toBe(true);
     });
   });
 });

@@ -3,17 +3,29 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter, Router, ActivatedRoute } from '@angular/router';
+import { signal } from '@angular/core';
+import { of } from 'rxjs';
 import { RoadmapPageComponent } from './roadmap-page.component';
 import { RoadmapService } from '../../services/roadmap.service';
 import { API_ENDPOINTS } from '../../../../core/constants/api-endpoints';
 import { RoadmapDetailResponse, ScheduleProposalResponse } from '../../models/roadmap.model';
 import { createDefaultSchedule } from '../../../../core/services/availability.service';
+import { CalendarIntegrationService } from '../../../../core/services/calendar-integration.service';
 
 describe('RoadmapPageComponent (WBS 6.3 3-Step AI Planning & Approval Workspace)', () => {
   let component: RoadmapPageComponent;
   let fixture: ComponentFixture<RoadmapPageComponent>;
   let service: RoadmapService;
   let httpTesting: HttpTestingController;
+  let mockCalendarService: {
+    connection: ReturnType<typeof signal<any>>;
+    isConnected: ReturnType<typeof signal<boolean>>;
+    isLoading: ReturnType<typeof signal<boolean>>;
+    loadStatus: ReturnType<typeof vi.fn>;
+    connectGoogleCalendar: ReturnType<typeof vi.fn>;
+    disconnectGoogleCalendar: ReturnType<typeof vi.fn>;
+    checkUrlCallback: ReturnType<typeof vi.fn>;
+  };
 
   const mockDetail: RoadmapDetailResponse = {
     id: '018f0000-0000-7000-8000-000000000001',
@@ -56,6 +68,16 @@ describe('RoadmapPageComponent (WBS 6.3 3-Step AI Planning & Approval Workspace)
   };
 
   beforeEach(async () => {
+    mockCalendarService = {
+      connection: signal({ connected: false, provider: 'GOOGLE', sync_status: 'IDLE' }),
+      isConnected: signal(false),
+      isLoading: signal(false),
+      loadStatus: vi.fn().mockReturnValue(of({ connected: false, provider: 'GOOGLE', sync_status: 'IDLE' })),
+      connectGoogleCalendar: vi.fn(),
+      disconnectGoogleCalendar: vi.fn(),
+      checkUrlCallback: vi.fn(),
+    };
+
     await TestBed.configureTestingModule({
       imports: [RoadmapPageComponent],
       providers: [
@@ -63,6 +85,7 @@ describe('RoadmapPageComponent (WBS 6.3 3-Step AI Planning & Approval Workspace)
         provideRouter([{ path: 'availability', component: RoadmapPageComponent }]),
         provideHttpClient(),
         provideHttpClientTesting(),
+        { provide: CalendarIntegrationService, useValue: mockCalendarService },
       ],
     }).compileComponents();
 
@@ -476,6 +499,10 @@ describe('RoadmapPageComponent (WBS 6.3 3-Step AI Planning & Approval Workspace)
         roadmap_id: mockDetail.id,
         total_sessions: 1,
         total_planned_minutes: 60,
+        buffer_minutes_per_week: 60,
+        recovery_window_days: 7,
+        daily_workload_cap_minutes: 180,
+        stability_weight: 0.8,
         activated_at: '2026-10-30T10:00:00Z',
         created_at: '2026-10-30T10:00:00Z',
         updated_at: '2026-10-30T10:00:00Z',
@@ -720,6 +747,22 @@ describe('RoadmapPageComponent (WBS 6.3 3-Step AI Planning & Approval Workspace)
         queryParams: {},
         replaceUrl: true,
       });
+    });
+
+    it('khi Google Calendar isConnected === true (dù chưa có profile lịch rảnh), hasConfiguredAvailability và checkPrerequisites trả về true và mở form tạo lộ trình', () => {
+      component.availabilityService.profile.set(null);
+      mockCalendarService.isConnected.set(true);
+
+      expect(component.availabilityService.hasConfiguredAvailability()).toBe(true);
+
+      component.toggleCreateForm();
+
+      const req = httpTesting.expectOne(API_ENDPOINTS.SETTINGS.AVAILABILITY);
+      req.flush(null);
+      fixture.detectChanges();
+
+      expect(component.showOnboardingModal()).toBe(false);
+      expect(component.showCreateForm()).toBe(true);
     });
   });
 });

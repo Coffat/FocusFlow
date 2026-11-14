@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
@@ -10,15 +10,23 @@ import { RoadmapsHubComponent } from './roadmaps-hub.component';
 import { RoadmapService } from '../../services/roadmap.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import { AvailabilityService } from '../../../../core/services/availability.service';
+import { CalendarIntegrationService } from '../../../../core/services/calendar-integration.service';
 import { RoadmapResponse } from '../../models/roadmap.model';
 
 describe('RoadmapsHubComponent', () => {
   let component: RoadmapsHubComponent;
   let fixture: ComponentFixture<RoadmapsHubComponent>;
+  let mockCalendarService: {
+    connection: ReturnType<typeof signal<any>>;
+    isConnected: ReturnType<typeof signal<boolean>>;
+    isLoading: ReturnType<typeof signal<boolean>>;
+    loadStatus: Mock<() => any>;
+  };
   let mockAvailabilityService: {
     profile: ReturnType<typeof signal<any>>;
-    hasConfiguredAvailability: ReturnType<typeof vi.fn>;
-    loadMyAvailability: ReturnType<typeof vi.fn>;
+    hasConfiguredAvailability: Mock<() => boolean>;
+    loadMyAvailability: Mock<(cb?: any) => void>;
+    checkPrerequisites: Mock<(cb: (ready: boolean) => void) => void>;
   };
   let mockRoadmapService: {
     roadmaps: ReturnType<typeof signal<RoadmapResponse[]>>;
@@ -84,10 +92,24 @@ describe('RoadmapsHubComponent', () => {
       archiveRoadmap: vi.fn(),
     };
 
+    mockCalendarService = {
+      connection: signal({ connected: false, provider: 'GOOGLE', sync_status: 'IDLE' }),
+      isConnected: signal(false),
+      isLoading: signal(false),
+      loadStatus: vi.fn().mockReturnValue(of({ connected: false, provider: 'GOOGLE', sync_status: 'IDLE' })),
+    };
+
     mockAvailabilityService = {
       profile: signal({ id: 'avail-1', user_id: 'usr-1' }),
       hasConfiguredAvailability: vi.fn().mockReturnValue(true),
       loadMyAvailability: vi.fn((cb) => cb?.({ id: 'avail-1' })),
+      checkPrerequisites: vi.fn((cb: (ready: boolean) => void) => {
+        if (!mockAvailabilityService.profile()) {
+          mockAvailabilityService.loadMyAvailability();
+        }
+        const ready = mockCalendarService.isConnected() || mockAvailabilityService.hasConfiguredAvailability();
+        cb(ready);
+      }),
     };
 
     const mockAuthService = {
@@ -112,6 +134,7 @@ describe('RoadmapsHubComponent', () => {
         { provide: RoadmapService, useValue: mockRoadmapService },
         { provide: AuthService, useValue: mockAuthService },
         { provide: AvailabilityService, useValue: mockAvailabilityService },
+        { provide: CalendarIntegrationService, useValue: mockCalendarService },
       ],
     }).compileComponents();
 
@@ -310,6 +333,19 @@ describe('RoadmapsHubComponent', () => {
         queryParams: {},
         replaceUrl: true,
       });
+    });
+
+    it('khi Google Calendar isConnected === true (dù chưa có profile lịch rảnh), checkPrerequisites trả về true và mở thẳng Wizard tạo lộ trình', () => {
+      mockAvailabilityService.profile.set(null);
+      mockCalendarService.isConnected.set(true);
+      mockAvailabilityService.hasConfiguredAvailability.mockReturnValue(false);
+
+      component.openCreateWizard(1);
+      fixture.detectChanges();
+
+      expect(component.prerequisiteDialogOpen()).toBe(false);
+      expect(component.wizardOpen()).toBe(true);
+      expect(component.wizardStep()).toBe(1);
     });
   });
 });
