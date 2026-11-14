@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideRouter } from '@angular/router';
+import { provideRouter, ActivatedRoute, Router } from '@angular/router';
 import { signal } from '@angular/core';
 import { MessageService, ConfirmationService } from 'primeng/api';
 import { SettingsPageComponent } from './settings-page.component';
@@ -84,7 +84,7 @@ describe('SettingsPageComponent', () => {
     await TestBed.configureTestingModule({
       imports: [SettingsPageComponent],
       providers: [
-        provideRouter([]),
+        provideRouter([{ path: '**', component: SettingsPageComponent }]),
         provideHttpClient(),
         provideHttpClientTesting(),
         { provide: SettingsService, useValue: mockSettingsService },
@@ -177,17 +177,123 @@ describe('SettingsPageComponent', () => {
     const connectSpy = vi.spyOn(component.calendarService, 'connectGoogleCalendar').mockImplementation(() => {});
     const disconnectSpy = vi.spyOn(component.calendarService, 'disconnectGoogleCalendar');
 
-    // 1. Click connect
+    // 1. Click connect without returnUrl -> default return_to
     component.onConnectGoogleCalendar();
     expect(connectSpy).toHaveBeenCalledWith('/settings?tab=calendar');
 
-    // 2. Click disconnect triggers confirmation dialog
+    // 2. Click connect with returnUrl & autoOpen -> encoded return_to
+    component.returnUrl.set('/roadmaps');
+    component.autoOpen.set(true);
+    component.onConnectGoogleCalendar();
+    expect(connectSpy).toHaveBeenCalledWith(
+      '/settings?tab=calendar&returnUrl=%2Froadmaps&autoOpen=true'
+    );
+
+    // 3. Click disconnect triggers confirmation dialog
     component.onDisconnectGoogleCalendar();
     expect(mockConfirmationService.confirm).toHaveBeenCalledWith(
       expect.objectContaining({
         header: 'Xác nhận ngắt kết nối',
       })
     );
+  });
+
+  it('trích xuất returnUrl, autoOpen và focus=calendar từ query params trong ngOnInit', async () => {
+    const router = TestBed.inject(Router);
+    await router.navigate([], {
+      queryParams: {
+        returnUrl: '/roadmaps/new',
+        autoOpen: 'true',
+        focus: 'calendar',
+      },
+    });
+
+    component.ngOnInit();
+
+    expect(component.returnUrl()).toBe('/roadmaps/new');
+    expect(component.autoOpen()).toBe(true);
+    expect(component.activeTab()).toBe('calendar');
+  });
+
+  it('gọi scrollIntoView mượt mà tới google-calendar-section khi scrollToGoogleCalendarSection được gọi', () => {
+    const mockElement = document.createElement('section');
+    mockElement.id = 'google-calendar-section';
+    mockElement.scrollIntoView = vi.fn();
+    document.body.appendChild(mockElement);
+
+    component.scrollToGoogleCalendarSection();
+
+    expect(mockElement.scrollIntoView).toHaveBeenCalledWith({
+      behavior: 'smooth',
+      block: 'start',
+    });
+
+    document.body.removeChild(mockElement);
+  });
+
+  it('điều hướng trở lại Lộ trình với continueToRoadmap kèm autoOpen', () => {
+    const router = TestBed.inject(Router);
+    const navigateSpy = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+
+    // Case 1: returnUrl without query params and autoOpen=true
+    component.returnUrl.set('/roadmaps');
+    component.autoOpen.set(true);
+    component.continueToRoadmap();
+    expect(navigateSpy).toHaveBeenCalledWith('/roadmaps?autoOpen=true');
+
+    // Case 2: returnUrl with existing query params and autoOpen=true
+    component.returnUrl.set('/roadmaps?mode=create');
+    component.autoOpen.set(true);
+    component.continueToRoadmap();
+    expect(navigateSpy).toHaveBeenCalledWith('/roadmaps?mode=create&autoOpen=true');
+
+    // Case 3: returnUrl already has autoOpen=true
+    component.returnUrl.set('/roadmaps?autoOpen=true');
+    component.autoOpen.set(true);
+    component.continueToRoadmap();
+    expect(navigateSpy).toHaveBeenCalledWith('/roadmaps?autoOpen=true');
+
+    // Case 4: returnUrl is null -> defaults to /roadmaps
+    component.returnUrl.set(null);
+    component.autoOpen.set(false);
+    component.continueToRoadmap();
+    expect(navigateSpy).toHaveBeenCalledWith('/roadmaps');
+  });
+
+  it('hiển thị Banner thành công và nút [Tiếp tục tạo Lộ trình] khi returnUrl có giá trị và Calendar đã kết nối', () => {
+    component.setTab('calendar');
+    component.returnUrl.set('/roadmaps');
+    component.autoOpen.set(true);
+
+    // Mock calendar connected
+    vi.spyOn(component.calendarService, 'isConnected').mockReturnValue(true);
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+
+    // Check back links
+    const tabBackLink = compiled.querySelector('[data-testid="tab-back-to-roadmap-link"]');
+    expect(tabBackLink).toBeTruthy();
+    expect(tabBackLink?.textContent).toContain('Quay lại Lộ trình');
+
+    const headerBackLink = compiled.querySelector('[data-testid="header-back-to-roadmap-link"]');
+    expect(headerBackLink).toBeTruthy();
+
+    // Check success banner
+    const banner = compiled.querySelector('[data-testid="calendar-success-banner"]');
+    expect(banner).toBeTruthy();
+    expect(banner?.textContent).toContain(
+      'Đã liên kết Google Calendar thành công! Bạn đã đủ điều kiện để AI lập lịch học tự động.'
+    );
+
+    // Check CTA button
+    const continueBtn = compiled.querySelector('[data-testid="continue-to-roadmap-btn"]') as HTMLButtonElement;
+    expect(continueBtn).toBeTruthy();
+    expect(continueBtn.textContent).toContain('Tiếp tục tạo Lộ trình');
+
+    const continueSpy = vi.spyOn(component, 'continueToRoadmap');
+    continueBtn.click();
+    expect(continueSpy).toHaveBeenCalled();
   });
 
   it('chuyển đổi giữa 4 horizontal tabs và cập nhật query param tab', () => {
