@@ -1,52 +1,45 @@
 <div class="flex-1 min-h-0 flex flex-col bg-[#FFFFFF] text-[#111111] overflow-hidden">
-  <!-- PART A: PINNED STEP SUB-HEADER BANNER -->
-  <div class="px-6 sm:px-8 py-4 border-b border-[#EAEAE6] bg-[#FAFAFA] flex flex-wrap items-center justify-between gap-3 shrink-0">
-    <div class="min-w-0 flex-1">
-      <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#EBF3EE] text-[#246B4A] border border-[#246B4A]/20 font-mono text-[11px] font-semibold uppercase tracking-wider mb-1">
-        <span class="w-1.5 h-1.5 rounded-full bg-[#246B4A]" aria-hidden="true"></span>
-        <span>BƯỚC 3 / 4 • AI GENERATION &amp; PHÊ DUYỆT CỘT MỐC CẤP 1 (SCR-03)</span>
-      </div>
-      <h2 class="font-serif text-xl sm:text-2xl text-[#111111] font-medium tracking-tight">
-        Phân rã Cấu trúc Kiến thức &amp; Phê duyệt Cột mốc Cấp 1
-      </h2>
-      <p class="text-xs text-[#555555] mt-0.5 leading-relaxed">
-        Kiểm tra, điều chỉnh thứ tự và số giờ ước tính của từng chặng cột mốc trước khi chuyển sang xếp lịch.
-      </p>
-    </div>
-
-    <div class="flex items-center gap-2 font-mono text-xs bg-[#FFFFFF] px-3.5 py-2 rounded-lg border border-[#DCDCDC] shrink-0">
-      <span class="text-[#555555]">Tổng ước tính:</span>
-      <span
-        data-testid="total-estimated-hours-badge"
-        class="font-bold text-[#246B4A]"
-      >
-        {{ totalEstimatedHours() }}h / {{ targetCapacityHours() }}h quỹ mục tiêu
-      </span>
-    </div>
-  </div>
-
   <!-- PART B: 7/5 TWO-COLUMN SPLIT WORKSPACE -->
   <div class="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-[#EAEAE6]">
     <!-- LEFT COLUMN (7 COLS): INTERACTIVE LEVEL-1 MILESTONES TREE -->
     <div class="lg:col-span-7 lg:h-full lg:overflow-y-auto p-6 sm:p-7 bg-[#FFFFFF] flex flex-col space-y-4">
-      <div class="flex items-center justify-between gap-2 pb-3 border-b border-[#EAEAE6] shrink-0">
-        <div>
+      <!-- STEP TITLE IN CONTENT & ESTIMATE BADGE / ACTIONS -->
+      <div class="pb-4 border-b border-[#EAEAE6] space-y-3 shrink-0">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="space-y-0.5 min-w-0 flex-1">
+            <h2 class="font-serif text-lg sm:text-xl text-[#111111] font-semibold tracking-tight">
+              Phân rã Cấu trúc Kiến thức &amp; Phê duyệt Cột mốc Cấp 1
+            </h2>
+            <p class="text-xs text-[#555555]">
+              Kiểm tra, điều chỉnh thứ tự và số giờ ước tính của từng chặng cột mốc trước khi chuyển sang xếp lịch.
+            </p>
+          </div>
+
+          <div class="flex items-center gap-2 font-mono text-[11px] bg-[#FAFAFA] px-3 py-1.5 rounded-lg border border-[#DCDCDC] shrink-0">
+            <span class="text-[#555555]">Tổng ước tính:</span>
+            <span
+              data-testid="total-estimated-hours-badge"
+              class="font-bold text-[#246B4A]"
+            >
+              {{ totalEstimatedHours() }}h / {{ targetCapacityHours() }}h quỹ mục tiêu
+            </span>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between gap-2 pt-1">
           <h3 class="text-sm font-bold text-[#111111]">
             Danh sách Cột mốc Cấp 1 ({{ editableMilestones().length }})
           </h3>
-          <p class="text-xs text-[#555555]">
-            Chỉnh sửa tiêu đề, mô tả, số giờ ước tính hoặc thay đổi thứ tự trước khi phê duyệt.
-          </p>
-        </div>
 
-        <button
-          type="button"
-          (click)="onAddMilestone()"
-          data-testid="add-milestone-btn"
-          class="px-3.5 py-1.5 rounded-full bg-[#F3F3F1] hover:bg-[#EAEAE6] text-[#111111] border border-[#DCDCDC] text-xs font-semibold transition-colors cursor-pointer shrink-0"
-        >
-          + Thêm cột mốc mới
-        </button>
+          <button
+            type="button"
+            (click)="onAddMilestone()"
+            data-testid="add-milestone-btn"
+            class="px-3.5 py-1.5 rounded-full bg-[#F3F3F1] hover:bg-[#EAEAE6] text-[#111111] border border-[#DCDCDC] text-xs font-semibold transition-colors cursor-pointer shrink-0"
+          >
+            + Thêm cột mốc mới
+          </button>
+        </div>
       </div>
 
       @if (editableMilestones().length === 0) {

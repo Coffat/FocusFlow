@@ -137,18 +137,33 @@ export class RoadmapWizardHostComponent {
     this.draftLevel.set((payload.prior_knowledge_level as PriorKnowledgeLevel) || 'BEGINNER');
     this.draftDeadline.set(payload.target_date ?? '');
 
-    this.roadmapService.createRoadmap(payload, created => {
-      const pendingAttachments =
-        typeof this.roadmapService.draftAttachments === 'function'
-          ? this.roadmapService.draftAttachments()
-          : [];
-      if (created?.goal_id && pendingAttachments.length > 0) {
-        this.roadmapService
-          .uploadKnowledgeAttachments?.(created.goal_id, pendingAttachments)
-          .subscribe();
-      }
-      this.currentStep.set(2);
-    });
+    const pendingAttachments =
+      typeof this.roadmapService.draftAttachments === 'function'
+        ? this.roadmapService.draftAttachments()
+        : [];
+    const hasAttachments = pendingAttachments.length > 0;
+
+    this.roadmapService.createRoadmap(
+      payload,
+      created => {
+        if (created?.goal_id && hasAttachments) {
+          const upload$ = this.roadmapService.uploadKnowledgeAttachments?.(
+            created.goal_id,
+            pendingAttachments
+          );
+          if (upload$) {
+            upload$.subscribe({
+              complete: () => this.roadmapService.generateClarificationQuestions(created.goal_id),
+              error: () => this.roadmapService.generateClarificationQuestions(created.goal_id),
+            });
+          } else {
+            this.roadmapService.generateClarificationQuestions(created.goal_id);
+          }
+        }
+        this.currentStep.set(2);
+      },
+      { skipAutoClarify: hasAttachments }
+    );
   }
 
   // =========================================================================

@@ -1,31 +1,26 @@
 <div class="flex-1 min-h-0 flex flex-col bg-[#FFFFFF] text-[#111111] overflow-hidden">
-  <!-- PART A: PINNED STEP SUB-HEADER BANNER -->
-  <div class="px-6 sm:px-8 py-4 border-b border-[#EAEAE6] bg-[#FAFAFA] flex flex-wrap items-center justify-between gap-3 shrink-0">
-    <div class="min-w-0 flex-1">
-      <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#EBF3EE] text-[#246B4A] border border-[#246B4A]/20 font-mono text-[11px] font-semibold uppercase tracking-wider mb-1">
-        <span class="material-symbols-outlined text-[13px]" aria-hidden="true">psychology_alt</span>
-        <span>BƯỚC 2 / 4 • FOCUSAI PEDAGOGICAL INTERVIEWER (GRILL-ME)</span>
-      </div>
-      <h2 class="font-serif text-xl sm:text-2xl text-[#111111] font-medium tracking-tight">
-        Để tạo lộ trình chính xác nhất, FocusAI cần làm rõ một vài điểm then chốt cùng bạn.
-      </h2>
-      <p class="text-xs text-[#555555] mt-0.5 leading-relaxed">
-        Trả lời nhanh các câu hỏi chẩn đoán sư phạm dưới đây để hệ thống đo ni đóng giày từng cột mốc và phiên Pomodoro.
-      </p>
-    </div>
-
-    <div class="flex items-center gap-2 font-mono text-xs bg-[#FFFFFF] px-3.5 py-2 rounded-lg border border-[#DCDCDC] shrink-0">
-      <span class="text-[#555555]">Tiến độ làm rõ:</span>
-      <span class="font-bold text-[#246B4A]">
-        {{ answeredCount() }}/{{ questions().length }} câu hỏi đã trả lời
-      </span>
-    </div>
-  </div>
-
   <!-- PART B: 7/5 TWO-COLUMN SPLIT WORKSPACE -->
   <div class="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-[#EAEAE6]">
     <!-- LEFT COLUMN (7 COLS): AI PEDAGOGICAL QUESTIONS -->
     <div class="lg:col-span-7 lg:h-full lg:overflow-y-auto p-6 sm:p-7 bg-[#FFFFFF] flex flex-col">
+      <!-- STEP TITLE IN CONTENT & PROGRESS PILL -->
+      <div class="mb-5 pb-3 border-b border-[#EAEAE6] flex flex-wrap items-center justify-between gap-3 shrink-0">
+        <div class="space-y-0.5 min-w-0 flex-1">
+          <h2 class="font-serif text-lg sm:text-xl text-[#111111] font-semibold tracking-tight">
+            Phỏng vấn Chẩn đoán Sư phạm (Grill-Me)
+          </h2>
+          <p class="text-xs text-[#555555]">
+            Trả lời nhanh các câu hỏi để hệ thống đo ni đóng giày từng cột mốc học tập.
+          </p>
+        </div>
+        <div class="flex items-center gap-2 font-mono text-[11px] bg-[#FAFAFA] px-3 py-1.5 rounded-lg border border-[#DCDCDC] shrink-0">
+          <span class="text-[#555555]">Tiến độ:</span>
+          <span class="font-bold text-[#246B4A]">
+            {{ answeredCount() }}/{{ questions().length }} câu hỏi
+          </span>
+        </div>
+      </div>
+
       @if (questions().length === 0) {
         <!-- EMPTY QUESTIONS STATE -->
         <div

@@ -1,49 +1,42 @@
 <div class="flex-1 min-h-0 flex flex-col bg-[#FFFFFF] text-[#111111] overflow-hidden">
-  <!-- PART A: PINNED STEP SUB-HEADER BANNER -->
-  <div class="px-6 sm:px-8 py-4 border-b border-[#EAEAE6] bg-[#FAFAFA] flex flex-wrap items-center justify-between gap-3 shrink-0">
-    <div class="min-w-0 flex-1">
-      <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#EBF3EE] text-[#246B4A] border border-[#246B4A]/20 font-mono text-[11px] font-semibold uppercase tracking-wider mb-1">
-        <span class="w-1.5 h-1.5 rounded-full bg-[#246B4A]" aria-hidden="true"></span>
-        <span>BƯỚC 4 / 4 • ĐỀ XUẤT LỊCH BIỂU CẤP 2 &amp; KIỂM ĐỊNH 3 TẦNG (SCR-05)</span>
-      </div>
-      <h2 class="font-serif text-xl sm:text-2xl text-[#111111] font-medium tracking-tight">
-        Tinh chỉnh Phiên học Pomodoro &amp; Áp dụng Lịch Chính thức
-      </h2>
-      <p class="text-xs text-[#555555] mt-0.5 leading-relaxed">
-        Kiểm định ràng buộc tất định 3 tầng và duyệt danh sách phiên học Pomodoro trước khi ghi vào Lịch chính thức.
-      </p>
-    </div>
-
-    <div class="flex items-center gap-2 font-mono text-xs bg-[#FFFFFF] px-3.5 py-2 rounded-lg border border-[#DCDCDC] shrink-0">
-      <span class="text-[#555555]">Tổng khối lượng:</span>
-      <span class="font-bold text-[#111111]">{{ editableTasks().length }} phiên</span>
-      <span class="text-[#DCDCDC]">•</span>
-      <span class="font-bold text-[#246B4A]">{{ totalPlannedMinutes() }} phút ({{ totalPomodoroBlocks() }} Pomodoro)</span>
-    </div>
-  </div>
-
   <!-- PART B: 7/5 TWO-COLUMN SPLIT WORKSPACE -->
   <div class="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-[#EAEAE6]">
     <!-- LEFT COLUMN (7 COLS): PROPOSED POMODORO SCHEDULE BLOCKS -->
     <div class="lg:col-span-7 lg:h-full lg:overflow-y-auto p-6 sm:p-7 bg-[#FFFFFF] flex flex-col space-y-4">
-      <div class="flex items-center justify-between gap-2 pb-3 border-b border-[#EAEAE6] shrink-0">
-        <div>
+      <!-- STEP TITLE IN CONTENT & SUMMARY PILL / ACTIONS -->
+      <div class="pb-4 border-b border-[#EAEAE6] space-y-3 shrink-0">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="space-y-0.5 min-w-0 flex-1">
+            <h2 class="font-serif text-lg sm:text-xl text-[#111111] font-semibold tracking-tight">
+              Tinh chỉnh Phiên học Pomodoro &amp; Áp dụng Lịch Chính thức
+            </h2>
+            <p class="text-xs text-[#555555]">
+              Kiểm định ràng buộc tất định 3 tầng và duyệt danh sách phiên học Pomodoro trước khi ghi vào Lịch chính thức.
+            </p>
+          </div>
+
+          <div class="flex items-center gap-2 font-mono text-[11px] bg-[#FAFAFA] px-3 py-1.5 rounded-lg border border-[#DCDCDC] shrink-0">
+            <span class="text-[#555555]">Tổng khối lượng:</span>
+            <span class="font-bold text-[#111111]">{{ editableTasks().length }} phiên</span>
+            <span class="text-[#DCDCDC]">•</span>
+            <span class="font-bold text-[#246B4A]">{{ totalPlannedMinutes() }} phút ({{ totalPomodoroBlocks() }} Pomodoro)</span>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between gap-2 pt-1">
           <h3 class="text-sm font-bold text-[#111111]">
             Danh sách Phiên học Pomodoro Đề xuất ({{ editableTasks().length }})
           </h3>
-          <p class="text-xs text-[#555555]">
-            Tinh chỉnh tiêu đề, thời lượng Pomodoro, ngày học dự kiến và độ khó cho từng phiên.
-          </p>
-        </div>
 
-        <button
-          type="button"
-          (click)="onAddTask()"
-          data-testid="add-task-btn"
-          class="px-3.5 py-1.5 rounded-full bg-[#F3F3F1] hover:bg-[#EAEAE6] text-[#111111] border border-[#DCDCDC] text-xs font-semibold transition-colors cursor-pointer shrink-0"
-        >
-          + Thêm phiên học
-        </button>
+          <button
+            type="button"
+            (click)="onAddTask()"
+            data-testid="add-task-btn"
+            class="px-3.5 py-1.5 rounded-full bg-[#F3F3F1] hover:bg-[#EAEAE6] text-[#111111] border border-[#DCDCDC] text-xs font-semibold transition-colors cursor-pointer shrink-0"
+          >
+            + Thêm phiên học
+          </button>
+        </div>
       </div>
 
       @if (editableTasks().length === 0) {
