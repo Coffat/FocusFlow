@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -197,10 +198,24 @@ class RedisSseJobStore(SseJobPort):
         self._redis_url = redis_url or settings.redis_url
         self._fallback = fallback_store or default_in_memory_sse_job_store
         self._client: aioredis.Redis | None = None
+        self._redis_retry_after: float = 0.0
 
-    def _get_client(self) -> aioredis.Redis:
+    def _redis_temporarily_disabled(self) -> bool:
+        return time.monotonic() < self._redis_retry_after
+
+    def _mark_redis_unavailable(self) -> None:
+        self._redis_retry_after = time.monotonic() + 15.0
+
+    def _get_client(self) -> aioredis.Redis | None:
+        if self._redis_temporarily_disabled():
+            return None
         if self._client is None:
-            self._client = aioredis.from_url(self._redis_url, decode_responses=True)
+            self._client = aioredis.from_url(
+                self._redis_url,
+                decode_responses=True,
+                socket_connect_timeout=0.3,
+                socket_timeout=1.5,
+            )
         return self._client
 
     @staticmethod
@@ -236,6 +251,8 @@ class RedisSseJobStore(SseJobPort):
 
         try:
             client = self._get_client()
+            if client is None:
+                return None
             job_id_str = await client.get(self._idem_key(user_id, operation, cleaned_key))
             if not job_id_str:
                 return None
@@ -243,6 +260,7 @@ class RedisSseJobStore(SseJobPort):
         except SseJobNotFoundError:
             return None
         except Exception:
+            self._mark_redis_unavailable()
             return None
 
     async def create_job(
@@ -269,29 +287,30 @@ class RedisSseJobStore(SseJobPort):
         )
         try:
             client = self._get_client()
-            meta = {
-                "job_id": str(record.job_id),
-                "user_id": str(record.user_id),
-                "roadmap_id": str(record.roadmap_id),
-                "reservation_id": str(record.reservation_id),
-                "job_type": record.job_type,
-                "status": record.status,
-                "created_at": record.created_at.isoformat(),
-                "updated_at": record.updated_at.isoformat(),
-            }
-            await client.set(
-                self._job_meta_key(job_id),
-                json.dumps(meta),
-                ex=max(1, ttl_seconds),
-            )
-            if idempotency_key and idempotency_key.strip():
+            if client is not None:
+                meta = {
+                    "job_id": str(record.job_id),
+                    "user_id": str(record.user_id),
+                    "roadmap_id": str(record.roadmap_id),
+                    "reservation_id": str(record.reservation_id),
+                    "job_type": record.job_type,
+                    "status": record.status,
+                    "created_at": record.created_at.isoformat(),
+                    "updated_at": record.updated_at.isoformat(),
+                }
                 await client.set(
-                    self._idem_key(user_id, operation, idempotency_key),
-                    str(job_id),
+                    self._job_meta_key(job_id),
+                    json.dumps(meta),
                     ex=max(1, ttl_seconds),
                 )
+                if idempotency_key and idempotency_key.strip():
+                    await client.set(
+                        self._idem_key(user_id, operation, idempotency_key),
+                        str(job_id),
+                        ex=max(1, ttl_seconds),
+                    )
         except Exception:
-            pass
+            self._mark_redis_unavailable()
         return record
 
     async def get_job_for_user(
@@ -307,6 +326,8 @@ class RedisSseJobStore(SseJobPort):
 
         try:
             client = self._get_client()
+            if client is None:
+                raise SseJobNotFoundError()
             raw_meta = await client.get(self._job_meta_key(job_id))
             if not raw_meta:
                 raise SseJobNotFoundError()
@@ -336,6 +357,7 @@ class RedisSseJobStore(SseJobPort):
         except SseJobNotFoundError:
             raise
         except Exception as exc:
+            self._mark_redis_unavailable()
             raise SseJobNotFoundError() from exc
 
     async def append_event(
@@ -346,19 +368,59 @@ class RedisSseJobStore(SseJobPort):
         data: dict[str, Any],
         status: str | None = None,
     ) -> SseEventRecord:
-        ev = await self._fallback.append_event(
-            job_id=job_id,
-            event=event,
-            data=data,
-            status=status,
-        )
+        ev: SseEventRecord | None = None
+        next_status = status
+        if next_status is None:
+            if event == "completed":
+                next_status = "COMPLETED"
+            elif event == "failed":
+                next_status = "FAILED"
+
+        try:
+            ev = await self._fallback.append_event(
+                job_id=job_id,
+                event=event,
+                data=data,
+                status=status,
+            )
+        except SseJobNotFoundError:
+            ev = None
+
         try:
             client = self._get_client()
-            serialized = json.dumps({"id": ev.id, "event": ev.event, "data": ev.data})
-            await client.rpush(self._job_events_key(job_id), serialized)
-            await client.expire(self._job_events_key(job_id), 86400)
+            if client is not None:
+                meta_key = self._job_meta_key(job_id)
+                events_key = self._job_events_key(job_id)
+                raw_meta = await client.get(meta_key)
+                if raw_meta:
+                    meta = json.loads(raw_meta)
+                    if ev is None:
+                        next_id = int(await client.llen(events_key)) + 1
+                        enriched_data = dict(data)
+                        enriched_data.setdefault("id", next_id)
+                        enriched_data.setdefault("event", event)
+                        ev = SseEventRecord(id=next_id, event=event, data=enriched_data)
+                    if next_status is not None:
+                        meta["status"] = next_status
+                    elif meta.get("status") == "RESERVED":
+                        meta["status"] = "STREAMING"
+                    meta["updated_at"] = datetime.now(UTC).isoformat()
+                    serialized = json.dumps({"id": ev.id, "event": ev.event, "data": ev.data})
+                    await client.rpush(events_key, serialized)
+                    await client.expire(events_key, 86400)
+                    await client.set(meta_key, json.dumps(meta), ex=86400)
+                elif ev is None:
+                    raise SseJobNotFoundError()
+            elif ev is None:
+                raise SseJobNotFoundError()
+        except SseJobNotFoundError:
+            raise
         except Exception:
-            pass
+            self._mark_redis_unavailable()
+            if ev is None:
+                raise SseJobNotFoundError()
+
+        assert ev is not None
         return ev
 
     async def stream_events(
@@ -369,13 +431,82 @@ class RedisSseJobStore(SseJobPort):
         last_event_id: int | None = None,
         timeout_seconds: float = 55.0,
     ) -> AsyncIterator[SseEventRecord]:
-        async for ev in self._fallback.stream_events(
-            job_id=job_id,
-            user_id=user_id,
-            last_event_id=last_event_id,
-            timeout_seconds=timeout_seconds,
-        ):
-            yield ev
+        job = await self.get_job_for_user(job_id=job_id, user_id=user_id)
+        cursor = int(last_event_id) if last_event_id is not None else 0
+        deadline = asyncio.get_running_loop().time() + timeout_seconds
+
+        # Try streaming via Redis when available so cross-process Taskiq workers work seamlessly.
+        redis_available = False
+        try:
+            client = self._get_client()
+            if client is not None:
+                raw_meta = await client.get(self._job_meta_key(job_id))
+                redis_available = bool(raw_meta)
+        except Exception:
+            self._mark_redis_unavailable()
+            redis_available = False
+
+        if not redis_available:
+            async for ev in self._fallback.stream_events(
+                job_id=job_id,
+                user_id=user_id,
+                last_event_id=last_event_id,
+                timeout_seconds=timeout_seconds,
+            ):
+                yield ev
+            return
+
+        del job
+        while True:
+            try:
+                client = self._get_client()
+                if client is None:
+                    return
+                raw_meta = await client.get(self._job_meta_key(job_id))
+                if not raw_meta:
+                    return
+                meta = json.loads(raw_meta)
+                if UUID(meta["user_id"]) != user_id:
+                    return
+                raw_events = await client.lrange(self._job_events_key(job_id), 0, -1)
+                parsed = [
+                    SseEventRecord(
+                        id=int(ev_dict["id"]),
+                        event=str(ev_dict["event"]),
+                        data=dict(ev_dict["data"]),
+                    )
+                    for ev_dict in (json.loads(item) for item in raw_events)
+                ]
+            except Exception:
+                async for ev in self._fallback.stream_events(
+                    job_id=job_id,
+                    user_id=user_id,
+                    last_event_id=cursor if cursor > 0 else last_event_id,
+                    timeout_seconds=max(0.1, deadline - asyncio.get_running_loop().time()),
+                ):
+                    yield ev
+                return
+
+            pending = [ev for ev in parsed if ev.id > cursor]
+            for ev in pending:
+                cursor = ev.id
+                yield ev
+                if ev.event in ("completed", "failed") or ev.data.get("stage") in (
+                    "COMPLETED",
+                    "FAILED",
+                ):
+                    return
+
+            if meta.get("status") in ("COMPLETED", "FAILED") and all(
+                ev.id <= cursor for ev in parsed
+            ):
+                return
+
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                return
+            await asyncio.sleep(min(0.1, remaining))
 
 
 default_in_memory_sse_job_store = InMemorySseJobStore()
+default_redis_sse_job_store = RedisSseJobStore(fallback_store=default_in_memory_sse_job_store)

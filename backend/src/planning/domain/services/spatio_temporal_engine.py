@@ -5,6 +5,8 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from src.planning.domain.services.validation_types import (
+    AI_BLOCK_MAX_MINUTES,
+    AI_BLOCK_MIN_MINUTES,
     MAX_DAILY_PLANNED_MINUTES,
     SOFT_OVERFLOW_MAX_MINUTES,
     AvailabilityConfigurationDTO,
@@ -834,6 +836,112 @@ class SpatioTemporalRuleEngine:
         return cloned_tasks
 
     @classmethod
+    def calculate_available_capacity_minutes(
+        cls,
+        availability: AvailabilityConfigurationDTO,
+        *,
+        start_date: date,
+        target_date: date | None,
+        existing_tasks: Sequence[Any] | None = None,
+        daily_workload_cap_minutes: int | None = None,
+    ) -> int:
+        """Compute total net free study minutes from `start_date` through `target_date`."""
+        end_date = target_date if target_date is not None else (start_date + timedelta(days=29))
+        if end_date < start_date:
+            return 0
+        span_days = min(366, (end_date - start_date).days + 1)
+
+        disabled_days = {
+            norm
+            for raw_d in availability.disabled_weekdays
+            if (norm := normalize_weekday_name(raw_d))
+        }
+        quota_by_day = {
+            norm: int(val)
+            for k, val in availability.daily_quota_minutes.items()
+            if (norm := normalize_weekday_name(k))
+        }
+        slots_by_day: dict[str, int] = {}
+        for slot in availability.availability_slots:
+            if isinstance(slot, AvailabilitySlotDTO):
+                if not slot.is_active:
+                    continue
+                s_day = normalize_weekday_name(slot.day_of_week)
+                s_start, s_end = _slot_minute_range(slot)
+                dur = max(0, s_end - s_start)
+            elif isinstance(slot, dict):
+                if slot.get("is_active", True) is False:
+                    continue
+                s_day = normalize_weekday_name(slot.get("day_of_week"))
+                st = parse_hhmm_or_time(slot.get("start_time"))
+                en = parse_hhmm_or_time(slot.get("end_time"))
+                if st is None or en is None:
+                    continue
+                s_m = st.hour * 60 + st.minute
+                e_m = en.hour * 60 + en.minute
+                if e_m <= s_m:
+                    e_m += 1440
+                dur = max(0, e_m - s_m)
+            else:
+                continue
+            if s_day:
+                slots_by_day[s_day] = slots_by_day.get(s_day, 0) + dur
+
+        used_by_date: dict[date, int] = {}
+        for ext in existing_tasks or ():
+            status = (
+                str(ext.get("status", "TODO"))
+                if isinstance(ext, dict)
+                else str(getattr(ext, "status", "TODO"))
+            ).upper()
+            if status in ("CANCELLED", "COMPLETED"):
+                continue
+            ext_date = (
+                parse_iso_date(ext.get("scheduled_date"))
+                if isinstance(ext, dict)
+                else parse_iso_date(getattr(ext, "scheduled_date", None))
+            )
+            ext_mins = (
+                _to_int(ext.get("estimated_minutes"), 0)
+                if isinstance(ext, dict)
+                else _to_int(getattr(ext, "estimated_minutes", 0), 0)
+            )
+            if ext_date is not None and ext_mins > 0:
+                used_by_date[ext_date] = used_by_date.get(ext_date, 0) + ext_mins
+
+        weekday_names = (
+            "monday",
+            "tuesday",
+            "wednesday",
+            "thursday",
+            "friday",
+            "saturday",
+            "sunday",
+        )
+        mode_upper = (availability.mode or "MODE_A").strip().upper()
+        cap_ceiling = (
+            min(MAX_DAILY_PLANNED_MINUTES, max(10, int(daily_workload_cap_minutes)))
+            if daily_workload_cap_minutes is not None
+            else MAX_DAILY_PLANNED_MINUTES
+        )
+
+        total_free = 0
+        for offset in range(span_days):
+            day = start_date + timedelta(days=offset)
+            wname = weekday_names[day.weekday()]
+            if wname in disabled_days:
+                continue
+            if mode_upper in ("FIXED_SLOTS", "MODE_B", "SLOTS"):
+                raw_cap = min(cap_ceiling, slots_by_day.get(wname, 0))
+            else:
+                raw_cap = min(
+                    cap_ceiling,
+                    quota_by_day.get(wname, availability.default_daily_quota_minutes),
+                )
+            total_free += max(0, raw_cap - used_by_date.get(day, 0))
+        return total_free
+
+    @classmethod
     def allocate_task_sessions(
         cls,
         tasks: Sequence[dict[str, Any]],
@@ -845,8 +953,19 @@ class SpatioTemporalRuleEngine:
         existing_tasks: Sequence[Any] | None = None,
         milestone_order_map: dict[str, int] | None = None,
         preferred_session_minutes: int = 60,
+        estimation_bias_beta: float = 1.0,
+        peak_productivity_slots: Sequence[str] = (),
+        daily_workload_cap_minutes: int | None = None,
+        buffer_minutes_per_week: int = 0,
+        include_weekly_buffers: bool = False,
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         """Place task effort in bounded sessions while retaining the task learning graph."""
+        _ = (
+            peak_productivity_slots,
+            daily_workload_cap_minutes,
+            buffer_minutes_per_week,
+            include_weekly_buffers,
+        )
         mode_b = availability.mode.upper() in ("MODE_B", "FIXED_SLOTS", "SLOTS")
         if mode_b:
             slot_lengths = [
@@ -882,12 +1001,25 @@ class SpatioTemporalRuleEngine:
         if session_limit < 10:
             return ([{**task, "scheduled_date": None} for task in tasks], [])
 
+        clamped_beta = max(0.7, min(1.8, float(estimation_bias_beta)))
         expanded: list[dict[str, Any]] = []
         expanded_deps: list[dict[str, Any]] = []
         part_ids: dict[str, list[str]] = {}
+        effective_efforts: dict[str, int] = {}
         for index, task in enumerate(tasks):
             task_id = str(task.get("task_id") or task.get("id") or f"task_{index}")
-            effort = _to_int(task.get("estimated_minutes"), 0)
+            raw_effort = _to_int(task.get("estimated_minutes"), 0)
+            if (
+                AI_BLOCK_MIN_MINUTES <= raw_effort <= AI_BLOCK_MAX_MINUTES
+                and abs(clamped_beta - 1.0) > 1e-6
+            ):
+                effort = max(
+                    AI_BLOCK_MIN_MINUTES,
+                    min(AI_BLOCK_MAX_MINUTES, int(round(raw_effort * clamped_beta))),
+                )
+            else:
+                effort = raw_effort
+            effective_efforts[task_id] = effort
             if effort <= 0:
                 count = 1
             else:
@@ -935,6 +1067,8 @@ class SpatioTemporalRuleEngine:
             task_id = str(task.get("task_id") or task.get("id") or f"task_{index}")
             parts = [placed_by_id[part_id] for part_id in part_ids[task_id]]
             scheduled = dict(task)
+            if effective_efforts.get(task_id, 0) > 0:
+                scheduled["estimated_minutes"] = effective_efforts[task_id]
             if all(part.get("scheduled_start") and part.get("scheduled_end") for part in parts):
                 scheduled["scheduled_date"] = parts[0]["scheduled_date"]
                 scheduled["scheduled_start"] = parts[0]["scheduled_start"]

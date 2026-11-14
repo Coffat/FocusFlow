@@ -24,13 +24,14 @@ backend_static() {
 
 backend_tests() {
   cd "$root_dir/backend"
-  uv run --extra dev pytest -q \
+  uv run --extra dev pytest tests/unit tests/ai_evals -q \
     --cov=src.account.domain.services.hybrid_availability_rule_engine \
     --cov=src.execution.public_api \
     --cov=src.planning.domain.services.spatio_temporal_engine \
-    --cov-branch --cov-report=term --cov-report="xml:$root_dir/artifacts/quality/coverage.xml" \
+    --cov-branch --cov-fail-under=95 --cov-report=term --cov-report="xml:$root_dir/artifacts/quality/coverage.xml" \
     --junitxml="$root_dir/artifacts/quality/backend.xml"
   uv run --extra dev python -m tests.ai_evals.constraints_eval > "$root_dir/artifacts/quality/ai-eval.json"
+  uv run --extra dev python -m tests.ai_evals.golden_ai_workflows_v2 > "$root_dir/artifacts/quality/ai-eval-v2.json"
 }
 
 frontend_static() {

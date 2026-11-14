@@ -246,6 +246,9 @@ class ProposalValidationGateOrchestrator:
         raw_blocks = proposal_data.get("schedule_blocks")
         has_blocks = isinstance(raw_blocks, list)
 
+        capacity_overflow = proposal_data.get("_capacity_overflow")
+        emitted_capacity_violation = False
+
         for idx, task in enumerate(raw_tasks):
             if not isinstance(task, dict):
                 violations.append(
@@ -310,16 +313,35 @@ class ProposalValidationGateOrchestrator:
 
             sched_date = parse_iso_date(task.get("scheduled_date"))
             if sched_date is None:
-                violations.append(
-                    ConstraintViolationDTO(
-                        task_index=idx,
-                        field="scheduled_date",
-                        rule_code="INVALID_SCHEDULED_DATE",
-                        expected_bound="YYYY-MM-DD",
-                        actual_value=str(task.get("scheduled_date")),
-                        suggested_fix="Cung cấp ngày học hợp lệ theo định dạng YYYY-MM-DD.",
+                if isinstance(capacity_overflow, dict) and not emitted_capacity_violation:
+                    avail_m = int(capacity_overflow.get("available_minutes", 0) or 0)
+                    req_m = int(capacity_overflow.get("required_minutes", 0) or 0)
+                    t_date = str(capacity_overflow.get("target_date", "N/A"))
+                    violations.append(
+                        ConstraintViolationDTO(
+                            task_index=idx,
+                            field="estimated_minutes",
+                            rule_code="CAPACITY_EXCEEDED_BEFORE_TARGET_DATE",
+                            expected_bound=f"Tổng thời lượng <= {avail_m} phút rảnh trước {t_date}",
+                            actual_value=f"Yêu cầu {req_m} phút (dư {max(0, req_m - avail_m)} phút)",
+                            suggested_fix=(
+                                f"Gộp hoặc rút gọn các nhiệm vụ trong biên [{min_bound}, {max_bound}] phút "
+                                f"để tổng nỗ lực không vượt quá {avail_m} phút khả dụng trước {t_date}."
+                            ),
+                        )
                     )
-                )
+                    emitted_capacity_violation = True
+                elif not isinstance(capacity_overflow, dict):
+                    violations.append(
+                        ConstraintViolationDTO(
+                            task_index=idx,
+                            field="scheduled_date",
+                            rule_code="INVALID_SCHEDULED_DATE",
+                            expected_bound="YYYY-MM-DD",
+                            actual_value=str(task.get("scheduled_date")),
+                            suggested_fix="Cung cấp ngày học hợp lệ theo định dạng YYYY-MM-DD.",
+                        )
+                    )
             elif est_mins > 0 and not has_blocks:
                 minutes_by_date.setdefault(sched_date, []).append((idx, est_mins))
 
@@ -781,6 +803,10 @@ class ProposalValidationGateOrchestrator:
         thinking_level: str | None = None,
         deterministic_allocation: bool = False,
         preferred_session_minutes: int = 60,
+        estimation_bias_beta: float = 1.0,
+        peak_productivity_slots: Sequence[str] = (),
+        daily_workload_cap_minutes: int | None = None,
+        buffer_minutes_per_week: int = 0,
     ) -> ValidationGateResultDTO:
         """Invoke LLMProviderPort and run the 3-Tier Validation Gate with up to `max_retries` (2) self-correction loops."""
         if self._llm is None:
@@ -856,12 +882,37 @@ class ProposalValidationGateOrchestrator:
                     existing_tasks=existing_tasks,
                     milestone_order_map=milestone_order_map,
                     preferred_session_minutes=preferred_session_minutes,
+                    estimation_bias_beta=estimation_bias_beta,
+                    peak_productivity_slots=peak_productivity_slots,
+                    daily_workload_cap_minutes=daily_workload_cap_minutes,
+                    buffer_minutes_per_week=buffer_minutes_per_week,
                 )
                 raw_proposal = {
                     **raw_proposal,
                     "tasks": allocated_tasks,
                     "schedule_blocks": schedule_blocks,
                 }
+                if current_roadmap_target_date is not None and any(
+                    isinstance(t, dict) and parse_iso_date(t.get("scheduled_date")) is None
+                    for t in allocated_tasks
+                ):
+                    avail_mins = SpatioTemporalRuleEngine.calculate_available_capacity_minutes(
+                        availability,
+                        start_date=start_date or date.today(),
+                        target_date=current_roadmap_target_date,
+                        existing_tasks=existing_tasks,
+                        daily_workload_cap_minutes=daily_workload_cap_minutes,
+                    )
+                    req_mins = sum(
+                        _safe_minutes(t.get("estimated_minutes"))
+                        for t in allocated_tasks
+                        if isinstance(t, dict)
+                    )
+                    raw_proposal["_capacity_overflow"] = {
+                        "available_minutes": avail_mins,
+                        "required_minutes": req_mins,
+                        "target_date": current_roadmap_target_date.isoformat(),
+                    }
             elif isinstance(raw_tasks, list) and any(
                 isinstance(t, dict) and parse_iso_date(t.get("scheduled_date")) is None
                 for t in raw_tasks

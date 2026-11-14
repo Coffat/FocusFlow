@@ -15,7 +15,10 @@ __all__ = [
     "CalendarConnectionQueryPort",
     "CalendarConnectionSnapshotDTO",
     "CalendarSyncFacadePort",
+    "ConceptMasterySnapshotDTO",
     "InsufficientQuotaError",
+    "LearnerMemoryItemSnapshotDTO",
+    "LearnerMemoryQueryPort",
     "LearnerProfileDTO",
     "LearnerProfileQueryPort",
     "ProposedTaskBlockDTO",
@@ -30,6 +33,7 @@ __all__ = [
     "create_availability_query_port",
     "create_calendar_connection_query_port",
     "create_calendar_sync_facade",
+    "create_learner_memory_query_port",
     "create_learner_profile_query_port",
     "create_quota_facade",
     "create_user_query_port",
@@ -192,6 +196,55 @@ class LearnerProfileQueryPort(Protocol):
     async def get_learner_profile(self, user_id: UUID) -> LearnerProfileDTO: ...
 
 
+@dataclass(frozen=True, slots=True)
+class LearnerMemoryItemSnapshotDTO:
+    """Read-only Learner Memory Item snapshot exposed across bounded contexts."""
+
+    id: UUID
+    user_id: UUID
+    category: str
+    memory_key: str
+    memory_value: str
+    confidence: float
+    source_workflow: str
+    status: str = "CONFIRMED"
+
+
+@dataclass(frozen=True, slots=True)
+class ConceptMasterySnapshotDTO:
+    """Read-only Concept Mastery snapshot exposed across bounded contexts."""
+
+    user_id: UUID
+    concept_id: str
+    mastery_score: float
+    status: str
+    evidence_count: int
+
+
+class LearnerMemoryQueryPort(Protocol):
+    """Cross-context port for reading & recording SRL Learner Memory & Concept Mastery."""
+
+    async def list_active_memory_items(
+        self,
+        user_id: UUID,
+        limit: int = 20,
+    ) -> list[LearnerMemoryItemSnapshotDTO]: ...
+
+    async def list_concept_masteries(
+        self,
+        user_id: UUID,
+        concept_ids: list[str] | None = None,
+    ) -> list[ConceptMasterySnapshotDTO]: ...
+
+    async def upsert_memory_and_mastery_feedback(
+        self,
+        user_id: UUID,
+        *,
+        memories: list[dict[str, Any]] | None = None,
+        masteries: list[dict[str, Any]] | None = None,
+    ) -> None: ...
+
+
 @dataclass(frozen=True)
 class UserSnapshotDTO:
     """Read-only user profile DTO exposed across bounded contexts."""
@@ -322,6 +375,12 @@ def create_availability_query_port(session: Any) -> AvailabilityQueryPort:
 def create_learner_profile_query_port(session: Any) -> LearnerProfileQueryPort:
     _ensure_account_factories_loaded()
     res: LearnerProfileQueryPort = _learner_profile_factory(session)
+    return res
+
+
+def create_learner_memory_query_port(session: Any) -> LearnerMemoryQueryPort:
+    _ensure_account_factories_loaded()
+    res: LearnerMemoryQueryPort = _learner_profile_factory(session)
     return res
 
 

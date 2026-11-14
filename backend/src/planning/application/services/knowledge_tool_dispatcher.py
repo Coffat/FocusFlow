@@ -13,6 +13,8 @@ from src.planning.domain.models.knowledge_concept import (
     LearningConcept,
     LearningResource,
 )
+from src.shared_kernel.application.harness.models import ToolResultEnvelope
+from src.shared_kernel.application.harness.tool_registry import RegisteredTool, ToolRegistry
 from src.shared_kernel.application.llm_port import (
     LLMToolCallResultDTO,
     LLMToolDeclarationDTO,
@@ -432,3 +434,47 @@ class KnowledgeToolDispatcher:
             "count": len(resources),
             "resources": [r.to_dict() for r in resources],
         }
+
+
+def build_planning_tool_registry(
+    knowledge_base: KnowledgeBasePort,
+    *,
+    stage: RoadmapPipelineStage = RoadmapPipelineStage.TASK_DECOMPOSITION,
+    max_tool_calls: int = 3,
+    timeout_seconds: float = 1.5,
+) -> tuple[ToolRegistry, KnowledgeToolDispatcher]:
+    """Build a stage-gated `ToolRegistry` backed by `KnowledgeToolDispatcher`."""
+    dispatcher = KnowledgeToolDispatcher(
+        knowledge_base,
+        stage=stage,
+        max_tool_calls=max_tool_calls,
+        timeout_seconds=timeout_seconds,
+    )
+    registry = ToolRegistry()
+    for tool_name, decl in ALL_KNOWLEDGE_TOOL_DECLARATIONS.items():
+        allowed_stages = frozenset(
+            pipe_stage.value
+            for pipe_stage, names in STAGE_ALLOWED_TOOLS.items()
+            if tool_name in names
+        )
+
+        async def _handler(
+            arguments: dict[str, Any],
+            *,
+            _tool_name: str = tool_name,
+        ) -> ToolResultEnvelope:
+            result = await dispatcher.dispatch(_tool_name, arguments)
+            return ToolResultEnvelope(
+                status="OK",
+                summary=f"Executed {_tool_name} ({result.get('count', 1)} item(s))",
+                data=result,
+            )
+
+        registry.register(
+            RegisteredTool(
+                declaration=decl,
+                allowed_stages=allowed_stages,
+                handler=_handler,
+            )
+        )
+    return registry, dispatcher

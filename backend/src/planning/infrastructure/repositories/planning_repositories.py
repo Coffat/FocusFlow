@@ -406,6 +406,10 @@ class SqlAlchemyOfficialScheduleRepository(OfficialScheduleRepositoryPort):
             roadmap_id=row.roadmap_id,
             total_sessions=row.total_sessions,
             total_planned_minutes=row.total_planned_minutes,
+            buffer_minutes_per_week=int(getattr(row, "buffer_minutes_per_week", 60) or 60),
+            recovery_window_days=int(getattr(row, "recovery_window_days", 7) or 7),
+            daily_workload_cap_minutes=int(getattr(row, "daily_workload_cap_minutes", 180) or 180),
+            stability_weight=float(getattr(row, "stability_weight", 0.8) or 0.8),
             activated_at=row.activated_at,
             created_at=row.created_at,
             updated_at=row.updated_at,
@@ -429,6 +433,10 @@ class SqlAlchemyOfficialScheduleRepository(OfficialScheduleRepositoryPort):
                 roadmap_id=schedule.roadmap_id,
                 total_sessions=schedule.total_sessions,
                 total_planned_minutes=schedule.total_planned_minutes,
+                buffer_minutes_per_week=schedule.buffer_minutes_per_week,
+                recovery_window_days=schedule.recovery_window_days,
+                daily_workload_cap_minutes=schedule.daily_workload_cap_minutes,
+                stability_weight=schedule.stability_weight,
                 activated_at=activated,
                 created_at=created,
                 updated_at=updated,
@@ -437,6 +445,10 @@ class SqlAlchemyOfficialScheduleRepository(OfficialScheduleRepositoryPort):
         else:
             row.total_sessions = schedule.total_sessions
             row.total_planned_minutes = schedule.total_planned_minutes
+            row.buffer_minutes_per_week = schedule.buffer_minutes_per_week
+            row.recovery_window_days = schedule.recovery_window_days
+            row.daily_workload_cap_minutes = schedule.daily_workload_cap_minutes
+            row.stability_weight = schedule.stability_weight
             row.activated_at = activated
             row.updated_at = updated
 

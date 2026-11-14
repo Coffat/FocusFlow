@@ -160,6 +160,7 @@ class SseJobTicketDTO:
     job_type: str
     status: str
     stream_url: str
+    is_existing: bool = False
 
 
 @dataclass(frozen=True, slots=True)

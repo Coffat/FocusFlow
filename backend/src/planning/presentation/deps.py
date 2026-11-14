@@ -12,10 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.account.public_api import (
     AvailabilityQueryPort,
+    LearnerMemoryQueryPort,
     LearnerProfileQueryPort,
     QuotaFacadePort,
     UserQueryPort,
     create_availability_query_port,
+    create_learner_memory_query_port,
     create_learner_profile_query_port,
     create_quota_facade,
     create_user_query_port,
@@ -55,8 +57,12 @@ from src.planning.application.use_cases import (
     GetCurrentScheduleProposalUseCase,
     GetRoadmapDetailUseCase,
     InitiateMilestoneGenerationUseCase,
+    InitiateOverdueRecoveryUseCase,
     InitiateScheduleProposalGenerationUseCase,
     ListRoadmapsUseCase,
+    PauseRoadmapUseCase,
+    ReoptimizeScheduleProposalUseCase,
+    ResumeRoadmapUseCase,
     SaveManualRoadmapPlanUseCase,
     SubmitClarificationAnswersUseCase,
     UpdateMilestonesUseCase,
@@ -84,7 +90,9 @@ from src.planning.infrastructure.repositories.schedule_block_repository import (
 from src.planning.infrastructure.repositories.sqlalchemy_knowledge_base_repository import (
     SqlAlchemyKnowledgeBaseRepository,
 )
-from src.planning.infrastructure.sse import default_in_memory_sse_job_store
+from src.planning.infrastructure.sse import default_redis_sse_job_store
+from src.shared_kernel.application.embedding_port import EmbeddingProviderPort
+from src.shared_kernel.application.harness.workflow_port import WorkflowRepositoryPort
 from src.shared_kernel.application.llm_port import LLMProviderPort
 from src.shared_kernel.application.uow import AsyncUnitOfWork
 from src.shared_kernel.config import get_settings
@@ -96,10 +104,11 @@ from src.shared_kernel.infrastructure.external_ai.circuit_breaker import (
     CircuitBreakingLLMProvider,
     RedisCircuitStateStore,
 )
-from src.shared_kernel.infrastructure.external_ai.embedding_adapter import MockEmbeddingAdapter
+from src.shared_kernel.infrastructure.external_ai.embedding_adapter import LiteLLMEmbeddingAdapter
 from src.shared_kernel.infrastructure.external_ai.litellm_adapter import (
     LiteLLMAdapter,
 )
+from src.shared_kernel.infrastructure.workflow.repository import SqlAlchemyWorkflowRepository
 
 security_bearer = HTTPBearer(auto_error=False)
 _ai_redis_client: redis.Redis | None = None
@@ -186,16 +195,21 @@ def get_create_knowledge_source_use_case(
     )
 
 
+def get_planning_embedding_provider() -> EmbeddingProviderPort:
+    return LiteLLMEmbeddingAdapter()
+
+
 def get_ingest_knowledge_source_use_case(
     source_repository: KnowledgeSourceRepositoryPort = Depends(get_knowledge_source_repository),
     file_store: LocalKnowledgeFileStore = Depends(get_knowledge_file_store),
+    embedding_provider: EmbeddingProviderPort = Depends(get_planning_embedding_provider),
     uow: AsyncUnitOfWork = Depends(get_planning_uow),
 ) -> IngestKnowledgeSourceUseCase:
     settings = get_settings()
     return IngestKnowledgeSourceUseCase(
         source_repository=source_repository,
         file_store=file_store,
-        embedding_provider=MockEmbeddingAdapter(),
+        embedding_provider=embedding_provider,
         url_fetcher=SafeUrlFetcher(
             max_bytes=settings.knowledge_url_max_bytes,
             timeout_seconds=settings.knowledge_url_timeout_seconds,
@@ -243,6 +257,18 @@ def get_planning_schedule_change_log_port(
     return create_schedule_change_log_port(session)
 
 
+def get_planning_learner_memory_port(
+    session: AsyncSession = Depends(get_planning_db_session),
+) -> LearnerMemoryQueryPort:
+    return create_learner_memory_query_port(session)
+
+
+def get_planning_workflow_repository(
+    session: AsyncSession = Depends(get_planning_db_session),
+) -> WorkflowRepositoryPort:
+    return SqlAlchemyWorkflowRepository(session)
+
+
 def get_llm_provider() -> LLMProviderPort:
     provider: LLMProviderPort = LiteLLMAdapter()
     settings = get_settings()
@@ -264,7 +290,7 @@ def get_llm_provider() -> LLMProviderPort:
 
 
 def get_sse_job_store() -> SseJobPort:
-    return default_in_memory_sse_job_store
+    return default_redis_sse_job_store
 
 
 # --- Authentication Dependency ---
@@ -366,11 +392,21 @@ def get_generate_clarification_questions_use_case(
     goal_repo: GoalRepositoryPort = Depends(get_goal_repository),
     quota_facade: QuotaFacadePort = Depends(get_planning_quota_facade),
     llm_provider: LLMProviderPort = Depends(get_llm_provider),
+    uow: AsyncUnitOfWork = Depends(get_planning_uow),
+    learner_memory_port: LearnerMemoryQueryPort = Depends(get_planning_learner_memory_port),
+    knowledge_source_repo: KnowledgeSourceRepositoryPort = Depends(get_knowledge_source_repository),
+    embedding_provider: EmbeddingProviderPort = Depends(get_planning_embedding_provider),
+    workflow_repo: WorkflowRepositoryPort = Depends(get_planning_workflow_repository),
 ) -> GenerateClarificationQuestionsUseCase:
     return GenerateClarificationQuestionsUseCase(
         goal_repo=goal_repo,
         quota_facade=quota_facade,
         llm_provider=llm_provider,
+        uow=uow,
+        learner_memory_port=learner_memory_port,
+        knowledge_source_repo=knowledge_source_repo,
+        embedding_provider=embedding_provider,
+        workflow_repo=workflow_repo,
     )
 
 
@@ -393,6 +429,12 @@ def get_execute_milestone_generation_use_case(
     sse_job_store: SseJobPort = Depends(get_sse_job_store),
     uow: AsyncUnitOfWork = Depends(get_planning_uow),
     knowledge_base: KnowledgeBasePort | None = Depends(get_knowledge_base_repository),
+    learner_memory_port: LearnerMemoryQueryPort | None = Depends(get_planning_learner_memory_port),
+    knowledge_source_repo: KnowledgeSourceRepositoryPort | None = Depends(
+        get_knowledge_source_repository
+    ),
+    embedding_provider: EmbeddingProviderPort | None = Depends(get_planning_embedding_provider),
+    workflow_repo: WorkflowRepositoryPort | None = Depends(get_planning_workflow_repository),
 ) -> ExecuteMilestoneGenerationUseCase:
     effective_kb = knowledge_base if isinstance(knowledge_base, KnowledgeBasePort) else None
     return ExecuteMilestoneGenerationUseCase(
@@ -404,6 +446,10 @@ def get_execute_milestone_generation_use_case(
         sse_job_store=sse_job_store,
         uow=uow,
         knowledge_base=effective_kb,
+        learner_memory_port=learner_memory_port,
+        knowledge_source_repo=knowledge_source_repo,
+        embedding_provider=embedding_provider,
+        workflow_repo=workflow_repo,
     )
 
 
@@ -464,6 +510,12 @@ def get_execute_schedule_proposal_generation_use_case(
     knowledge_base: KnowledgeBasePort | None = Depends(get_knowledge_base_repository),
     user_query_port: UserQueryPort = Depends(get_planning_user_query_port),
     block_repo: ScheduleBlockRepositoryPort = Depends(get_schedule_block_repository),
+    learner_memory_port: LearnerMemoryQueryPort | None = Depends(get_planning_learner_memory_port),
+    knowledge_source_repo: KnowledgeSourceRepositoryPort | None = Depends(
+        get_knowledge_source_repository
+    ),
+    embedding_provider: EmbeddingProviderPort | None = Depends(get_planning_embedding_provider),
+    workflow_repo: WorkflowRepositoryPort | None = Depends(get_planning_workflow_repository),
 ) -> ExecuteScheduleProposalGenerationUseCase:
     effective_kb = knowledge_base if isinstance(knowledge_base, KnowledgeBasePort) else None
     return ExecuteScheduleProposalGenerationUseCase(
@@ -482,6 +534,10 @@ def get_execute_schedule_proposal_generation_use_case(
         knowledge_base=effective_kb,
         user_query_port=user_query_port,
         block_repo=block_repo,
+        learner_memory_port=learner_memory_port,
+        knowledge_source_repo=knowledge_source_repo,
+        embedding_provider=embedding_provider,
+        workflow_repo=workflow_repo,
     )
 
 
@@ -641,6 +697,96 @@ def get_archive_roadmap_use_case(
     )
 
 
+def get_pause_roadmap_use_case(
+    roadmap_repo: RoadmapRepositoryPort = Depends(get_roadmap_repository),
+    schedule_repo: OfficialScheduleRepositoryPort = Depends(get_official_schedule_repository),
+    uow: AsyncUnitOfWork = Depends(get_planning_uow),
+    schedule_change_log_port: ScheduleChangeLogPort = Depends(
+        get_planning_schedule_change_log_port
+    ),
+) -> PauseRoadmapUseCase:
+    return PauseRoadmapUseCase(
+        roadmap_repo=roadmap_repo,
+        schedule_repo=schedule_repo,
+        uow=uow,
+        schedule_change_log_port=schedule_change_log_port,
+    )
+
+
+def get_resume_roadmap_use_case(
+    goal_repo: GoalRepositoryPort = Depends(get_goal_repository),
+    roadmap_repo: RoadmapRepositoryPort = Depends(get_roadmap_repository),
+    schedule_repo: OfficialScheduleRepositoryPort = Depends(get_official_schedule_repository),
+    uow: AsyncUnitOfWork = Depends(get_planning_uow),
+    execution_sync_port: ExecutionScheduleSyncPort = Depends(get_planning_execution_sync_port),
+    block_repo: ScheduleBlockRepositoryPort = Depends(get_schedule_block_repository),
+    user_query_port: UserQueryPort = Depends(get_planning_user_query_port),
+    schedule_change_log_port: ScheduleChangeLogPort = Depends(
+        get_planning_schedule_change_log_port
+    ),
+) -> ResumeRoadmapUseCase:
+    return ResumeRoadmapUseCase(
+        goal_repo=goal_repo,
+        roadmap_repo=roadmap_repo,
+        schedule_repo=schedule_repo,
+        uow=uow,
+        execution_sync_port=execution_sync_port,
+        block_repo=block_repo,
+        user_query_port=user_query_port,
+        schedule_change_log_port=schedule_change_log_port,
+    )
+
+
+def get_reoptimize_schedule_proposal_use_case(
+    roadmap_repo: RoadmapRepositoryPort = Depends(get_roadmap_repository),
+    milestone_repo: MilestoneRepositoryPort = Depends(get_milestone_repository),
+    proposal_repo: ScheduleProposalRepositoryPort = Depends(get_schedule_proposal_repository),
+    availability_query_port: AvailabilityQueryPort = Depends(get_planning_availability_query_port),
+    execution_sync_port: ExecutionScheduleSyncPort = Depends(get_planning_execution_sync_port),
+    uow: AsyncUnitOfWork = Depends(get_planning_uow),
+    learner_profile_port: LearnerProfileQueryPort = Depends(get_planning_learner_profile_port),
+    user_query_port: UserQueryPort = Depends(get_planning_user_query_port),
+    block_repo: ScheduleBlockRepositoryPort = Depends(get_schedule_block_repository),
+) -> ReoptimizeScheduleProposalUseCase:
+    return ReoptimizeScheduleProposalUseCase(
+        roadmap_repo=roadmap_repo,
+        milestone_repo=milestone_repo,
+        proposal_repo=proposal_repo,
+        availability_query_port=availability_query_port,
+        execution_sync_port=execution_sync_port,
+        uow=uow,
+        learner_profile_port=learner_profile_port,
+        user_query_port=user_query_port,
+        block_repo=block_repo,
+    )
+
+
+def get_initiate_overdue_recovery_use_case(
+    roadmap_repo: RoadmapRepositoryPort = Depends(get_roadmap_repository),
+    milestone_repo: MilestoneRepositoryPort = Depends(get_milestone_repository),
+    proposal_repo: ScheduleProposalRepositoryPort = Depends(get_schedule_proposal_repository),
+    availability_query_port: AvailabilityQueryPort = Depends(get_planning_availability_query_port),
+    execution_sync_port: ExecutionScheduleSyncPort = Depends(get_planning_execution_sync_port),
+    sse_job_store: SseJobPort = Depends(get_sse_job_store),
+    uow: AsyncUnitOfWork = Depends(get_planning_uow),
+    learner_profile_port: LearnerProfileQueryPort = Depends(get_planning_learner_profile_port),
+    user_query_port: UserQueryPort = Depends(get_planning_user_query_port),
+    block_repo: ScheduleBlockRepositoryPort = Depends(get_schedule_block_repository),
+) -> InitiateOverdueRecoveryUseCase:
+    return InitiateOverdueRecoveryUseCase(
+        roadmap_repo=roadmap_repo,
+        milestone_repo=milestone_repo,
+        proposal_repo=proposal_repo,
+        availability_query_port=availability_query_port,
+        execution_sync_port=execution_sync_port,
+        sse_job_store=sse_job_store,
+        uow=uow,
+        learner_profile_port=learner_profile_port,
+        user_query_port=user_query_port,
+        block_repo=block_repo,
+    )
+
+
 # --- Annotated Dependencies for Routers (Depends stays 100% in deps.py) ---
 CurrentLearnerIdDep = Annotated[UUID, Depends(get_current_learner_id)]
 SseJobStoreDep = Annotated[SseJobPort, Depends(get_sse_job_store)]
@@ -680,6 +826,14 @@ GetRoadmapDetailUseCaseDep = Annotated[
 ]
 UpdateRoadmapUseCaseDep = Annotated[UpdateRoadmapUseCase, Depends(get_update_roadmap_use_case)]
 ArchiveRoadmapUseCaseDep = Annotated[ArchiveRoadmapUseCase, Depends(get_archive_roadmap_use_case)]
+PauseRoadmapUseCaseDep = Annotated[PauseRoadmapUseCase, Depends(get_pause_roadmap_use_case)]
+ResumeRoadmapUseCaseDep = Annotated[ResumeRoadmapUseCase, Depends(get_resume_roadmap_use_case)]
+ReoptimizeScheduleProposalUseCaseDep = Annotated[
+    ReoptimizeScheduleProposalUseCase, Depends(get_reoptimize_schedule_proposal_use_case)
+]
+InitiateOverdueRecoveryUseCaseDep = Annotated[
+    InitiateOverdueRecoveryUseCase, Depends(get_initiate_overdue_recovery_use_case)
+]
 GenerateClarificationQuestionsUseCaseDep = Annotated[
     GenerateClarificationQuestionsUseCase,
     Depends(get_generate_clarification_questions_use_case),

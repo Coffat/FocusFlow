@@ -250,6 +250,10 @@ class OfficialScheduleResponse(BaseModel):
     roadmap_id: UUID
     total_sessions: int
     total_planned_minutes: int
+    buffer_minutes_per_week: int = 60
+    recovery_window_days: int = 7
+    daily_workload_cap_minutes: int = 180
+    stability_weight: float = 0.8
     activated_at: datetime
     created_at: datetime
     updated_at: datetime

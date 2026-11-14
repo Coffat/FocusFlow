@@ -38,9 +38,13 @@ from src.planning.presentation.deps import (
     GetCurrentProposalUseCaseDep,
     GetRoadmapDetailUseCaseDep,
     InitiateMilestoneGenUseCaseDep,
+    InitiateOverdueRecoveryUseCaseDep,
     InitiateProposalGenUseCaseDep,
     KnowledgeSourceRepositoryDep,
     ListRoadmapsUseCaseDep,
+    PauseRoadmapUseCaseDep,
+    ReoptimizeScheduleProposalUseCaseDep,
+    ResumeRoadmapUseCaseDep,
     SaveManualPlanUseCaseDep,
     SseJobStoreDep,
     SubmitClarificationAnswersUseCaseDep,
@@ -74,7 +78,10 @@ from src.planning.presentation.schemas.planning_schemas import (
     UpdateRoadmapRequest,
     UpdateScheduleProposalRequest,
 )
-from src.planning.presentation.tasks import ingest_knowledge_source
+from src.planning.presentation.tasks import (
+    dispatch_ai_roadmap_generation,
+    dispatch_ingest_knowledge_source,
+)
 from src.shared_kernel.config import get_settings
 from src.shared_kernel.domain.exceptions import DomainError
 
@@ -293,7 +300,7 @@ async def upload_knowledge_source_file(
         )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail="Goal not found") from exc
-    await ingest_knowledge_source.kiq(str(source.id), str(current_user_id))
+    await dispatch_ingest_knowledge_source(source_id=str(source.id), user_id=str(current_user_id))
     return _to_knowledge_source_response(source)
 
 
@@ -319,7 +326,7 @@ async def add_knowledge_source_url(
         )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail="Goal not found") from exc
-    await ingest_knowledge_source.kiq(str(source.id), str(current_user_id))
+    await dispatch_ingest_knowledge_source(source_id=str(source.id), user_id=str(current_user_id))
     return _to_knowledge_source_response(source)
 
 
@@ -631,6 +638,91 @@ async def archive_roadmap(
         return _handle_planning_error(exc)
 
 
+@roadmaps_router.post(
+    "/{roadmap_id}/pause",
+    response_model=RoadmapResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Pause an ACTIVE Roadmap (`ACTIVE -> PAUSED`, UC-22)",
+)
+async def pause_roadmap(
+    roadmap_id: UUID,
+    user_id: CurrentLearnerIdDep,
+    use_case: PauseRoadmapUseCaseDep,
+) -> RoadmapResponse | JSONResponse:
+    try:
+        paused = await use_case.execute(user_id=user_id, roadmap_id=roadmap_id)
+        return _to_roadmap_response(paused)
+    except DomainError as exc:
+        return _handle_planning_error(exc)
+
+
+@roadmaps_router.post(
+    "/{roadmap_id}/resume",
+    response_model=RoadmapResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Resume a PAUSED Roadmap (`PAUSED -> ACTIVE`) applying Domino Shift (UC-22)",
+)
+async def resume_roadmap(
+    roadmap_id: UUID,
+    user_id: CurrentLearnerIdDep,
+    use_case: ResumeRoadmapUseCaseDep,
+    shift_days: int | None = Query(default=None, ge=0, le=365),
+) -> RoadmapResponse | JSONResponse:
+    try:
+        resumed = await use_case.execute(
+            user_id=user_id,
+            roadmap_id=roadmap_id,
+            shift_days=shift_days,
+        )
+        return _to_roadmap_response(resumed)
+    except DomainError as exc:
+        return _handle_planning_error(exc)
+
+
+@roadmaps_router.post(
+    "/{roadmap_id}/reoptimize-schedule",
+    response_model=ScheduleProposalResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Deterministic schedule-only re-optimization (0 AI credit) creating a DRAFT proposal",
+)
+async def reoptimize_schedule_proposal(
+    roadmap_id: UUID,
+    user_id: CurrentLearnerIdDep,
+    use_case: ReoptimizeScheduleProposalUseCaseDep,
+) -> ScheduleProposalResponse | JSONResponse:
+    try:
+        view = await use_case.execute(user_id=user_id, roadmap_id=roadmap_id)
+        return _to_proposal_response(view)
+    except DomainError as exc:
+        return _handle_planning_error(exc)
+
+
+@roadmaps_router.post(
+    "/{roadmap_id}/overdue-revise-jobs",
+    response_model=SseJobTicketResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Initiate deterministic overdue-recovery DRAFT proposal job (UC-23)",
+)
+async def initiate_overdue_recovery_job(
+    roadmap_id: UUID,
+    user_id: CurrentLearnerIdDep,
+    use_case: InitiateOverdueRecoveryUseCaseDep,
+) -> SseJobTicketResponse | JSONResponse:
+    try:
+        ticket = await use_case.execute(user_id=user_id, roadmap_id=roadmap_id)
+        if not ticket.is_existing and ticket.status != "COMPLETED":
+            await dispatch_ai_roadmap_generation(
+                job_id=str(ticket.job_id),
+                reservation_id=str(ticket.reservation_id),
+                user_id=str(user_id),
+                roadmap_id=str(roadmap_id),
+                job_type=ticket.job_type,
+            )
+        return _to_ticket_response(ticket)
+    except DomainError as exc:
+        return _handle_planning_error(exc)
+
+
 # =============================================================================
 # Level 1 — AI Milestone Generation, Editing & Approval (UC-07 / FR-PLAN-001)
 # =============================================================================
@@ -653,7 +745,16 @@ async def initiate_milestone_generation_job(
             user_id=user_id,
             roadmap_id=roadmap_id,
             idempotency_key=idempotency_key,
+            run_inline=False,
         )
+        if not ticket.is_existing:
+            await dispatch_ai_roadmap_generation(
+                job_id=str(ticket.job_id),
+                reservation_id=str(ticket.reservation_id),
+                user_id=str(user_id),
+                roadmap_id=str(roadmap_id),
+                job_type=ticket.job_type,
+            )
         return _to_ticket_response(ticket)
     except DomainError as exc:
         return _handle_planning_error(exc)
@@ -737,7 +838,16 @@ async def initiate_schedule_proposal_generation_job(
             user_id=user_id,
             roadmap_id=roadmap_id,
             idempotency_key=idempotency_key,
+            run_inline=False,
         )
+        if not ticket.is_existing:
+            await dispatch_ai_roadmap_generation(
+                job_id=str(ticket.job_id),
+                reservation_id=str(ticket.reservation_id),
+                user_id=str(user_id),
+                roadmap_id=str(roadmap_id),
+                job_type=ticket.job_type,
+            )
         return _to_ticket_response(ticket)
     except DomainError as exc:
         return _handle_planning_error(exc)

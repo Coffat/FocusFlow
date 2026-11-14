@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from src.account.public_api import AvailabilityQueryPort, UserQueryPort
+from src.account.public_api import AvailabilityQueryPort, LearnerProfileQueryPort, UserQueryPort
 from src.evaluation.public_api import ScheduleChangeLogPort
 from src.execution.public_api import (
     ExecutionScheduleSyncPort,
@@ -17,6 +17,7 @@ from src.planning.application.dtos.planning_dtos import (
     ProposedDependencyInputItemDTO,
     ProposedTaskInputItemDTO,
     ScheduleProposalViewDTO,
+    SseJobTicketDTO,
 )
 from src.planning.application.ports.planning_repository_ports import (
     GoalRepositoryPort,
@@ -28,6 +29,7 @@ from src.planning.application.ports.planning_repository_ports import (
 from src.planning.application.ports.schedule_block_repository_port import (
     ScheduleBlockRepositoryPort,
 )
+from src.planning.application.ports.sse_job_port import SseJobPort
 from src.planning.application.services.existing_schedule_occupancy import (
     expand_existing_schedule_occupancy,
 )
@@ -40,6 +42,7 @@ from src.planning.application.use_cases.proposal_generation_use_cases import (
 )
 from src.planning.domain.events.planning_events import MilestoneApprovedEvent
 from src.planning.domain.exceptions.planning_exceptions import (
+    PlanningDomainError,
     ProposalValidationGateError,
     RoadmapNotFoundError,
     ScheduleProposalNotFoundError,
@@ -54,8 +57,10 @@ from src.planning.domain.models.schedule import (
     OfficialSchedule,
     ScheduleProposal,
     ScheduleProposalStatus,
+    ScheduleProposalType,
 )
 from src.planning.domain.models.schedule_block import ScheduleBlock
+from src.planning.domain.services.spatio_temporal_engine import SpatioTemporalRuleEngine
 from src.planning.domain.services.validation_types import (
     parse_iso_date,
     parse_iso_datetime,
@@ -931,4 +936,309 @@ class SaveManualRoadmapPlanUseCase:
                 "proposed_tasks_count": len(proposal_data.get("tasks", [])),
                 "proposed_total_minutes": proposed_minutes,
             },
+        )
+
+
+async def _build_reoptimized_draft_proposal(
+    *,
+    user_id: UUID,
+    roadmap_id: UUID,
+    proposal_type: ScheduleProposalType,
+    start_date_anchor: Any,
+    roadmap_repo: RoadmapRepositoryPort,
+    milestone_repo: MilestoneRepositoryPort,
+    proposal_repo: ScheduleProposalRepositoryPort,
+    availability_port: AvailabilityQueryPort,
+    execution_sync_port: ExecutionScheduleSyncPort,
+    uow: AsyncUnitOfWork,
+    learner_profile_port: LearnerProfileQueryPort | None = None,
+    user_query_port: UserQueryPort | None = None,
+    block_repo: ScheduleBlockRepositoryPort | None = None,
+    effective_now: datetime,
+    only_overdue_and_incomplete: bool = False,
+) -> ScheduleProposalViewDTO:
+    """Shared deterministic schedule re-allocation for Reoptimize (0 credit) & Overdue Recovery (UC-23)."""
+    roadmap = await roadmap_repo.get_by_id_for_user(roadmap_id, user_id)
+    if roadmap is None:
+        raise RoadmapNotFoundError()
+
+    roadmap_tasks = await execution_sync_port.get_tasks_for_roadmaps(
+        [roadmap_id],
+        roadmap_target_dates={roadmap_id: roadmap.target_date},
+    )
+    incomplete_tasks = [t for t in roadmap_tasks if t.status in ("TODO", "IN_PROGRESS")]
+    if only_overdue_and_incomplete:
+        overdue = [
+            t
+            for t in incomplete_tasks
+            if t.scheduled_date is not None and t.scheduled_date < effective_now.date()
+        ]
+        # Keep existing dependency/order across overdue + remaining incomplete tasks
+        target_tasks = incomplete_tasks if overdue else incomplete_tasks
+    else:
+        target_tasks = incomplete_tasks
+
+    if not target_tasks:
+        raise PlanningDomainError(
+            message="Không có nhiệm vụ chưa hoàn thành nào để tái tối ưu lịch học.",
+            code="NO_TASKS_TO_REOPTIMIZE",
+        )
+
+    milestones = await milestone_repo.list_by_roadmap_id(roadmap_id)
+    milestone_order_map = {str(m.id): m.sequence_order for m in milestones}
+    valid_mids: set[UUID | str] = {m.id for m in milestones}
+
+    avail_snapshot = await availability_port.get_active_availability(user_id)
+    avail_config = build_availability_config_from_snapshot(avail_snapshot)
+    if user_query_port is not None:
+        user_snapshot = await user_query_port.get_user_by_id(user_id)
+        if user_snapshot is not None:
+            avail_config = replace(avail_config, timezone=user_snapshot.timezone)
+
+    pref_minutes = 60
+    est_beta = 1.0
+    if learner_profile_port is not None:
+        profile = await learner_profile_port.get_learner_profile(user_id)
+        pref_minutes = int(profile.opt_session_minutes)
+        est_beta = float(profile.estimation_bias_beta)
+
+    active_roadmaps = await roadmap_repo.list_by_user_id(user_id, status="ACTIVE")
+    other_roadmaps = [r for r in active_roadmaps if r.id != roadmap_id]
+    other_ids = [r.id for r in other_roadmaps]
+    other_targets = {r.id: r.target_date for r in other_roadmaps}
+    other_existing = await execution_sync_port.get_tasks_for_roadmaps(
+        other_ids,
+        roadmap_target_dates=other_targets,
+    )
+    if block_repo is not None:
+        other_existing = expand_existing_schedule_occupancy(
+            other_existing,
+            await block_repo.list_by_roadmap_ids(other_ids),
+        )
+
+    unscheduled_items = [
+        {
+            "task_id": str(t.task_id),
+            "milestone_id": str(t.milestone_id),
+            "title": t.title,
+            "estimated_minutes": int(t.estimated_minutes),
+        }
+        for t in target_tasks
+    ]
+    allocated_tasks, schedule_blocks = SpatioTemporalRuleEngine.allocate_task_sessions(
+        unscheduled_items,
+        avail_config,
+        start_date=start_date_anchor,
+        target_date=roadmap.target_date,
+        existing_tasks=other_existing,
+        milestone_order_map=milestone_order_map,
+        preferred_session_minutes=pref_minutes,
+        estimation_bias_beta=est_beta,
+    )
+    candidate_payload = {
+        "tasks": allocated_tasks,
+        "schedule_blocks": schedule_blocks,
+        "dependencies": [],
+    }
+    orchestrator = ProposalValidationGateOrchestrator(enable_tier3_judge=False)
+    gate_result = await orchestrator.validate_proposal(
+        candidate_payload,
+        availability=avail_config,
+        valid_milestone_ids=valid_mids if valid_mids else None,
+        existing_tasks=other_existing,
+        current_roadmap_target_date=roadmap.target_date,
+        is_ai_generated=False,
+    )
+    if not gate_result.is_valid:
+        raise ProposalValidationGateError(
+            message="Không thể tái tối ưu lịch học với cấu hình thời gian rảnh hiện tại.",
+            code="SCHEDULE_REOPTIMIZE_FAILED",
+            violations=[v.to_dict() for v in gate_result.violations],
+        )
+
+    proposal_data = normalize_proposal_task_ids_and_dependencies(
+        gate_result.validated_proposal_data
+    )
+    proposal_data["source"] = proposal_type.value
+    proposal_data["availability_mode"] = avail_config.mode
+    proposal = ScheduleProposal(
+        id=generate_uuid7(),
+        roadmap_id=roadmap_id,
+        user_id=user_id,
+        proposal_data=proposal_data,
+        proposal_type=proposal_type,
+        status=ScheduleProposalStatus.DRAFT,
+        applied_at=None,
+        created_at=effective_now,
+        updated_at=effective_now,
+    )
+
+    async with uow:
+        await proposal_repo.discard_existing_drafts(roadmap_id, effective_now)
+        saved_proposal = await proposal_repo.save(proposal)
+        await uow.commit()
+
+    proposed_minutes = sum(
+        int(t.get("estimated_minutes", 0) or 0)
+        for t in proposal_data.get("tasks", [])
+        if isinstance(t, dict)
+    )
+    return ScheduleProposalViewDTO(
+        proposal=saved_proposal,
+        is_valid=True,
+        violations=[],
+        soft_overflow_warnings=[w.to_dict() for w in gate_result.soft_overflow_warnings],
+        advisory_warnings=list(gate_result.advisory_warnings),
+        diff_summary={
+            "proposed_tasks_count": len(proposal_data.get("tasks", [])),
+            "proposed_total_minutes": proposed_minutes,
+            "proposal_type": proposal_type.value,
+        },
+    )
+
+
+class ReoptimizeScheduleProposalUseCase:
+    """Schedule-only deterministic re-optimization (`0 AI credit`) creating a DRAFT proposal."""
+
+    def __init__(
+        self,
+        *,
+        roadmap_repo: RoadmapRepositoryPort,
+        milestone_repo: MilestoneRepositoryPort,
+        proposal_repo: ScheduleProposalRepositoryPort,
+        availability_query_port: AvailabilityQueryPort,
+        execution_sync_port: ExecutionScheduleSyncPort,
+        uow: AsyncUnitOfWork,
+        learner_profile_port: LearnerProfileQueryPort | None = None,
+        user_query_port: UserQueryPort | None = None,
+        block_repo: ScheduleBlockRepositoryPort | None = None,
+    ) -> None:
+        self._roadmap_repo = roadmap_repo
+        self._milestone_repo = milestone_repo
+        self._proposal_repo = proposal_repo
+        self._availability_port = availability_query_port
+        self._execution_sync_port = execution_sync_port
+        self._uow = uow
+        self._learner_profile_port = learner_profile_port
+        self._user_query_port = user_query_port
+        self._block_repo = block_repo
+
+    async def execute(
+        self,
+        *,
+        user_id: UUID,
+        roadmap_id: UUID,
+        now: datetime | None = None,
+    ) -> ScheduleProposalViewDTO:
+        effective_now = now or datetime.now(UTC)
+        roadmap = await self._roadmap_repo.get_by_id_for_user(roadmap_id, user_id)
+        if roadmap is None:
+            raise RoadmapNotFoundError()
+        anchor_date = max(effective_now.date(), roadmap.start_date or effective_now.date())
+        return await _build_reoptimized_draft_proposal(
+            user_id=user_id,
+            roadmap_id=roadmap_id,
+            proposal_type=ScheduleProposalType.SCHEDULE_ONLY_REOPTIMIZE,
+            start_date_anchor=anchor_date,
+            roadmap_repo=self._roadmap_repo,
+            milestone_repo=self._milestone_repo,
+            proposal_repo=self._proposal_repo,
+            availability_port=self._availability_port,
+            execution_sync_port=self._execution_sync_port,
+            uow=self._uow,
+            learner_profile_port=self._learner_profile_port,
+            user_query_port=self._user_query_port,
+            block_repo=self._block_repo,
+            effective_now=effective_now,
+        )
+
+
+class InitiateOverdueRecoveryUseCase:
+    """UC-23: Generate DRAFT overdue-recovery ScheduleProposal without auto-mutating OfficialSchedule."""
+
+    def __init__(
+        self,
+        *,
+        roadmap_repo: RoadmapRepositoryPort,
+        milestone_repo: MilestoneRepositoryPort,
+        proposal_repo: ScheduleProposalRepositoryPort,
+        availability_query_port: AvailabilityQueryPort,
+        execution_sync_port: ExecutionScheduleSyncPort,
+        sse_job_store: SseJobPort,
+        uow: AsyncUnitOfWork,
+        learner_profile_port: LearnerProfileQueryPort | None = None,
+        user_query_port: UserQueryPort | None = None,
+        block_repo: ScheduleBlockRepositoryPort | None = None,
+    ) -> None:
+        self._roadmap_repo = roadmap_repo
+        self._milestone_repo = milestone_repo
+        self._proposal_repo = proposal_repo
+        self._availability_port = availability_query_port
+        self._execution_sync_port = execution_sync_port
+        self._sse = sse_job_store
+        self._uow = uow
+        self._learner_profile_port = learner_profile_port
+        self._user_query_port = user_query_port
+        self._block_repo = block_repo
+
+    async def execute(
+        self,
+        *,
+        user_id: UUID,
+        roadmap_id: UUID,
+        now: datetime | None = None,
+    ) -> SseJobTicketDTO:
+        effective_now = now or datetime.now(UTC)
+        view = await _build_reoptimized_draft_proposal(
+            user_id=user_id,
+            roadmap_id=roadmap_id,
+            proposal_type=ScheduleProposalType.AI_RECOVERY,
+            start_date_anchor=effective_now.date(),
+            roadmap_repo=self._roadmap_repo,
+            milestone_repo=self._milestone_repo,
+            proposal_repo=self._proposal_repo,
+            availability_port=self._availability_port,
+            execution_sync_port=self._execution_sync_port,
+            uow=self._uow,
+            learner_profile_port=self._learner_profile_port,
+            user_query_port=self._user_query_port,
+            block_repo=self._block_repo,
+            effective_now=effective_now,
+            only_overdue_and_incomplete=True,
+        )
+
+        job_id = generate_uuid7()
+        reservation_id = generate_uuid7()
+        await self._sse.create_job(
+            job_id=job_id,
+            user_id=user_id,
+            roadmap_id=roadmap_id,
+            reservation_id=reservation_id,
+            job_type="OVERDUE_RECOVERY",
+            operation=f"OVERDUE_RECOVERY:{roadmap_id}",
+        )
+        await self._sse.append_event(
+            job_id=job_id,
+            event="completed",
+            status="COMPLETED",
+            data={
+                "stage": "COMPLETED",
+                "progress": 100,
+                "delta_text": "Đã tạo bản nháp khôi phục nhiệm vụ quá hạn (DRAFT).",
+                "deltaText": "Đã tạo bản nháp khôi phục nhiệm vụ quá hạn (DRAFT).",
+                "payload": {
+                    "proposal_id": str(view.proposal.id),
+                    "roadmap_id": str(roadmap_id),
+                    "status": view.proposal.status.value,
+                    "proposal_type": ScheduleProposalType.AI_RECOVERY.value,
+                },
+            },
+        )
+        return SseJobTicketDTO(
+            job_id=job_id,
+            reservation_id=reservation_id,
+            roadmap_id=roadmap_id,
+            job_type="OVERDUE_RECOVERY",
+            status="COMPLETED",
+            stream_url=f"/api/v1/roadmaps/jobs/{job_id}/stream",
         )

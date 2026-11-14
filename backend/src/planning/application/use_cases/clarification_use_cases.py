@@ -2,14 +2,25 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from src.account.public_api import QuotaExceededError, QuotaFacadePort
+from src.account.public_api import (
+    LearnerMemoryQueryPort,
+    QuotaExceededError,
+    QuotaFacadePort,
+)
 from src.planning.application.dtos.planning_dtos import (
     ClarificationAnswerItem,
     ClarificationContextPayload,
     ClarificationQuestion,
     ClarificationQuestionsResponse,
 )
+from src.planning.application.ports.knowledge_source_repository_port import (
+    KnowledgeSourceRepositoryPort,
+)
 from src.planning.application.ports.planning_repository_ports import GoalRepositoryPort
+from src.planning.application.services.harness_support import (
+    compact_context_snapshot,
+    load_planning_harness_context_inputs,
+)
 from src.planning.application.services.roadmap_context_builder import (
     RoadmapContextBuilder,
 )
@@ -19,6 +30,10 @@ from src.planning.application.services.roadmap_skills import (
 )
 from src.planning.domain.exceptions.planning_exceptions import GoalNotFoundError
 from src.planning.domain.models.goal import Goal
+from src.shared_kernel.application.embedding_port import EmbeddingProviderPort
+from src.shared_kernel.application.harness.execution_manager import AIExecutionManager
+from src.shared_kernel.application.harness.models import WorkflowType
+from src.shared_kernel.application.harness.workflow_port import WorkflowRepositoryPort
 from src.shared_kernel.application.llm_port import LLMProviderPort
 from src.shared_kernel.application.uow import AsyncUnitOfWork
 
@@ -144,11 +159,19 @@ class GenerateClarificationQuestionsUseCase:
         quota_facade: QuotaFacadePort,
         llm_provider: LLMProviderPort,
         uow: AsyncUnitOfWork | None = None,
+        learner_memory_port: LearnerMemoryQueryPort | None = None,
+        knowledge_source_repo: KnowledgeSourceRepositoryPort | None = None,
+        embedding_provider: EmbeddingProviderPort | None = None,
+        workflow_repo: WorkflowRepositoryPort | None = None,
     ) -> None:
         self._goal_repo = goal_repo
         self._quota = quota_facade
         self._llm = llm_provider
         self._uow = uow
+        self._learner_memory_port = learner_memory_port
+        self._knowledge_source_repo = knowledge_source_repo
+        self._embedding_provider = embedding_provider
+        self._workflow_repo = workflow_repo
 
     async def execute(
         self,
@@ -184,8 +207,34 @@ class GenerateClarificationQuestionsUseCase:
         try:
             known_dims = RoadmapContextBuilder.extract_known_diagnostic_dimensions(goal)
             context_block = RoadmapContextBuilder.build_clarification_context(goal)
+            harness_inputs = await load_planning_harness_context_inputs(
+                user_id=user_id,
+                goal_id=goal_id,
+                query_text=f"{goal.title} {goal.raw_description or ''}",
+                learner_memory_port=self._learner_memory_port,
+                knowledge_source_repo=self._knowledge_source_repo,
+                embedding_provider=self._embedding_provider,
+            )
+            assembled = RoadmapContextBuilder.assemble_harness_context(
+                system_instruction=GOAL_CLARIFIER_SKILL.system_instruction,
+                workflow_stage="GOAL_CLARIFICATION",
+                base_context_text=context_block,
+                learner_diagnostic={"known_dimensions": known_dims},
+                memory_items=harness_inputs.memory_items,
+                concept_masteries=harness_inputs.concept_masteries,
+                knowledge_chunks=harness_inputs.knowledge_chunks,
+            )
+            effective_context = (
+                f"{context_block}\n\n{assembled.text}"
+                if (
+                    harness_inputs.memory_items
+                    or harness_inputs.concept_masteries
+                    or harness_inputs.knowledge_chunks
+                )
+                else context_block
+            )
             user_prompt = build_goal_clarifier_prompt(
-                context_block,
+                effective_context,
                 goal_title=goal.title,
                 raw_description=goal.raw_description or "",
                 prior_knowledge_level=goal.prior_knowledge_level,
@@ -193,12 +242,45 @@ class GenerateClarificationQuestionsUseCase:
                 known_dimensions=known_dims,
             )
 
-            raw_result, p_tok, c_tok = await self._llm.generate_structured(
-                prompt=user_prompt,
-                system_prompt=GOAL_CLARIFIER_SKILL.system_instruction,
-                response_schema=ClarificationQuestionsResponse,
-                user_prompt=user_prompt,
-            )
+            if self._workflow_repo is not None:
+                exec_mgr = AIExecutionManager(
+                    provider=self._llm,
+                    quota=self._quota,
+                    max_retries=0,
+                    workflow_repo=self._workflow_repo,
+                )
+                exec_res = await exec_mgr.execute(
+                    user_id=user_id,
+                    operation_type="GOAL_CLARIFICATION",
+                    system_prompt=GOAL_CLARIFIER_SKILL.system_instruction,
+                    user_prompt=user_prompt,
+                    response_schema=ClarificationQuestionsResponse.model_json_schema(),
+                    model_name="gemini-2.5-flash",
+                    existing_reservation_id=reservation_id,
+                    commit_on_success=False,
+                    release_on_failure=False,
+                    workflow_type=WorkflowType.PLAN_CREATION,
+                    step_name="GOAL_CLARIFIER",
+                    step_order=1,
+                    goal_id=goal_id,
+                    context_snapshot=compact_context_snapshot(
+                        goal_id=goal_id,
+                        roadmap_id=None,
+                        stage="GOAL_CLARIFICATION",
+                        inputs=harness_inputs,
+                        layer_tokens=assembled.layer_tokens,
+                    ),
+                )
+                raw_result = exec_res.value
+                p_tok = exec_res.prompt_tokens
+                c_tok = exec_res.completion_tokens
+            else:
+                raw_result, p_tok, c_tok = await self._llm.generate_structured(
+                    prompt=user_prompt,
+                    system_prompt=GOAL_CLARIFIER_SKILL.system_instruction,
+                    response_schema=ClarificationQuestionsResponse,
+                    user_prompt=user_prompt,
+                )
 
             raw_questions: list[Any] = []
             if isinstance(raw_result, dict) and isinstance(raw_result.get("questions"), list):

@@ -7,7 +7,12 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt.exceptions import ExpiredSignatureError, PyJWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.account.public_api import UserQueryPort, create_user_query_port
+from src.account.public_api import (
+    LearnerMemoryQueryPort,
+    UserQueryPort,
+    create_learner_memory_query_port,
+    create_user_query_port,
+)
 from src.evaluation.application.ports.intelligence_repository_port import (
     EvaluationIntelligenceRepositoryPort,
 )
@@ -33,10 +38,12 @@ from src.planning.public_api import (
     create_milestone_ownership_port,
     create_planning_dashboard_query_port,
 )
+from src.shared_kernel.application.harness.workflow_port import WorkflowRepositoryPort
 from src.shared_kernel.application.uow import AsyncUnitOfWork
 from src.shared_kernel.config import get_settings
 from src.shared_kernel.infrastructure.database.session import get_async_session
 from src.shared_kernel.infrastructure.database.sqlalchemy_uow import SqlAlchemyUnitOfWork
+from src.shared_kernel.infrastructure.workflow.repository import SqlAlchemyWorkflowRepository
 
 security_bearer = HTTPBearer(auto_error=False)
 
@@ -71,6 +78,18 @@ def get_evaluation_user_query_port(
     return create_user_query_port(session)
 
 
+def get_evaluation_learner_memory_port(
+    session: AsyncSession = Depends(get_evaluation_db_session),
+) -> LearnerMemoryQueryPort:
+    return create_learner_memory_query_port(session)
+
+
+def get_evaluation_workflow_repository(
+    session: AsyncSession = Depends(get_evaluation_db_session),
+) -> WorkflowRepositoryPort:
+    return SqlAlchemyWorkflowRepository(session)
+
+
 async def get_current_evaluation_learner_id(
     request: Request,
     bearer: HTTPAuthorizationCredentials | None = Depends(security_bearer),
@@ -99,23 +118,46 @@ def get_generate_proof_use_case(
     repository: EvaluationIntelligenceRepositoryPort = Depends(get_intelligence_repository),
     ownership: MilestoneOwnershipQueryPort = Depends(get_milestone_ownership_port),
     uow: AsyncUnitOfWork = Depends(get_evaluation_uow),
+    learner_memory_port: LearnerMemoryQueryPort = Depends(get_evaluation_learner_memory_port),
+    workflow_repo: WorkflowRepositoryPort = Depends(get_evaluation_workflow_repository),
 ) -> GenerateMilestoneProofUseCase:
-    return GenerateMilestoneProofUseCase(repository, ownership, uow)
+    return GenerateMilestoneProofUseCase(
+        repository,
+        ownership,
+        uow,
+        learner_memory_port=learner_memory_port,
+        workflow_repo=workflow_repo,
+    )
 
 
 def get_submit_proof_use_case(
     repository: EvaluationIntelligenceRepositoryPort = Depends(get_intelligence_repository),
     uow: AsyncUnitOfWork = Depends(get_evaluation_uow),
+    learner_memory_port: LearnerMemoryQueryPort = Depends(get_evaluation_learner_memory_port),
+    workflow_repo: WorkflowRepositoryPort = Depends(get_evaluation_workflow_repository),
 ) -> SubmitMilestoneProofUseCase:
-    return SubmitMilestoneProofUseCase(repository, uow)
+    return SubmitMilestoneProofUseCase(
+        repository,
+        uow,
+        learner_memory_port=learner_memory_port,
+        workflow_repo=workflow_repo,
+    )
 
 
 def get_generate_weekly_review_use_case(
     repository: EvaluationIntelligenceRepositoryPort = Depends(get_intelligence_repository),
     ownership: MilestoneOwnershipQueryPort = Depends(get_milestone_ownership_port),
     uow: AsyncUnitOfWork = Depends(get_evaluation_uow),
+    learner_memory_port: LearnerMemoryQueryPort = Depends(get_evaluation_learner_memory_port),
+    workflow_repo: WorkflowRepositoryPort = Depends(get_evaluation_workflow_repository),
 ) -> GenerateWeeklyReviewUseCase:
-    return GenerateWeeklyReviewUseCase(repository, ownership, uow)
+    return GenerateWeeklyReviewUseCase(
+        repository,
+        ownership,
+        uow,
+        learner_memory_port=learner_memory_port,
+        workflow_repo=workflow_repo,
+    )
 
 
 def get_latest_weekly_review_use_case(

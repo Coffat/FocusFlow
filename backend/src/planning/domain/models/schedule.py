@@ -30,6 +30,10 @@ class OfficialSchedule(AggregateRoot):
     roadmap_id: UUID = field(default_factory=generate_uuid7)
     total_sessions: int = 0
     total_planned_minutes: int = 0
+    buffer_minutes_per_week: int = 60
+    recovery_window_days: int = 7
+    daily_workload_cap_minutes: int = 180
+    stability_weight: float = 0.8
     activated_at: datetime = field(default_factory=lambda: datetime.min)
     created_at: datetime = field(default_factory=lambda: datetime.min)
     updated_at: datetime = field(default_factory=lambda: datetime.min)

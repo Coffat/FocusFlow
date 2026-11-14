@@ -7,6 +7,7 @@ from uuid import UUID
 from src.account.public_api import (
     AvailabilityQueryPort,
     AvailabilitySnapshotDTO,
+    LearnerMemoryQueryPort,
     LearnerProfileQueryPort,
     QuotaFacadePort,
     UserQueryPort,
@@ -14,6 +15,9 @@ from src.account.public_api import (
 from src.execution.public_api import ExecutionScheduleSyncPort
 from src.planning.application.dtos.planning_dtos import SseJobTicketDTO
 from src.planning.application.ports.knowledge_base_port import KnowledgeBasePort
+from src.planning.application.ports.knowledge_source_repository_port import (
+    KnowledgeSourceRepositoryPort,
+)
 from src.planning.application.ports.planning_repository_ports import (
     GoalRepositoryPort,
     MilestoneRepositoryPort,
@@ -26,6 +30,10 @@ from src.planning.application.ports.schedule_block_repository_port import (
 from src.planning.application.ports.sse_job_port import SseJobPort
 from src.planning.application.services.existing_schedule_occupancy import (
     expand_existing_schedule_occupancy,
+)
+from src.planning.application.services.harness_support import (
+    compact_context_snapshot,
+    load_planning_harness_context_inputs,
 )
 from src.planning.application.services.knowledge_tool_dispatcher import (
     KnowledgeToolDispatcher,
@@ -58,6 +66,15 @@ from src.planning.domain.services.validation_types import (
     AvailabilitySlotDTO,
     ConstraintViolationDTO,
 )
+from src.shared_kernel.application.embedding_port import EmbeddingProviderPort
+from src.shared_kernel.application.harness.models import (
+    WorkflowRun,
+    WorkflowStatus,
+    WorkflowStepExecution,
+    WorkflowStepStatus,
+    WorkflowType,
+)
+from src.shared_kernel.application.harness.workflow_port import WorkflowRepositoryPort
 from src.shared_kernel.application.llm_port import LLMProviderPort
 from src.shared_kernel.application.uow import AsyncUnitOfWork
 from src.shared_kernel.domain.base import generate_uuid7
@@ -278,6 +295,10 @@ class ExecuteScheduleProposalGenerationUseCase:
         knowledge_base: KnowledgeBasePort | None = None,
         user_query_port: UserQueryPort | None = None,
         block_repo: ScheduleBlockRepositoryPort | None = None,
+        learner_memory_port: LearnerMemoryQueryPort | None = None,
+        knowledge_source_repo: KnowledgeSourceRepositoryPort | None = None,
+        embedding_provider: EmbeddingProviderPort | None = None,
+        workflow_repo: WorkflowRepositoryPort | None = None,
     ) -> None:
         self._goal_repo = goal_repo
         self._roadmap_repo = roadmap_repo
@@ -294,6 +315,10 @@ class ExecuteScheduleProposalGenerationUseCase:
         self._kb = knowledge_base
         self._user_query_port = user_query_port
         self._block_repo = block_repo
+        self._learner_memory_port = learner_memory_port
+        self._knowledge_source_repo = knowledge_source_repo
+        self._embedding_provider = embedding_provider
+        self._workflow_repo = workflow_repo
 
     async def execute(
         self,
@@ -368,23 +393,24 @@ class ExecuteScheduleProposalGenerationUseCase:
             start_date_str = (roadmap.start_date or effective_now.date()).isoformat()
 
             system_prompt = TASK_DECOMPOSER_SKILL.system_instruction
-            legacy_block = (
-                f"GENERATE_PROPOSAL_TASKS\n"
-                f"Roadmap: {sanitized_title}\n"
-                f"Description: {sanitized_desc}\n"
-                f"Prior Knowledge Level: {prior_knowledge}\n"
-                + (
-                    f"Clarification Context:\n{PromptSanitizer.sanitize(clarification_ctx, wrap_xml=True)}\n"
-                    if clarification_ctx
-                    else ""
-                )
-                + f"Start Date: {start_date_str}\n"
+            # Keep deterministic machine-readable markers for offline MockLLMAdapter while
+            # eliminating duplicated goal/milestone/availability prose when Goal exists.
+            header_markers = (
+                "GENERATE_PROPOSAL_TASKS\n"
+                f"Start Date: {start_date_str}\n"
                 f"Target Date: {roadmap.target_date.isoformat() if roadmap.target_date else 'N/A'}\n"
-                f"Availability Mode: {avail_config.mode}\n"
-                f"Learner Optimal Session Minutes: {learner_profile.opt_session_minutes} (beta={learner_profile.estimation_bias_beta})\n"
-                f"MILESTONE_IDS:\n" + "\n".join(milestone_lines) + "\n"
-                "AVAILABILITY_SLOTS:\n"
+                "MILESTONE_IDS:\n"
+                + "\n".join(milestone_lines)
+                + "\nAVAILABILITY_SLOTS:\n"
                 + ("\n".join(slot_lines) if slot_lines else "monday: 19:30-21:30")
+            )
+            harness_inputs = await load_planning_harness_context_inputs(
+                user_id=user_id,
+                goal_id=roadmap.goal_id,
+                query_text=f"{roadmap.title} {roadmap.description or ''}",
+                learner_memory_port=self._learner_memory_port,
+                knowledge_source_repo=self._knowledge_source_repo,
+                embedding_provider=self._embedding_provider,
             )
             if goal is not None:
                 structured_ctx = RoadmapContextBuilder.build_task_decomposition_context(
@@ -395,9 +421,51 @@ class ExecuteScheduleProposalGenerationUseCase:
                     learner_profile=learner_profile,
                     existing_tasks=existing_tasks,
                 )
-                user_prompt = build_task_decomposer_prompt(f"{legacy_block}\n\n{structured_ctx}")
             else:
-                user_prompt = build_task_decomposer_prompt(legacy_block)
+                structured_ctx = (
+                    f"Roadmap: {sanitized_title}\n"
+                    f"Description: {sanitized_desc}\n"
+                    f"Prior Knowledge Level: {prior_knowledge}\n"
+                    + (
+                        f"Clarification Context:\n{PromptSanitizer.sanitize(clarification_ctx, wrap_xml=True)}\n"
+                        if clarification_ctx
+                        else ""
+                    )
+                    + f"Availability Mode: {avail_config.mode}\n"
+                    f"Learner Optimal Session Minutes: {learner_profile.opt_session_minutes} "
+                    f"(beta={learner_profile.estimation_bias_beta})"
+                )
+
+            assembled = RoadmapContextBuilder.assemble_harness_context(
+                system_instruction=system_prompt,
+                workflow_stage="TASK_DECOMPOSITION",
+                base_context_text=structured_ctx,
+                learner_diagnostic={
+                    "prior_knowledge_level": prior_knowledge,
+                    "opt_session_minutes": learner_profile.opt_session_minutes,
+                    "estimation_bias_beta": float(learner_profile.estimation_bias_beta),
+                },
+                workflow_constraints={
+                    "start_date": start_date_str,
+                    "target_date": roadmap.target_date.isoformat() if roadmap.target_date else None,
+                    "availability_mode": avail_config.mode,
+                },
+                memory_items=harness_inputs.memory_items,
+                concept_masteries=harness_inputs.concept_masteries,
+                knowledge_chunks=harness_inputs.knowledge_chunks,
+            )
+            harness_suffix = (
+                f"\n\n{assembled.text}"
+                if (
+                    harness_inputs.memory_items
+                    or harness_inputs.concept_masteries
+                    or harness_inputs.knowledge_chunks
+                )
+                else ""
+            )
+            user_prompt = build_task_decomposer_prompt(
+                f"{header_markers}\n\n{structured_ctx}{harness_suffix}"
+            )
 
             dispatcher: KnowledgeToolDispatcher | None = None
             if self._kb is not None:
@@ -471,6 +539,8 @@ class ExecuteScheduleProposalGenerationUseCase:
                 thinking_level=TASK_DECOMPOSER_SKILL.thinking_level,
                 deterministic_allocation=True,
                 preferred_session_minutes=learner_profile.opt_session_minutes,
+                estimation_bias_beta=float(learner_profile.estimation_bias_beta),
+                peak_productivity_slots=getattr(learner_profile, "peak_productivity_slots", ()),
             )
 
             normalized_data = normalize_proposal_task_ids_and_dependencies(
@@ -502,6 +572,49 @@ class ExecuteScheduleProposalGenerationUseCase:
                     prompt_tokens=gate_result.total_prompt_tokens,
                     completion_tokens=gate_result.total_completion_tokens,
                 )
+                if self._workflow_repo is not None:
+                    wf_run_id = generate_uuid7()
+                    await self._workflow_repo.add_run(
+                        WorkflowRun(
+                            id=wf_run_id,
+                            user_id=user_id,
+                            workflow_type=WorkflowType.SCHEDULE_GENERATION,
+                            current_step="TASK_DECOMPOSER",
+                            status=WorkflowStatus.COMPLETED,
+                            context_snapshot=compact_context_snapshot(
+                                goal_id=roadmap.goal_id,
+                                roadmap_id=roadmap_id,
+                                stage="TASK_DECOMPOSITION",
+                                inputs=harness_inputs,
+                                layer_tokens=assembled.layer_tokens,
+                            ),
+                            started_at=effective_now,
+                            goal_id=roadmap.goal_id,
+                            roadmap_id=roadmap_id,
+                            completed_at=effective_now,
+                        )
+                    )
+                    await self._workflow_repo.add_step(
+                        WorkflowStepExecution(
+                            id=generate_uuid7(),
+                            workflow_run_id=wf_run_id,
+                            step_name="TASK_DECOMPOSER",
+                            step_order=1,
+                            status=WorkflowStepStatus.COMPLETED,
+                            input_summary={
+                                "milestones_count": len(milestones),
+                                "availability_mode": avail_config.mode,
+                            },
+                            output_payload={
+                                "proposal_id": str(saved_proposal.id),
+                                "attempts_used": gate_result.attempts_used,
+                                "pedagogical_score": gate_result.pedagogical_score,
+                            },
+                            retry_count=max(0, int(gate_result.attempts_used) - 1),
+                            started_at=effective_now,
+                            completed_at=effective_now,
+                        )
+                    )
                 await self._uow.commit()
 
             tasks_list = saved_proposal.proposal_data.get("tasks", [])
@@ -606,6 +719,7 @@ class InitiateScheduleProposalGenerationUseCase:
                     job_type=existing_job.job_type,
                     status=existing_job.status,
                     stream_url=f"/api/v1/roadmaps/jobs/{existing_job.job_id}/stream",
+                    is_existing=True,
                 )
 
         # Enforce FR-PLAN-001 guard BEFORE reserving AI quota

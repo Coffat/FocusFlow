@@ -384,6 +384,14 @@ class ExecutionScheduleSyncPort(Protocol):
         protected_task_ids: Sequence[UUID] = (),
     ) -> ScheduleSyncResultDTO: ...
 
+    async def shift_incomplete_tasks_for_domino(
+        self,
+        *,
+        roadmap_id: UUID,
+        shift_days: int,
+        now: datetime,
+    ) -> int: ...
+
 
 _execution_sync_factory: object = None
 

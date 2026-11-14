@@ -6,6 +6,9 @@ from src.planning.application.dtos.planning_dtos import (
     ClarificationContextPayload,
     parse_clarification_context,
 )
+from src.planning.application.knowledge.untrusted_context import (
+    wrap_untrusted_knowledge_context,
+)
 from src.planning.domain.models.goal import Goal
 from src.planning.domain.models.knowledge_concept import (
     ConceptPrerequisiteGraph,
@@ -13,6 +16,11 @@ from src.planning.domain.models.knowledge_concept import (
 )
 from src.planning.domain.models.milestone import Milestone
 from src.planning.domain.models.roadmap import Roadmap
+from src.shared_kernel.application.harness.context_engine import (
+    AssembledContext,
+    ContextEngine,
+)
+from src.shared_kernel.application.harness.models import HarnessContext
 from src.shared_kernel.infrastructure.external_ai.prompt_sanitizer import (
     PromptSanitizer,
 )
@@ -377,6 +385,124 @@ class RoadmapContextBuilder:
             "instruction: Phân rã thành các nhiệm vụ học tập nguyên tử (30 <= estimated_minutes <= 120) có learning_objective, completion_criteria, task_type (THEORY | PRACTICE | REVIEW | PROJECT) và dependencies không chu trình.",
         ]
         return "\n".join(sections)
+
+    @staticmethod
+    def format_learner_memory_layer(
+        memory_items: Sequence[Any] = (),
+        concept_masteries: Sequence[Any] = (),
+    ) -> dict[str, Any]:
+        """Serialize active LearnerMemoryItem & ConceptMastery snapshots for USER layer."""
+        serialized_memories: list[dict[str, Any]] = []
+        for item in memory_items:
+            if isinstance(item, dict):
+                key = str(item.get("memory_key", "")).strip()
+                val = item.get("memory_value", {})
+                cat = str(item.get("category", "PREFERENCE"))
+                conf = float(item.get("confidence", 0.5))
+            else:
+                key = str(getattr(item, "memory_key", "")).strip()
+                val = getattr(item, "memory_value", {})
+                cat = str(getattr(item, "category", "PREFERENCE"))
+                conf = float(getattr(item, "confidence", 0.5))
+            if key:
+                serialized_memories.append(
+                    {
+                        "category": cat,
+                        "key": PromptSanitizer.sanitize(key)[:120],
+                        "value": val,
+                        "confidence": round(conf, 3),
+                    }
+                )
+
+        serialized_masteries: list[dict[str, Any]] = []
+        for mastery in concept_masteries:
+            if isinstance(mastery, dict):
+                ckey = str(mastery.get("concept_key", "")).strip()
+                score = float(mastery.get("mastery_score", 0.0))
+                ev = str(mastery.get("last_evidence_type", ""))
+            else:
+                ckey = str(getattr(mastery, "concept_key", "")).strip()
+                score = float(getattr(mastery, "mastery_score", 0.0))
+                ev = str(getattr(mastery, "last_evidence_type", ""))
+            if ckey:
+                serialized_masteries.append(
+                    {
+                        "concept_key": PromptSanitizer.sanitize(ckey)[:120],
+                        "mastery_score": round(score, 3),
+                        "evidence": ev,
+                    }
+                )
+        return {
+            "active_memories": serialized_memories,
+            "concept_masteries": serialized_masteries,
+        }
+
+    @staticmethod
+    def format_rag_learning_layer(
+        knowledge_chunks: Sequence[Any] = (),
+    ) -> list[dict[str, Any]]:
+        """Wrap retrieved RAG KnowledgeChunks inside `<untrusted_knowledge_context>`."""
+        wrapped_chunks: list[dict[str, Any]] = []
+        for idx, chunk in enumerate(knowledge_chunks, start=1):
+            if isinstance(chunk, dict):
+                source_id = str(chunk.get("source_id", f"rag-{idx}"))
+                chunk_index = chunk.get("chunk_index", idx - 1)
+                content = str(chunk.get("content", "")).strip()
+            else:
+                source_id = str(getattr(chunk, "source_id", f"rag-{idx}"))
+                chunk_index = getattr(chunk, "chunk_index", idx - 1)
+                content = str(getattr(chunk, "content", "")).strip()
+            if not content:
+                continue
+            citation_id = f"{source_id}#chunk-{chunk_index}"
+            wrapped = wrap_untrusted_knowledge_context(
+                source_id=citation_id,
+                content=PromptSanitizer.sanitize(content)[:1500],
+            )
+            wrapped_chunks.append({"citation_id": citation_id, "context": wrapped})
+        return wrapped_chunks
+
+    @classmethod
+    def assemble_harness_context(
+        cls,
+        *,
+        system_instruction: str,
+        workflow_stage: str,
+        base_context_text: str,
+        learner_diagnostic: dict[str, Any] | None = None,
+        workflow_constraints: dict[str, Any] | None = None,
+        memory_items: Sequence[Any] = (),
+        concept_masteries: Sequence[Any] = (),
+        knowledge_chunks: Sequence[Any] = (),
+        runtime_feedback: str = "",
+        total_token_budget: int = 8000,
+    ) -> AssembledContext:
+        """Assemble 5-layer HarnessContext through shared `ContextEngine`."""
+        user_payload = dict(learner_diagnostic or {})
+        user_payload.update(cls.format_learner_memory_layer(memory_items, concept_masteries))
+
+        learning_payload: dict[str, Any] = {
+            "planning_context": base_context_text,
+            "rag_chunks": cls.format_rag_learning_layer(knowledge_chunks),
+        }
+        workflow_payload: dict[str, Any] = {
+            "stage": workflow_stage,
+            **(workflow_constraints or {}),
+        }
+        runtime_payload: dict[str, Any] = {}
+        if runtime_feedback.strip():
+            runtime_payload["feedback"] = runtime_feedback.strip()
+
+        engine = ContextEngine(total_token_budget=total_token_budget)
+        return engine.assemble(
+            HarnessContext(
+                system={"instruction": system_instruction},
+                workflow=workflow_payload,
+                user=user_payload,
+                learning=learning_payload,
+                runtime=runtime_payload,
+            )
+        )
 
 
 GoalContextBuilder = RoadmapContextBuilder

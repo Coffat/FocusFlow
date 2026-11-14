@@ -6,6 +6,8 @@ from typing import Any
 from src.planning.application.services.knowledge_tool_dispatcher import (
     RoadmapPipelineStage,
 )
+from src.shared_kernel.application.harness.models import PromptTemplate
+from src.shared_kernel.application.harness.prompt_registry import PromptRegistry
 
 
 @dataclass(frozen=True, slots=True)
@@ -283,3 +285,55 @@ def build_task_repair_prompt(
         f"{prev_summary}\n"
         "Hãy điều chỉnh lại `tasks` và `dependencies` để khắc phục TRIỆT ĐỂ mọi mã lỗi trên và trả về JSON hợp lệ."
     )
+
+
+def build_planning_prompt_registry() -> PromptRegistry:
+    """Register versioned planning prompt templates with deterministic checksums."""
+    registry = PromptRegistry()
+    specs: tuple[tuple[str, SkillDefinition, str, dict[str, Any]], ...] = (
+        (
+            "GOAL_CLARIFIER",
+            GOAL_CLARIFIER_SKILL,
+            "PLAN_CREATION",
+            {"type": "object", "required": ["questions"]},
+        ),
+        (
+            "CURRICULUM_ARCHITECT",
+            MILESTONE_PLANNER_SKILL,
+            "PLAN_CREATION",
+            {"type": "object", "required": ["milestones"]},
+        ),
+        (
+            "TASK_DECOMPOSER",
+            TASK_DECOMPOSER_SKILL,
+            "SCHEDULE_GENERATION",
+            {"type": "object", "required": ["tasks", "dependencies"]},
+        ),
+        (
+            "PEDAGOGICAL_JUDGE",
+            PEDAGOGICAL_JUDGE_SKILL,
+            "SCHEDULE_GENERATION",
+            {"type": "object", "required": ["score", "passed"]},
+        ),
+    )
+    for prompt_id, skill, workflow_type, output_schema in specs:
+        checksum = PromptRegistry.checksum_for(
+            prompt_id=prompt_id,
+            version=skill.version,
+            workflow_type=workflow_type,
+            skill_id=skill.skill_id,
+            system_template=skill.system_instruction,
+            output_schema=output_schema,
+        )
+        registry.register(
+            PromptTemplate(
+                prompt_id=prompt_id,
+                version=skill.version,
+                workflow_type=workflow_type,
+                skill_id=skill.skill_id,
+                system_template=skill.system_instruction,
+                output_schema=output_schema,
+                checksum=checksum,
+            )
+        )
+    return registry

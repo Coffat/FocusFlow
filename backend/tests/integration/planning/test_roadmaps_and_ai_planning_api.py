@@ -42,7 +42,7 @@ async def planning_users() -> AsyncGenerator[tuple[UUID, UUID], None]:
     async with async_session_factory() as session:
         u1 = UserORM(
             id=owner_id,
-            email=f"plan_owner_{owner_id.hex[:8]}@focusflow.vn",
+            email=f"plan_owner_{owner_id.hex}@focusflow.vn",
             password_hash="argon2id$mockhash",
             full_name="Planning Owner Learner",
             timezone="Asia/Ho_Chi_Minh",
@@ -52,7 +52,7 @@ async def planning_users() -> AsyncGenerator[tuple[UUID, UUID], None]:
         )
         u2 = UserORM(
             id=other_id,
-            email=f"plan_other_{other_id.hex[:8]}@focusflow.vn",
+            email=f"plan_other_{other_id.hex}@focusflow.vn",
             password_hash="argon2id$mockhash",
             full_name="Other Learner",
             timezone="Asia/Ho_Chi_Minh",
@@ -89,6 +89,7 @@ async def planning_users() -> AsyncGenerator[tuple[UUID, UUID], None]:
 
     app.dependency_overrides.clear()
     app.dependency_overrides[get_current_learner_id] = lambda: owner_id
+    app.dependency_overrides[get_llm_provider] = lambda: MockLLMAdapter()
 
     try:
         yield owner_id, other_id

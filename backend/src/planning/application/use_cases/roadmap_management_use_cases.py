@@ -1,7 +1,8 @@
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
 
 from src.account.public_api import UserQueryPort
+from src.evaluation.public_api import ScheduleChangeLogPort
 from src.execution.public_api import ExecutionScheduleSyncPort
 from src.planning.application.dtos.planning_dtos import RoadmapDetailDTO
 from src.planning.application.ports.planning_repository_ports import (
@@ -10,6 +11,9 @@ from src.planning.application.ports.planning_repository_ports import (
     OfficialScheduleRepositoryPort,
     RoadmapRepositoryPort,
     ScheduleProposalRepositoryPort,
+)
+from src.planning.application.ports.schedule_block_repository_port import (
+    ScheduleBlockRepositoryPort,
 )
 from src.planning.domain.exceptions.planning_exceptions import RoadmapNotFoundError
 from src.planning.domain.models.roadmap import Roadmap, RoadmapStatus
@@ -206,6 +210,175 @@ class ArchiveRoadmapUseCase:
             if goal is not None:
                 goal.archive(effective_now)
                 await self._goal_repo.save(goal)
+            await self._uow.commit()
+
+        return saved_roadmap
+
+
+class PauseRoadmapUseCase:
+    """Pause an ACTIVE Roadmap (`ACTIVE -> PAUSED`) and log event (`UC-22`)."""
+
+    def __init__(
+        self,
+        *,
+        roadmap_repo: RoadmapRepositoryPort,
+        schedule_repo: OfficialScheduleRepositoryPort,
+        uow: AsyncUnitOfWork,
+        schedule_change_log_port: ScheduleChangeLogPort | None = None,
+    ) -> None:
+        self._roadmap_repo = roadmap_repo
+        self._schedule_repo = schedule_repo
+        self._uow = uow
+        self._change_log_port = schedule_change_log_port
+
+    async def execute(
+        self,
+        *,
+        user_id: UUID,
+        roadmap_id: UUID,
+        now: datetime | None = None,
+    ) -> Roadmap:
+        effective_now = now or datetime.now(UTC)
+        roadmap = await self._roadmap_repo.get_by_id_for_user(roadmap_id, user_id)
+        if roadmap is None:
+            raise RoadmapNotFoundError()
+
+        roadmap.pause(effective_now)
+        schedule = await self._schedule_repo.get_by_roadmap_id(roadmap_id)
+
+        async with self._uow:
+            saved_roadmap = await self._roadmap_repo.save(roadmap)
+            if self._change_log_port is not None:
+                await self._change_log_port.record_change_log(
+                    roadmap_id=roadmap_id,
+                    schedule_id=schedule.id if schedule is not None else None,
+                    trigger_type="ROADMAP_PAUSED",
+                    reason="Tạm dừng lộ trình học tập theo yêu cầu người học (UC-22)",
+                    affected_tasks_count=0,
+                    total_shifted_minutes=0,
+                    diff_payload={"paused_at": effective_now.isoformat()},
+                    now=effective_now,
+                )
+            await self._uow.commit()
+
+        return saved_roadmap
+
+
+class ResumeRoadmapUseCase:
+    """Resume a PAUSED Roadmap (`PAUSED -> ACTIVE`) applying Domino Shift without increasing `reschedule_count` (`UC-22`)."""
+
+    def __init__(
+        self,
+        *,
+        goal_repo: GoalRepositoryPort,
+        roadmap_repo: RoadmapRepositoryPort,
+        schedule_repo: OfficialScheduleRepositoryPort,
+        uow: AsyncUnitOfWork,
+        execution_sync_port: ExecutionScheduleSyncPort | None = None,
+        block_repo: ScheduleBlockRepositoryPort | None = None,
+        user_query_port: UserQueryPort | None = None,
+        schedule_change_log_port: ScheduleChangeLogPort | None = None,
+    ) -> None:
+        self._goal_repo = goal_repo
+        self._roadmap_repo = roadmap_repo
+        self._schedule_repo = schedule_repo
+        self._uow = uow
+        self._execution_sync_port = execution_sync_port
+        self._block_repo = block_repo
+        self._user_query_port = user_query_port
+        self._change_log_port = schedule_change_log_port
+
+    async def execute(
+        self,
+        *,
+        user_id: UUID,
+        roadmap_id: UUID,
+        shift_days: int | None = None,
+        now: datetime | None = None,
+    ) -> Roadmap:
+        effective_now = now or datetime.now(UTC)
+        roadmap = await self._roadmap_repo.get_by_id_for_user(roadmap_id, user_id)
+        if roadmap is None:
+            raise RoadmapNotFoundError()
+
+        paused_at = roadmap.updated_at if roadmap.updated_at != datetime.min else effective_now
+        effective_shift_days = (
+            max(0, int(shift_days))
+            if shift_days is not None
+            else max(1, (effective_now.date() - paused_at.date()).days)
+        )
+
+        effective_tier = "FREE"
+        if self._user_query_port is not None:
+            snap = await self._user_query_port.get_user_by_id(user_id)
+            if snap is not None:
+                effective_tier = snap.tier
+        active_count = await self._roadmap_repo.count_active_by_user_id(
+            user_id,
+            exclude_roadmap_id=roadmap_id,
+        )
+        roadmap.activate(
+            effective_now,
+            tier=effective_tier,
+            current_active_count=active_count,
+        )
+
+        if effective_shift_days > 0 and roadmap.target_date is not None:
+            roadmap.target_date = roadmap.target_date + timedelta(days=effective_shift_days)
+
+        schedule = await self._schedule_repo.get_by_roadmap_id(roadmap_id)
+        shifted_tasks_count = 0
+
+        async with self._uow:
+            saved_roadmap = await self._roadmap_repo.save(roadmap)
+            if effective_shift_days > 0:
+                goal = await self._goal_repo.get_by_id(roadmap.goal_id)
+                if goal is not None and goal.target_date is not None:
+                    goal.target_date = goal.target_date + timedelta(days=effective_shift_days)
+                    goal.updated_at = effective_now
+                    await self._goal_repo.save(goal)
+
+                if self._execution_sync_port is not None:
+                    shifted_tasks_count = (
+                        await self._execution_sync_port.shift_incomplete_tasks_for_domino(
+                            roadmap_id=roadmap_id,
+                            shift_days=effective_shift_days,
+                            now=effective_now,
+                        )
+                    )
+
+                if self._block_repo is not None and schedule is not None:
+                    delta = timedelta(days=effective_shift_days)
+                    blocks = await self._block_repo.get_by_schedule_id(schedule.id)
+                    updated_blocks = []
+                    for blk in blocks:
+                        if blk.status == "PLANNED":
+                            blk.block_date = blk.block_date + delta
+                            blk.start_time = blk.start_time + delta
+                            blk.end_time = blk.end_time + delta
+                            blk.sync_status = "PENDING_SYNC"
+                            blk.updated_at = effective_now
+                            updated_blocks.append(blk)
+                    if updated_blocks:
+                        await self._block_repo.save_all(updated_blocks)
+
+            if self._change_log_port is not None:
+                await self._change_log_port.record_change_log(
+                    roadmap_id=roadmap_id,
+                    schedule_id=schedule.id if schedule is not None else None,
+                    trigger_type="DOMINO_SHIFT",
+                    reason=(
+                        f"Kích hoạt lại lộ trình và dịch Domino {effective_shift_days} ngày "
+                        "không tăng reschedule_count (UC-22)"
+                    ),
+                    affected_tasks_count=shifted_tasks_count,
+                    total_shifted_minutes=effective_shift_days * 60,
+                    diff_payload={
+                        "shift_days": effective_shift_days,
+                        "shifted_tasks_count": shifted_tasks_count,
+                    },
+                    now=effective_now,
+                )
             await self._uow.commit()
 
         return saved_roadmap

@@ -107,6 +107,12 @@ def create_app() -> FastAPI:
 
 app = create_app()
 
+from src.shared_kernel.infrastructure.worker.broker import (  # noqa: E402
+    register_dependency_overrides_provider,
+)
+
+register_dependency_overrides_provider(lambda: app.dependency_overrides)
+
 try:
     import taskiq_fastapi
 

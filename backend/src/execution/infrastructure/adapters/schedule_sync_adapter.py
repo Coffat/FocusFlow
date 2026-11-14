@@ -1,5 +1,5 @@
 from collections.abc import Mapping, Sequence
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import delete, select, text
@@ -241,6 +241,35 @@ class ExecutionScheduleSyncAdapter(ExecutionScheduleSyncPort):
             total_active_sessions=total_active_sessions,
             total_planned_minutes=total_planned_minutes,
         )
+
+    async def shift_incomplete_tasks_for_domino(
+        self,
+        *,
+        roadmap_id: UUID,
+        shift_days: int,
+        now: datetime,
+    ) -> int:
+        """Shift TODO/IN_PROGRESS tasks forward by `shift_days` without incrementing `reschedule_count` (UC-22)."""
+        if shift_days <= 0:
+            return 0
+        delta = timedelta(days=shift_days)
+        stmt = select(TaskORM).where(
+            TaskORM.roadmap_id == roadmap_id,
+            TaskORM.status.in_(("TODO", "IN_PROGRESS")),
+        )
+        rows = list((await self._session.execute(stmt)).scalars().all())
+        shifted_count = 0
+        for row in rows:
+            if row.scheduled_date is not None:
+                row.scheduled_date = row.scheduled_date + delta
+            if row.scheduled_start is not None:
+                row.scheduled_start = row.scheduled_start + delta
+            if row.scheduled_end is not None:
+                row.scheduled_end = row.scheduled_end + delta
+            row.updated_at = now
+            shifted_count += 1
+        await self._session.flush()
+        return shifted_count
 
 
 SqlAlchemyExecutionScheduleSyncAdapter = ExecutionScheduleSyncAdapter

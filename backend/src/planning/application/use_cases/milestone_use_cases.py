@@ -4,18 +4,25 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from src.account.public_api import QuotaFacadePort
+from src.account.public_api import LearnerMemoryQueryPort, QuotaFacadePort
 from src.planning.application.dtos.planning_dtos import (
     MilestoneInputItemDTO,
     SseJobTicketDTO,
 )
 from src.planning.application.ports.knowledge_base_port import KnowledgeBasePort
+from src.planning.application.ports.knowledge_source_repository_port import (
+    KnowledgeSourceRepositoryPort,
+)
 from src.planning.application.ports.planning_repository_ports import (
     GoalRepositoryPort,
     MilestoneRepositoryPort,
     RoadmapRepositoryPort,
 )
 from src.planning.application.ports.sse_job_port import SseJobPort
+from src.planning.application.services.harness_support import (
+    compact_context_snapshot,
+    load_planning_harness_context_inputs,
+)
 from src.planning.application.services.knowledge_tool_dispatcher import (
     KnowledgeToolDispatcher,
     RoadmapPipelineStage,
@@ -43,6 +50,10 @@ from src.planning.domain.models.milestone import (
     MilestoneStatus,
     validate_milestone_sequence,
 )
+from src.shared_kernel.application.embedding_port import EmbeddingProviderPort
+from src.shared_kernel.application.harness.execution_manager import AIExecutionManager
+from src.shared_kernel.application.harness.models import WorkflowType
+from src.shared_kernel.application.harness.workflow_port import WorkflowRepositoryPort
 from src.shared_kernel.application.llm_port import LLMProviderPort
 from src.shared_kernel.application.uow import AsyncUnitOfWork
 from src.shared_kernel.domain.base import generate_uuid7
@@ -104,6 +115,10 @@ class ExecuteMilestoneGenerationUseCase:
         sse_job_store: SseJobPort,
         uow: AsyncUnitOfWork,
         knowledge_base: KnowledgeBasePort | None = None,
+        learner_memory_port: LearnerMemoryQueryPort | None = None,
+        knowledge_source_repo: KnowledgeSourceRepositoryPort | None = None,
+        embedding_provider: EmbeddingProviderPort | None = None,
+        workflow_repo: WorkflowRepositoryPort | None = None,
     ) -> None:
         self._goal_repo = goal_repo
         self._roadmap_repo = roadmap_repo
@@ -113,6 +128,10 @@ class ExecuteMilestoneGenerationUseCase:
         self._sse = sse_job_store
         self._uow = uow
         self._kb = knowledge_base
+        self._learner_memory_port = learner_memory_port
+        self._knowledge_source_repo = knowledge_source_repo
+        self._embedding_provider = embedding_provider
+        self._workflow_repo = workflow_repo
 
     async def execute(
         self,
@@ -183,8 +202,39 @@ class ExecuteMilestoneGenerationUseCase:
                 )
                 context_block = "\n".join(prompt_lines)
 
+            harness_inputs = await load_planning_harness_context_inputs(
+                user_id=user_id,
+                goal_id=roadmap.goal_id,
+                query_text=f"{raw_title} {raw_desc}",
+                learner_memory_port=self._learner_memory_port,
+                knowledge_source_repo=self._knowledge_source_repo,
+                embedding_provider=self._embedding_provider,
+            )
+            assembled = RoadmapContextBuilder.assemble_harness_context(
+                system_instruction=system_prompt,
+                workflow_stage="MILESTONE_PLANNING",
+                base_context_text=context_block,
+                learner_diagnostic={"prior_knowledge_level": prior_knowledge},
+                workflow_constraints={
+                    "start_date": roadmap.start_date.isoformat() if roadmap.start_date else None,
+                    "target_date": roadmap.target_date.isoformat() if roadmap.target_date else None,
+                },
+                memory_items=harness_inputs.memory_items,
+                concept_masteries=harness_inputs.concept_masteries,
+                knowledge_chunks=harness_inputs.knowledge_chunks,
+            )
+            effective_context = (
+                f"{context_block}\n\n{assembled.text}"
+                if (
+                    harness_inputs.memory_items
+                    or harness_inputs.concept_masteries
+                    or harness_inputs.knowledge_chunks
+                )
+                else context_block
+            )
+
             base_user_prompt = build_milestone_planner_prompt(
-                context_block,
+                effective_context,
                 goal_title=raw_title,
                 raw_description=raw_desc,
                 prior_knowledge_level=prior_knowledge,
@@ -222,14 +272,58 @@ class ExecuteMilestoneGenerationUseCase:
                         "thinking_level": MILESTONE_PLANNER_SKILL.thinking_level,
                     }
 
-                raw_result, p_tok, c_tok = await self._llm.generate_structured(
-                    prompt=current_prompt,
-                    system_prompt=system_prompt,
-                    response_schema=MILESTONE_RESPONSE_SCHEMA,
-                    user_prompt=current_prompt,
-                    temperature=0.2,
-                    **extra_kwargs,
-                )
+                if self._workflow_repo is not None:
+                    exec_mgr = AIExecutionManager(
+                        provider=self._llm,
+                        quota=self._quota_facade,
+                        max_retries=0,
+                        workflow_repo=self._workflow_repo,
+                    )
+                    exec_res = await exec_mgr.execute(
+                        user_id=user_id,
+                        operation_type="MILESTONE_GEN",
+                        system_prompt=system_prompt,
+                        user_prompt=current_prompt,
+                        response_schema=MILESTONE_RESPONSE_SCHEMA,
+                        model_name="gemini-2.5-flash",
+                        tools=(
+                            dispatcher.get_allowed_tool_declarations()
+                            if dispatcher is not None and attempt == 1
+                            else None
+                        ),
+                        tool_executor=(
+                            dispatcher.dispatch if dispatcher is not None and attempt == 1 else None
+                        ),
+                        max_tool_calls=MILESTONE_PLANNER_SKILL.max_tool_calls,
+                        thinking_level=MILESTONE_PLANNER_SKILL.thinking_level,
+                        existing_reservation_id=reservation_id,
+                        commit_on_success=False,
+                        release_on_failure=False,
+                        workflow_type=WorkflowType.PLAN_CREATION,
+                        step_name="CURRICULUM_ARCHITECT",
+                        step_order=attempt,
+                        goal_id=roadmap.goal_id,
+                        roadmap_id=roadmap_id,
+                        context_snapshot=compact_context_snapshot(
+                            goal_id=roadmap.goal_id,
+                            roadmap_id=roadmap_id,
+                            stage="MILESTONE_PLANNING",
+                            inputs=harness_inputs,
+                            layer_tokens=assembled.layer_tokens,
+                        ),
+                    )
+                    raw_result = exec_res.value
+                    p_tok = exec_res.prompt_tokens
+                    c_tok = exec_res.completion_tokens
+                else:
+                    raw_result, p_tok, c_tok = await self._llm.generate_structured(
+                        prompt=current_prompt,
+                        system_prompt=system_prompt,
+                        response_schema=MILESTONE_RESPONSE_SCHEMA,
+                        user_prompt=current_prompt,
+                        temperature=0.2,
+                        **extra_kwargs,
+                    )
                 total_prompt_tokens += int(p_tok or 0)
                 total_completion_tokens += int(c_tok or 0)
 
@@ -416,6 +510,7 @@ class InitiateMilestoneGenerationUseCase:
                     job_type=existing_job.job_type,
                     status=existing_job.status,
                     stream_url=f"/api/v1/roadmaps/jobs/{existing_job.job_id}/stream",
+                    is_existing=True,
                 )
 
         async with self._uow:
