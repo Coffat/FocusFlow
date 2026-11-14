@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     environment: str = "development"
     debug: bool = True
     backend_cors_origins: str = '["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:4200", "http://127.0.0.1:4200"]'
-    frontend_url: str = "http://localhost:4200"
+    frontend_url: str = "http://localhost:3000"
 
     # PostgreSQL 16 (Asyncpg)
     database_url: str = (
@@ -65,8 +65,8 @@ class Settings(BaseSettings):
     llm_tool_timeout_seconds: float = 5.0
     enable_tier3_judge: bool = True
     ai_harness_v2_enabled: bool = False
-    knowledge_rag_enabled: bool = False
-    learner_memory_enabled: bool = False
+    knowledge_rag_enabled: bool = True
+    learner_memory_enabled: bool = True
     ai_circuit_failure_threshold: int = 3
     ai_circuit_window_seconds: int = 60
     ai_circuit_open_seconds: int = 60

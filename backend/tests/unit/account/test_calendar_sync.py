@@ -433,7 +433,7 @@ async def test_handle_google_calendar_callback_get_redirect() -> None:
     settings = Settings(
         calendar_provider="mock",
         calendar_encryption_key=key,
-        frontend_url="http://localhost:4200",
+        frontend_url="http://localhost:3000",
     )
     repo = InMemoryCalendarConnectionRepository()
     adapter = MockCalendarAdapter()
@@ -462,7 +462,7 @@ async def test_handle_google_calendar_callback_get_redirect() -> None:
     )
     assert response.status_code == 302
     assert (
-        response.headers["location"] == "http://localhost:4200/schedule?calendar_connected=success"
+        response.headers["location"] == "http://localhost:3000/schedule?calendar_connected=success"
     )
 
     # 2. Error case (e.g. invalid code triggering CalendarAuthError) -> 302 redirect with ?calendar_connected=error
@@ -479,7 +479,28 @@ async def test_handle_google_calendar_callback_get_redirect() -> None:
     assert err_response.status_code == 302
     assert "calendar_connected=error" in err_response.headers["location"]
     assert "error_detail=" in err_response.headers["location"]
-    assert "http://localhost:4200/schedule" in err_response.headers["location"]
+    assert "http://localhost:3000/schedule" in err_response.headers["location"]
+
+    # 3. return_to already contains query parameters -> join with & instead of ?
+    state_with_query = {
+        "user_id": str(user_id),
+        "sync_type": "two_way",
+        "return_to": "/settings?tab=calendar&focus=calendar",
+    }
+    state_query_str = base64.urlsafe_b64encode(
+        json.dumps(state_with_query).encode("utf-8")
+    ).decode("utf-8")
+    response_with_query = await handle_google_calendar_callback_get(
+        request=req,
+        code="mock_auth_code",
+        state=state_query_str,
+        use_case=use_case,
+    )
+    assert response_with_query.status_code == 302
+    assert (
+        response_with_query.headers["location"]
+        == "http://localhost:3000/settings?tab=calendar&focus=calendar&calendar_connected=success"
+    )
 
 
 @pytest.mark.asyncio

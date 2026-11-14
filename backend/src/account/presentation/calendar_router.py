@@ -63,7 +63,7 @@ async def handle_google_calendar_callback_get(
     ),
 ) -> Response:
     settings = get_settings()
-    frontend_url = (settings.frontend_url or "http://localhost:4200").rstrip("/")
+    frontend_url = (settings.frontend_url or "http://localhost:3000").rstrip("/")
     return_to = "/settings"
 
     # Extract user_id and return_to from state
@@ -84,11 +84,13 @@ async def handle_google_calendar_callback_get(
         dto = CalendarOAuthCallbackRequestDTO(code=code, state=state)
         await use_case.execute(user_id=user_id, request=dto)
 
-        redirect_url = f"{frontend_url}{return_to}?calendar_connected=success"
+        separator = "&" if "?" in return_to else "?"
+        redirect_url = f"{frontend_url}{return_to}{separator}calendar_connected=success"
         return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
     except (CalendarAuthError, CalendarProviderError, Exception) as exc:
         error_msg = getattr(exc, "message", str(exc))
-        redirect_url = f"{frontend_url}{return_to}?calendar_connected=error&error_detail={urllib.parse.quote(str(error_msg))}"
+        separator = "&" if "?" in return_to else "?"
+        redirect_url = f"{frontend_url}{return_to}{separator}calendar_connected=error&error_detail={urllib.parse.quote(str(error_msg))}"
         return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
 
 
