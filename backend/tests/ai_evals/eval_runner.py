@@ -477,6 +477,9 @@ class _ScenarioEvalResult:
     injection_has_valid_output: bool = False
     injection_isolated: bool = False
     decomposer_error_categories: list[str] = field(default_factory=list)
+    schema_check_calls: int = 0
+    critic_schema_mismatch_count: int = 0
+    schema_repair_attempts: int = 0
 
 
 def _build_milestone_entities(milestones: Sequence[dict[str, Any]]) -> list[Milestone]:
@@ -520,14 +523,19 @@ async def _evaluate_scenario(
     judge_thinking_level: str | None = None,
     judge_timeout_seconds: float | None = None,
     include_weekly: bool = True,
-    parallel_critics_and_judge: bool = False,
+    parallel_critics_and_judge: bool | None = None,
     decomposer_provider_factory: ProviderFactory | None = None,
     judge_provider_factory: ProviderFactory | None = None,
     weekly_provider_factory: ProviderFactory | None = None,
 ) -> _ScenarioEvalResult:
+    effective_parallel = (
+        (use_live and judge_provider_factory is None)
+        if parallel_critics_and_judge is None
+        else bool(parallel_critics_and_judge)
+    )
     availability = _build_availability(scenario["availability"])
     milestones = list(scenario["milestones"])
-    milestone_entities = _build_milestone_entities(milestones) if parallel_critics_and_judge else []
+    milestone_entities = _build_milestone_entities(milestones) if effective_parallel else []
     valid_milestone_ids = {UUID(str(m["milestone_id"])) for m in milestones}
     milestone_json = json.dumps(
         [
@@ -605,11 +613,12 @@ async def _evaluate_scenario(
         )
         orchestrator = ProposalValidationGateOrchestrator(
             llm_provider=provider,
-            enable_tier3_judge=parallel_critics_and_judge,
-            tier3_timeout_seconds=effective_judge_timeout if parallel_critics_and_judge else None,
-            workflow_repo=parallel_wf_repo if parallel_critics_and_judge else None,
+            enable_tier3_judge=effective_parallel,
+            tier3_timeout_seconds=effective_judge_timeout if effective_parallel else None,
+            workflow_repo=parallel_wf_repo if effective_parallel else None,
         )
         t0 = time.perf_counter()
+        step_start_idx = len(parallel_wf_repo.steps)
         proposal: dict[str, Any] = {}
         attempts_used = 1
         retries_used = 0
@@ -631,8 +640,8 @@ async def _evaluate_scenario(
                 current_roadmap_target_date=date.fromisoformat(str(scenario["target_date"])),
                 goal_title=str(scenario["goal"].get("title", "")),
                 learner_level=str(scenario.get("learner_level", "")),
-                milestone_summary=milestone_json if parallel_critics_and_judge else "",
-                milestones=milestone_entities if parallel_critics_and_judge else (),
+                milestone_summary=milestone_json if effective_parallel else "",
+                milestones=milestone_entities if effective_parallel else (),
                 thinking_level=decomposer_thinking_level or TASK_DECOMPOSER_SKILL.thinking_level,
                 deterministic_allocation=True,
                 max_retries=2,
@@ -650,14 +659,28 @@ async def _evaluate_scenario(
                 and len(proposal.get("tasks", []))
                 >= int(scenario["expected_invariants"].get("min_tasks", 1))
             )
-            if parallel_critics_and_judge and gate_result.is_valid:
+            if effective_parallel and gate_result.is_valid:
                 case_judge_status = gate_result.judge_status
                 case_pedagogical_score = gate_result.pedagogical_score
                 result.pedagogical_score = gate_result.pedagogical_score
                 if gate_result.judge_status == "REVIEW_PENDING":
-                    judge_error_category = classify_eval_error(
-                        error_message=" ".join(gate_result.advisory_warnings)
-                    )
+                    failed_judge_steps = [
+                        step
+                        for step in parallel_wf_repo.steps[step_start_idx:]
+                        if step.step_name == "PEDAGOGICAL_JUDGE"
+                        and step.status == WorkflowStepStatus.FAILED
+                    ]
+                    if failed_judge_steps:
+                        last_j = failed_judge_steps[-1]
+                        judge_error_category = classify_eval_error(
+                            error_code=str(last_j.output_payload.get("error_category") or "")
+                            or None,
+                            error_message=str(last_j.output_payload.get("error", "")),
+                        )
+                    else:
+                        judge_error_category = classify_eval_error(
+                            error_message=" ".join(gate_result.advisory_warnings)
+                        )
             if not passed:
                 trial_error = "INSUFFICIENT_TASKS"
         except ProposalValidationGateError as exc:
@@ -670,6 +693,50 @@ async def _evaluate_scenario(
             retries_used = 0
             trial_error = type(exc).__name__
             trial_exc = exc
+
+        trial_steps = parallel_wf_repo.steps[step_start_idx:]
+        if trial_exc is not None and effective_parallel and p_tok == 0 and trial_steps:
+            p_tok = sum(int(s.output_payload.get("prompt_tokens", 0) or 0) for s in trial_steps)
+            o_tok = sum(
+                int(
+                    s.output_payload.get(
+                        "output_tokens", s.output_payload.get("completion_tokens", 0)
+                    )
+                    or 0
+                )
+                for s in trial_steps
+            )
+            t_tok = sum(int(s.output_payload.get("thinking_tokens", 0) or 0) for s in trial_steps)
+
+        if effective_parallel:
+            decomposer_steps = [s for s in trial_steps if s.step_name == "TASK_DECOMPOSER"]
+            critic_steps = [
+                s
+                for s in trial_steps
+                if s.step_name
+                in {
+                    "COVERAGE_PREREQUISITE_CRITIC",
+                    "LEARNER_FIT_ACTIONABILITY_CRITIC",
+                    "QUALITY_ARBITER",
+                }
+            ]
+            judge_steps = [s for s in trial_steps if s.step_name == "PEDAGOGICAL_JUDGE"]
+            result.schema_check_calls += (
+                max(1, len(decomposer_steps)) + len(critic_steps) + len(judge_steps)
+            )
+            for c_step in critic_steps:
+                if c_step.status == WorkflowStepStatus.FAILED:
+                    c_cat = classify_eval_error(
+                        error_code=str(c_step.output_payload.get("error_category") or "") or None,
+                        error_message=str(c_step.output_payload.get("error", "")),
+                    )
+                    if c_cat == "SCHEMA_MISMATCH":
+                        result.critic_schema_mismatch_count += 1
+            result.schema_repair_attempts += sum(
+                int(s.output_payload.get("repair_attempts", 0) or 0) for s in trial_steps
+            )
+        else:
+            result.schema_check_calls += attempts_used if trial_exc is None else 1
 
         elapsed_ms = round((time.perf_counter() - t0) * 1000.0, 3)
         result.latencies_ms.append(elapsed_ms)
@@ -723,7 +790,8 @@ async def _evaluate_scenario(
     last_tasks_count = len(last_valid_proposal.get("tasks", []))
     result.tasks_count = last_tasks_count
     result.min_tasks_met = last_tasks_count >= min_tasks_required
-    if not parallel_critics_and_judge and last_valid_proposal.get("tasks"):
+    if not effective_parallel and last_valid_proposal.get("tasks"):
+        result.schema_check_calls += 1
         judge_workflow_repo = _EvalWorkflowRepo()
         if judge_provider_factory is not None:
             judge_provider = judge_provider_factory(idx, scenario)
@@ -792,6 +860,10 @@ async def _evaluate_scenario(
                     error_code=run_err_code,
                     error_message=step_err_msg or warn_text,
                 )
+            result.schema_repair_attempts += sum(
+                int(step.output_payload.get("repair_attempts", 0) or 0)
+                for step in judge_workflow_repo.steps
+            )
         except Exception as exc:
             case_judge_status = "REVIEW_PENDING"
             judge_error_category = classify_eval_error(exc)
@@ -806,6 +878,7 @@ async def _evaluate_scenario(
     if not include_weekly:
         result.weekly_skipped = True
     else:
+        result.schema_check_calls += 1
         roadmap_uuid = uuid4()
         weekly_repo = _EvalWeeklyRepo(roadmap_uuid)
         weekly_workflow_repo = _EvalWorkflowRepo()
@@ -1053,6 +1126,13 @@ def validate_eval_report_totals(report: dict[str, Any]) -> None:
             eb["decomposer"][category] + eb["judge"][category] + eb["weekly"][category]
         )
 
+    assert report["post_repair_schema_mismatch_count"] >= eb["total"]["SCHEMA_MISMATCH"]
+    assert 0 <= report["post_repair_schema_mismatch_count"] <= report["schema_check_calls"]
+    expected_mismatch_rate = round(
+        report["post_repair_schema_mismatch_count"] / max(1, report["schema_check_calls"]), 4
+    )
+    assert report["post_repair_schema_mismatch_rate"] == expected_mismatch_rate
+
 
 async def run_planning_eval_suite(
     dataset_path: Path = DEFAULT_18_GOALS_DATASET_PATH,
@@ -1065,7 +1145,7 @@ async def run_planning_eval_suite(
     judge_thinking_level: str | None = None,
     judge_timeout_seconds: float | None = None,
     include_weekly: bool = True,
-    parallel_critics_and_judge: bool = False,
+    parallel_critics_and_judge: bool | None = None,
     decomposer_provider_factory: ProviderFactory | None = None,
     judge_provider_factory: ProviderFactory | None = None,
     weekly_provider_factory: ProviderFactory | None = None,
@@ -1219,6 +1299,14 @@ async def run_planning_eval_suite(
     decomposer_thinking_tokens_total = sum(
         item.decomposer_thinking_tokens for item in scenario_results
     )
+    schema_check_calls = sum(item.schema_check_calls for item in scenario_results)
+    critic_schema_mismatch_count = sum(
+        item.critic_schema_mismatch_count for item in scenario_results
+    )
+    post_repair_schema_mismatch_count = (
+        total_errors["SCHEMA_MISMATCH"] + critic_schema_mismatch_count
+    )
+    schema_repair_attempts_total = sum(item.schema_repair_attempts for item in scenario_results)
 
     sorted_latencies = sorted(latencies_ms)
     report: dict[str, Any] = {
@@ -1233,6 +1321,12 @@ async def run_planning_eval_suite(
         "pass_at_1": round(pass_at_1_count / max(1, total_runs), 4),
         "post_retry_recovery_rate": round(passed_runs / max(1, total_runs), 4),
         "avg_retries": round(total_retries / max(1, total_runs), 4),
+        "schema_check_calls": schema_check_calls,
+        "schema_repair_attempts_total": schema_repair_attempts_total,
+        "post_repair_schema_mismatch_count": post_repair_schema_mismatch_count,
+        "post_repair_schema_mismatch_rate": round(
+            post_repair_schema_mismatch_count / max(1, schema_check_calls), 4
+        ),
         "prompt_tokens_total": prompt_tokens_total,
         "output_tokens_total": output_tokens_total,
         "thinking_tokens_total": thinking_tokens_total,
@@ -1357,8 +1451,9 @@ def parse_cli_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--parallel-critics-judge",
-        action="store_true",
-        help="Run Dual Critics and Tier 3 Judge in parallel inside orchestrator.",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Run Dual Critics and Tier 3 Judge in parallel inside orchestrator (default: enabled in live mode).",
     )
     mode_group = parser.add_mutually_exclusive_group()
     mode_group.add_argument(

@@ -487,6 +487,9 @@ async def test_4_4_error_breakdown_taxonomy_and_self_check_totals() -> None:
         "QUOTA": 1,
         "OTHER": 1,
     }
+    assert report["schema_check_calls"] == 48
+    assert report["post_repair_schema_mismatch_count"] == 3
+    assert report["post_repair_schema_mismatch_rate"] == round(3 / 48, 4)
     validate_eval_report_totals(report)
 
     # Verify self-check fails if any summary total disagrees with details
@@ -558,4 +561,26 @@ async def test_include_weekly_false_skips_weekly_review_cleanly() -> None:
     assert report["weekly_llm_success_count"] == 0
     assert report["weekly_fallbacks"] == 0
     assert all(o["weekly_source"] == "skipped" for o in report["per_case_outcomes"])
+    validate_eval_report_totals(report)
+
+
+@pytest.mark.asyncio
+async def test_live_mode_defaults_to_parallel_critics_and_judge() -> None:
+    cli_args = parse_cli_args(["--live", "--trials-per-goal", "1"])
+    assert cli_args.live is True
+    assert cli_args.parallel_critics_judge is None
+
+    report = await run_planning_eval_suite(
+        trials_per_goal=1,
+        live=True,
+        include_weekly=False,
+        decomposer_provider_factory=lambda _i, _s: StubLLMAdapter(),
+    )
+    assert report["mode"] == "live"
+    assert report["passed_runs"] == 18
+    assert report["judge_passed_count"] == 18
+    # 18 * (1 decomposer + 2 parallel critics + 1 parallel judge) = 72 calls
+    assert report["schema_check_calls"] == 72
+    assert report["post_repair_schema_mismatch_count"] == 0
+    assert report["post_repair_schema_mismatch_rate"] == 0.0
     validate_eval_report_totals(report)
