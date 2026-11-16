@@ -76,7 +76,7 @@ class Settings(BaseSettings):
     embedding_provider: str = "google_ai_studio"
     embedding_api_key: str = Field(
         default="",
-        validation_alias=AliasChoices("embedding_api_key", "gemini_api_key"),
+        validation_alias=AliasChoices("embedding_api_key"),
     )
     embedding_model: str = "gemini/gemini-embedding-2"
     embedding_base_url: str = ""

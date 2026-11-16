@@ -1294,3 +1294,242 @@ def test_untrusted_context_generic_section_regex_and_unicode_normalization() -> 
     block = format_untrusted_block(UntrustedBlockKind.USER_INPUT, attack_payload)
     assert block.count("<user_input>") == 1
     assert block.count("</user_input>") == 1
+
+
+@pytest.mark.asyncio
+async def test_litellm_adapter_extracts_and_logs_actual_model_id_on_all_branches(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify actual_model_id from resp.model_version / response.model is returned and logged."""
+    import sys
+    import types as py_types
+
+    import structlog.testing
+    from google import genai
+
+    class FakeModels:
+        async def generate_content(self, *, model: str, contents: Any, config: Any) -> Any:
+            del model, contents, config
+            return SimpleNamespace(
+                model_version="gemini-3.8-flash-low-resolved-002",
+                usage_metadata=SimpleNamespace(
+                    prompt_token_count=12,
+                    candidates_token_count=20,
+                    thoughts_token_count=5,
+                ),
+                text='{"status": "ok", "summary": "done", "milestones": [{"sequence_order": 1, "title": "M1", "description": "D1"}]}',
+            )
+
+    monkeypatch.setattr(
+        genai,
+        "Client",
+        lambda **kwargs: SimpleNamespace(aio=SimpleNamespace(models=FakeModels())),
+    )
+
+    gemini_adapter = LiteLLMAdapter()
+    gemini_adapter._settings = SimpleNamespace(  # type: ignore[assignment]
+        llm_provider="gemini",
+        llm_thinking_control="model_suffix",
+        llm_model="gemini-3.8-flash-medium",
+        llm_model_low="gemini-3.8-flash-low",
+        llm_model_medium="gemini-3.8-flash-medium",
+        llm_model_high="gemini-3.8-flash-high",
+        llm_api_key="real-test-key",
+        llm_base_url="http://127.0.0.1:8045",
+        llm_thinking_level="LOW",
+        llm_schema_enforced_by_gateway=False,
+        ai_hard_timeout_seconds=55.0,
+    )
+
+    with structlog.testing.capture_logs() as cap_logs:
+        res = await gemini_adapter.generate_structured(
+            system_prompt="Sys",
+            user_prompt="Plan",
+            response_schema=SampleRoadmapOutput,
+            thinking_level="LOW",
+        )
+
+    assert res.model_id == "gemini-3.8-flash-low-resolved-002"
+    assert gemini_adapter.last_model_used == "gemini-3.8-flash-low-resolved-002"
+    completed = [e for e in cap_logs if e.get("event") == "llm_generation_completed"]
+    assert len(completed) == 1
+    assert completed[0]["requested_model"] == "gemini-3.8-flash-low"
+    assert completed[0]["actual_model_id"] == "gemini-3.8-flash-low-resolved-002"
+    assert completed[0]["thinking_tokens"] == 5
+    assert completed[0]["output_tokens"] == 25
+
+    # Non-gemini litellm branch extracts response.model and logs actual_model_id
+    async def fake_acompletion(**kwargs: Any) -> Any:
+        del kwargs
+        return SimpleNamespace(
+            model="openai/gpt-4o-mini-2026-01",
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        content='{"status": "ok", "summary": "litellm", "milestones": [{"sequence_order": 1, "title": "M1", "description": "D1"}]}'
+                    )
+                )
+            ],
+            usage=SimpleNamespace(prompt_tokens=10, completion_tokens=15),
+        )
+
+    monkeypatch.setitem(
+        sys.modules, "litellm", py_types.SimpleNamespace(acompletion=fake_acompletion)
+    )
+    openai_adapter = LiteLLMAdapter()
+    openai_adapter._settings = SimpleNamespace(  # type: ignore[assignment]
+        llm_provider="openai",
+        llm_model="gpt-4o-mini",
+        llm_api_key="sk-test",
+        llm_base_url="",
+        llm_schema_enforced_by_gateway=False,
+        ai_hard_timeout_seconds=55.0,
+    )
+    with structlog.testing.capture_logs() as cap_logs_litellm:
+        res_oai = await openai_adapter.generate_structured(
+            system_prompt="Sys",
+            user_prompt="Plan",
+            response_schema=SampleRoadmapOutput,
+        )
+
+    assert res_oai.model_id == "gpt-4o-mini-2026-01"
+    completed_oai = [e for e in cap_logs_litellm if e.get("event") == "llm_generation_completed"]
+    assert len(completed_oai) == 1
+    assert completed_oai[0]["actual_model_id"] == "gpt-4o-mini-2026-01"
+
+
+@pytest.mark.asyncio
+async def test_probe_cobhub_capabilities_detects_mismatch_caches_and_fails_safe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify probe_cobhub_capabilities detects schema/thinking mismatches, caches by (base_url, low_model), and never crashes health/startup."""
+    import structlog.testing
+    from fastapi.testclient import TestClient
+    from google import genai
+
+    from src.main import app, run_startup_ai_probe
+    from src.shared_kernel.infrastructure.external_ai.litellm_adapter import (
+        clear_cobhub_capability_probe_cache,
+        probe_cobhub_capabilities,
+    )
+
+    clear_cobhub_capability_probe_cache()
+    probe_calls: list[tuple[str, Any]] = []
+
+    class FakeModels:
+        async def generate_content(self, *, model: str, contents: Any, config: Any) -> Any:
+            del contents
+            probe_calls.append((model, config))
+            if getattr(config, "response_json_schema", None) is not None:
+                # Probe 1: gateway does NOT enforce schema (wrong field names returned)
+                return SimpleNamespace(
+                    model_version="gemini-3.8-flash-low",
+                    usage_metadata=SimpleNamespace(
+                        prompt_token_count=10, candidates_token_count=5, thoughts_token_count=0
+                    ),
+                    text='{"wrong_field": true}',
+                )
+            # Probe 2: gateway silently routed low model to high-thinking behavior (950 > 300)
+            return SimpleNamespace(
+                model_version="gemini-3.8-flash",
+                usage_metadata=SimpleNamespace(
+                    prompt_token_count=10, candidates_token_count=5, thoughts_token_count=950
+                ),
+                text='{"ok": true}',
+            )
+
+    monkeypatch.setattr(
+        genai,
+        "Client",
+        lambda **kwargs: SimpleNamespace(aio=SimpleNamespace(models=FakeModels())),
+    )
+
+    mismatch_settings = SimpleNamespace(
+        llm_provider="gemini",
+        llm_thinking_control="model_suffix",
+        llm_model="gemini-3.8-flash-medium",
+        llm_model_low="gemini-3.8-flash-low",
+        llm_api_key="real-test-key",
+        llm_base_url="http://127.0.0.1:8045",
+        llm_schema_enforced_by_gateway=True,
+    )
+
+    with structlog.testing.capture_logs() as cap_logs:
+        res1 = await probe_cobhub_capabilities(mismatch_settings)
+        res2 = await probe_cobhub_capabilities(mismatch_settings)
+
+    assert res1.probe_succeeded is True
+    assert res1.cached is False
+    assert res1.schema_enforced_detected is False
+    assert res1.low_model_thinking_tokens == 950
+    assert res1.low_thinking_is_low is False
+    assert res1.actual_model_id == "gemini-3.8-flash"
+    assert set(res1.mismatches) == {
+        "schema_enforced_mismatch",
+        "low_thinking_tokens_exceeded",
+        "low_model_id_mismatch",
+    }
+
+    # Cached second call did not hit FakeModels again
+    assert len(probe_calls) == 2
+    assert res2.cached is True
+    assert res2.mismatches == res1.mismatches
+
+    warnings = [e for e in cap_logs if e.get("event") == "cobhub_capability_mismatch"]
+    assert len(warnings) == 1
+    assert warnings[0]["schema_enforced_detected"] is False
+    assert warnings[0]["low_thinking_is_low"] is False
+
+    # Fail-safe when gateway errors: does not crash startup or /api/health?probe_ai=true
+    clear_cobhub_capability_probe_cache()
+
+    class FailingModels:
+        async def generate_content(self, *, model: str, contents: Any, config: Any) -> Any:
+            del model, contents, config
+            raise ConnectionError("Gateway unreachable")
+
+    monkeypatch.setattr(
+        genai,
+        "Client",
+        lambda **kwargs: SimpleNamespace(aio=SimpleNamespace(models=FailingModels())),
+    )
+
+    failed_probe = await probe_cobhub_capabilities(mismatch_settings)
+    assert failed_probe.probe_succeeded is False
+    assert "ConnectionError" in (failed_probe.error or "")
+
+    # Startup helper skips cleanly in test environment and never crashes outside test env
+    assert await run_startup_ai_probe(app) is None
+
+    import src.main as main_mod
+
+    monkeypatch.setattr(
+        main_mod,
+        "get_settings",
+        lambda: SimpleNamespace(
+            environment="development",
+            llm_provider="gemini",
+            llm_thinking_control="model_suffix",
+            llm_model="gemini-3.8-flash-medium",
+            llm_model_low="gemini-3.8-flash-low",
+            llm_api_key="real-test-key",
+            llm_base_url="http://127.0.0.1:8045",
+            llm_schema_enforced_by_gateway=False,
+        ),
+    )
+    startup_res = await run_startup_ai_probe(app)
+    assert startup_res is not None
+    assert startup_res.probe_succeeded is False
+
+    client = TestClient(app)
+    health_fast = client.get("/api/health")
+    assert health_fast.status_code == 200
+    assert health_fast.json()["status"] == "healthy"
+
+    health_probed = client.get("/api/health?probe_ai=true")
+    assert health_probed.status_code == 200
+    body = health_probed.json()
+    assert body["status"] == "healthy"
+    assert body["ai_gateway"]["probe_succeeded"] is False
+    assert "ConnectionError" in body["ai_gateway"]["error"]
+    clear_cobhub_capability_probe_cache()

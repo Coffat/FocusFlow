@@ -3,8 +3,10 @@ import json
 import os
 import re
 from collections.abc import AsyncIterator, Sequence
-from typing import Any
+from dataclasses import dataclass, replace
+from typing import Any, Literal
 
+import structlog
 from pydantic import BaseModel, ValidationError
 
 from src.shared_kernel.application.llm_port import (
@@ -17,6 +19,89 @@ from src.shared_kernel.application.llm_port import (
     format_concise_schema_errors,
 )
 from src.shared_kernel.config import get_settings
+
+logger = structlog.get_logger(__name__)
+
+_DEFAULT_PROBE_TIMEOUT_SECONDS = 8.0
+_LOW_THINKING_MAX_TOKENS = 300
+
+
+class _GatewaySchemaProbeModel(BaseModel):
+    probe_status: Literal["OK"]
+    probe_code: int
+
+
+@dataclass(frozen=True, slots=True)
+class CobhubCapabilityProbeResult:
+    """Result of probing cobhub gateway schema enforcement & low-thinking behavior."""
+
+    base_url: str
+    requested_low_model: str
+    actual_model_id: str
+    schema_enforced_detected: bool
+    low_model_thinking_tokens: int
+    low_thinking_is_low: bool
+    configured_schema_enforced: bool = False
+    mismatches: tuple[str, ...] = ()
+    probe_succeeded: bool = True
+    error: str | None = None
+    cached: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "status": "degraded" if (not self.probe_succeeded or self.mismatches) else "ok",
+            "probe_succeeded": self.probe_succeeded,
+            "base_url": self.base_url,
+            "requested_low_model": self.requested_low_model,
+            "actual_model_id": self.actual_model_id,
+            "schema_enforced_detected": self.schema_enforced_detected,
+            "configured_schema_enforced": self.configured_schema_enforced,
+            "low_model_thinking_tokens": self.low_model_thinking_tokens,
+            "low_thinking_is_low": self.low_thinking_is_low,
+            "mismatches": list(self.mismatches),
+            "error": self.error,
+            "cached": self.cached,
+        }
+
+
+_COBHUB_PROBE_CACHE: dict[tuple[str, str], CobhubCapabilityProbeResult] = {}
+
+
+def clear_cobhub_capability_probe_cache() -> None:
+    """Clear cached cobhub capability probe results."""
+    _COBHUB_PROBE_CACHE.clear()
+
+
+def _rewrite_docker_localhost(base_url: str | None) -> str | None:
+    cleaned = (base_url or "").strip() or None
+    if cleaned and (os.path.exists("/.dockerenv") or os.environ.get("RUNNING_IN_DOCKER")):
+        cleaned = re.sub(
+            r"^http://(127\.0\.0\.1|localhost)(:\d+)",
+            r"http://host.docker.internal\2",
+            cleaned,
+        )
+    return cleaned
+
+
+def _parse_json_text(raw: str) -> Any:
+    clean = raw.strip()
+    if clean.startswith("```json"):
+        clean = clean[7:]
+    elif clean.startswith("```"):
+        clean = clean[3:]
+    if clean.endswith("```"):
+        clean = clean[:-3]
+    clean = clean.strip()
+    try:
+        return json.loads(clean)
+    except Exception:
+        json_match = re.search(r"(\{.*\})", clean, re.DOTALL)
+        if json_match:
+            return json.loads(json_match.group(1))
+        json_list_match = re.search(r"(\[.*\])", clean, re.DOTALL)
+        if json_list_match:
+            return json.loads(json_list_match.group(1))
+        raise
 
 
 def _normalize_schema_and_validate(
@@ -289,14 +374,7 @@ class LiteLLMAdapter(LLMProviderPort):
         return self._settings.llm_provider.strip().lower() == "gemini"
 
     def _resolve_base_url(self) -> str | None:
-        base_url = (getattr(self._settings, "llm_base_url", "") or "").strip() or None
-        if base_url and (os.path.exists("/.dockerenv") or os.environ.get("RUNNING_IN_DOCKER")):
-            base_url = re.sub(
-                r"^http://(127\.0\.0\.1|localhost)(:\d+)",
-                r"http://host.docker.internal\2",
-                base_url,
-            )
-        return base_url
+        return _rewrite_docker_localhost(getattr(self._settings, "llm_base_url", ""))
 
     def _resolve_thinking_control(self) -> str:
         raw = str(getattr(self._settings, "llm_thinking_control", "model_suffix") or "model_suffix")
@@ -415,6 +493,7 @@ class LiteLLMAdapter(LLMProviderPort):
         thinking_control = self._resolve_thinking_control()
         candidate_models, degraded_set = self._resolve_candidate_models(effective_level)
         preferred_model: str | None = None
+        last_requested_model: str = candidate_models[0]
 
         total_budget = (
             float(timeout_seconds)
@@ -431,7 +510,7 @@ class LiteLLMAdapter(LLMProviderPort):
             is_tool_turn: bool = False,
             parse_json_fn: Any | None = None,
         ) -> Any:
-            nonlocal preferred_model
+            nonlocal preferred_model, last_requested_model
             ordered_candidates = list(candidate_models)
             if preferred_model and preferred_model in ordered_candidates:
                 ordered_candidates.remove(preferred_model)
@@ -469,18 +548,23 @@ class LiteLLMAdapter(LLMProviderPort):
                             ),
                             timeout=call_timeout,
                         )
+                        actual_model_id = (
+                            str(getattr(resp, "model_version", None) or cand).strip() or cand
+                        )
                         if parse_json_fn is not None:
                             parsed = parse_json_fn(resp)
                             preferred_model = cand
-                            self.model_used = cand
-                            self.last_model_used = cand
+                            last_requested_model = cand
+                            self.model_used = actual_model_id
+                            self.last_model_used = actual_model_id
                             is_degraded = cand in degraded_set
                             self.degraded_model_used = is_degraded
                             self.last_degraded_model_used = is_degraded
                             return resp, parsed
                         preferred_model = cand
-                        self.model_used = cand
-                        self.last_model_used = cand
+                        last_requested_model = cand
+                        self.model_used = actual_model_id
+                        self.last_model_used = actual_model_id
                         is_degraded = cand in degraded_set
                         self.degraded_model_used = is_degraded
                         self.last_degraded_model_used = is_degraded
@@ -698,24 +782,7 @@ class LiteLLMAdapter(LLMProviderPort):
                     getattr(candidates_list[0], "finish_reason", None) if candidates_list else None
                 )
                 raise ValueError(f"Empty JSON response from model (finish_reason={finish_reason})")
-            clean = raw
-            if clean.startswith("```json"):
-                clean = clean[7:]
-            elif clean.startswith("```"):
-                clean = clean[3:]
-            if clean.endswith("```"):
-                clean = clean[:-3]
-            clean = clean.strip()
-            try:
-                return json.loads(clean)
-            except Exception:
-                json_match = re.search(r"(\{.*\})", clean, re.DOTALL)
-                if json_match:
-                    return json.loads(json_match.group(1))
-                json_list_match = re.search(r"(\[.*\])", clean, re.DOTALL)
-                if json_list_match:
-                    return json.loads(json_list_match.group(1))
-                raise
+            return _parse_json_text(raw)
 
         final_resp, parsed = await _call_model(
             contents=final_user_prompt,
@@ -801,6 +868,15 @@ class LiteLLMAdapter(LLMProviderPort):
                     model_id=self.last_model_used,
                 ) from repair_val_err
 
+        logger.info(
+            "llm_generation_completed",
+            requested_model=last_requested_model,
+            actual_model_id=self.last_model_used,
+            prompt_tokens=total_prompt_tokens,
+            output_tokens=total_completion_tokens,
+            thinking_tokens=total_thinking_tokens,
+            repair_attempts=repair_attempts,
+        )
         return LLMGenerationResult(
             payload=validated,
             prompt_tokens=total_prompt_tokens,
@@ -886,8 +962,12 @@ class LiteLLMAdapter(LLMProviderPort):
         thinking_tokens = int(getattr(details, "reasoning_tokens", 0) or 0)
         completion_tokens = max(completion_tokens, thinking_tokens)
         parsed = json.loads(content)
-        self.model_used = self.model_identifier.split("/")[-1]
-        self.last_model_used = self.model_used
+        actual_model_id = (
+            str(getattr(response, "model", None) or self.model_identifier).split("/")[-1].strip()
+            or self.model_identifier.split("/")[-1]
+        )
+        self.model_used = actual_model_id
+        self.last_model_used = actual_model_id
         try:
             validated_dict = _normalize_schema_and_validate(parsed, response_schema)
         except (ValidationError, ValueError) as val_err:
@@ -901,12 +981,35 @@ class LiteLLMAdapter(LLMProviderPort):
                 thinking_tokens=thinking_tokens,
                 model_id=self.last_model_used,
             ) from val_err
+        logger.info(
+            "llm_generation_completed",
+            requested_model=self.model_identifier,
+            actual_model_id=actual_model_id,
+            prompt_tokens=prompt_tokens,
+            output_tokens=completion_tokens,
+            thinking_tokens=thinking_tokens,
+            repair_attempts=0,
+        )
         return LLMGenerationResult(
             payload=validated_dict,
             prompt_tokens=prompt_tokens,
             output_tokens=completion_tokens,
             thinking_tokens=thinking_tokens,
             model_id=self.last_model_used,
+        )
+
+    @staticmethod
+    async def probe_cobhub_capabilities(
+        settings: Any | None = None,
+        *,
+        force: bool = False,
+        timeout_seconds: float = _DEFAULT_PROBE_TIMEOUT_SECONDS,
+    ) -> CobhubCapabilityProbeResult:
+        """Probe cobhub gateway schema enforcement & low-thinking behavior (cached)."""
+        return await probe_cobhub_capabilities(
+            settings,
+            force=force,
+            timeout_seconds=timeout_seconds,
         )
 
     async def stream_structured(
@@ -933,3 +1036,184 @@ class LiteLLMAdapter(LLMProviderPort):
             delta = part.choices[0].delta.content
             if delta:
                 yield delta
+
+
+async def probe_cobhub_capabilities(
+    settings: Any | None = None,
+    *,
+    force: bool = False,
+    timeout_seconds: float = _DEFAULT_PROBE_TIMEOUT_SECONDS,
+) -> CobhubCapabilityProbeResult:
+    """Probe cobhub gateway schema enforcement & low-thinking model behavior with caching."""
+    effective_settings = settings if settings is not None else get_settings()
+    provider = str(getattr(effective_settings, "llm_provider", "") or "").strip().lower()
+    resolved_base_url = _rewrite_docker_localhost(getattr(effective_settings, "llm_base_url", ""))
+    default_model = (
+        str(getattr(effective_settings, "llm_model", "") or "gemini-3.8-flash-medium")
+        .split("/")[-1]
+        .strip()
+        or "gemini-3.8-flash-medium"
+    )
+    low_model = (
+        str(getattr(effective_settings, "llm_model_low", "") or default_model)
+        .split("/")[-1]
+        .strip()
+        or default_model
+    )
+    configured_schema_enforced = bool(
+        getattr(effective_settings, "llm_schema_enforced_by_gateway", False)
+    )
+
+    if provider != "gemini" or not resolved_base_url:
+        return CobhubCapabilityProbeResult(
+            base_url=resolved_base_url or "",
+            requested_low_model=low_model,
+            actual_model_id="",
+            schema_enforced_detected=configured_schema_enforced,
+            low_model_thinking_tokens=0,
+            low_thinking_is_low=True,
+            configured_schema_enforced=configured_schema_enforced,
+            probe_succeeded=False,
+            error="AI_PROVIDER_NOT_CONFIGURED",
+            cached=False,
+        )
+
+    cache_key = (resolved_base_url, low_model)
+    if not force and cache_key in _COBHUB_PROBE_CACHE:
+        return replace(_COBHUB_PROBE_CACHE[cache_key], cached=True)
+
+    try:
+        client = LiteLLMAdapter.build_google_genai_client(
+            str(getattr(effective_settings, "llm_api_key", "") or ""),
+            resolved_base_url,
+        )
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + max(0.5, float(timeout_seconds))
+
+        # Probe 1: send minimal JSON request with response_json_schema only (no system schema injection).
+        probe1_cfg = LiteLLMAdapter.build_generate_content_config(
+            system_instruction="You are a minimal JSON health probe.",
+            response_mime_type="application/json",
+            response_json_schema=_GatewaySchemaProbeModel.model_json_schema(),
+            max_output_tokens=128,
+            thinking_level=None,
+        )
+        rem1 = max(0.1, deadline - loop.time())
+        resp1 = await asyncio.wait_for(
+            client.aio.models.generate_content(
+                model=low_model,
+                contents="Return a valid JSON object.",
+                config=probe1_cfg,
+            ),
+            timeout=rem1,
+        )
+        schema_enforced_detected = False
+        raw_text1 = (getattr(resp1, "text", None) or "").strip()
+        if raw_text1:
+            try:
+                parsed1 = _parse_json_text(raw_text1)
+                _GatewaySchemaProbeModel.model_validate(parsed1)
+                schema_enforced_detected = True
+            except (json.JSONDecodeError, ValidationError, ValueError):
+                schema_enforced_detected = False
+
+        # Probe 2: call configured llm_model_low and inspect actual_model_id + thoughts_token_count.
+        thinking_control = (
+            str(
+                getattr(effective_settings, "llm_thinking_control", "model_suffix")
+                or "model_suffix"
+            )
+            .strip()
+            .lower()
+        )
+        probe2_thinking_level = "LOW" if thinking_control == "param" else None
+        probe2_cfg = LiteLLMAdapter.build_generate_content_config(
+            system_instruction="Return minimal JSON.",
+            response_mime_type="application/json",
+            max_output_tokens=128,
+            thinking_level=probe2_thinking_level,
+        )
+        rem2 = deadline - loop.time()
+        if rem2 <= 0:
+            raise TimeoutError(f"Cobhub capability probe exceeded timeout ({timeout_seconds:.1f}s)")
+        resp2 = await asyncio.wait_for(
+            client.aio.models.generate_content(
+                model=low_model,
+                contents='Trả về JSON {"ok": true}.',
+                config=probe2_cfg,
+            ),
+            timeout=rem2,
+        )
+        actual_model_id = (
+            str(getattr(resp2, "model_version", None) or low_model).strip() or low_model
+        )
+        usage2 = getattr(resp2, "usage_metadata", None)
+        low_thinking_tokens = int(getattr(usage2, "thoughts_token_count", 0) or 0)
+        low_thinking_is_low = low_thinking_tokens <= _LOW_THINKING_MAX_TOKENS
+
+        mismatches: list[str] = []
+        if schema_enforced_detected != configured_schema_enforced:
+            mismatches.append("schema_enforced_mismatch")
+        if not low_thinking_is_low:
+            mismatches.append("low_thinking_tokens_exceeded")
+        if low_model not in actual_model_id and actual_model_id != low_model:
+            mismatches.append("low_model_id_mismatch")
+
+        result = CobhubCapabilityProbeResult(
+            base_url=resolved_base_url,
+            requested_low_model=low_model,
+            actual_model_id=actual_model_id,
+            schema_enforced_detected=schema_enforced_detected,
+            low_model_thinking_tokens=low_thinking_tokens,
+            low_thinking_is_low=low_thinking_is_low,
+            configured_schema_enforced=configured_schema_enforced,
+            mismatches=tuple(mismatches),
+            probe_succeeded=True,
+            error=None,
+            cached=False,
+        )
+        _COBHUB_PROBE_CACHE[cache_key] = result
+        if mismatches:
+            logger.warning(
+                "cobhub_capability_mismatch",
+                base_url=resolved_base_url,
+                requested_low_model=low_model,
+                actual_model_id=actual_model_id,
+                schema_enforced_detected=schema_enforced_detected,
+                configured_schema_enforced=configured_schema_enforced,
+                low_model_thinking_tokens=low_thinking_tokens,
+                low_thinking_is_low=low_thinking_is_low,
+                mismatches=mismatches,
+            )
+        else:
+            logger.info(
+                "cobhub_capability_probe_completed",
+                base_url=resolved_base_url,
+                requested_low_model=low_model,
+                actual_model_id=actual_model_id,
+                schema_enforced_detected=schema_enforced_detected,
+                low_model_thinking_tokens=low_thinking_tokens,
+                low_thinking_is_low=low_thinking_is_low,
+            )
+        return result
+    except Exception as exc:
+        safe_err = f"{type(exc).__name__}: {str(exc)[:200]}"
+        logger.warning(
+            "cobhub_capability_probe_failed",
+            base_url=resolved_base_url,
+            requested_low_model=low_model,
+            error=safe_err,
+        )
+        return CobhubCapabilityProbeResult(
+            base_url=resolved_base_url,
+            requested_low_model=low_model,
+            actual_model_id="",
+            schema_enforced_detected=configured_schema_enforced,
+            low_model_thinking_tokens=0,
+            low_thinking_is_low=True,
+            configured_schema_enforced=configured_schema_enforced,
+            mismatches=(),
+            probe_succeeded=False,
+            error=safe_err,
+            cached=False,
+        )

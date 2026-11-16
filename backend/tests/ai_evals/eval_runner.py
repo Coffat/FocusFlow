@@ -233,6 +233,19 @@ def _percentile(sorted_values: list[float], pct: float) -> float:
     return round(interpolated, 3)
 
 
+def _summarize_latency_stats(values: Sequence[float]) -> dict[str, float | int]:
+    if not values:
+        return {"count": 0, "min_ms": 0.0, "p50_ms": 0.0, "p95_ms": 0.0, "max_ms": 0.0}
+    ordered = sorted(float(v) for v in values)
+    return {
+        "count": len(ordered),
+        "min_ms": round(ordered[0], 3),
+        "p50_ms": _percentile(ordered, 50.0),
+        "p95_ms": _percentile(ordered, 95.0),
+        "max_ms": round(ordered[-1], 3),
+    }
+
+
 def _build_availability(raw: dict[str, Any]) -> AvailabilityConfigurationDTO:
     mode_str = str(raw.get("mode", "MODE_A")).upper()
     slots = tuple(
@@ -454,6 +467,9 @@ class _FailingWeeklyLLM(LLMProviderPort):
 class _ScenarioEvalResult:
     outcome: dict[str, Any]
     latencies_ms: list[float] = field(default_factory=list)
+    decomposer_latencies_ms: list[float] = field(default_factory=list)
+    critics_judge_latencies_ms: list[float] = field(default_factory=list)
+    weekly_latencies_ms: list[float] = field(default_factory=list)
     total_runs: int = 0
     pass_at_1_count: int = 0
     passed_runs: int = 0
@@ -741,6 +757,24 @@ async def _evaluate_scenario(
         elapsed_ms = round((time.perf_counter() - t0) * 1000.0, 3)
         result.latencies_ms.append(elapsed_ms)
 
+        if effective_parallel:
+            decomposer_step_ms = [
+                max(0.0, (s.completed_at - s.started_at).total_seconds() * 1000.0)
+                for s in decomposer_steps
+                if s.started_at is not None and s.completed_at is not None
+            ]
+            result.decomposer_latencies_ms.append(
+                round(sum(decomposer_step_ms), 3) if decomposer_step_ms else elapsed_ms
+            )
+            cj_steps = [*critic_steps, *judge_steps]
+            cj_starts = [s.started_at for s in cj_steps if s.started_at is not None]
+            cj_ends = [s.completed_at for s in cj_steps if s.completed_at is not None]
+            if cj_starts and cj_ends:
+                cj_wall_ms = max(0.0, (max(cj_ends) - min(cj_starts)).total_seconds() * 1000.0)
+                result.critics_judge_latencies_ms.append(round(cj_wall_ms, 3))
+        else:
+            result.decomposer_latencies_ms.append(elapsed_ms)
+
         result.total_retries += retries_used
         result.prompt_tokens_total += p_tok
         result.output_tokens_total += o_tok
@@ -816,6 +850,7 @@ async def _evaluate_scenario(
             tier3_timeout_seconds=judge_timeout,
             workflow_repo=judge_workflow_repo,
         )
+        j_t0 = time.perf_counter()
         try:
             (
                 _skipped,
@@ -867,6 +902,10 @@ async def _evaluate_scenario(
         except Exception as exc:
             case_judge_status = "REVIEW_PENDING"
             judge_error_category = classify_eval_error(exc)
+        finally:
+            result.critics_judge_latencies_ms.append(
+                round((time.perf_counter() - j_t0) * 1000.0, 3)
+            )
 
     result.judge_status = case_judge_status
     result.judge_error_category = judge_error_category
@@ -875,6 +914,9 @@ async def _evaluate_scenario(
     case_weekly_fallback = False
     case_weekly_faithfulness = 0.0
     weekly_error_category: str | None = None
+    weekly_p_tok = 0
+    weekly_o_tok = 0
+    weekly_t_tok = 0
     if not include_weekly:
         result.weekly_skipped = True
     else:
@@ -897,6 +939,7 @@ async def _evaluate_scenario(
             workflow_repo=weekly_workflow_repo,  # type: ignore[arg-type]
             llm_provider=weekly_llm,
         )
+        w_t0 = time.perf_counter()
         try:
             weekly_res = await weekly_uc.execute(
                 user_id=uuid4(),
@@ -911,6 +954,14 @@ async def _evaluate_scenario(
                 "deterministic-fallback",
                 "deterministic-insufficient-data",
             )
+            if weekly_workflow_repo.steps:
+                w_out = weekly_workflow_repo.steps[-1].output_payload
+                weekly_p_tok = int(w_out.get("prompt_tokens", 0) or 0)
+                weekly_t_tok = int(w_out.get("thinking_tokens", 0) or 0)
+                weekly_o_tok = max(
+                    int(w_out.get("output_tokens", w_out.get("completion_tokens", 0)) or 0),
+                    weekly_t_tok,
+                )
             raw_logged_faithfulness = (
                 weekly_workflow_repo.steps[-1].output_payload.get("quantitative_faithfulness")
                 if weekly_workflow_repo.steps
@@ -951,6 +1002,14 @@ async def _evaluate_scenario(
             case_weekly_fallback = True
             case_weekly_faithfulness = 0.0
             weekly_error_category = classify_eval_error(exc)
+        finally:
+            result.weekly_latencies_ms.append(round((time.perf_counter() - w_t0) * 1000.0, 3))
+            result.prompt_tokens_total += weekly_p_tok
+            result.output_tokens_total += weekly_o_tok
+            result.thinking_tokens_total += weekly_t_tok
+            case_p_tok += weekly_p_tok
+            case_o_tok += weekly_o_tok
+            case_t_tok += weekly_t_tok
 
     result.weekly_fallback = case_weekly_fallback
     result.weekly_faithfulness = case_weekly_faithfulness
@@ -992,6 +1051,14 @@ async def _evaluate_scenario(
         "min_tasks_met": last_tasks_count >= min_tasks_required,
         "pedagogical_score": case_pedagogical_score,
         "median_latency_ms": _percentile(sorted(result.latencies_ms), 50.0),
+        "decomposer_latency_ms": _percentile(sorted(result.decomposer_latencies_ms), 50.0),
+        "critics_judge_parallel_latency_ms": _percentile(
+            sorted(result.critics_judge_latencies_ms), 50.0
+        ),
+        "weekly_latency_ms": _percentile(sorted(result.weekly_latencies_ms), 50.0),
+        "weekly_prompt_tokens": weekly_p_tok,
+        "weekly_output_tokens": weekly_o_tok,
+        "weekly_thinking_tokens": weekly_t_tok,
         "judge_status": case_judge_status,
         "judge_error_category": judge_error_category,
         "weekly_fallback": case_weekly_fallback,
@@ -1133,6 +1200,24 @@ def validate_eval_report_totals(report: dict[str, Any]) -> None:
     )
     assert report["post_repair_schema_mismatch_rate"] == expected_mismatch_rate
 
+    stage_stats = report["stage_latency_stats"]
+    assert set(stage_stats.keys()) == {"decomposer", "critics_judge_parallel", "weekly"}
+    for stage_key, stats in stage_stats.items():
+        assert set(stats.keys()) == {"count", "min_ms", "p50_ms", "p95_ms", "max_ms"}
+        assert isinstance(stats["count"], int) and stats["count"] >= 0
+        if stats["count"] > 0:
+            assert (
+                0.0 <= stats["min_ms"] <= stats["p50_ms"] <= stats["p95_ms"] <= stats["max_ms"]
+            ), f"Invalid latency ordering for {stage_key}: {stats}"
+
+    rates = report["error_category_rates"]
+    assert set(rates.keys()) == {"by_stage_rate", "share_of_total_errors"}
+    assert set(rates["by_stage_rate"].keys()) == {"decomposer", "judge", "weekly", "total"}
+    for step in ("decomposer", "judge", "weekly", "total"):
+        assert set(rates["by_stage_rate"][step].keys()) == set(ERROR_TAXONOMY_CATEGORIES)
+        assert all(0.0 <= v <= 1.0 for v in rates["by_stage_rate"][step].values())
+    assert set(rates["share_of_total_errors"].keys()) == set(ERROR_TAXONOMY_CATEGORIES)
+
 
 async def run_planning_eval_suite(
     dataset_path: Path = DEFAULT_18_GOALS_DATASET_PATH,
@@ -1205,6 +1290,9 @@ async def run_planning_eval_suite(
         )
 
     latencies_ms: list[float] = []
+    decomposer_latencies_ms: list[float] = []
+    critics_judge_latencies_ms: list[float] = []
+    weekly_latencies_ms: list[float] = []
     per_case_outcomes: list[dict[str, Any]] = []
     weekly_llm_faithfulness_scores: list[float] = []
     weekly_fallback_faithfulness_scores: list[float] = []
@@ -1239,6 +1327,9 @@ async def run_planning_eval_suite(
 
     for item in scenario_results:
         latencies_ms.extend(item.latencies_ms)
+        decomposer_latencies_ms.extend(item.decomposer_latencies_ms)
+        critics_judge_latencies_ms.extend(item.critics_judge_latencies_ms)
+        weekly_latencies_ms.extend(item.weekly_latencies_ms)
         per_case_outcomes.append(item.outcome)
         total_runs += item.total_runs
         pass_at_1_count += item.pass_at_1_count
@@ -1309,6 +1400,8 @@ async def run_planning_eval_suite(
     schema_repair_attempts_total = sum(item.schema_repair_attempts for item in scenario_results)
 
     sorted_latencies = sorted(latencies_ms)
+    total_stage_checks = total_runs + judge_attempted_cases + weekly_checks
+    total_error_events = sum(total_errors.values())
     report: dict[str, Any] = {
         "schema_version": "1.0",
         "mode": "live" if use_live else "mock",
@@ -1353,6 +1446,11 @@ async def run_planning_eval_suite(
         ),
         "latency_p50_ms": _percentile(sorted_latencies, 50.0),
         "latency_p95_ms": _percentile(sorted_latencies, 95.0),
+        "stage_latency_stats": {
+            "decomposer": _summarize_latency_stats(decomposer_latencies_ms),
+            "critics_judge_parallel": _summarize_latency_stats(critics_judge_latencies_ms),
+            "weekly": _summarize_latency_stats(weekly_latencies_ms),
+        },
         "judge_checks": judge_checks,
         "judge_attempted_cases": judge_attempted_cases,
         "judge_passed_count": judge_passed_count,
@@ -1407,6 +1505,40 @@ async def run_planning_eval_suite(
             "judge": judge_errors,
             "weekly": weekly_errors,
             "total": total_errors,
+        },
+        "error_category_rates": {
+            "by_stage_rate": {
+                "decomposer": {
+                    cat: round(decomposer_errors[cat] / max(1, total_runs), 4)
+                    for cat in ERROR_TAXONOMY_CATEGORIES
+                },
+                "judge": {
+                    cat: (
+                        round(judge_errors[cat] / judge_attempted_cases, 4)
+                        if judge_attempted_cases > 0
+                        else 0.0
+                    )
+                    for cat in ERROR_TAXONOMY_CATEGORIES
+                },
+                "weekly": {
+                    cat: (
+                        round(weekly_errors[cat] / weekly_checks, 4) if weekly_checks > 0 else 0.0
+                    )
+                    for cat in ERROR_TAXONOMY_CATEGORIES
+                },
+                "total": {
+                    cat: round(total_errors[cat] / max(1, total_stage_checks), 4)
+                    for cat in ERROR_TAXONOMY_CATEGORIES
+                },
+            },
+            "share_of_total_errors": {
+                cat: (
+                    round(total_errors[cat] / total_error_events, 4)
+                    if total_error_events > 0
+                    else 0.0
+                )
+                for cat in ERROR_TAXONOMY_CATEGORIES
+            },
         },
         "per_case_outcomes": per_case_outcomes,
     }

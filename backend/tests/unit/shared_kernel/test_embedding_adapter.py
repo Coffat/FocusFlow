@@ -106,14 +106,26 @@ async def test_embedding_and_llm_configs_are_completely_isolated(
 ) -> None:
     import litellm
 
-    # Env alias check: GEMINI_API_KEY populates embedding_api_key ONLY, never llm_api_key
-    monkeypatch.delenv("LLM_API_KEY", raising=False)
-    monkeypatch.delenv("LLM_KEY", raising=False)
+    # Env alias check: GEMINI_API_KEY and LLM_API_KEY NEVER populate embedding_api_key;
+    # only EMBEDDING_API_KEY populates embedding_api_key.
     monkeypatch.delenv("EMBEDDING_API_KEY", raising=False)
     monkeypatch.setenv("GEMINI_API_KEY", "studio-only-env-key")
+    monkeypatch.setenv("LLM_API_KEY", "cobhub-only-env-key")
+    env_settings_missing = Settings(_env_file=None)
+    assert env_settings_missing.embedding_api_key == ""
+    assert env_settings_missing.llm_api_key == "cobhub-only-env-key"
+
+    # Fail-closed when only GEMINI_API_KEY and LLM_API_KEY exist without EMBEDDING_API_KEY
+    fail_closed_adapter = LiteLLMEmbeddingAdapter()
+    fail_closed_adapter._settings = env_settings_missing
+    with pytest.raises(RuntimeError, match="AI_EMBEDDING_PROVIDER_NOT_CONFIGURED"):
+        await fail_closed_adapter.embed(["hello"])
+
+    # When EMBEDDING_API_KEY is explicitly set, Settings reads only EMBEDDING_API_KEY
+    monkeypatch.setenv("EMBEDDING_API_KEY", "strict-embedding-key-123")
     env_settings = Settings(_env_file=None)
-    assert env_settings.embedding_api_key == "studio-only-env-key"
-    assert env_settings.llm_api_key == ""
+    assert env_settings.embedding_api_key == "strict-embedding-key-123"
+    assert env_settings.llm_api_key == "cobhub-only-env-key"
 
     captured_embed_calls: list[dict[str, Any]] = []
 

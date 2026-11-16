@@ -610,6 +610,7 @@ class AIExecutionManager:
                 "operation_type": operation_type,
                 "step_name": step_name or operation_type,
                 "model_id": resolved_model_id,
+                "actual_model_id": resolved_model_id,
                 "prompt_tokens": prompt_tokens,
                 "output_tokens": billable_completion_tokens,
                 "completion_tokens": billable_completion_tokens,
@@ -636,6 +637,8 @@ class AIExecutionManager:
                         **prompt_audit,
                     },
                     output_payload={
+                        "model_id": resolved_model_id,
+                        "actual_model_id": resolved_model_id,
                         "prompt_tokens": prompt_tokens,
                         "output_tokens": billable_completion_tokens,
                         "completion_tokens": billable_completion_tokens,

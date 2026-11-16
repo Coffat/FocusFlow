@@ -927,6 +927,7 @@ async def test_execution_manager_passes_remaining_timeouts_and_logs_thinking_tok
     completed_logs = [rec for rec in caplog.records if rec.msg == "ai_execution_completed"]
     assert len(completed_logs) == 1
     assert getattr(completed_logs[0], "thinking_tokens", None) == 22
+    assert getattr(completed_logs[0], "actual_model_id", None) == "gemini-3.8-flash-medium"
 
     # Also verify tool_call_timeout_seconds is passed when tools are present
     seen_timeouts.clear()

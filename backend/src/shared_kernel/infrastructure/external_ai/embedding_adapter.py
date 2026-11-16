@@ -143,7 +143,7 @@ class LiteLLMEmbeddingAdapter(EmbeddingProviderPort):
         if lowered_key in _PLACEHOLDER_API_KEYS or lowered_key.startswith("your_"):
             raise RuntimeError(
                 "AI_EMBEDDING_PROVIDER_NOT_CONFIGURED: "
-                "Missing valid EMBEDDING_API_KEY / GEMINI_API_KEY for embeddings."
+                "Missing valid EMBEDDING_API_KEY for embeddings."
             )
 
         import litellm

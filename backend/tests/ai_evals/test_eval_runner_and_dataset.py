@@ -583,4 +583,71 @@ async def test_live_mode_defaults_to_parallel_critics_and_judge() -> None:
     assert report["schema_check_calls"] == 72
     assert report["post_repair_schema_mismatch_count"] == 0
     assert report["post_repair_schema_mismatch_rate"] == 0.0
+    assert set(report["stage_latency_stats"].keys()) == {
+        "decomposer",
+        "critics_judge_parallel",
+        "weekly",
+    }
+    assert report["stage_latency_stats"]["decomposer"]["count"] == 18
+    assert report["stage_latency_stats"]["critics_judge_parallel"]["count"] == 18
+    assert report["stage_latency_stats"]["weekly"]["count"] == 0
+    validate_eval_report_totals(report)
+
+
+@pytest.mark.asyncio
+async def test_eval_runner_accumulates_weekly_thinking_tokens_and_error_rates() -> None:
+    """Verify WeeklyReview thinking_tokens are included in totals and error_category_rates/stage_latency_stats match."""
+
+    class _ThinkingWeeklyLLM(StubLLMAdapter):
+        async def generate_structured(
+            self,
+            *,
+            system_prompt: str = "",
+            user_prompt: str = "",
+            response_schema: Any = None,
+            tools: Any = None,
+            tool_executor: Any = None,
+            max_tool_calls: int = 2,
+            thinking_level: str | None = None,
+            timeout_seconds: float | None = None,
+            tool_call_timeout_seconds: float | None = None,
+        ) -> LLMGenerationResult:
+            res = await super().generate_structured(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                response_schema=response_schema,
+                tools=tools,
+                tool_executor=tool_executor,
+                max_tool_calls=max_tool_calls,
+                thinking_level=thinking_level,
+                timeout_seconds=timeout_seconds,
+                tool_call_timeout_seconds=tool_call_timeout_seconds,
+            )
+            return LLMGenerationResult(
+                payload=res.payload,
+                prompt_tokens=111,
+                output_tokens=77,
+                thinking_tokens=33,
+                model_id="gemini-3.8-flash-low",
+            )
+
+    def weekly_factory(idx: int, _s: dict[str, Any]) -> LLMProviderPort:
+        if idx == 0:
+            return _ScriptedErrorLLM(TimeoutError("Weekly timeout"))
+        return _ThinkingWeeklyLLM()
+
+    report = await run_planning_eval_suite(
+        trials_per_goal=1,
+        live=False,
+        include_weekly=True,
+        weekly_provider_factory=weekly_factory,
+    )
+    # 17 weekly LLM successes * 33 thinking_tokens = 561
+    assert report["thinking_tokens_total"] >= 17 * 33
+    assert report["per_case_outcomes"][0]["weekly_thinking_tokens"] == 0
+    assert report["per_case_outcomes"][1]["weekly_thinking_tokens"] == 33
+    assert report["per_case_outcomes"][1]["weekly_output_tokens"] == 77
+    assert report["per_case_outcomes"][1]["weekly_prompt_tokens"] == 111
+    assert report["stage_latency_stats"]["weekly"]["count"] == 18
+    assert report["error_category_rates"]["by_stage_rate"]["weekly"]["TIMEOUT"] == round(1 / 18, 4)
     validate_eval_report_totals(report)
