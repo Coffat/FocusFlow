@@ -120,7 +120,7 @@ class CalendarSyncEventsResultDTO:
 
 
 class CalendarProviderPort(Protocol):
-    """Driven Port for external calendar integration (Google Calendar v3, Outlook, Mock)."""
+    """Driven Port for external calendar integration (Google Calendar v3)."""
 
     async def get_free_busy_intervals(
         self,

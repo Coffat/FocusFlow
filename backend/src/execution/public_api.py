@@ -28,10 +28,14 @@ __all__ = [
     "StudyExecutionStatsDTO",
     "StudySessionAbandonedEvent",
     "StudySessionCompletedEvent",
+    "WeeklyExecutionMetricsDTO",
+    "WeeklyExecutionMetricsQueryPort",
     "create_execution_dashboard_query_port",
     "create_execution_schedule_sync_port",
+    "create_weekly_execution_metrics_port",
     "register_execution_dashboard_factory",
     "register_execution_sync_factory",
+    "register_weekly_execution_metrics_factory",
 ]
 
 
@@ -470,4 +474,51 @@ def create_execution_dashboard_query_port(session: object) -> ExecutionDashboard
         importlib.import_module("src.execution.infrastructure.adapters.execution_dashboard_adapter")
     assert callable(_execution_dashboard_factory)
     res: ExecutionDashboardQueryPort = _execution_dashboard_factory(session)
+    return res
+
+
+@dataclass(frozen=True, slots=True)
+class WeeklyExecutionMetricsDTO:
+    """Deterministic weekly execution metrics aggregated from StudySession & Task records."""
+
+    completed_minutes: int = 0
+    planned_minutes: int = 0
+    completed_sessions_count: int = 0
+    completed_tasks_count: int = 0
+    planned_tasks_count: int = 0
+    overdue_tasks_count: int = 0
+    adherence_rate_pct: float | None = None
+
+
+class WeeklyExecutionMetricsQueryPort(Protocol):
+    """Cross-context read-only query port for Weekly Review deterministic metrics."""
+
+    async def get_roadmap_period_metrics(
+        self,
+        *,
+        user_id: UUID,
+        roadmap_id: UUID,
+        period_start: date,
+        period_end: date,
+    ) -> WeeklyExecutionMetricsDTO: ...
+
+
+_weekly_execution_metrics_factory: object = None
+
+
+def register_weekly_execution_metrics_factory(factory: object) -> None:
+    global _weekly_execution_metrics_factory
+    _weekly_execution_metrics_factory = factory
+
+
+def create_weekly_execution_metrics_port(session: object) -> WeeklyExecutionMetricsQueryPort:
+    global _weekly_execution_metrics_factory
+    if _weekly_execution_metrics_factory is None:
+        import importlib
+
+        importlib.import_module(
+            "src.execution.infrastructure.adapters.weekly_execution_metrics_adapter"
+        )
+    assert callable(_weekly_execution_metrics_factory)
+    res: WeeklyExecutionMetricsQueryPort = _weekly_execution_metrics_factory(session)
     return res

@@ -1,0 +1,735 @@
+"""3-Tier Hybrid Validation Gate Orchestrator & Self-Correction Retry Loop (ADR-009 / T6.1 / T7.3)."""
+
+from __future__ import annotations
+
+import asyncio
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass, field
+from datetime import date
+from typing import Any
+from uuid import UUID, uuid4
+
+from src.planning.application.services.learning_quality import (
+    has_operational_quality_review_failure,
+    run_dual_quality_critics,
+    validate_task_coverage,
+)
+from src.planning.application.services.roadmap_skills import (
+    PROPOSAL_SELF_CORRECTION_PROMPT,
+    TASK_DECOMPOSER_SKILL,
+    build_planning_prompt_registry,
+)
+from src.planning.application.services.validation_gate.tier1_schema import (
+    _safe_minutes,
+    run_tier1_gate,
+    validate_ai_milestones_tier1,
+)
+from src.planning.application.services.validation_gate.tier2_deterministic import (
+    run_tier2_gate,
+)
+from src.planning.application.services.validation_gate.tier3_judge import (
+    TIER3_JUDGE_TIMEOUT_SECONDS,
+    execute_tier3_pedagogical_judge,
+)
+from src.planning.domain.exceptions.planning_exceptions import (
+    ProposalValidationGateError,
+    SoftOverflowConfirmationRequiredError,
+)
+from src.planning.domain.models.milestone import Milestone
+from src.planning.domain.services.spatio_temporal_engine import (
+    SpatioTemporalRuleEngine,
+)
+from src.planning.domain.services.validation_types import (
+    AvailabilityConfigurationDTO,
+    ConstraintViolationDTO,
+    SoftOverflowWarningDTO,
+    parse_iso_date,
+)
+from src.shared_kernel.application.harness.execution_manager import AIExecutionManager
+from src.shared_kernel.application.harness.models import PromptTemplate, WorkflowType
+from src.shared_kernel.application.harness.prompt_registry import build_prompt_audit_metadata
+from src.shared_kernel.application.harness.untrusted_context import sanitize_untrusted_text
+from src.shared_kernel.application.harness.workflow_port import WorkflowRepositoryPort
+from src.shared_kernel.application.llm_port import LLMProviderPort
+
+DECOMPOSER_CALL_TIMEOUT_SECONDS: float = 35.0
+PIPELINE_DEADLINE_SECONDS: float = 55.0
+MIN_RETRY_REMAINING_SECONDS: float = 12.0
+DEFAULT_MAX_RETRIES: int = 2
+
+
+@dataclass(frozen=True, slots=True)
+class ValidationGateResultDTO:
+    """Comprehensive validation output from the 3-Tier Hybrid Validation Gate (ADR-009)."""
+
+    is_valid: bool
+    violations: tuple[ConstraintViolationDTO, ...] = ()
+    soft_overflow_warnings: tuple[SoftOverflowWarningDTO, ...] = ()
+    advisory_warnings: tuple[str, ...] = ()
+    judge_skipped: bool = False
+    judge_status: str = "PASSED"
+    pedagogical_score: float | None = None
+    is_partial_schedule: bool = False
+    scheduled_tasks_count: int = 0
+    unscheduled_tasks_count: int = 0
+    unscheduled_tasks: tuple[dict[str, Any], ...] = ()
+    attempts_used: int = 1
+    retry_history: tuple[dict[str, Any], ...] = ()
+    validated_proposal_data: dict[str, Any] = field(default_factory=dict)
+    total_prompt_tokens: int = 0
+    total_completion_tokens: int = 0
+    total_thinking_tokens: int = 0
+
+    @property
+    def has_soft_overflow(self) -> bool:
+        return len(self.soft_overflow_warnings) > 0
+
+
+def _summarize_milestones(milestones: Sequence[Milestone]) -> str:
+    if not milestones:
+        return ""
+    lines = []
+    for m in sorted(milestones, key=lambda item: item.sequence_order):
+        outcomes = "; ".join(m.learning_outcomes[:3])
+        concepts = ", ".join(m.required_concepts[:5])
+        lines.append(
+            f"M{m.sequence_order} ({m.title}): effort={m.estimated_effort_minutes}m | "
+            f"outcomes=[{outcomes}] | concepts=[{concepts}]"
+        )
+    return "\n".join(lines)
+
+
+class ProposalValidationGateOrchestrator:
+    """3-Tier Hybrid Validation Gate & Self-Correction Retry Loop Orchestrator (UC-12 / ADR-009)."""
+
+    def __init__(
+        self,
+        llm_provider: LLMProviderPort | None = None,
+        *,
+        enable_tier3_judge: bool = True,
+        tier3_timeout_seconds: float = TIER3_JUDGE_TIMEOUT_SECONDS,
+        workflow_repo: WorkflowRepositoryPort | None = None,
+        user_id: UUID | None = None,
+        goal_id: UUID | None = None,
+        roadmap_id: UUID | None = None,
+    ) -> None:
+        self._llm = llm_provider
+        self._enable_tier3_judge = enable_tier3_judge
+        self._tier3_timeout_seconds = tier3_timeout_seconds
+        self._workflow_repo = workflow_repo
+        self._user_id = user_id
+        self._goal_id = goal_id
+        self._roadmap_id = roadmap_id
+        self._last_judge_prompt_tokens = 0
+        self._last_judge_completion_tokens = 0
+        self._last_judge_thinking_tokens = 0
+
+    @staticmethod
+    def validate_ai_milestones_tier1(
+        milestones_data: Sequence[dict[str, Any]],
+    ) -> list[ConstraintViolationDTO]:
+        """Validate adaptive Milestone structure and pedagogical minimum fields."""
+        return validate_ai_milestones_tier1(milestones_data)
+
+    @classmethod
+    def run_tier1_gate(
+        cls,
+        proposal_data: dict[str, Any],
+        *,
+        valid_milestone_ids: set[UUID | str] | None = None,
+        is_ai_generated: bool = True,
+        allow_unscheduled_tasks: bool = False,
+    ) -> list[ConstraintViolationDTO]:
+        """Execute Tier 1 Syntactic & Bound checks on a ScheduleProposal payload."""
+        return run_tier1_gate(
+            proposal_data,
+            valid_milestone_ids=valid_milestone_ids,
+            is_ai_generated=is_ai_generated,
+            allow_unscheduled_tasks=allow_unscheduled_tasks,
+        )
+
+    @classmethod
+    def run_tier2_gate(
+        cls,
+        proposal_data: dict[str, Any],
+        *,
+        availability: AvailabilityConfigurationDTO,
+        existing_tasks: Sequence[object] = (),
+        current_roadmap_target_date: date | None = None,
+        allow_unscheduled_tasks: bool = False,
+    ) -> tuple[list[ConstraintViolationDTO], list[SoftOverflowWarningDTO]]:
+        """Execute Tier 2 Deterministic Spatio-Temporal, Cross-Roadmap EDF & DAG checks."""
+        return run_tier2_gate(
+            proposal_data,
+            availability=availability,
+            existing_tasks=existing_tasks,
+            current_roadmap_target_date=current_roadmap_target_date,
+            allow_unscheduled_tasks=allow_unscheduled_tasks,
+        )
+
+    async def run_tier3_pedagogical_judge(
+        self,
+        proposal_data: dict[str, Any],
+        *,
+        goal_title: str = "",
+        learner_level: str = "",
+        milestone_summary: str = "",
+        remaining_budget_seconds: float | None = None,
+        workflow_repo: WorkflowRepositoryPort | None = None,
+    ) -> tuple[bool, float | None, list[str], str]:
+        """Execute Tier 3 Pedagogical LLM-as-a-Judge with strict <= 8.0s timeout & honest status."""
+        outcome = await execute_tier3_pedagogical_judge(
+            self._llm,
+            proposal_data,
+            enable_tier3_judge=self._enable_tier3_judge,
+            tier3_timeout_seconds=self._tier3_timeout_seconds,
+            goal_title=goal_title,
+            learner_level=learner_level,
+            milestone_summary=milestone_summary,
+            remaining_budget_seconds=remaining_budget_seconds,
+            workflow_repo=workflow_repo or self._workflow_repo,
+            user_id=self._user_id,
+            goal_id=self._goal_id,
+            roadmap_id=self._roadmap_id,
+        )
+        self._last_judge_prompt_tokens = outcome.prompt_tokens
+        self._last_judge_completion_tokens = outcome.completion_tokens
+        self._last_judge_thinking_tokens = outcome.thinking_tokens
+        return (
+            outcome.judge_skipped,
+            outcome.pedagogical_score,
+            outcome.advisory_warnings,
+            outcome.judge_status,
+        )
+
+    async def validate_proposal(
+        self,
+        proposal_data: dict[str, Any],
+        *,
+        availability: AvailabilityConfigurationDTO,
+        valid_milestone_ids: set[UUID | str] | None = None,
+        existing_tasks: Sequence[object] = (),
+        current_roadmap_target_date: date | None = None,
+        is_ai_generated: bool = True,
+        require_soft_overflow_confirmation: bool = False,
+        confirm_soft_overflow: bool = False,
+        goal_title: str = "",
+        learner_level: str = "",
+        milestone_summary: str = "",
+        allow_unscheduled_tasks: bool = False,
+        remaining_budget_seconds: float | None = None,
+    ) -> ValidationGateResultDTO:
+        """Run all 3 Tiers on a single proposal payload."""
+        self._last_judge_prompt_tokens = 0
+        self._last_judge_completion_tokens = 0
+        self._last_judge_thinking_tokens = 0
+        tier1_violations = self.run_tier1_gate(
+            proposal_data,
+            valid_milestone_ids=valid_milestone_ids,
+            is_ai_generated=is_ai_generated,
+            allow_unscheduled_tasks=allow_unscheduled_tasks,
+        )
+        tier2_violations, soft_warnings = self.run_tier2_gate(
+            proposal_data,
+            availability=availability,
+            existing_tasks=existing_tasks,
+            current_roadmap_target_date=current_roadmap_target_date,
+            allow_unscheduled_tasks=allow_unscheduled_tasks,
+        )
+
+        all_violations = [*tier1_violations, *tier2_violations]
+        if all_violations:
+            return ValidationGateResultDTO(
+                is_valid=False,
+                violations=tuple(all_violations),
+                soft_overflow_warnings=tuple(soft_warnings),
+                validated_proposal_data=proposal_data,
+            )
+
+        if require_soft_overflow_confirmation and soft_warnings and not confirm_soft_overflow:
+            total_overflow = sum(w.overflow_minutes for w in soft_warnings)
+            raise SoftOverflowConfirmationRequiredError(overflow_minutes=total_overflow)
+
+        judge_skipped, score, advisories, judge_status = await self.run_tier3_pedagogical_judge(
+            proposal_data,
+            goal_title=goal_title,
+            learner_level=learner_level,
+            milestone_summary=milestone_summary,
+            remaining_budget_seconds=remaining_budget_seconds,
+        )
+
+        raw_tasks_obj = proposal_data.get("tasks")
+        raw_tasks = raw_tasks_obj if isinstance(raw_tasks_obj, list) else []
+        capacity_overflow = proposal_data.get("_capacity_overflow")
+        avail_mins = (
+            int(capacity_overflow.get("available_minutes", 0) or 0)
+            if isinstance(capacity_overflow, dict)
+            else 1
+        )
+        default_unscheduled_reason = (
+            "NO_AVAILABILITY_CONFIGURED: Chưa có khung giờ rảnh khả dụng"
+            if avail_mins <= 0
+            else "DEADLINE_CAPACITY_EXCEEDED: Không đủ thời gian rảnh trước ngày mục tiêu"
+        )
+
+        updated_tasks: list[dict[str, Any]] = []
+        scheduled_tasks_count = 0
+        unscheduled_list: list[dict[str, Any]] = []
+        for task in raw_tasks:
+            if not isinstance(task, dict):
+                continue
+            t_copy = dict(task)
+            if parse_iso_date(t_copy.get("scheduled_date")) is not None:
+                scheduled_tasks_count += 1
+            else:
+                if not t_copy.get("unscheduled_reason"):
+                    t_copy["unscheduled_reason"] = default_unscheduled_reason
+                unscheduled_list.append(t_copy)
+            updated_tasks.append(t_copy)
+
+        is_partial = len(unscheduled_list) > 0
+        if is_partial:
+            partial_msg = (
+                f"Lịch học khả thi một phần: Đã xếp lịch {scheduled_tasks_count}/{len(updated_tasks)} nhiệm vụ; "
+                f"còn {len(unscheduled_list)} nhiệm vụ trong danh sách chờ ({default_unscheduled_reason})."
+            )
+            if partial_msg not in advisories:
+                advisories.append(partial_msg)
+
+        enriched_data = dict(proposal_data)
+        enriched_data["tasks"] = updated_tasks
+        enriched_data["soft_overflow_warnings"] = [w.to_dict() for w in soft_warnings]
+        enriched_data["judge_status"] = judge_status
+        enriched_data["is_partial_schedule"] = is_partial
+        enriched_data["scheduled_tasks_count"] = scheduled_tasks_count
+        enriched_data["unscheduled_tasks_count"] = len(unscheduled_list)
+        enriched_data["unscheduled_tasks"] = unscheduled_list
+        if advisories:
+            enriched_data["advisory_warnings"] = advisories
+        if judge_skipped:
+            enriched_data["judge_skipped"] = True
+
+        return ValidationGateResultDTO(
+            is_valid=True,
+            violations=(),
+            soft_overflow_warnings=tuple(soft_warnings),
+            advisory_warnings=tuple(advisories),
+            judge_skipped=judge_skipped,
+            judge_status=judge_status,
+            pedagogical_score=score,
+            is_partial_schedule=is_partial,
+            scheduled_tasks_count=scheduled_tasks_count,
+            unscheduled_tasks_count=len(unscheduled_list),
+            unscheduled_tasks=tuple(unscheduled_list),
+            validated_proposal_data=enriched_data,
+            total_prompt_tokens=self._last_judge_prompt_tokens,
+            total_completion_tokens=self._last_judge_completion_tokens,
+            total_thinking_tokens=self._last_judge_thinking_tokens,
+        )
+
+    @staticmethod
+    def build_self_correction_prompt(
+        original_user_prompt: str,
+        violations: Sequence[ConstraintViolationDTO],
+        attempt_number: int,
+    ) -> str:
+        """Build full-regeneration self-correction prompt listing all constraint violations (T6.1)."""
+        retry_tpl = build_planning_prompt_registry().latest(
+            PROPOSAL_SELF_CORRECTION_PROMPT.prompt_id
+        )
+        lines = [
+            original_user_prompt,
+            "",
+            f"[SELF-CORRECTION RETRY ATTEMPT #{attempt_number}]",
+            retry_tpl.system_template,
+            "Danh sách toàn bộ vi phạm cần khắc phục triệt để khi sinh lại toàn bộ danh sách:",
+        ]
+        for idx, v in enumerate(violations, start=1):
+            task_ref = f"task_index={v.task_index}" if v.task_index is not None else "toàn cục"
+            lines.append(
+                f"{idx}. [{v.rule_code}] ({task_ref}, trường '{v.field}'): "
+                f"Giá trị hiện tại = {v.actual_value} | Yêu cầu = {v.expected_bound} | "
+                f"Cách sửa = {v.suggested_fix}"
+            )
+        lines.append(
+            "Yêu cầu hành động: Sinh lại TOÀN BỘ danh sách hợp lệ theo đúng schema và khắc phục tất cả các lỗi đã liệt kê ở trên."
+        )
+        return "\n".join(lines)
+
+    async def generate_and_validate_proposal_with_retry(
+        self,
+        *,
+        system_prompt: str,
+        user_prompt: str,
+        response_schema: dict[str, Any] | type[Any] | None,
+        availability: AvailabilityConfigurationDTO,
+        valid_milestone_ids: set[UUID | str] | None = None,
+        existing_tasks: Sequence[object] = (),
+        current_roadmap_target_date: date | None = None,
+        goal_title: str = "",
+        learner_level: str = "",
+        milestone_summary: str = "",
+        max_retries: int = DEFAULT_MAX_RETRIES,
+        on_retry_callback: Callable[[int, Sequence[ConstraintViolationDTO]], Any] | None = None,
+        start_date: date | None = None,
+        milestone_order_map: dict[str, int] | None = None,
+        tools: list[Any] | None = None,
+        tool_executor: Any | None = None,
+        max_tool_calls: int = 4,
+        thinking_level: str | None = None,
+        deterministic_allocation: bool = False,
+        preferred_session_minutes: int = 60,
+        estimation_bias_beta: float = 1.0,
+        peak_productivity_slots: Sequence[str] = (),
+        daily_workload_cap_minutes: int | None = None,
+        buffer_minutes_per_week: int = 0,
+        allow_partial_schedule: bool = True,
+        milestones: Sequence[Milestone] = (),
+        resource_resolver: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+        prompt_template: PromptTemplate | None = None,
+    ) -> ValidationGateResultDTO:
+        """Invoke LLMProviderPort via AIExecutionManager and run the 3-Tier Validation Gate with up to `max_retries` (2) self-correction loops."""
+        if self._llm is None:
+            raise ValueError(
+                "LLMProviderPort is required for generate_and_validate_proposal_with_retry."
+            )
+
+        registry = build_planning_prompt_registry()
+        effective_tpl = prompt_template or registry.latest(TASK_DECOMPOSER_SKILL.skill_id)
+        retry_tpl = registry.latest(PROPOSAL_SELF_CORRECTION_PROMPT.prompt_id)
+        effective_milestone_summary = milestone_summary or _summarize_milestones(milestones)
+
+        current_prompt = user_prompt
+        total_prompt_tokens = 0
+        total_completion_tokens = 0
+        total_thinking_tokens = 0
+        retry_history: list[dict[str, Any]] = []
+        last_violations: list[ConstraintViolationDTO] = []
+        pedagogical_retry_used = False
+
+        max_attempts = max(1, int(max_retries) + 1)
+        pipeline_deadline = asyncio.get_running_loop().time() + PIPELINE_DEADLINE_SECONDS
+        effective_schema: dict[str, Any] | type[Any] = (
+            response_schema if response_schema is not None else {"type": "object"}
+        )
+
+        for attempt in range(1, max_attempts + 1):
+            remaining_seconds = pipeline_deadline - asyncio.get_running_loop().time()
+            if remaining_seconds <= 0:
+                raise TimeoutError("Task decomposition exceeded 55 seconds")
+
+            decomposer_timeout = min(DECOMPOSER_CALL_TIMEOUT_SECONDS, remaining_seconds)
+            exec_mgr = AIExecutionManager(
+                provider=self._llm,
+                manage_quota=False,
+                max_retries=0,
+                timeout_seconds=decomposer_timeout,
+                workflow_repo=self._workflow_repo,
+            )
+            step_snapshot = (
+                {"retry_prompt_ref": retry_tpl.prompt_ref, **build_prompt_audit_metadata(retry_tpl)}
+                if attempt > 1
+                else {}
+            )
+            exec_res = await exec_mgr.execute(
+                user_id=self._user_id or uuid4(),
+                operation_type="TASK_DECOMPOSITION",
+                system_prompt=system_prompt,
+                user_prompt=current_prompt,
+                response_schema=effective_schema,
+                model_name=getattr(self._llm, "model_identifier", "gemini-3.8-flash"),
+                tools=tools if attempt == 1 else None,
+                tool_executor=tool_executor if attempt == 1 else None,
+                max_tool_calls=max_tool_calls if (tools is not None and attempt == 1) else 0,
+                thinking_level=thinking_level,
+                workflow_type=WorkflowType.SCHEDULE_GENERATION,
+                step_name="TASK_DECOMPOSER",
+                step_order=attempt,
+                goal_id=self._goal_id,
+                roadmap_id=self._roadmap_id,
+                context_snapshot=step_snapshot,
+                prompt_template=effective_tpl,
+            )
+            raw_proposal = exec_res.value if isinstance(exec_res.value, dict) else {}
+            total_prompt_tokens += int(exec_res.prompt_tokens or 0)
+            total_completion_tokens += int(exec_res.completion_tokens or 0)
+            total_thinking_tokens += int(exec_res.thinking_tokens or 0)
+
+            if resource_resolver is not None and isinstance(raw_proposal, dict):
+                raw_proposal = resource_resolver(raw_proposal)
+
+            raw_tasks = raw_proposal.get("tasks") if isinstance(raw_proposal, dict) else None
+            quality_violations: list[ConstraintViolationDTO] = []
+            if isinstance(raw_proposal, dict) and isinstance(raw_tasks, list) and milestones:
+                quality_violations.extend(validate_task_coverage(raw_tasks, milestones))
+                remaining_seconds = pipeline_deadline - asyncio.get_running_loop().time()
+                if remaining_seconds <= 0:
+                    raise TimeoutError("Task quality review exceeded 55 seconds")
+                critic_timeout = min(8.0, remaining_seconds)
+                critic_tokens: dict[str, int] = {}
+                (
+                    critic_violations,
+                    quality_reports,
+                    critic_p,
+                    critic_c,
+                ) = await asyncio.wait_for(
+                    run_dual_quality_critics(
+                        self._llm,
+                        stage="TASK_DECOMPOSITION",
+                        payload=raw_proposal,
+                        context=f"Goal: {sanitize_untrusted_text(goal_title)}",
+                        learner_level=learner_level,
+                        milestone_summary=effective_milestone_summary,
+                        timeout_seconds=critic_timeout,
+                        arbiter_timeout_seconds=critic_timeout,
+                        workflow_repo=self._workflow_repo,
+                        user_id=self._user_id,
+                        goal_id=self._goal_id,
+                        roadmap_id=self._roadmap_id,
+                        workflow_type=WorkflowType.SCHEDULE_GENERATION,
+                        token_accumulator=critic_tokens,
+                    ),
+                    timeout=remaining_seconds,
+                )
+                total_prompt_tokens += critic_p
+                total_completion_tokens += critic_c
+                total_thinking_tokens += int(critic_tokens.get("thinking_tokens", 0))
+                if has_operational_quality_review_failure(critic_violations):
+                    raise TimeoutError(
+                        "Task quality review did not complete within its time budget"
+                    )
+                quality_violations.extend(critic_violations)
+                raw_proposal = {**raw_proposal, "quality_reviews": quality_reports}
+
+            if quality_violations:
+                last_violations = quality_violations
+                retry_history.append(
+                    {
+                        "attempt": attempt,
+                        "violations": [v.to_dict() for v in quality_violations],
+                    }
+                )
+                remaining_for_retry = pipeline_deadline - asyncio.get_running_loop().time()
+                if attempt < max_attempts and remaining_for_retry >= MIN_RETRY_REMAINING_SECONDS:
+                    if on_retry_callback is not None:
+                        maybe_coro = on_retry_callback(attempt, last_violations)
+                        if asyncio.iscoroutine(maybe_coro):
+                            await maybe_coro
+                    current_prompt = self.build_self_correction_prompt(
+                        user_prompt,
+                        last_violations,
+                        attempt_number=attempt,
+                    )
+                    continue
+                break
+
+            if deterministic_allocation and isinstance(raw_tasks, list):
+                unscheduled_tasks = [
+                    {
+                        k: v
+                        for k, v in task.items()
+                        if k
+                        not in {
+                            "scheduled_date",
+                            "scheduled_start",
+                            "scheduled_end",
+                            "start_time",
+                            "end_time",
+                        }
+                    }
+                    if isinstance(task, dict)
+                    else task
+                    for task in raw_tasks
+                ]
+                raw_deps = (
+                    raw_proposal.get("dependencies")
+                    if isinstance(raw_proposal.get("dependencies"), list)
+                    else []
+                )
+                allocated_tasks, schedule_blocks = SpatioTemporalRuleEngine.allocate_task_sessions(
+                    unscheduled_tasks,
+                    availability,
+                    start_date=start_date or date.today(),
+                    target_date=current_roadmap_target_date,
+                    dependencies=raw_deps,
+                    existing_tasks=existing_tasks,
+                    milestone_order_map=milestone_order_map,
+                    preferred_session_minutes=preferred_session_minutes,
+                    estimation_bias_beta=estimation_bias_beta,
+                    peak_productivity_slots=peak_productivity_slots,
+                    daily_workload_cap_minutes=daily_workload_cap_minutes,
+                    buffer_minutes_per_week=buffer_minutes_per_week,
+                )
+                raw_proposal = {
+                    **raw_proposal,
+                    "tasks": allocated_tasks,
+                    "schedule_blocks": schedule_blocks,
+                }
+            elif isinstance(raw_tasks, list) and any(
+                isinstance(t, dict) and parse_iso_date(t.get("scheduled_date")) is None
+                for t in raw_tasks
+            ):
+                raw_deps = raw_proposal.get("dependencies", [])
+                allocated_tasks = SpatioTemporalRuleEngine.allocate_tasks_to_availability(
+                    raw_tasks,
+                    availability,
+                    start_date=start_date or date.today(),
+                    target_date=current_roadmap_target_date,
+                    dependencies=raw_deps if isinstance(raw_deps, list) else [],
+                    existing_tasks=existing_tasks,
+                    milestone_order_map=milestone_order_map,
+                )
+                raw_proposal = {**raw_proposal, "tasks": allocated_tasks}
+            else:
+                allocated_tasks = raw_tasks if isinstance(raw_tasks, list) else []
+
+            has_unscheduled = any(
+                isinstance(t, dict) and parse_iso_date(t.get("scheduled_date")) is None
+                for t in allocated_tasks
+            )
+            allow_unscheduled_in_attempt = False
+            if has_unscheduled and isinstance(raw_proposal, dict):
+                avail_mins = SpatioTemporalRuleEngine.calculate_available_capacity_minutes(
+                    availability,
+                    start_date=start_date or date.today(),
+                    target_date=current_roadmap_target_date,
+                    existing_tasks=existing_tasks,
+                    daily_workload_cap_minutes=daily_workload_cap_minutes,
+                )
+                req_mins = sum(
+                    _safe_minutes(t.get("estimated_minutes"))
+                    for t in allocated_tasks
+                    if isinstance(t, dict)
+                )
+                raw_proposal = {
+                    **raw_proposal,
+                    "_capacity_overflow": {
+                        "available_minutes": avail_mins,
+                        "required_minutes": req_mins,
+                        "target_date": (
+                            current_roadmap_target_date.isoformat()
+                            if current_roadmap_target_date is not None
+                            else "N/A"
+                        ),
+                    },
+                }
+                if allow_partial_schedule:
+                    remaining_for_retry = pipeline_deadline - asyncio.get_running_loop().time()
+                    if (
+                        attempt == 1
+                        and attempt < max_attempts
+                        and remaining_for_retry >= MIN_RETRY_REMAINING_SECONDS
+                        and avail_mins > 0
+                        and req_mins <= int(avail_mins * 1.30)
+                    ):
+                        allow_unscheduled_in_attempt = False
+                    else:
+                        allow_unscheduled_in_attempt = True
+
+            remaining_for_judge = max(0.0, pipeline_deadline - asyncio.get_running_loop().time())
+            gate_result = await self.validate_proposal(
+                raw_proposal,
+                availability=availability,
+                valid_milestone_ids=valid_milestone_ids,
+                existing_tasks=existing_tasks,
+                current_roadmap_target_date=current_roadmap_target_date,
+                is_ai_generated=True,
+                goal_title=goal_title,
+                learner_level=learner_level,
+                milestone_summary=effective_milestone_summary,
+                allow_unscheduled_tasks=allow_unscheduled_in_attempt,
+                remaining_budget_seconds=remaining_for_judge,
+            )
+            total_prompt_tokens += self._last_judge_prompt_tokens
+            total_completion_tokens += self._last_judge_completion_tokens
+            total_thinking_tokens += self._last_judge_thinking_tokens
+
+            if gate_result.is_valid:
+                remaining_for_retry = pipeline_deadline - asyncio.get_running_loop().time()
+                if (
+                    gate_result.judge_status == "NEEDS_REVIEW"
+                    and attempt < max_attempts
+                    and not pedagogical_retry_used
+                    and remaining_for_retry >= MIN_RETRY_REMAINING_SECONDS
+                ):
+                    pedagogical_retry_used = True
+                    judge_violation = ConstraintViolationDTO(
+                        task_index=None,
+                        field="tasks",
+                        rule_code="PEDAGOGICAL_QUALITY_ISSUE",
+                        expected_bound="Pedagogical score >= 60% & overall_status != FAIL",
+                        actual_value=f"score={gate_result.pedagogical_score}",
+                        suggested_fix=(
+                            "; ".join(gate_result.advisory_warnings)
+                            if gate_result.advisory_warnings
+                            else "Cải thiện trình tự sư phạm, độ rõ ràng và tính thực hành của các nhiệm vụ học tập."
+                        ),
+                    )
+                    last_violations = [judge_violation]
+                    retry_history.append(
+                        {
+                            "attempt": attempt,
+                            "violations": [judge_violation.to_dict()],
+                        }
+                    )
+                    if on_retry_callback is not None:
+                        maybe_coro = on_retry_callback(attempt, last_violations)
+                        if asyncio.iscoroutine(maybe_coro):
+                            await maybe_coro
+                    current_prompt = self.build_self_correction_prompt(
+                        user_prompt,
+                        last_violations,
+                        attempt_number=attempt,
+                    )
+                    continue
+
+                return ValidationGateResultDTO(
+                    is_valid=True,
+                    violations=(),
+                    soft_overflow_warnings=gate_result.soft_overflow_warnings,
+                    advisory_warnings=gate_result.advisory_warnings,
+                    judge_skipped=gate_result.judge_skipped,
+                    judge_status=gate_result.judge_status,
+                    pedagogical_score=gate_result.pedagogical_score,
+                    is_partial_schedule=gate_result.is_partial_schedule,
+                    scheduled_tasks_count=gate_result.scheduled_tasks_count,
+                    unscheduled_tasks_count=gate_result.unscheduled_tasks_count,
+                    unscheduled_tasks=gate_result.unscheduled_tasks,
+                    attempts_used=attempt,
+                    retry_history=tuple(retry_history),
+                    validated_proposal_data=gate_result.validated_proposal_data,
+                    total_prompt_tokens=total_prompt_tokens,
+                    total_completion_tokens=total_completion_tokens,
+                    total_thinking_tokens=total_thinking_tokens,
+                )
+
+            last_violations = list(gate_result.violations)
+            retry_record = {
+                "attempt": attempt,
+                "violations": [v.to_dict() for v in last_violations],
+            }
+            retry_history.append(retry_record)
+
+            remaining_for_retry = pipeline_deadline - asyncio.get_running_loop().time()
+            if attempt < max_attempts and remaining_for_retry >= MIN_RETRY_REMAINING_SECONDS:
+                if on_retry_callback is not None:
+                    maybe_coro = on_retry_callback(attempt, last_violations)
+                    if asyncio.iscoroutine(maybe_coro):
+                        await maybe_coro
+                current_prompt = self.build_self_correction_prompt(
+                    user_prompt,
+                    last_violations,
+                    attempt_number=attempt,
+                )
+            else:
+                break
+
+        raise ProposalValidationGateError(
+            message=(
+                f"Đề xuất lịch học của AI vẫn vi phạm ràng buộc sau {max_attempts} lần thử "
+                f"(tối đa {max_retries} vòng tự sửa lỗi): "
+                + ", ".join(v.rule_code for v in last_violations)
+            ),
+            code="AI_SCHEMA_VALIDATION_ERROR",
+            violations=[v.to_dict() for v in last_violations],
+        )

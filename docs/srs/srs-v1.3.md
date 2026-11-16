@@ -23,6 +23,7 @@
 | **v1.2** | 27/10/2026 | Vũ Toàn Thắng | Chuẩn hóa ngữ nghĩa trung lập công nghệ (ISO/IEC/IEEE 29148:2018) và đồng bộ hóa toàn diện với Kiến trúc (`ADR-001`..`ADR-010`), Danh mục **7 Tác nhân (`ACT-01`..`ACT-07`)** & **25 Use Cases (`UC-01`..`UC-25` trên 5 phân hệ)**: (1) Chuẩn hóa `FR-ADAPT-002` (`UC-21`) sinh `ScheduleProposal` (`DRAFT`) cho 1 lộ trình đi qua cổng kiểm định 3 tầng (`UC-12`) và yêu cầu người học phê duyệt (`Apply`) để bảo toàn bất biến `BUSR-02`/`BUSR-03`; (2) Bổ sung yêu cầu cập nhật hồ sơ & múi giờ (`FR-AUTH-003`), quản lý danh mục & lưu trữ lộ trình `ARCHIVED` (`FR-PLAN-006`, Mục 6.1), giới hạn thời lượng task AI ($30\text{--}120$ phút) vs thủ công ($15\text{--}240$ phút) & hủy task (`FR-TASK-001..002`), quy tắc hạ cấp `PREMIUM` $\rightarrow$ `FREE` giữ 3 lộ trình `ACTIVE` theo EDF (`FR-QUOTA-002`, `FR-ADM-002`); (3) Đồng bộ hành vi hủy và hoàn trả giữ chỗ quota (`RELEASED`) sau 2 lần retry AI thất bại (`FR-PLAN-005`, `FR-AI-001`), chuẩn hóa trạng thái giao dịch thanh toán `{PENDING, PAID, FAILED, CANCELLED, EXPIRED}` có `expires_at` (15 phút), tách bạch `CalendarConnection` và `WebCalToken` (Mục 12), và chuẩn hóa luồng kiểm toán bảo mật/quản trị tập trung (Structured Audit Stream). |
 | **v1.3** | 03/11/2026 | Vũ Toàn Thắng | Nâng cấp toàn diện theo thiết kế **FocusFlow Learning Intelligence Harness** & Báo cáo Đối chiếu Chiến lược Sản phẩm (Mentor Report 11/2026): (1) Nâng cấp định vị thành **FocusFlow Learning Intelligence Harness — An adaptive AI-powered learning management system** xoay quanh 3 Trụ cột Cạnh tranh (*Personalized Learning Planning với Knowledge RAG, Adaptive Scheduling với Rolling-Horizon & Schedule Resilience, Continuous Learner Intelligence với Structured Learner Memory*) và **Controlled Adaptive Recovery**; (2) Thống nhất **Chu trình 6 bước (Understand $\rightarrow$ Plan $\rightarrow$ Schedule $\rightarrow$ Adapt $\rightarrow$ Learn $\rightarrow$ Improve)** với **Mô hình 3 pha Zimmerman SRL** (*Forethought = Understand + Plan + Schedule; Performance = Execute + Check-in + Prove; Self-Reflection = Adapt + Learn + Improve*); (3) Phân tách nền tảng **3 Thực thể Cốt lõi**: **Roadmap** (`estimated_effort`), **Schedule** (`schedule_blocks` với `scheduled_duration`, đổi giờ rảnh chỉ chạy lại Schedule Optimization mà không tạo lại Roadmap) và **Learner Model** (`learner_profiles`, `learner_memory_items`, `learner_concept_masteries` lưu giữ xuyên suốt nhiều Roadmap); (4) Tích hợp **Knowledge Ingestion & Hybrid RAG Pipeline** (`knowledge_sources`, `knowledge_chunks` với PostgreSQL 16 `tsvector` + `pgvector` HNSW, SSRF Guard, `<untrusted_knowledge_context>`), **Unified Availability Model** (`freeBusy`/`syncToken` + `external_calendar_event_id`), **Schedule Resilience**, **Goal Feasibility Prediction** và **What-if Planning** (`WHAT_IF_SIMULATION`); (5) Bổ sung **Today Focus View** (`UC-13`), **MVS Mode 10–15 phút (`UC-15`)**, **Daily Learning Check-in**, bắt buộc `Key Takeaway` (Tầng 1 Guard) + `self_confidence (1..5)` (`UC-14`), nợ takeaway (`pending_takeaway` — `UC-16`), **Rolling-Horizon Overdue Recovery** (`UC-23`), **Adaptive Workload**, **Weekly Reschedule Budget**, **Anti-Procrastination Mode**, **Post-Failure Reset Ritual** (`UC-24`); (6) Bổ sung **Prove Mode** (`UC-20`) kèm **Mistake Intelligence** (`mistake_taxonomy_json`), **Intelligent Revision** (What Works Clearinghouse), **Skill Mastery Tracking** (`learner_concept_masteries`), **Weekly Reflection** (`user_reflection_payload` — `UC-21`), và **Structured Learner Memory** (4 loại $\times$ 3 tầng nhận thức); (7) Phân tầng **3 Nhóm Tính năng (Nhóm A, Nhóm B, Nhóm C)** + **Lộ trình 5 Giai đoạn**; chuẩn hóa Domain Model lên **35 bảng (3NF/BCNF)** (12 `account`, 10 `planning`, 5 `execution`, 4 `evaluation`, 4 `shared_kernel`) và **28 Use Cases (`UC-01`..`UC-28`)**. |
 | **v1.4** | 05/11/2026 | Hội đồng CCB — Vũ Toàn Thắng | Phê duyệt Kiểm soát Thay đổi (Change Control Board - CCB) chốt Baseline: (1) Bổ sung Yêu cầu Chức năng Tự đặt lại Mật khẩu qua Thư điện tử (FR-AUTH-004), gỡ bỏ khỏi §2.5 Out-of-Scope; (2) Bổ sung Yêu cầu Chức năng Đóng & Xóa vĩnh viễn Tài khoản theo Quyền được Lãng quên (FR-PROFILE-002, tuân thủ GDPR Điều 17) kèm trạng thái 'DELETED' tại Mục 12 Bảng #1 users; (3) Chuẩn hóa mô hình **8 Tác nhân (`ACT-00`..`ACT-07`)** theo chuẩn OMG UML 2.5.1 và Alistair Cockburn (bổ sung `ACT-00` Guest, `ACT-01` Registered User abstract, loại bỏ `Time <<temporal>>` / Scheduler nội bộ khỏi danh mục Actor — các thành phần nội bộ `PostgreSQL`, `Redis`, `Taskiq Worker/Scheduler`, `Internal AI Harness` nằm trong System Boundary, còn các Use Case định kỳ sử dụng `TimeEvent` trigger gắn với Beneficiary Actor `Learner`/`Administrator`); (4) Cập nhật Ma trận Truy vết RTM Mục 16 đạt 43 Yêu cầu Chức năng (FR-AUTH-001..004, FR-GOAL-001..003, FR-PLAN-001..006, FR-AVAIL-001..003, FR-SCHEDULE-001, FR-TASK-001..003, FR-SESSION-001..003, FR-ADAPT-001..003, FR-PAUSE-001..002, FR-CALENDAR-001..003, FR-REPORT-001..003, FR-AI-001..002, FR-QUOTA-001..002, FR-ADM-001..003, FR-PROFILE-001..002) và Mục 17 Tổng kết Baseline v1.4. |
+| **v1.5** | 15/11/2026 | Vũ Toàn Thắng | Nâng cấp `FR-GOAL-001/002` sang Clarification v2 theo provenance và information gap: giá trị mặc định chỉ là `ASSUMED`; sinh 0–3 câu hỏi và tối đa một follow-up có điều kiện; hoàn tất với `NOT_REQUIRED | ANSWERED | PARTIAL | SKIPPED`; mỗi lượt LLM sử dụng một reservation quota riêng; Clarification chỉ cảnh báo sớm `CONSTRAINT_CONFLICT`, còn Goal Feasibility chính thức thực hiện sau khi có `estimated_effort`. |
 
 ---
 
@@ -799,38 +800,42 @@ Mục này chuẩn hóa toàn bộ các máy trạng thái (State Machines) củ
 
 #### FR-GOAL-001: Nhập mục tiêu học tập ban đầu
 - **Tiêu đề**: Thu thập mục tiêu học tập ban đầu.
-- **Mô tả**: Hệ thống phải cho phép Learner đã đăng nhập nhập mục tiêu học tập tự do kèm thời hạn hoàn thành mong muốn.
+- **Mô tả**: Hệ thống phải cho phép Learner đã đăng nhập nhập mục tiêu học tập tự do kèm thời hạn hoàn thành mong muốn và ghi nhận provenance của các dữ liệu có cấu trúc.
 - **Tiền điều kiện**: Learner đã xác thực thành công phiên làm việc và số lượng lộ trình `ACTIVE` hiện tại chưa vượt trần của gói dịch vụ (`FREE` $\le 3$, `PREMIUM` $\le 15$ theo `OS-02`).
 - **Tác nhân kích hoạt**: Learner gửi mục tiêu học tập (`UC-07`).
-- **Dữ liệu đầu vào**: Tiêu đề / Chuỗi mô tả mục tiêu (chuỗi ký tự), Ngày hoàn thành mong muốn (`target_date`).
+- **Dữ liệu đầu vào**: Tiêu đề / Chuỗi mô tả mục tiêu (chuỗi ký tự), Ngày hoàn thành mong muốn (`target_date`), quỹ giờ học tuần (`weekly_commitment_hours`), trình độ ban đầu và provenance `USER_EXPLICIT | USER_CONFIRMED | SYSTEM_DEFAULT` tương ứng.
 - **Luồng chính**:
-  1. Learner nhập mô tả mục tiêu và thời hạn vào giao diện Tạo mới lộ trình.
+  1. Learner nhập mô tả mục tiêu, thời hạn và quỹ giờ học vào giao diện Tạo mới lộ trình. Hệ thống có thể đề xuất ngày mặc định 12 tuần.
   2. Hệ thống kiểm tra độ dài văn bản mục tiêu (tối thiểu 10 ký tự, tối đa 500 ký tự), kiểm tra ngày mục tiêu phải ở tương lai (`target_date > CURRENT_DATE`) và kiểm tra số lượng lộ trình đang `ACTIVE` của tài khoản.
-  3. Hệ thống lưu bản ghi Goal và khởi tạo Roadmap ở trạng thái `INITIALIZED` gắn liền với `user_id`, chuyển tiếp sang bước AI làm rõ ngữ cảnh.
+  3. Hệ thống lưu bản ghi Goal và khởi tạo Roadmap ở trạng thái `INITIALIZED` gắn liền với `user_id`, chuyển tiếp sang bước AI làm rõ ngữ cảnh. `target_date` chỉ là fact `KNOWN` khi Learner tự nhập/chỉnh (`USER_EXPLICIT`) hoặc xác nhận giá trị gợi ý (`USER_CONFIRMED`); giá trị mặc định chưa được chạm là `SYSTEM_DEFAULT` và được phân loại `ASSUMED`.
 - **Luồng ngoại lệ**:
   - *Mục tiêu rỗng hoặc quá ngắn*: Hệ thống hiển thị cảnh báo yêu cầu mô tả rõ hơn.
   - *Ngày mục tiêu ở quá khứ*: Hệ thống yêu cầu chọn ngày trong tương lai.
   - *Đạt trần số lộ trình hoạt động của gói cước*: Hệ thống từ chối tạo mới và gợi ý lưu trữ lộ trình cũ (`UC-10`) hoặc nâng cấp gói Premium (`UC-04`).
 - **Hậu điều kiện**: Bản ghi Goal và Roadmap được tạo ở trạng thái `INITIALIZED`.
-- **Tiêu chí chấp nhận**: Ghi nhận chính xác mục tiêu của đúng người dùng đã đăng nhập; chặn tạo mới khi vượt trần lộ trình `ACTIVE` của gói cước.
+- **Tiêu chí chấp nhận**: Ghi nhận chính xác mục tiêu của đúng người dùng đã đăng nhập; không coi deadline mặc định là đã xác nhận; chặn tạo mới khi vượt trần lộ trình `ACTIVE` của gói cước.
 - **Phương pháp kiểm chứng**: Kiểm thử giao diện và kiểm thử dữ liệu API.
 - **Truy vết**: BR-001, BUSR-01, BUSR-05, UC-07, OS-02.
 
 #### FR-GOAL-002: Tương tác hỏi-đáp làm rõ ngữ cảnh với AI (AI Clarification)
 - **Tiêu đề**: Đối thoại làm rõ ngữ cảnh với AI.
-- **Mô tả**: Hệ thống phải hỗ trợ luồng đối thoại có cấu trúc để AI đặt câu hỏi làm rõ trình độ hiện tại, phong cách học và mức độ chuyên sâu mong muốn.
+- **Mô tả**: Hệ thống phải chuẩn hóa facts có provenance, phân tích information gap và hỗ trợ luồng đối thoại có cấu trúc, thích ứng để chỉ hỏi những thông tin còn thiếu hoặc mâu thuẫn.
 - **Tiền điều kiện**: Goal đã được khởi tạo; tài khoản còn hạn ngạch AI (tuân thủ `FR-QUOTA-001`).
 - **Tác nhân kích hoạt**: Hệ thống tự động chuyển tiếp sau khi Goal được nhập (`UC-07`).
 - **Dữ liệu đầu vào**: Câu trả lời của Learner cho các câu hỏi gợi ý từ AI.
 - **Luồng chính**:
-  1. Hệ thống làm sạch và cô lập ngữ cảnh mô tả Goal (tuân thủ `NFR-SEC-003`), sau đó gửi yêu cầu đến External LLM Provider (`ACT-04`) để sinh 2–3 câu hỏi định hình năng lực.
-  2. Hệ thống hiển thị các câu hỏi cho Learner dưới dạng trắc nghiệm hoặc nhập liệu ngắn.
-  3. Learner chọn hoặc nhập câu trả lời và bấm "Tiếp tục".
-  4. Hệ thống tổng hợp câu trả lời vào ngữ cảnh làm rõ (`clarification_context`) của Goal để chuẩn bị cho giai đoạn sinh Milestone.
+  1. Hệ thống hợp nhất Goal, dữ liệu có cấu trúc, availability và Learner Model thành facts có trạng thái `KNOWN | PARTIAL | UNKNOWN | CONTRADICTORY | ASSUMED`, rồi chọn tối đa ba gap có tác động downstream cao nhất.
+  2. Nếu facts đã đủ, hệ thống hoàn tất `NOT_REQUIRED` mà không gọi LLM. Nếu còn gap, hệ thống làm sạch và cô lập ngữ cảnh (tuân thủ `NFR-SEC-003`) rồi yêu cầu External LLM Provider (`ACT-04`) sinh 0–3 câu hỏi; mỗi câu phải gắn với một gap còn mở.
+  3. Hệ thống hiển thị các câu hỏi cho Learner dưới dạng trắc nghiệm hoặc nhập liệu ngắn; server cấp và đối chiếu `session_id`, `question_id`, `option_id`.
+  4. Learner chọn hoặc nhập câu trả lời và bấm "Tiếp tục". Hệ thống không tự sinh câu trả lời cho câu chưa được thao tác.
+  5. Sau lượt đầu, hệ thống chỉ sinh tối đa một follow-up nếu còn gap ưu tiên cao ở trạng thái `PARTIAL` hoặc `CONTRADICTORY`; follow-up dùng một quota reservation riêng và phải được báo trước cho Learner.
+  6. Hệ thống lưu `clarification_context` schema v2 gồm facts, gaps, assumptions, contradictions và provenance để chuẩn bị sinh Milestone/Task. Trạng thái hoàn tất là `NOT_REQUIRED | ANSWERED | PARTIAL | SKIPPED`.
 - **Luồng ngoại lệ**:
   - *AI gặp lỗi hoặc timeout*: Kích hoạt cơ chế Fallback (`FR-AI-002`), cho phép bỏ qua bước làm rõ để sinh kế hoạch cơ bản hoặc chuyển sang lập kế hoạch thủ công (`UC-09`).
+  - *Hết quota follow-up*: Hoàn tất ở `PARTIAL`, ghi rõ assumptions và vẫn cho phép tiếp tục.
+  - *Phát hiện xung đột ràng buộc*: Phát cảnh báo sớm `CONSTRAINT_CONFLICT`; không kết luận `UNREALISTIC`. Goal Feasibility chính thức chỉ chạy sau khi đã có `estimated_effort`.
 - **Hậu điều kiện**: Goal được cập nhật ngữ cảnh làm rõ bổ sung, sẵn sàng cho việc phân rã Milestones.
-- **Tiêu chí chấp nhận**: Hoàn tất trao đổi trong giới hạn thời gian `NFR-PERF-001`; cung cấp đường thoát lập kế hoạch thủ công khi có lỗi.
+- **Tiêu chí chấp nhận**: Sinh 0–3 câu ban đầu, tối đa một follow-up; không hỏi dimension đã `KNOWN`; mỗi lượt LLM đi qua `RESERVE → COMMIT/RELEASE`; retry tối đa hai lần cho lỗi có thể phục hồi trong hard timeout 55 giây; request lặp/reload không gọi LLM hoặc trừ quota lần hai; cung cấp đường thoát lập kế hoạch thủ công khi có lỗi.
 - **Phương pháp kiểm chứng**: Mock LLM Service Integration Test.
 - **Truy vết**: BR-001, BUSR-10, UC-07, NFR-PERF-001, NFR-SEC-003.
 
@@ -858,13 +863,13 @@ Mục này chuẩn hóa toàn bộ các máy trạng thái (State Machines) củ
 
 #### FR-PLAN-001: Sinh và Phê duyệt Cột mốc tổng quan (Milestones - Cấp 1)
 - **Tiêu đề**: Phân rã và phê duyệt Milestones Cấp 1.
-- **Mô tả**: Hệ thống phải yêu cầu AI sinh danh sách các cột mốc kiến thức (Milestones) tổng quan, hiển thị cho Learner xem xét, chỉnh sửa và bấm duyệt.
+- **Mô tả**: Hệ thống phải yêu cầu AI sinh danh sách Milestones thích ứng với phạm vi mục tiêu, trình độ, deadline và quỹ giờ; không áp đặt hard-cap số lượng, sau đó hiển thị cho Learner xem xét, chỉnh sửa và bấm duyệt.
 - **Tiền điều kiện**: Goal đã thu thập đủ ngữ cảnh; tài khoản còn hạn ngạch AI.
 - **Tác nhân kích hoạt**: Learner xác nhận hoàn tất bước làm rõ ngữ cảnh (`UC-07`).
 - **Dữ liệu đầu vào**: Thông tin Goal và ngữ cảnh làm rõ của người học.
 - **Luồng chính**:
-  1. Hệ thống gửi yêu cầu đến External LLM Provider (`ACT-04`) với schema định sẵn yêu cầu sinh danh sách 3–7 Milestones tuần tự.
-  2. Hệ thống kiểm tra schema kết quả trả về từ AI (tuân thủ `FR-AI-001`).
+  1. Planner lập **coverage blueprint** từ mục tiêu, prerequisite và learner context, sau đó sinh danh sách Milestones không rỗng có `sequence_order` liên tục; mỗi Milestone có `learning_outcomes`, `completion_criteria`, `estimated_effort_minutes`, `required_concepts`, `unverified_concepts` và quan hệ tiên quyết.
+  2. Hai AI Critic độc lập chạy song song: Critic A kiểm coverage/prerequisite/trùng lặp/khoảng trống; Critic B kiểm learner fit/deadline/cognitive load/tính đo lường. Deterministic coverage gate hợp nhất lỗi nghiêm trọng thành structured violations và cho Planner tối đa 2 vòng tự sửa trong cùng quota reservation.
   3. Giao diện hiển thị danh sách Milestones cho Learner.
   4. Learner có quyền: thêm mới, sửa đổi tên/mô tả/thứ tự, hoặc xóa bớt Milestone.
   5. Learner bấm "Duyệt Milestones (Approve Milestones)".
@@ -872,14 +877,14 @@ Mục này chuẩn hóa toàn bộ các máy trạng thái (State Machines) củ
 - **Luồng ngoại lệ**:
   - *AI trả về sai cấu trúc sau 2 lần tự động thử lại*: Hủy thao tác, hoàn trả giữ chỗ hạn ngạch AI (`RELEASED`) theo `FR-AI-001` và cho phép thử lại hoặc lập kế hoạch thủ công (`UC-09`).
 - **Hậu điều kiện**: Roadmap lưu danh sách Milestones ở trạng thái `APPROVED`.
-- **Tiêu chí chấp nhận**: Hệ thống không bao giờ tự động sinh task chi tiết nếu Learner chưa bấm duyệt Milestones.
+- **Tiêu chí chấp nhận**: Hệ thống không bao giờ tự động sinh task chi tiết nếu Learner chưa bấm duyệt Milestones; không lưu bản nháp nếu danh sách rỗng, thứ tự không liên tục, coverage gate thất bại hoặc còn lỗi Critic nghiêm trọng. Mục tiêu nhỏ được phép có ít Milestones; mục tiêu rộng phải tiếp tục phân rã đến khi bao phủ đủ phạm vi.
 - **Phương pháp kiểm chứng**: End-to-end Automated Test.
 - **Truy vết**: BR-001, BUSR-02, UC-07, NFR-AI-001.
 
 #### FR-PLAN-002: Phân tách Sinh Lộ trình AI (Roadmap) và Lập Thời gian biểu Tất định (`schedule_blocks`), Dự báo Khả thi & Mô phỏng What-if
 - **Tiêu đề**: Phân tách sinh Lộ trình học tập (AI Roadmap Generation) với Lập thời gian biểu tất định (`DeterministicSchedulingEngine` & `schedule_blocks`), Dự báo tính khả thi (`Goal Feasibility Prediction`) và Mô phỏng kịch bản (`What-if Planning`).
 - **Mô tả**: Dựa trên Milestones đã duyệt, cơ sở tri thức RAG (`knowledge_chunks`) và `LearnerModel`, hệ thống tách biệt rõ 2 bước:
-  1. **AI Roadmap Generation**: AI phân rã mỗi Milestone thành các `Tasks` độc lập với lịch biểu (chứa nỗ lực ước tính `estimated_effort` / `estimated_minutes` từ **$30\text{--}120$ phút**, quan hệ tiên quyết `Task Dependencies` DAG, và `Learning Resources` kèm trích dẫn nguồn `provenance_citations`).
+  1. **AI Roadmap Generation**: AI phân rã mỗi Milestone thành số lượng `Tasks` thích ứng theo outcomes, concepts, effort và bằng chứng hoàn thành; mỗi outcome có ít nhất một Task qua `covered_outcome_ids`, mỗi required concept có Task học hoặc thực hành tương ứng. Task mix (`THEORY`, `PRACTICE`, `REVIEW`, `PROJECT`) được chọn theo nội dung, không theo quota số lượng cố định.
   2. **Deterministic Schedule Allocation (`schedule_blocks`)**: Bộ lập lịch tất định **`DeterministicSchedulingEngine`** phân bổ các Task vào các phiên học cụ thể trong bảng **`schedule_blocks`** với thời lượng phiên `scheduled_duration_minutes` (cho phép tách một Task dài 120 phút thành hai phiên `schedule_blocks` 60 phút trên các ngày/khung giờ khác nhau) dựa trên `UnifiedAvailabilityModel` và bộ quy tắc **Schedule Resilience**, sau đó kiểm định qua cổng 3 tầng (`FR-PLAN-005` / `UC-12`) để tạo `ScheduleProposal` (`DRAFT`).
   3. **Bất biến Tách biệt Roadmap vs. Schedule**: Khi người học thay đổi cấu hình thời gian rảnh (ví dụ giảm từ 2h/ngày xuống 1h/ngày), hệ thống **chỉ cần chạy lại Schedule Optimization để tái phân bổ `schedule_blocks` mà không phải tạo lại Roadmap**.
 - **Quy tắc Chống Vỡ Lịch (Schedule Resilience Rules)**:
@@ -890,7 +895,8 @@ Mục này chuẩn hóa toàn bộ các máy trạng thái (State Machines) củ
   4. **Protected Sessions (Phiên học được bảo vệ)**: Cho phép ghim cố định các phiên học quan trọng không bị xê dịch khi tái lập lịch tự động.
   5. **Schedule Stability (Tính ổn định lịch biểu)**: Hạn chế tối đa việc xáo trộn các phiên học trong 48 giờ tới (Minimal Perturbation / Rolling Horizon) khi tối ưu hóa lại lịch.
 - **Dự báo Tính khả thi (Goal Feasibility Prediction) & Mô phỏng Kịch bản (What-if Planning)**:
-  - **Goal Feasibility Prediction**: Trước khi lưu đề xuất, hệ thống tính toán tỷ số giữa tổng nỗ lực cần thiết (đã nhân hệ số $\beta_{bias}$ từ `LearnerModel` và cộng `Buffer Time`) so với tổng quỹ thời gian rảnh thực tế đến `target_date`, trả về chỉ số khả thi (`FEASIBLE`, `TIGHT`, `UNREALISTIC`) kèm gợi ý điều chỉnh hạn chót hoặc tăng quỹ giờ.
+  - **Goal Feasibility Prediction**: Trước khi lưu đề xuất, hệ thống trả typed feasibility gồm `required_minutes`, `available_minutes`, `scheduled_minutes`, `schedulable_ratio`, `unscheduled_minutes`, `reason_codes`, `recommended_actions` và trạng thái: `FEASIBLE` khi đạt 100%; `PARTIAL` khi đạt từ 25% đến dưới 100%; `INFEASIBLE` khi dưới 25% hoặc không có slot hợp lệ.
+  - `PARTIAL` yêu cầu Learner chọn rõ giữ phần còn lại trong Backlog, chỉnh Task rồi kiểm định lại, hoặc dùng strategy `FIT_CAPACITY` để tạo lại Milestones và duyệt lại scope. `INFEASIBLE` bị chặn Apply bằng `PLAN_INFEASIBLE`. Apply `PARTIAL` bắt buộc `confirm_partial_schedule = true` và backend tính lại feasibility theo availability mới nhất.
   - **What-if Planning (`proposal_type = 'WHAT_IF_SIMULATION'`)**: Cho phép người học tạo bản mô phỏng kịch bản giả định (ví dụ: *"Nếu tuần tới tôi chỉ học được 1h/ngày hoặc muốn xong sớm hơn 2 tuần thì lịch sẽ thay đổi thế nào?"*) trên `ScheduleProposal` mà hoàn toàn không ảnh hưởng đến `OfficialSchedule` đang chạy cho tới khi bấm `Apply`.
 - **Tiền điều kiện**: Milestones đã ở trạng thái `APPROVED`; Learner đã có cấu hình Availability hợp lệ; tài khoản còn hạn ngạch AI.
 - **Tác nhân kích hoạt**: Learner bấm "Tạo Đề xuất Lịch trình" hoặc "Mô phỏng What-if" (`UC-08`).
@@ -957,6 +963,7 @@ Mục này chuẩn hóa toàn bộ các máy trạng thái (State Machines) củ
 - **Mô tả**: Mọi đề xuất lịch học do AI sinh ra (bao gồm lập lịch lộ trình mới tại `FR-PLAN-002` / `UC-08` và dời lịch quá hạn / tái thiết trong phạm vi 1 lộ trình tại `FR-ADAPT-002` / `UC-23`, `UC-24`) bắt buộc phải đi qua cổng kiểm định 3 tầng (xem `ADR-009`), đồng thời bộ kiểm định ràng buộc cứng tất định (Tầng 2 — `UC-12`) được tái sử dụng cho mọi thao tác lưu/sửa lịch thủ công (`UC-09`, `UC-11`, `UC-13`) và tịnh tiến Domino Shift (`UC-22`):
   1. *Tầng 1 — Chốt chặn cứng (Hard Blocking Gate — Cú pháp & JSON Schema)*: Kiểm tra tính toàn vẹn cấu trúc JSON Schema, định dạng ngày giờ hợp lệ và tính xác thực của `milestone_id` / `task_id` thuộc đúng Roadmap đang xét.
   2. *Tầng 2 — Chốt chặn cứng (Hard Blocking Gate — Deterministic Constraint Engine 100% — `UC-12`)*:
+     - Kiểm tra Milestone không rỗng Task, coverage đầy đủ của `covered_outcome_ids` và `required_concepts`, objective/criteria đo được, Task không trùng nghĩa, dependency hợp lệ và tổng effort không lệch bất hợp lý so với Milestone.
      - Kiểm tra toán học quỹ thời gian rảnh mỗi ngày và tổng tuần không bị vượt trần ở Chế độ A (`BUSR-03`, `FR-AVAIL-001`, `OS-06`) dựa trên `UnifiedAvailabilityModel`.
      - Kiểm tra từng khối `schedule_blocks` (`scheduled_duration_minutes`) nằm trọn trong khung giờ rảnh thực tế ở Chế độ B (`BUSR-03`, `FR-AVAIL-002`) và quy tắc Tràn giờ mềm tối đa 30 phút cho task cuối ngày (`BUSR-04`).
      - Kiểm tra không trùng lấn lịch (Zero Overlap) với `OfficialSchedule` của các lộ trình `ACTIVE` khác và khoảng bận từ lịch ngoại vi (`BUSR-05`, `FR-AVAIL-003`).
@@ -964,6 +971,7 @@ Mục này chuẩn hóa toàn bộ các máy trạng thái (State Machines) củ
      - Kiểm tra giới hạn thời lượng task hợp lệ (`estimated_effort` / `estimated_minutes`): **$30\text{--}120$ phút** đối với task do AI sinh (`FR-PLAN-002`, `FR-ADAPT-002`, có thể tách thành các `schedule_blocks` $\ge 30$ phút) và **$15\text{--}240$ phút** đối với task do người học tạo hoặc chỉnh sửa thủ công (`FR-PLAN-004`, `FR-TASK-001`).
      - Kiểm tra 5 quy tắc **Schedule Resilience**: (1) `Buffer Time` ($\ge 10\text{--}15$ phút nghỉ giữa các `schedule_blocks`), (2) `Recovery Window` (giữ $\ge 15\%$ dung lượng dự phòng tuần), (3) `Daily Workload Cap` (trần nỗ lực nhận thức mỗi ngày), (4) `Protected Sessions` (không tự động dời các phiên đã ghim `is_protected = TRUE`), và (5) `Schedule Stability` (neo giữ lịch trong cửa sổ gần khi tái lập lịch).
   3. *Tầng 3 — Cổng tham vấn mềm (Soft Advisory Gate — Lightweight LLM Pedagogical Judge)*: Đánh giá độ dốc nhận thức (kiến thức nền tảng xếp trước nâng cao) và tính hợp lý của khối lượng học, vận hành với giới hạn thời gian chờ độc lập **$\le 5\text{ giây}$** và cơ chế **Fail-Open**.
+- **Rà soát chất lượng trước Tầng 1–3**: Hai AI Critic độc lập cho từng giai đoạn Milestone và Task chạy song song qua Shared AI Harness Runtime. Lỗi nghiêm trọng của Critic là hard-block cho bản nháp sinh bởi AI; Planner được tối đa 2 vòng repair và mỗi repair phải được cả deterministic gate lẫn hai Critic rà lại. Planner, Critic và repair dùng chung một quota reservation; toàn pipeline chịu hard timeout tổng 55 giây.
 - **Tiền điều kiện**: Hệ thống nhận dữ liệu lịch dự thảo từ AI hoặc yêu cầu thay đổi lịch từ người học.
 - **Tác nhân kích hoạt**: Sự kiện sinh đề xuất từ AI (`UC-08`, `UC-23`, `UC-24`) hoặc thao tác áp dụng/chỉnh sửa lịch của người học (`UC-08`, `UC-09`, `UC-11`, `UC-13`, `UC-22`, `UC-23`, `UC-24`).
 - **Dữ liệu đầu vào**: Danh sách task dự thảo/thay đổi, Quan hệ tiên quyết, Cấu hình thời gian rảnh (Availability), Lịch chính thức hiện có và khoảng bận ngoại vi.

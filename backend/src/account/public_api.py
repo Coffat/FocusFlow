@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 from uuid import UUID
 
 from src.shared_kernel.domain.events import DomainEvent
@@ -97,6 +97,11 @@ class AvailabilitySnapshotDTO:
     daily_quota_minutes: dict[str, int] = field(default_factory=dict)
     availability_slots: tuple[dict[str, Any], ...] = ()
     disabled_weekdays: tuple[str, ...] = ()
+    calendar_integration_mode: str = "NONE"
+    allowed_window_start: str = "07:00"
+    allowed_window_end: str = "23:00"
+    min_session_minutes: int = 30
+    is_persisted: bool = True
 
 
 @dataclass(frozen=True)
@@ -159,7 +164,7 @@ class QuotaFacadePort(Protocol):
         reservation_id: UUID,
         prompt_tokens: int = 0,
         completion_tokens: int = 0,
-        model_name: str = "gemini-2.5-flash",
+        model_name: str = "gemini-3.8-flash",
     ) -> None: ...
 
     async def release_reservation(
@@ -287,6 +292,7 @@ class CalendarBusyIntervalDTO:
     end_time: datetime
 
 
+@runtime_checkable
 class CalendarConnectionQueryPort(Protocol):
     """Cross-context read-only query port for Google/Outlook Calendar connection state."""
 
@@ -305,6 +311,7 @@ class CalendarConnectionQueryPort(Protocol):
     ) -> list[CalendarBusyIntervalDTO]: ...
 
 
+@runtime_checkable
 class CalendarSyncFacadePort(Protocol):
     """Cross-context facade port for calendar synchronization operations (UC-17)."""
 
@@ -312,7 +319,7 @@ class CalendarSyncFacadePort(Protocol):
         self,
         schedule_id: UUID,
         user_id: UUID,
-    ) -> None: ...
+    ) -> str: ...
 
 
 _quota_factory: Any = None

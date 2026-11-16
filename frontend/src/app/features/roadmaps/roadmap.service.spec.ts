@@ -108,7 +108,11 @@ describe('RoadmapService (WBS 6.3 AI Planning & Approval Store)', () => {
           question_id: 'q1',
           text: 'Bạn đã từng học lập trình Python trước đây chưa?',
           question_type: 'single_choice',
-          options: ['Chưa từng', 'Đã học cơ bản', 'Thành thạo'],
+          options: [
+            { id: 'none', label: 'Chưa từng' },
+            { id: 'basic', label: 'Đã học cơ bản' },
+            { id: 'advanced', label: 'Thành thạo' },
+          ],
         },
       ],
     });
@@ -144,7 +148,8 @@ describe('RoadmapService (WBS 6.3 AI Planning & Approval Store)', () => {
     // Test skip clarification
     service.setActiveStep(1);
     service.skipClarification();
-    expect(service.activeStep()).toBe(2);
+    expect(service.activeStep()).toBe(1);
+    expect(service.clarificationStatus()).toBe('ERROR');
   });
 
   it('sinh Cột mốc bằng AI qua 2-Stage SSE, theo dõi retry và phê duyệt Cột mốc (FR-PLAN-001)', () => {
@@ -166,6 +171,7 @@ describe('RoadmapService (WBS 6.3 AI Planning & Approval Store)', () => {
     );
     expect(postReq.request.method).toBe('POST');
     expect(postReq.request.headers.has('Idempotency-Key')).toBe(true);
+    expect(postReq.request.body.generation_strategy).toBe('FULL_SCOPE');
 
     const ticket: SseJobTicketResponse = {
       job_id: '018f0000-0000-7000-8000-000000000111',
@@ -206,6 +212,7 @@ describe('RoadmapService (WBS 6.3 AI Planning & Approval Store)', () => {
         sequence_order: 1,
         title: 'Chặng 1: Domain Model',
         description: 'Thiết kế Aggregate',
+        estimated_effort_minutes: 60,
         status: 'PENDING',
         created_at: '2026-10-30T08:00:00Z',
         updated_at: '2026-10-30T08:00:00Z',
@@ -216,6 +223,7 @@ describe('RoadmapService (WBS 6.3 AI Planning & Approval Store)', () => {
         sequence_order: 2,
         title: 'Chặng 2: Use Cases & Ports',
         description: 'Xây dựng tầng Application',
+        estimated_effort_minutes: 60,
         status: 'PENDING',
         created_at: '2026-10-30T08:00:00Z',
         updated_at: '2026-10-30T08:00:00Z',
@@ -226,6 +234,7 @@ describe('RoadmapService (WBS 6.3 AI Planning & Approval Store)', () => {
         sequence_order: 3,
         title: 'Chặng 3: Presentation & UI',
         description: 'Kết nối OpenAPI & Angular 21',
+        estimated_effort_minutes: 60,
         status: 'PENDING',
         created_at: '2026-10-30T08:00:00Z',
         updated_at: '2026-10-30T08:00:00Z',
@@ -277,6 +286,41 @@ describe('RoadmapService (WBS 6.3 AI Planning & Approval Store)', () => {
     expect(service.activeStep()).toBe(3);
   });
 
+  it('hiển thị lỗi timeout thực từ server thay vì báo mất kết nối SSE', () => {
+    const stream$ = new Subject<AiStreamChunkEvent<unknown>>();
+    vi.spyOn(aiSseService, 'observeJobStream').mockReturnValue(stream$.asObservable());
+
+    service.generateMilestonesWithAi(mockRoadmap.id);
+    httpTesting
+      .expectOne(API_ENDPOINTS.ROADMAPS.MILESTONES_GENERATE_JOBS(mockRoadmap.id))
+      .flush({
+        job_id: 'job-timeout-1',
+        reservation_id: 'reservation-timeout-1',
+        roadmap_id: mockRoadmap.id,
+        job_type: 'MILESTONE_GEN',
+        status: 'RESERVED',
+        stream_url: '/api/v1/roadmaps/jobs/job-timeout-1/stream',
+        jobId: 'job-timeout-1',
+        reservationId: 'reservation-timeout-1',
+        streamUrl: '/api/v1/roadmaps/jobs/job-timeout-1/stream',
+      } satisfies SseJobTicketResponse);
+
+    stream$.next({
+      eventType: 'failed',
+      stage: 'FAILED',
+      progress: 100,
+      code: 'AI_GATEWAY_TIMEOUT',
+      message: 'AI mất quá nhiều thời gian phản hồi. Vui lòng thử lại.',
+    });
+    stream$.complete();
+
+    expect(service.errorMessage()).toBe(
+      'AI mất quá nhiều thời gian phản hồi. Vui lòng thử lại.'
+    );
+    expect(service.sseProgress().isStreaming).toBe(false);
+    expect(service.sseProgress().stage).toBe('FAILED');
+  });
+
   it('sinh Đề xuất Lịch học AI (UC-08) qua 2-Stage SSE và chỉnh sửa nhiệm vụ với updateProposal (UC-12)', () => {
     const stream$ = new Subject<AiStreamChunkEvent<unknown>>();
     vi.spyOn(aiSseService, 'observeJobStream').mockReturnValue(stream$.asObservable());
@@ -308,11 +352,16 @@ describe('RoadmapService (WBS 6.3 AI Planning & Approval Store)', () => {
       status: 'DRAFT',
       is_valid: true,
       has_soft_overflow: false,
+      judge_status: 'PASSED',
+      is_partial_schedule: false,
+      scheduled_tasks_count: 1,
+      unscheduled_tasks_count: 0,
       tasks: [
         {
           task_id: 't-1',
           milestone_id: 'ms-1',
           title: 'Xây dựng Validation Gate',
+          task_type: 'PRACTICE',
           estimated_minutes: 60,
           scheduled_date: '2026-11-02',
           scheduled_start: '2026-11-02T19:30:00Z',
@@ -389,11 +438,16 @@ describe('RoadmapService (WBS 6.3 AI Planning & Approval Store)', () => {
       status: 'DRAFT',
       is_valid: true,
       has_soft_overflow: true,
+      judge_status: 'PASSED',
+      is_partial_schedule: false,
+      scheduled_tasks_count: 1,
+      unscheduled_tasks_count: 0,
       tasks: [
         {
           task_id: 'task-1',
           milestone_id: 'ms-1',
           title: 'Thực hành Spatio-Temporal Engine',
+          task_type: 'PRACTICE',
           estimated_minutes: 90,
           scheduled_date: '2026-11-02',
           scheduled_start: '20:15',
@@ -432,6 +486,7 @@ describe('RoadmapService (WBS 6.3 AI Planning & Approval Store)', () => {
           sequence_order: 1,
           title: 'Chặng 1',
           description: null,
+          estimated_effort_minutes: 60,
           status: 'APPROVED',
           created_at: '2026-10-30T08:00:00Z',
           updated_at: '2026-10-30T08:00:00Z',
@@ -462,7 +517,11 @@ describe('RoadmapService (WBS 6.3 AI Planning & Approval Store)', () => {
       API_ENDPOINTS.ROADMAPS.PROPOSAL_APPLY(mockRoadmap.id, proposalWithSoftOverflow.id)
     );
     expect(applyReq.request.method).toBe('POST');
-    expect(applyReq.request.body).toEqual({ confirm_soft_overflow: true });
+    expect(applyReq.request.body).toEqual({
+      confirm_soft_overflow: true,
+      confirm_warnings: false,
+      confirm_partial_schedule: false,
+    });
 
     const applyResponse: ApplyScheduleProposalResponse = {
       roadmap_id: mockRoadmap.id,
@@ -478,6 +537,8 @@ describe('RoadmapService (WBS 6.3 AI Planning & Approval Store)', () => {
       affected_tasks_count: 1,
       total_shifted_minutes: 90,
       trigger_type: 'INITIAL_APPLY',
+      calendar_sync_status: 'NOT_CONNECTED',
+      backlog_unscheduled_tasks_count: 0,
       official_schedule: {
         id: 'sched-001',
         roadmap_id: mockRoadmap.id,
@@ -546,11 +607,16 @@ describe('RoadmapService (WBS 6.3 AI Planning & Approval Store)', () => {
       status: 'DRAFT',
       is_valid: true,
       has_soft_overflow: false,
+      judge_status: 'PASSED',
+      is_partial_schedule: false,
+      scheduled_tasks_count: 1,
+      unscheduled_tasks_count: 0,
       tasks: [
         {
           task_id: 'task-manual-1',
           milestone_id: 'ms-1',
           title: 'Tự đọc chương 1',
+          task_type: 'PRACTICE',
           estimated_minutes: 75,
           scheduled_date: '2026-11-02',
           scheduled_start: '19:30',

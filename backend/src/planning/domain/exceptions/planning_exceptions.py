@@ -96,6 +96,63 @@ class SoftOverflowConfirmationRequiredError(PlanningDomainError):
         self.overflow_minutes = overflow_minutes
 
 
+class FreshCalendarConflictDetectedError(PlanningDomainError):
+    """Raised on Apply when a fresh Google Calendar FreeBusy or active roadmap conflict is detected (AC-09)."""
+
+    def __init__(
+        self,
+        conflicts: list[dict[str, object]] | None = None,
+        message: str | None = None,
+    ) -> None:
+        msg = message or (
+            "Phát hiện xung đột mới với sự kiện bận trên Google Calendar hoặc lộ trình đang học. "
+            "Vui lòng bấm 'Tối ưu lại lịch' (Reoptimize) trước khi áp dụng."
+        )
+        super().__init__(message=msg, code="FRESH_CALENDAR_CONFLICT_DETECTED")
+        self.conflicts = conflicts or []
+
+
+class JudgeReviewConfirmationRequiredError(PlanningDomainError):
+    """Raised on Apply when Tier 3 Pedagogical Judge marked proposal as NEEDS_REVIEW/REVIEW_PENDING without confirmation."""
+
+    def __init__(
+        self,
+        judge_status: str = "NEEDS_REVIEW",
+        advisory_warnings: list[str] | None = None,
+        message: str | None = None,
+    ) -> None:
+        msg = message or (
+            f"Đề xuất lịch học đang ở trạng thái thẩm định '{judge_status}'. "
+            "Cần xác nhận (confirm_warnings=True hoặc confirm_soft_overflow=True) trước khi áp dụng."
+        )
+        super().__init__(message=msg, code="JUDGE_REVIEW_CONFIRMATION_REQUIRED")
+        self.judge_status = judge_status
+        self.advisory_warnings = advisory_warnings or []
+
+
+class PartialScheduleConfirmationRequiredError(PlanningDomainError):
+    def __init__(self) -> None:
+        super().__init__(
+            message=(
+                "Lịch chỉ xếp được một phần Roadmap trước deadline. "
+                "Hãy xác nhận giữ phần còn lại trong Backlog."
+            ),
+            code="PARTIAL_SCHEDULE_CONFIRMATION_REQUIRED",
+        )
+
+
+class PlanInfeasibleError(PlanningDomainError):
+    def __init__(self, schedulable_ratio: float) -> None:
+        super().__init__(
+            message=(
+                "Mục tiêu hiện không khả thi với deadline và quỹ giờ đã chọn. "
+                "Vui lòng gia hạn deadline, tăng thời gian rảnh hoặc thu hẹp mục tiêu."
+            ),
+            code="PLAN_INFEASIBLE",
+        )
+        self.schedulable_ratio = schedulable_ratio
+
+
 class GoalNotFoundError(PlanningDomainError):
     """Raised when a goal is not found or does not belong to the current user (IDOR protection)."""
 
@@ -106,6 +163,16 @@ class GoalNotFoundError(PlanningDomainError):
             else message
         )
         super().__init__(message=msg, code="GOAL_NOT_FOUND")
+
+
+class InvalidClarificationSessionError(PlanningDomainError):
+    """Raised when a clarification session/round/question does not match server state."""
+
+    def __init__(
+        self,
+        message: str = "Phiên làm rõ mục tiêu không hợp lệ hoặc đã kết thúc.",
+    ) -> None:
+        super().__init__(message=message, code="INVALID_CLARIFICATION_SESSION")
 
 
 class RoadmapNotFoundError(PlanningDomainError):
@@ -178,3 +245,13 @@ class ToolCallLimitExceededError(PlanningDomainError):
         super().__init__(message=msg, code="TOOL_CALL_LIMIT_EXCEEDED")
         self.stage = stage
         self.max_calls = max_calls
+
+
+class AIExecutionError(PlanningDomainError):
+    """Raised when an external AI service fails or is unavailable."""
+
+    def __init__(
+        self,
+        message: str = "Hệ thống AI hiện đang bận hoặc gặp sự cố kết nối. Vui lòng bấm 'Thử lại' sau giây lát.",
+    ) -> None:
+        super().__init__(message=message, code="AI_EXECUTION_ERROR")

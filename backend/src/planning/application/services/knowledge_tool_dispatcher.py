@@ -30,20 +30,8 @@ class RoadmapPipelineStage(StrEnum):
     PEDAGOGICAL_JUDGE = "PEDAGOGICAL_JUDGE"
 
 
-STAGE_ALLOWED_TOOLS: dict[RoadmapPipelineStage, frozenset[str]] = {
-    RoadmapPipelineStage.GOAL_CLARIFICATION: frozenset(),
-    RoadmapPipelineStage.MILESTONE_PLANNING: frozenset(
-        {"search_learning_concepts", "get_concept_prerequisite_graph"}
-    ),
-    RoadmapPipelineStage.TASK_DECOMPOSITION: frozenset(
-        {
-            "search_learning_concepts",
-            "get_concept_prerequisite_graph",
-            "get_learning_resources_and_guidance",
-        }
-    ),
-    RoadmapPipelineStage.PEDAGOGICAL_JUDGE: frozenset(),
-}
+# Populated and verified from `SkillDefinition.allowed_tools` in `roadmap_skills.py`.
+STAGE_ALLOWED_TOOLS: dict[RoadmapPipelineStage, frozenset[str]] = {}
 
 SEARCH_LEARNING_CONCEPTS_TOOL_DECL = LLMToolDeclarationDTO(
     name="search_learning_concepts",
@@ -190,14 +178,26 @@ class KnowledgeToolDispatcher:
         return tuple(self._collected_resources)
 
     def get_allowed_tool_declarations(self) -> list[LLMToolDeclarationDTO]:
-        allowed_names = STAGE_ALLOWED_TOOLS.get(self._stage, frozenset())
+        from src.planning.application.services.roadmap_skills import (
+            STAGE_ALLOWED_TOOLS as SKILL_STAGE_ALLOWED_TOOLS,
+        )
+
+        allowed_names = SKILL_STAGE_ALLOWED_TOOLS.get(
+            self._stage, STAGE_ALLOWED_TOOLS.get(self._stage, frozenset())
+        )
         return [
             decl for name, decl in ALL_KNOWLEDGE_TOOL_DECLARATIONS.items() if name in allowed_names
         ]
 
     async def dispatch(self, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         """Validate tool permission, call limit, and input arguments, then execute with timeout."""
-        allowed = STAGE_ALLOWED_TOOLS.get(self._stage, frozenset())
+        from src.planning.application.services.roadmap_skills import (
+            STAGE_ALLOWED_TOOLS as SKILL_STAGE_ALLOWED_TOOLS,
+        )
+
+        allowed = SKILL_STAGE_ALLOWED_TOOLS.get(
+            self._stage, STAGE_ALLOWED_TOOLS.get(self._stage, frozenset())
+        )
         if tool_name not in allowed:
             raise UnauthorizedToolCallError(tool_name=tool_name, stage=self._stage.value)
 
@@ -450,11 +450,15 @@ def build_planning_tool_registry(
         max_tool_calls=max_tool_calls,
         timeout_seconds=timeout_seconds,
     )
+    from src.planning.application.services.roadmap_skills import (
+        STAGE_ALLOWED_TOOLS as SKILL_STAGE_ALLOWED_TOOLS,
+    )
+
     registry = ToolRegistry()
     for tool_name, decl in ALL_KNOWLEDGE_TOOL_DECLARATIONS.items():
         allowed_stages = frozenset(
             pipe_stage.value
-            for pipe_stage, names in STAGE_ALLOWED_TOOLS.items()
+            for pipe_stage, names in SKILL_STAGE_ALLOWED_TOOLS.items()
             if tool_name in names
         )
 

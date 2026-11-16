@@ -1,66 +1,111 @@
-import hashlib
-import math
+import asyncio
+import os
+import re
 from typing import Any
 
 from src.shared_kernel.application.embedding_port import EmbeddingProviderPort
 from src.shared_kernel.config import get_settings
 
 
-class MockEmbeddingAdapter(EmbeddingProviderPort):
-    """Network-free deterministic embeddings for tests, CI and offline defense."""
-
-    dimensions = 768
-
-    async def embed(self, texts: list[str]) -> list[list[float]]:
-        return [self._embed_one(text) for text in texts]
-
-    @classmethod
-    def _embed_one(cls, text: str) -> list[float]:
-        digest = hashlib.sha256(text.encode()).digest()
-        values = [
-            ((digest[index % len(digest)] / 255.0) * 2.0) - 1.0 for index in range(cls.dimensions)
-        ]
-        norm = math.sqrt(sum(value * value for value in values)) or 1.0
-        return [value / norm for value in values]
-
-
 class LiteLLMEmbeddingAdapter(EmbeddingProviderPort):
-    """Provider-agnostic embedding adapter via LiteLLM with deterministic offline fallback."""
+    """Fail-closed provider-agnostic embedding adapter via LiteLLM and cobhub gateway."""
 
     dimensions = 768
 
     def __init__(self, *, model: str | None = None, api_key: str | None = None) -> None:
-        settings = get_settings()
-        self._provider = settings.llm_provider.strip().lower()
-        self._api_key = api_key if api_key is not None else settings.llm_api_key
-        if model is not None:
-            self._model = model
-        elif self._provider == "gemini":
-            self._model = "gemini/text-embedding-004"
-        elif self._provider == "openai":
-            self._model = "text-embedding-3-small"
-        else:
-            self._model = f"{self._provider}/text-embedding-004"
+        self._model_override = model
+        self._api_key_override = api_key
+        self._base_url: str = ""
+        self._model: str = "gemini/gemini-embedding-2"
+        self._settings = get_settings()
+
+    @property
+    def _settings(self) -> Any:
+        return self.__settings
+
+    @_settings.setter
+    def _settings(self, value: Any) -> None:
+        self.__settings = value
+        self._base_url = self._compute_base_url()
+        self._model = self._compute_model()
+
+    def _resolve_provider(self) -> str:
+        return (getattr(self._settings, "llm_provider", "") or "").strip().lower()
+
+    def _resolve_api_key(self) -> str:
+        raw = (
+            self._api_key_override
+            if self._api_key_override is not None
+            else getattr(self._settings, "llm_api_key", "")
+        )
+        return (raw or "").strip()
+
+    def _compute_base_url(self) -> str:
+        base_url = (getattr(self._settings, "llm_base_url", "") or "").strip()
+        if base_url and (os.path.exists("/.dockerenv") or os.environ.get("RUNNING_IN_DOCKER")):
+            base_url = re.sub(
+                r"^http://(127\.0\.0\.1|localhost)(:\d+)",
+                r"http://host.docker.internal\2",
+                base_url,
+            )
+        return base_url
+
+    def _compute_model(self) -> str:
+        if self._model_override is not None:
+            return self._model_override
+        provider = self._resolve_provider()
+        configured = (
+            getattr(self._settings, "llm_embedding_model", "") or "gemini/gemini-embedding-2"
+        ).strip()
+        if provider == "gemini":
+            return configured if "/" in configured else f"gemini/{configured}"
+        if provider == "openai":
+            return configured or "text-embedding-3-small"
+        return configured if "/" in configured else f"{provider}/{configured}"
+
+    def _candidate_models(self) -> tuple[str, ...]:
+        return (self._model,)
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         if not texts:
             return []
-        if self._provider == "mock" or not self._api_key or self._api_key == "mock-key":
-            return await MockEmbeddingAdapter().embed(texts)
-        try:
-            import litellm
 
-            response: Any = await litellm.aembedding(
-                model=self._model,
-                input=texts,
-                api_key=self._api_key,
-                dimensions=self.dimensions,
+        provider = self._resolve_provider()
+        if not provider or provider in ("mock", "local_mock"):
+            raise RuntimeError(
+                "AI_EMBEDDING_PROVIDER_NOT_CONFIGURED: "
+                f"Unsupported llm_provider={getattr(self._settings, 'llm_provider', None)!r}."
+            )
+        if provider == "gemini" and not self._base_url:
+            raise RuntimeError(
+                "AI_EMBEDDING_PROVIDER_NOT_CONFIGURED: Missing LLM_BASE_URL for cobhub gateway."
+            )
+        api_key = self._resolve_api_key()
+        if not api_key or api_key in ("mock-key", "your-api-key"):
+            raise RuntimeError(
+                "AI_EMBEDDING_PROVIDER_NOT_CONFIGURED: Missing valid LLM_API_KEY for embeddings."
+            )
+
+        import litellm
+
+        model = self._model
+        try:
+            response: Any = await asyncio.wait_for(
+                litellm.aembedding(
+                    model=model,
+                    input=texts,
+                    api_key=api_key,
+                    api_base=self._base_url or None,
+                    dimensions=self.dimensions,
+                ),
+                timeout=3.0,
             )
             data = getattr(response, "data", None)
             if isinstance(response, dict):
                 data = response.get("data")
             if isinstance(data, list) and len(data) == len(texts):
                 vectors: list[list[float]] = []
+                valid = True
                 for item in data:
                     emb = (
                         item.get("embedding")
@@ -70,8 +115,12 @@ class LiteLLMEmbeddingAdapter(EmbeddingProviderPort):
                     if isinstance(emb, list) and len(emb) >= self.dimensions:
                         vectors.append([float(v) for v in emb[: self.dimensions]])
                     else:
-                        return await MockEmbeddingAdapter().embed(texts)
-                return vectors
-        except Exception:
-            pass
-        return await MockEmbeddingAdapter().embed(texts)
+                        valid = False
+                        break
+                if valid:
+                    return vectors
+            raise RuntimeError(f"Invalid embedding response shape from model={model}")
+        except Exception as exc:
+            raise RuntimeError(
+                f"AI_EMBEDDING_FAILED: Embedding model failed ({model}): {exc}"
+            ) from exc

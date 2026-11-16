@@ -2,7 +2,10 @@ from datetime import UTC, date, datetime
 from uuid import UUID
 
 from src.account.public_api import UserQueryPort
-from src.planning.application.dtos.planning_dtos import CreateGoalAndRoadmapResultDTO
+from src.planning.application.dtos.planning_dtos import (
+    ClarificationContextPayload,
+    CreateGoalAndRoadmapResultDTO,
+)
 from src.planning.application.ports.planning_repository_ports import (
     GoalRepositoryPort,
     RoadmapRepositoryPort,
@@ -40,6 +43,8 @@ class CreateGoalAndRoadmapUseCase:
         prior_knowledge_level: str = "BEGINNER",
         start_date: date | None = None,
         target_date: date | None = None,
+        weekly_commitment_hours: float | None = None,
+        input_provenance: dict[str, str] | None = None,
         tier: str | None = None,
         now: datetime | None = None,
     ) -> CreateGoalAndRoadmapResultDTO:
@@ -64,6 +69,14 @@ class CreateGoalAndRoadmapUseCase:
         )
         effective_start_date = start_date or effective_now.date()
 
+        initial_clarification = ClarificationContextPayload(
+            status="PARTIAL",
+            questions_version="v2.0",
+            input_provenance=dict(input_provenance or {}),
+            weekly_commitment_hours=weekly_commitment_hours,
+            unresolved_assumptions=["Phiên làm rõ mục tiêu chưa hoàn tất."],
+            updated_at=effective_now.isoformat(),
+        )
         goal = Goal(
             id=generate_uuid7(),
             user_id=user_id,
@@ -72,6 +85,7 @@ class CreateGoalAndRoadmapUseCase:
             target_date=target_date,
             status=GoalStatus.ACTIVE,
             prior_knowledge_level=prior_knowledge_level or "BEGINNER",
+            clarification_context=initial_clarification.to_json_str(),
             created_at=effective_now,
             updated_at=effective_now,
         )

@@ -1,10 +1,15 @@
 from collections.abc import Sequence
-from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from src.account.public_api import AvailabilityQueryPort, LearnerProfileQueryPort, UserQueryPort
+from src.account.public_api import (
+    AvailabilityQueryPort,
+    CalendarConnectionQueryPort,
+    CalendarSyncFacadePort,
+    LearnerProfileQueryPort,
+    UserQueryPort,
+)
 from src.evaluation.public_api import ScheduleChangeLogPort
 from src.execution.public_api import (
     ExecutionScheduleSyncPort,
@@ -30,18 +35,29 @@ from src.planning.application.ports.schedule_block_repository_port import (
     ScheduleBlockRepositoryPort,
 )
 from src.planning.application.ports.sse_job_port import SseJobPort
+from src.planning.application.services.effective_availability_service import (
+    GetEffectiveAvailabilityUseCase,
+)
 from src.planning.application.services.existing_schedule_occupancy import (
     expand_existing_schedule_occupancy,
+)
+from src.planning.application.services.learning_quality import (
+    FeasibilityStatus,
+    assess_schedule_feasibility,
+    validate_task_coverage,
 )
 from src.planning.application.services.validation_gate import (
     ProposalValidationGateOrchestrator,
 )
 from src.planning.application.use_cases.proposal_generation_use_cases import (
-    build_availability_config_from_snapshot,
     normalize_proposal_task_ids_and_dependencies,
 )
 from src.planning.domain.events.planning_events import MilestoneApprovedEvent
 from src.planning.domain.exceptions.planning_exceptions import (
+    FreshCalendarConflictDetectedError,
+    JudgeReviewConfirmationRequiredError,
+    PartialScheduleConfirmationRequiredError,
+    PlanInfeasibleError,
     PlanningDomainError,
     ProposalValidationGateError,
     RoadmapNotFoundError,
@@ -224,6 +240,7 @@ class UpdateScheduleProposalUseCase:
         uow: AsyncUnitOfWork,
         user_query_port: UserQueryPort | None = None,
         block_repo: ScheduleBlockRepositoryPort | None = None,
+        calendar_connection_query_port: CalendarConnectionQueryPort | None = None,
     ) -> None:
         self._roadmap_repo = roadmap_repo
         self._milestone_repo = milestone_repo
@@ -233,6 +250,7 @@ class UpdateScheduleProposalUseCase:
         self._uow = uow
         self._user_query_port = user_query_port
         self._block_repo = block_repo
+        self._calendar_connection_port = calendar_connection_query_port
 
     async def execute(
         self,
@@ -257,12 +275,14 @@ class UpdateScheduleProposalUseCase:
         milestones = await self._milestone_repo.list_by_roadmap_id(roadmap_id)
         valid_mids: set[UUID | str] = {m.id for m in milestones}
 
-        avail_snapshot = await self._availability_port.get_active_availability(user_id)
-        avail_config = build_availability_config_from_snapshot(avail_snapshot)
+        user_tz = "UTC"
         if self._user_query_port is not None:
             user_snapshot = await self._user_query_port.get_user_by_id(user_id)
-            if user_snapshot is not None:
-                avail_config = replace(avail_config, timezone=user_snapshot.timezone)
+            user_tz = (
+                user_snapshot.timezone
+                if user_snapshot is not None and user_snapshot.timezone
+                else "Asia/Ho_Chi_Minh"
+            )
 
         active_roadmaps = await self._roadmap_repo.list_by_user_id(user_id, status="ACTIVE")
         other_roadmaps = [r for r in active_roadmaps if r.id != roadmap_id]
@@ -276,6 +296,22 @@ class UpdateScheduleProposalUseCase:
             existing_tasks = expand_existing_schedule_occupancy(
                 existing_tasks, await self._block_repo.list_by_roadmap_ids(other_ids)
             )
+
+        effective_avail_uc = GetEffectiveAvailabilityUseCase(
+            availability_query_port=self._availability_port,
+            calendar_connection_query_port=self._calendar_connection_port,
+            execution_sync_port=self._execution_sync_port,
+        )
+        effective_avail = await effective_avail_uc.execute(
+            user_id=user_id,
+            start_date=roadmap.start_date or effective_now.date(),
+            target_date=roadmap.target_date,
+            timezone=user_tz,
+            existing_tasks=existing_tasks,
+            exclude_roadmap_id=roadmap_id,
+        )
+        avail_config = effective_avail.availability_config
+        existing_tasks = list(effective_avail.effective_existing_tasks)
 
         normalized_payload = _serialize_task_inputs(tasks, dependencies)
         original_tasks = {
@@ -305,13 +341,20 @@ class UpdateScheduleProposalUseCase:
             existing_tasks=existing_tasks,
             current_roadmap_target_date=roadmap.target_date,
             is_ai_generated=False,
+            allow_unscheduled_tasks=any(
+                isinstance(task, dict) and task.get("scheduled_date") is None
+                for task in normalized_payload["tasks"]
+            ),
         )
+        coverage_violations = validate_task_coverage(normalized_payload["tasks"], milestones)
+        combined_violations = [*gate_result.violations, *coverage_violations]
+        proposal_is_valid = gate_result.is_valid and not coverage_violations
 
-        if reject_invalid and not gate_result.is_valid:
+        if reject_invalid and not proposal_is_valid:
             raise ProposalValidationGateError(
                 message="Bản chỉnh sửa đề xuất lịch học vi phạm các ràng buộc kiểm định UC-12.",
                 code="PROPOSAL_VALIDATION_FAILED",
-                violations=[v.to_dict() for v in gate_result.violations],
+                violations=[v.to_dict() for v in combined_violations],
             )
 
         updated_data = dict(proposal.proposal_data)
@@ -324,9 +367,22 @@ class UpdateScheduleProposalUseCase:
         updated_data["soft_overflow_warnings"] = [
             w.to_dict() for w in gate_result.soft_overflow_warnings
         ]
-        updated_data["validation_violations"] = [v.to_dict() for v in gate_result.violations]
-        updated_data["is_valid"] = gate_result.is_valid
+        updated_data["validation_violations"] = [v.to_dict() for v in combined_violations]
+        updated_data["is_valid"] = proposal_is_valid
         updated_data["availability_mode"] = avail_config.mode
+        updated_data["availability_source_metadata"] = effective_avail.source_metadata
+        available_minutes = SpatioTemporalRuleEngine.calculate_available_capacity_minutes(
+            avail_config,
+            start_date=roadmap.start_date or effective_now.date(),
+            target_date=roadmap.target_date,
+            existing_tasks=existing_tasks,
+        )
+        feasibility = assess_schedule_feasibility(
+            [task for task in normalized_payload["tasks"] if isinstance(task, dict)],
+            available_minutes=available_minutes,
+        )
+        updated_data["feasibility"] = feasibility.to_dict()
+        updated_data["is_partial_schedule"] = feasibility.status is FeasibilityStatus.PARTIAL
 
         proposal.proposal_data = updated_data
         proposal.updated_at = effective_now
@@ -340,12 +396,16 @@ class UpdateScheduleProposalUseCase:
             for t in normalized_payload["tasks"]
             if isinstance(t, dict)
         )
+        advisories = list(gate_result.advisory_warnings)
+        for w in effective_avail.warnings:
+            if w not in advisories:
+                advisories.append(w)
         return ScheduleProposalViewDTO(
             proposal=saved_proposal,
-            is_valid=gate_result.is_valid,
-            violations=[v.to_dict() for v in gate_result.violations],
+            is_valid=proposal_is_valid,
+            violations=[v.to_dict() for v in combined_violations],
             soft_overflow_warnings=[w.to_dict() for w in gate_result.soft_overflow_warnings],
-            advisory_warnings=list(gate_result.advisory_warnings),
+            advisory_warnings=advisories,
             diff_summary={
                 "proposed_tasks_count": len(normalized_payload["tasks"]),
                 "proposed_total_minutes": proposed_minutes,
@@ -369,6 +429,8 @@ class ApplyScheduleProposalUseCase:
         schedule_change_log_port: ScheduleChangeLogPort,
         uow: AsyncUnitOfWork,
         user_query_port: UserQueryPort | None = None,
+        calendar_connection_query_port: CalendarConnectionQueryPort | None = None,
+        calendar_sync_facade: CalendarSyncFacadePort | None = None,
     ) -> None:
         self._roadmap_repo = roadmap_repo
         self._milestone_repo = milestone_repo
@@ -380,6 +442,63 @@ class ApplyScheduleProposalUseCase:
         self._change_log_port = schedule_change_log_port
         self._uow = uow
         self._user_query_port = user_query_port
+        self._calendar_connection_port = calendar_connection_query_port
+        self._calendar_sync_facade = calendar_sync_facade
+
+    @staticmethod
+    def _detect_fresh_calendar_conflicts(
+        proposal_data: dict[str, Any],
+        blocked_intervals: Sequence[dict[str, Any]],
+    ) -> list[dict[str, object]]:
+        conflicts: list[dict[str, object]] = []
+        raw_blocks = proposal_data.get("schedule_blocks")
+        raw_tasks = proposal_data.get("tasks", [])
+
+        candidate_sessions: list[dict[str, Any]] = []
+        if isinstance(raw_blocks, list) and raw_blocks:
+            for b in raw_blocks:
+                if isinstance(b, dict):
+                    candidate_sessions.append(
+                        {
+                            "task_id": str(b.get("task_id", "")),
+                            "scheduled_start": b.get("scheduled_start"),
+                            "scheduled_end": b.get("scheduled_end"),
+                        }
+                    )
+        elif isinstance(raw_tasks, list):
+            for t in raw_tasks:
+                if isinstance(t, dict) and t.get("scheduled_start") and t.get("scheduled_end"):
+                    candidate_sessions.append(
+                        {
+                            "task_id": str(t.get("task_id") or t.get("id") or ""),
+                            "title": str(t.get("title", "")),
+                            "scheduled_start": t.get("scheduled_start"),
+                            "scheduled_end": t.get("scheduled_end"),
+                        }
+                    )
+
+        for sess in candidate_sessions:
+            s_dt = parse_iso_datetime(sess.get("scheduled_start"))
+            e_dt = parse_iso_datetime(sess.get("scheduled_end"))
+            if s_dt is None or e_dt is None:
+                continue
+            for blocked in blocked_intervals:
+                b_start = parse_iso_datetime(blocked.get("start_time"))
+                b_end = parse_iso_datetime(blocked.get("end_time"))
+                if b_start is None or b_end is None:
+                    continue
+                if s_dt < b_end and b_start < e_dt:
+                    conflicts.append(
+                        {
+                            "task_id": sess.get("task_id"),
+                            "scheduled_start": s_dt.isoformat(),
+                            "scheduled_end": e_dt.isoformat(),
+                            "conflict_source": blocked.get("source", "GOOGLE_CALENDAR_BUSY"),
+                            "conflict_start": b_start.isoformat(),
+                            "conflict_end": b_end.isoformat(),
+                        }
+                    )
+        return conflicts
 
     async def execute(
         self,
@@ -388,6 +507,9 @@ class ApplyScheduleProposalUseCase:
         roadmap_id: UUID,
         proposal_id: UUID,
         confirm_soft_overflow: bool = False,
+        confirm_warnings: bool = False,
+        confirm_partial_schedule: bool = False,
+        idempotency_key: str | None = None,
         tier: str | None = None,
         now: datetime | None = None,
     ) -> ApplyScheduleProposalResultDTO:
@@ -401,15 +523,42 @@ class ApplyScheduleProposalUseCase:
         if proposal is None or proposal.roadmap_id != roadmap_id or proposal.user_id != user_id:
             raise ScheduleProposalNotFoundError()
 
+        existing_schedule = await self._schedule_repo.get_by_roadmap_id(roadmap_id)
+
+        # AC-10 Idempotency: If this exact proposal was already APPLIED, return idempotently
+        if proposal.status == ScheduleProposalStatus.APPLIED and existing_schedule is not None:
+            cached = proposal.proposal_data.get("last_apply_result", {})
+            if not isinstance(cached, dict):
+                cached = {}
+            return ApplyScheduleProposalResultDTO(
+                roadmap=roadmap,
+                official_schedule=existing_schedule,
+                proposal=proposal,
+                preserved_completed_tasks_count=int(
+                    cached.get("preserved_completed_tasks_count", 0)
+                ),
+                replaced_tasks_count=int(cached.get("replaced_tasks_count", 0)),
+                inserted_tasks_count=int(cached.get("inserted_tasks_count", 0)),
+                affected_tasks_count=int(cached.get("affected_tasks_count", 0)),
+                total_shifted_minutes=int(cached.get("total_shifted_minutes", 0)),
+                trigger_type=str(cached.get("trigger_type", "INITIAL_APPLY")),
+                calendar_sync_status=str(cached.get("calendar_sync_status", "NOT_CONNECTED")),
+                backlog_unscheduled_tasks_count=int(
+                    cached.get("backlog_unscheduled_tasks_count", 0)
+                ),
+            )
+
         milestones = await self._milestone_repo.list_by_roadmap_id(roadmap_id)
         valid_mids: set[UUID | str] = {m.id for m in milestones}
 
-        avail_snapshot = await self._availability_port.get_active_availability(user_id)
-        avail_config = build_availability_config_from_snapshot(avail_snapshot)
+        user_tz = "UTC"
         if self._user_query_port is not None:
             user_snapshot = await self._user_query_port.get_user_by_id(user_id)
-            if user_snapshot is not None:
-                avail_config = replace(avail_config, timezone=user_snapshot.timezone)
+            user_tz = (
+                user_snapshot.timezone
+                if user_snapshot is not None and user_snapshot.timezone
+                else "Asia/Ho_Chi_Minh"
+            )
 
         active_roadmaps = await self._roadmap_repo.list_by_user_id(user_id, status="ACTIVE")
         other_roadmaps = [r for r in active_roadmaps if r.id != roadmap_id]
@@ -423,7 +572,23 @@ class ApplyScheduleProposalUseCase:
             existing_tasks, await self._block_repo.list_by_roadmap_ids(other_ids)
         )
 
-        existing_schedule = await self._schedule_repo.get_by_roadmap_id(roadmap_id)
+        # AC-09 Fresh Availability & Conflict Revalidation before commit
+        effective_avail_uc = GetEffectiveAvailabilityUseCase(
+            availability_query_port=self._availability_port,
+            calendar_connection_query_port=self._calendar_connection_port,
+            execution_sync_port=self._execution_sync_port,
+        )
+        effective_avail = await effective_avail_uc.execute(
+            user_id=user_id,
+            start_date=roadmap.start_date or effective_now.date(),
+            target_date=roadmap.target_date,
+            timezone=user_tz,
+            existing_tasks=existing_tasks,
+            exclude_roadmap_id=roadmap_id,
+        )
+        avail_config = effective_avail.availability_config
+        existing_tasks = list(effective_avail.effective_existing_tasks)
+
         protected_blocks = (
             [
                 block
@@ -480,6 +645,46 @@ class ApplyScheduleProposalUseCase:
                 )
 
         normalized_data = normalize_proposal_task_ids_and_dependencies(proposal.proposal_data)
+
+        raw_normalized_tasks = [
+            task for task in normalized_data.get("tasks", []) if isinstance(task, dict)
+        ]
+        fresh_capacity_minutes = SpatioTemporalRuleEngine.calculate_available_capacity_minutes(
+            avail_config,
+            start_date=roadmap.start_date or effective_now.date(),
+            target_date=roadmap.target_date,
+            existing_tasks=existing_tasks,
+        )
+        feasibility = assess_schedule_feasibility(
+            raw_normalized_tasks,
+            available_minutes=fresh_capacity_minutes,
+        )
+        normalized_data["feasibility"] = feasibility.to_dict()
+        normalized_data["is_partial_schedule"] = feasibility.status is FeasibilityStatus.PARTIAL
+        if feasibility.status is FeasibilityStatus.INFEASIBLE:
+            raise PlanInfeasibleError(feasibility.schedulable_ratio)
+        if feasibility.status is FeasibilityStatus.PARTIAL and not confirm_partial_schedule:
+            raise PartialScheduleConfirmationRequiredError()
+
+        # AC-09: Check fresh Google Calendar busy intervals for direct time collisions
+        google_busy_blocks = [
+            b
+            for b in effective_avail.blocked_intervals
+            if b.get("source") == "GOOGLE_CALENDAR_BUSY"
+        ]
+        if google_busy_blocks:
+            fresh_conflicts = self._detect_fresh_calendar_conflicts(
+                normalized_data,
+                google_busy_blocks,
+            )
+            if fresh_conflicts:
+                raise FreshCalendarConflictDetectedError(conflicts=fresh_conflicts)
+
+        is_partial_proposal = bool(normalized_data.get("is_partial_schedule", False)) or any(
+            isinstance(t, dict) and bool(t.get("unscheduled_reason"))
+            for t in normalized_data.get("tasks", [])
+        )
+
         orchestrator = ProposalValidationGateOrchestrator(enable_tier3_judge=False)
         gate_result = await orchestrator.validate_proposal(
             normalized_data,
@@ -488,20 +693,33 @@ class ApplyScheduleProposalUseCase:
             existing_tasks=existing_tasks,
             current_roadmap_target_date=roadmap.target_date,
             is_ai_generated=False,
+            allow_unscheduled_tasks=is_partial_proposal,
+        )
+        coverage_violations = validate_task_coverage(
+            [task for task in normalized_data.get("tasks", []) if isinstance(task, dict)],
+            milestones,
         )
 
-        if not gate_result.is_valid:
+        if not gate_result.is_valid or coverage_violations:
             raise ProposalValidationGateError(
                 message="Không thể áp dụng lịch học: phát hiện vi phạm ràng buộc tại cổng kiểm định UC-12.",
                 code="PROPOSAL_VALIDATION_FAILED",
-                violations=[v.to_dict() for v in gate_result.violations],
+                violations=[v.to_dict() for v in [*gate_result.violations, *coverage_violations]],
             )
 
-        if gate_result.soft_overflow_warnings and not confirm_soft_overflow:
+        user_confirmed = bool(confirm_soft_overflow or confirm_warnings)
+        if gate_result.soft_overflow_warnings and not user_confirmed:
             total_overflow = sum(w.overflow_minutes for w in gate_result.soft_overflow_warnings)
             err = SoftOverflowConfirmationRequiredError(overflow_minutes=total_overflow)
             err.warnings = [w.to_dict() for w in gate_result.soft_overflow_warnings]  # type: ignore[attr-defined]
             raise err
+
+        proposal_judge_status = str(normalized_data.get("judge_status", "PASSED")).upper()
+        if proposal_judge_status in ("NEEDS_REVIEW", "REVIEW_PENDING") and not user_confirmed:
+            raise JudgeReviewConfirmationRequiredError(
+                judge_status=proposal_judge_status,
+                advisory_warnings=[str(w) for w in normalized_data.get("advisory_warnings", [])],
+            )
 
         effective_tier = tier or "FREE"
         if tier is None and self._user_query_port is not None:
@@ -519,6 +737,7 @@ class ApplyScheduleProposalUseCase:
 
         sync_tasks: list[ProposedTaskSyncItemDTO] = []
         default_mid = milestones[0].id if milestones else generate_uuid7()
+        backlog_unscheduled_count = 0
         for t in raw_tasks:
             if not isinstance(t, dict):
                 continue
@@ -528,6 +747,11 @@ class ApplyScheduleProposalUseCase:
                 mid = UUID(str(mid_raw)) if mid_raw else default_mid
             except ValueError:
                 mid = default_mid
+            s_date = parse_iso_date(t.get("scheduled_date"))
+            s_start = parse_iso_datetime(t.get("scheduled_start"))
+            s_end = parse_iso_datetime(t.get("scheduled_end"))
+            if s_date is None and is_partial_proposal:
+                backlog_unscheduled_count += 1
             sync_tasks.append(
                 ProposedTaskSyncItemDTO(
                     task_id=tid,
@@ -537,18 +761,28 @@ class ApplyScheduleProposalUseCase:
                         str(t["description"]).strip() if t.get("description") is not None else None
                     ),
                     estimated_minutes=int(t.get("estimated_minutes", 30) or 30),
-                    scheduled_date=parse_iso_date(t.get("scheduled_date")),
-                    scheduled_start=parse_iso_datetime(t.get("scheduled_start")),
-                    scheduled_end=parse_iso_datetime(t.get("scheduled_end")),
+                    scheduled_date=s_date,
+                    scheduled_start=s_start,
+                    scheduled_end=s_end,
                 )
             )
 
         missing_block_times = [
             str(task.task_id)
             for task in sync_tasks
-            if task.scheduled_date is None
-            or task.scheduled_start is None
-            or task.scheduled_end is None
+            if (
+                not is_partial_proposal
+                and (
+                    task.scheduled_date is None
+                    or task.scheduled_start is None
+                    or task.scheduled_end is None
+                )
+            )
+            or (
+                is_partial_proposal
+                and task.scheduled_date is not None
+                and (task.scheduled_start is None or task.scheduled_end is None)
+            )
         ]
         if missing_block_times:
             raise ProposalValidationGateError(
@@ -704,6 +938,18 @@ class ApplyScheduleProposalUseCase:
             saved_schedule = await self._schedule_repo.save(official_schedule)
             self._uow.collect_events_from(official_schedule)
 
+            if idempotency_key:
+                normalized_data["applied_idempotency_key"] = idempotency_key
+            normalized_data["last_apply_result"] = {
+                "preserved_completed_tasks_count": sync_result.preserved_completed_tasks_count,
+                "replaced_tasks_count": sync_result.replaced_tasks_count,
+                "inserted_tasks_count": sync_result.inserted_tasks_count,
+                "affected_tasks_count": sync_result.affected_tasks_count,
+                "total_shifted_minutes": sync_result.total_shifted_minutes,
+                "trigger_type": trigger_type,
+                "calendar_sync_status": "NOT_CONNECTED",
+                "backlog_unscheduled_tasks_count": backlog_unscheduled_count,
+            }
             proposal.proposal_data = normalized_data
             proposal.mark_applied(effective_now)
             saved_proposal = await self._proposal_repo.save(proposal)
@@ -721,11 +967,78 @@ class ApplyScheduleProposalUseCase:
                     "replaced_tasks_count": sync_result.replaced_tasks_count,
                     "inserted_tasks_count": sync_result.inserted_tasks_count,
                     "confirm_soft_overflow": confirm_soft_overflow,
+                    "confirm_warnings": confirm_warnings,
+                    "backlog_unscheduled_tasks_count": backlog_unscheduled_count,
                 },
                 now=effective_now,
             )
 
             await self._uow.commit()
+
+        # AC-11: Honest Google Calendar Sync after commit
+        calendar_sync_status = "NOT_CONNECTED"
+        google_meta_status = str(
+            effective_avail.source_metadata.get("google_sync_status", "NOT_CONNECTED")
+        )
+        is_cal_connected = bool(effective_avail.source_metadata.get("calendar_connected", False))
+        if google_meta_status == "FAILED_OR_EXPIRED":
+            calendar_sync_status = "SYNC_FAILED"
+            async with self._uow:
+                failed_blocks = await self._block_repo.get_by_schedule_id(saved_schedule.id)
+                for b in failed_blocks:
+                    if b.status != "CANCELLED":
+                        b.sync_status = "SYNC_FAILED"
+                        b.updated_at = effective_now
+                await self._block_repo.save_all(failed_blocks)
+                await self._uow.commit()
+        elif is_cal_connected:
+            if self._calendar_sync_facade is not None:
+                try:
+                    facade_status = await self._calendar_sync_facade.sync_schedule_blocks_to_google(
+                        schedule_id=saved_schedule.id,
+                        user_id=user_id,
+                    )
+                    refreshed_blocks = [
+                        b
+                        for b in await self._block_repo.get_by_schedule_id(saved_schedule.id)
+                        if b.status != "CANCELLED"
+                    ]
+                    if any(b.sync_status == "SYNC_FAILED" for b in refreshed_blocks) or (
+                        facade_status == "SYNC_FAILED"
+                    ):
+                        calendar_sync_status = "SYNC_FAILED"
+                    elif (
+                        not refreshed_blocks
+                        or all(b.sync_status == "SYNCED" for b in refreshed_blocks)
+                        or facade_status == "SYNCED"
+                    ):
+                        calendar_sync_status = "SYNCED"
+                    elif facade_status in ("NOT_CONNECTED", "PENDING_SYNC"):
+                        calendar_sync_status = facade_status
+                    else:
+                        calendar_sync_status = "PENDING_SYNC"
+                except Exception:
+                    calendar_sync_status = "SYNC_FAILED"
+                    async with self._uow:
+                        failed_blocks = await self._block_repo.get_by_schedule_id(saved_schedule.id)
+                        for b in failed_blocks:
+                            if b.status != "CANCELLED":
+                                b.sync_status = "SYNC_FAILED"
+                                b.updated_at = effective_now
+                        await self._block_repo.save_all(failed_blocks)
+                        await self._uow.commit()
+            else:
+                calendar_sync_status = "PENDING_SYNC"
+
+        if calendar_sync_status != "NOT_CONNECTED":
+            async with self._uow:
+                updated_prop_data = dict(saved_proposal.proposal_data)
+                last_res = dict(updated_prop_data.get("last_apply_result", {}))
+                last_res["calendar_sync_status"] = calendar_sync_status
+                updated_prop_data["last_apply_result"] = last_res
+                saved_proposal.proposal_data = updated_prop_data
+                saved_proposal = await self._proposal_repo.save(saved_proposal)
+                await self._uow.commit()
 
         return ApplyScheduleProposalResultDTO(
             roadmap=saved_roadmap,
@@ -737,6 +1050,8 @@ class ApplyScheduleProposalUseCase:
             affected_tasks_count=sync_result.affected_tasks_count,
             total_shifted_minutes=sync_result.total_shifted_minutes,
             trigger_type=trigger_type,
+            calendar_sync_status=calendar_sync_status,
+            backlog_unscheduled_tasks_count=backlog_unscheduled_count,
         )
 
 
@@ -755,6 +1070,7 @@ class SaveManualRoadmapPlanUseCase:
         uow: AsyncUnitOfWork,
         user_query_port: UserQueryPort | None = None,
         block_repo: ScheduleBlockRepositoryPort | None = None,
+        calendar_connection_query_port: CalendarConnectionQueryPort | None = None,
     ) -> None:
         self._goal_repo = goal_repo
         self._roadmap_repo = roadmap_repo
@@ -765,6 +1081,7 @@ class SaveManualRoadmapPlanUseCase:
         self._uow = uow
         self._user_query_port = user_query_port
         self._block_repo = block_repo
+        self._calendar_connection_port = calendar_connection_query_port
 
     async def execute(
         self,
@@ -848,12 +1165,14 @@ class SaveManualRoadmapPlanUseCase:
                 seq_hint = int(t_dict.get("milestone_sequence_order", 1) or 1)
                 t_dict["milestone_id"] = str(seq_to_mid.get(seq_hint, default_mid))
 
-        avail_snapshot = await self._availability_port.get_active_availability(user_id)
-        avail_config = build_availability_config_from_snapshot(avail_snapshot)
+        user_tz = "UTC"
         if self._user_query_port is not None:
             user_snapshot = await self._user_query_port.get_user_by_id(user_id)
-            if user_snapshot is not None:
-                avail_config = replace(avail_config, timezone=user_snapshot.timezone)
+            user_tz = (
+                user_snapshot.timezone
+                if user_snapshot is not None and user_snapshot.timezone
+                else "Asia/Ho_Chi_Minh"
+            )
 
         active_roadmaps = await self._roadmap_repo.list_by_user_id(user_id, status="ACTIVE")
         other_roadmaps = [r for r in active_roadmaps if r.id != roadmap_id]
@@ -867,6 +1186,22 @@ class SaveManualRoadmapPlanUseCase:
             existing_tasks = expand_existing_schedule_occupancy(
                 existing_tasks, await self._block_repo.list_by_roadmap_ids(other_ids)
             )
+
+        effective_avail_uc = GetEffectiveAvailabilityUseCase(
+            availability_query_port=self._availability_port,
+            calendar_connection_query_port=self._calendar_connection_port,
+            execution_sync_port=self._execution_sync_port,
+        )
+        effective_avail = await effective_avail_uc.execute(
+            user_id=user_id,
+            start_date=roadmap.start_date or effective_now.date(),
+            target_date=roadmap.target_date,
+            timezone=user_tz,
+            existing_tasks=existing_tasks,
+            exclude_roadmap_id=roadmap_id,
+        )
+        avail_config = effective_avail.availability_config
+        existing_tasks = list(effective_avail.effective_existing_tasks)
 
         orchestrator = ProposalValidationGateOrchestrator(enable_tier3_judge=False)
         gate_result = await orchestrator.validate_proposal(
@@ -888,6 +1223,7 @@ class SaveManualRoadmapPlanUseCase:
         proposal_data = dict(gate_result.validated_proposal_data)
         proposal_data["source"] = "MANUAL"
         proposal_data["availability_mode"] = avail_config.mode
+        proposal_data["availability_source_metadata"] = effective_avail.source_metadata
         proposal_data["is_valid"] = True
         proposal_data["validation_violations"] = []
 
@@ -926,12 +1262,16 @@ class SaveManualRoadmapPlanUseCase:
             for t in proposal_data.get("tasks", [])
             if isinstance(t, dict)
         )
+        advisories = list(gate_result.advisory_warnings)
+        for w in effective_avail.warnings:
+            if w not in advisories:
+                advisories.append(w)
         return ScheduleProposalViewDTO(
             proposal=saved_proposal,
             is_valid=True,
             violations=[],
             soft_overflow_warnings=[w.to_dict() for w in gate_result.soft_overflow_warnings],
-            advisory_warnings=list(gate_result.advisory_warnings),
+            advisory_warnings=advisories,
             diff_summary={
                 "proposed_tasks_count": len(proposal_data.get("tasks", [])),
                 "proposed_total_minutes": proposed_minutes,
@@ -954,6 +1294,7 @@ async def _build_reoptimized_draft_proposal(
     learner_profile_port: LearnerProfileQueryPort | None = None,
     user_query_port: UserQueryPort | None = None,
     block_repo: ScheduleBlockRepositoryPort | None = None,
+    calendar_connection_query_port: CalendarConnectionQueryPort | None = None,
     effective_now: datetime,
     only_overdue_and_incomplete: bool = False,
 ) -> ScheduleProposalViewDTO:
@@ -988,12 +1329,11 @@ async def _build_reoptimized_draft_proposal(
     milestone_order_map = {str(m.id): m.sequence_order for m in milestones}
     valid_mids: set[UUID | str] = {m.id for m in milestones}
 
-    avail_snapshot = await availability_port.get_active_availability(user_id)
-    avail_config = build_availability_config_from_snapshot(avail_snapshot)
+    user_tz = "Asia/Ho_Chi_Minh"
     if user_query_port is not None:
         user_snapshot = await user_query_port.get_user_by_id(user_id)
-        if user_snapshot is not None:
-            avail_config = replace(avail_config, timezone=user_snapshot.timezone)
+        if user_snapshot is not None and user_snapshot.timezone:
+            user_tz = user_snapshot.timezone
 
     pref_minutes = 60
     est_beta = 1.0
@@ -1015,6 +1355,22 @@ async def _build_reoptimized_draft_proposal(
             other_existing,
             await block_repo.list_by_roadmap_ids(other_ids),
         )
+
+    effective_avail_uc = GetEffectiveAvailabilityUseCase(
+        availability_query_port=availability_port,
+        calendar_connection_query_port=calendar_connection_query_port,
+        execution_sync_port=execution_sync_port,
+    )
+    effective_avail = await effective_avail_uc.execute(
+        user_id=user_id,
+        start_date=start_date_anchor,
+        target_date=roadmap.target_date,
+        timezone=user_tz,
+        existing_tasks=other_existing,
+        exclude_roadmap_id=roadmap_id,
+    )
+    avail_config = effective_avail.availability_config
+    other_existing = list(effective_avail.effective_existing_tasks)
 
     unscheduled_items = [
         {
@@ -1061,6 +1417,7 @@ async def _build_reoptimized_draft_proposal(
     )
     proposal_data["source"] = proposal_type.value
     proposal_data["availability_mode"] = avail_config.mode
+    proposal_data["availability_source_metadata"] = effective_avail.source_metadata
     proposal = ScheduleProposal(
         id=generate_uuid7(),
         roadmap_id=roadmap_id,
@@ -1083,12 +1440,16 @@ async def _build_reoptimized_draft_proposal(
         for t in proposal_data.get("tasks", [])
         if isinstance(t, dict)
     )
+    advisories = list(gate_result.advisory_warnings)
+    for w in effective_avail.warnings:
+        if w not in advisories:
+            advisories.append(w)
     return ScheduleProposalViewDTO(
         proposal=saved_proposal,
         is_valid=True,
         violations=[],
         soft_overflow_warnings=[w.to_dict() for w in gate_result.soft_overflow_warnings],
-        advisory_warnings=list(gate_result.advisory_warnings),
+        advisory_warnings=advisories,
         diff_summary={
             "proposed_tasks_count": len(proposal_data.get("tasks", [])),
             "proposed_total_minutes": proposed_minutes,
@@ -1112,6 +1473,7 @@ class ReoptimizeScheduleProposalUseCase:
         learner_profile_port: LearnerProfileQueryPort | None = None,
         user_query_port: UserQueryPort | None = None,
         block_repo: ScheduleBlockRepositoryPort | None = None,
+        calendar_connection_query_port: CalendarConnectionQueryPort | None = None,
     ) -> None:
         self._roadmap_repo = roadmap_repo
         self._milestone_repo = milestone_repo
@@ -1122,6 +1484,7 @@ class ReoptimizeScheduleProposalUseCase:
         self._learner_profile_port = learner_profile_port
         self._user_query_port = user_query_port
         self._block_repo = block_repo
+        self._calendar_connection_port = calendar_connection_query_port
 
     async def execute(
         self,
@@ -1149,6 +1512,7 @@ class ReoptimizeScheduleProposalUseCase:
             learner_profile_port=self._learner_profile_port,
             user_query_port=self._user_query_port,
             block_repo=self._block_repo,
+            calendar_connection_query_port=self._calendar_connection_port,
             effective_now=effective_now,
         )
 
@@ -1169,6 +1533,7 @@ class InitiateOverdueRecoveryUseCase:
         learner_profile_port: LearnerProfileQueryPort | None = None,
         user_query_port: UserQueryPort | None = None,
         block_repo: ScheduleBlockRepositoryPort | None = None,
+        calendar_connection_query_port: CalendarConnectionQueryPort | None = None,
     ) -> None:
         self._roadmap_repo = roadmap_repo
         self._milestone_repo = milestone_repo
@@ -1180,6 +1545,7 @@ class InitiateOverdueRecoveryUseCase:
         self._learner_profile_port = learner_profile_port
         self._user_query_port = user_query_port
         self._block_repo = block_repo
+        self._calendar_connection_port = calendar_connection_query_port
 
     async def execute(
         self,
@@ -1203,6 +1569,7 @@ class InitiateOverdueRecoveryUseCase:
             learner_profile_port=self._learner_profile_port,
             user_query_port=self._user_query_port,
             block_repo=self._block_repo,
+            calendar_connection_query_port=self._calendar_connection_port,
             effective_now=effective_now,
             only_overdue_and_incomplete=True,
         )

@@ -1,4 +1,5 @@
-import inspect
+import asyncio
+import logging
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
@@ -6,6 +7,7 @@ from uuid import UUID
 
 from src.account.public_api import LearnerMemoryQueryPort, QuotaFacadePort
 from src.planning.application.dtos.planning_dtos import (
+    MilestoneGenerationLLMOutput,
     MilestoneInputItemDTO,
     SseJobTicketDTO,
 )
@@ -27,12 +29,18 @@ from src.planning.application.services.knowledge_tool_dispatcher import (
     KnowledgeToolDispatcher,
     RoadmapPipelineStage,
 )
+from src.planning.application.services.learning_quality import (
+    GenerationStrategy,
+    has_operational_quality_review_failure,
+    run_dual_quality_critics,
+)
 from src.planning.application.services.roadmap_context_builder import (
     RoadmapContextBuilder,
 )
 from src.planning.application.services.roadmap_skills import (
     MILESTONE_PLANNER_SKILL,
     build_milestone_planner_prompt,
+    build_planning_prompt_registry,
 )
 from src.planning.application.services.validation_gate import (
     DEFAULT_MAX_RETRIES,
@@ -44,8 +52,6 @@ from src.planning.domain.exceptions.planning_exceptions import (
     RoadmapNotFoundError,
 )
 from src.planning.domain.models.milestone import (
-    AI_MILESTONE_MAX_COUNT,
-    AI_MILESTONE_MIN_COUNT,
     Milestone,
     MilestoneStatus,
     validate_milestone_sequence,
@@ -53,52 +59,31 @@ from src.planning.domain.models.milestone import (
 from src.shared_kernel.application.embedding_port import EmbeddingProviderPort
 from src.shared_kernel.application.harness.execution_manager import AIExecutionManager
 from src.shared_kernel.application.harness.models import WorkflowType
+from src.shared_kernel.application.harness.untrusted_context import (
+    UntrustedBlockKind,
+    format_untrusted_block,
+)
 from src.shared_kernel.application.harness.workflow_port import WorkflowRepositoryPort
 from src.shared_kernel.application.llm_port import LLMProviderPort
 from src.shared_kernel.application.uow import AsyncUnitOfWork
 from src.shared_kernel.domain.base import generate_uuid7
-from src.shared_kernel.infrastructure.external_ai.prompt_sanitizer import (
-    PromptSanitizer,
-)
 
-MILESTONE_RESPONSE_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
-        "milestones": {
-            "type": "array",
-            "minItems": AI_MILESTONE_MIN_COUNT,
-            "maxItems": AI_MILESTONE_MAX_COUNT,
-            "items": {
-                "type": "object",
-                "properties": {
-                    "sequence_order": {"type": "integer", "minimum": 1},
-                    "title": {"type": "string", "minLength": 1},
-                    "description": {"type": "string"},
-                    "learning_outcomes": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                    },
-                    "completion_criteria": {"type": "string"},
-                    "estimated_effort_minutes": {"type": "integer", "minimum": 15},
-                    "required_concepts": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                    },
-                    "unverified_concepts": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                    },
-                    "dependencies": {
-                        "type": "array",
-                        "items": {"type": "integer"},
-                    },
-                },
-                "required": ["sequence_order", "title"],
-            },
-        }
-    },
-    "required": ["milestones"],
-}
+
+def _milestone_generation_error_details(exc: Exception) -> tuple[str, str]:
+    """Return a stable user-facing error without exposing provider details."""
+
+    if isinstance(exc, (TimeoutError, asyncio.TimeoutError)):
+        return (
+            "AI_GATEWAY_TIMEOUT",
+            "AI mất quá nhiều thời gian phản hồi. Vui lòng thử lại.",
+        )
+    return (
+        str(getattr(exc, "code", "MILESTONE_GEN_FAILED")),
+        str(exc).strip() or "Không thể sinh cột mốc học tập bằng AI. Vui lòng thử lại.",
+    )
+
+
+MILESTONE_RESPONSE_SCHEMA: dict[str, Any] = MilestoneGenerationLLMOutput.model_json_schema()
 
 
 class ExecuteMilestoneGenerationUseCase:
@@ -142,6 +127,7 @@ class ExecuteMilestoneGenerationUseCase:
         reservation_id: UUID,
         max_retries: int = DEFAULT_MAX_RETRIES,
         now: datetime | None = None,
+        generation_strategy: str = "FULL_SCOPE",
     ) -> list[Milestone]:
         effective_now = now or datetime.now(UTC)
 
@@ -158,10 +144,12 @@ class ExecuteMilestoneGenerationUseCase:
             prior_knowledge = goal.prior_knowledge_level if goal is not None else "BEGINNER"
             clarification_ctx = (goal.clarification_context or "") if goal is not None else ""
 
-            sanitized_title = PromptSanitizer.sanitize(raw_title, wrap_xml=True)
-            sanitized_desc = PromptSanitizer.sanitize(raw_desc, wrap_xml=True)
+            sanitized_title = format_untrusted_block(UntrustedBlockKind.GOAL_TITLE, raw_title)
+            sanitized_desc = format_untrusted_block(
+                UntrustedBlockKind.GOAL_RAW_DESCRIPTION, raw_desc
+            )
             sanitized_clarification = (
-                PromptSanitizer.sanitize(clarification_ctx, wrap_xml=True)
+                format_untrusted_block(UntrustedBlockKind.CLARIFICATION_DATA, clarification_ctx)
                 if clarification_ctx
                 else ""
             )
@@ -173,12 +161,13 @@ class ExecuteMilestoneGenerationUseCase:
                 data={
                     "stage": "STREAMING",
                     "progress": 35,
-                    "delta_text": "Đang phân tích mục tiêu học tập và phân rã cột mốc (3-7 chặng)...",
-                    "deltaText": "Đang phân tích mục tiêu học tập và phân rã cột mốc (3-7 chặng)...",
+                    "delta_text": "Đang phân tích phạm vi mục tiêu và lập coverage blueprint...",
+                    "deltaText": "Đang phân tích phạm vi mục tiêu và lập coverage blueprint...",
                 },
             )
 
-            system_prompt = MILESTONE_PLANNER_SKILL.system_instruction
+            planner_tpl = build_planning_prompt_registry().latest(MILESTONE_PLANNER_SKILL.skill_id)
+            system_prompt = planner_tpl.system_template
             if goal is not None:
                 context_block = RoadmapContextBuilder.build_milestone_planning_context(
                     goal=goal,
@@ -233,12 +222,10 @@ class ExecuteMilestoneGenerationUseCase:
                 else context_block
             )
 
+            strategy = GenerationStrategy(generation_strategy)
             base_user_prompt = build_milestone_planner_prompt(
                 effective_context,
-                goal_title=raw_title,
-                raw_description=raw_desc,
-                prior_knowledge_level=prior_knowledge,
-                clarification_summary=sanitized_clarification,
+                generation_strategy=strategy.value,
             )
 
             dispatcher: KnowledgeToolDispatcher | None = None
@@ -254,92 +241,133 @@ class ExecuteMilestoneGenerationUseCase:
             total_prompt_tokens = 0
             total_completion_tokens = 0
             max_attempts = max(1, int(max_retries) + 1)
+            pipeline_deadline = asyncio.get_running_loop().time() + 55.0
             validated_items: list[dict[str, Any]] = []
             last_violations = []
 
-            sig_params = inspect.signature(self._llm.generate_structured).parameters
-            supports_tools = "tools" in sig_params or any(
-                p.kind == inspect.Parameter.VAR_KEYWORD for p in sig_params.values()
-            )
-
             for attempt in range(1, max_attempts + 1):
-                extra_kwargs: dict[str, Any] = {}
-                if supports_tools and dispatcher is not None and attempt == 1:
-                    extra_kwargs = {
-                        "tools": dispatcher.get_allowed_tool_declarations(),
-                        "tool_executor": dispatcher.dispatch,
-                        "max_tool_calls": MILESTONE_PLANNER_SKILL.max_tool_calls,
-                        "thinking_level": MILESTONE_PLANNER_SKILL.thinking_level,
-                    }
+                remaining_seconds = pipeline_deadline - asyncio.get_running_loop().time()
+                if remaining_seconds <= 0:
+                    raise TimeoutError("Milestone generation exceeded 55 seconds")
 
-                if self._workflow_repo is not None:
-                    exec_mgr = AIExecutionManager(
-                        provider=self._llm,
-                        quota=self._quota_facade,
-                        max_retries=0,
-                        workflow_repo=self._workflow_repo,
-                    )
-                    exec_res = await exec_mgr.execute(
-                        user_id=user_id,
-                        operation_type="MILESTONE_GEN",
-                        system_prompt=system_prompt,
-                        user_prompt=current_prompt,
-                        response_schema=MILESTONE_RESPONSE_SCHEMA,
-                        model_name="gemini-2.5-flash",
-                        tools=(
-                            dispatcher.get_allowed_tool_declarations()
-                            if dispatcher is not None and attempt == 1
-                            else None
-                        ),
-                        tool_executor=(
-                            dispatcher.dispatch if dispatcher is not None and attempt == 1 else None
-                        ),
-                        max_tool_calls=MILESTONE_PLANNER_SKILL.max_tool_calls,
-                        thinking_level=MILESTONE_PLANNER_SKILL.thinking_level,
-                        existing_reservation_id=reservation_id,
-                        commit_on_success=False,
-                        release_on_failure=False,
-                        workflow_type=WorkflowType.PLAN_CREATION,
-                        step_name="CURRICULUM_ARCHITECT",
-                        step_order=attempt,
+                exec_mgr = AIExecutionManager(
+                    provider=self._llm,
+                    quota=self._quota_facade,
+                    manage_quota=False,
+                    max_retries=0,
+                    workflow_repo=self._workflow_repo,
+                    timeout_seconds=min(35.0, remaining_seconds),
+                )
+                exec_res = await exec_mgr.execute(
+                    user_id=user_id,
+                    operation_type="MILESTONE_GEN",
+                    system_prompt=system_prompt,
+                    user_prompt=current_prompt,
+                    response_schema=MILESTONE_RESPONSE_SCHEMA,
+                    model_name=getattr(self._llm, "model_identifier", "gemini-3.8-flash"),
+                    tools=(
+                        dispatcher.get_allowed_tool_declarations()
+                        if dispatcher is not None and attempt == 1
+                        else None
+                    ),
+                    tool_executor=(
+                        dispatcher.dispatch if dispatcher is not None and attempt == 1 else None
+                    ),
+                    max_tool_calls=(
+                        MILESTONE_PLANNER_SKILL.max_tool_calls
+                        if dispatcher is not None and attempt == 1
+                        else 0
+                    ),
+                    thinking_level=MILESTONE_PLANNER_SKILL.thinking_level,
+                    existing_reservation_id=reservation_id,
+                    commit_on_success=False,
+                    release_on_failure=False,
+                    workflow_type=WorkflowType.PLAN_CREATION,
+                    step_name="CURRICULUM_ARCHITECT",
+                    step_order=attempt,
+                    goal_id=roadmap.goal_id,
+                    roadmap_id=roadmap_id,
+                    context_snapshot=compact_context_snapshot(
                         goal_id=roadmap.goal_id,
                         roadmap_id=roadmap_id,
-                        context_snapshot=compact_context_snapshot(
-                            goal_id=roadmap.goal_id,
-                            roadmap_id=roadmap_id,
-                            stage="MILESTONE_PLANNING",
-                            inputs=harness_inputs,
-                            layer_tokens=assembled.layer_tokens,
-                        ),
-                    )
-                    raw_result = exec_res.value
-                    p_tok = exec_res.prompt_tokens
-                    c_tok = exec_res.completion_tokens
-                else:
-                    raw_result, p_tok, c_tok = await self._llm.generate_structured(
-                        prompt=current_prompt,
-                        system_prompt=system_prompt,
-                        response_schema=MILESTONE_RESPONSE_SCHEMA,
-                        user_prompt=current_prompt,
-                        temperature=0.2,
-                        **extra_kwargs,
-                    )
+                        stage="MILESTONE_PLANNING",
+                        inputs=harness_inputs,
+                        layer_tokens=assembled.layer_tokens,
+                        prompt_template=planner_tpl,
+                    ),
+                    prompt_template=planner_tpl,
+                )
+                raw_result = exec_res.value
+                p_tok = exec_res.prompt_tokens
+                c_tok = exec_res.completion_tokens
                 total_prompt_tokens += int(p_tok or 0)
                 total_completion_tokens += int(c_tok or 0)
 
-                raw_milestones = raw_result.get("milestones", [])
+                if isinstance(raw_result, list):
+                    raw_milestones = raw_result
+                elif isinstance(raw_result, dict):
+                    raw_milestones = raw_result.get("milestones", [])
+                else:
+                    raw_milestones = []
                 if not isinstance(raw_milestones, list):
                     raw_milestones = []
 
                 violations = ProposalValidationGateOrchestrator.validate_ai_milestones_tier1(
                     raw_milestones
                 )
+                critic_reports: list[dict[str, Any]] = []
+                if not violations:
+                    remaining_seconds = pipeline_deadline - asyncio.get_running_loop().time()
+                    if remaining_seconds <= 0:
+                        raise TimeoutError("Milestone quality review exceeded 55 seconds")
+                    critic_timeout = min(8.0, remaining_seconds)
+                    (
+                        critic_violations,
+                        critic_reports,
+                        critic_p,
+                        critic_c,
+                    ) = await asyncio.wait_for(
+                        run_dual_quality_critics(
+                            self._llm,
+                            stage="MILESTONE_PLANNING",
+                            payload={"milestones": raw_milestones},
+                            context=context_block,
+                            learner_level=prior_knowledge,
+                            timeout_seconds=critic_timeout,
+                            arbiter_timeout_seconds=critic_timeout,
+                            workflow_repo=self._workflow_repo,
+                            user_id=user_id,
+                            goal_id=roadmap.goal_id,
+                            roadmap_id=roadmap_id,
+                            workflow_type=WorkflowType.PLAN_CREATION,
+                        ),
+                        timeout=remaining_seconds,
+                    )
+                    total_prompt_tokens += critic_p
+                    total_completion_tokens += critic_c
+                    if has_operational_quality_review_failure(critic_violations):
+                        raise TimeoutError(
+                            "Milestone quality review did not complete within its time budget"
+                        )
+                    violations.extend(critic_violations)
                 if not violations:
                     validated_items = list(raw_milestones)
+                    roadmap.planning_metadata = {
+                        **roadmap.planning_metadata,
+                        "generation_strategy": strategy.value,
+                        "quality_reviews": critic_reports,
+                        "scope_summary": raw_result.get("scope_summary", "")
+                        if isinstance(raw_result, dict)
+                        else "",
+                        "deferred_scope": raw_result.get("deferred_scope", [])
+                        if isinstance(raw_result, dict)
+                        else [],
+                    }
                     break
 
                 last_violations = violations
-                if attempt < max_attempts:
+                remaining_for_retry = pipeline_deadline - asyncio.get_running_loop().time()
+                if attempt < max_attempts and remaining_for_retry >= 12.0:
                     await self._sse.append_event(
                         job_id=job_id,
                         event="validation_retry",
@@ -360,10 +388,12 @@ class ExecuteMilestoneGenerationUseCase:
                             attempt_number=attempt,
                         )
                     )
+                else:
+                    break
 
             if not validated_items:
                 raise ProposalValidationGateError(
-                    message="AI không thể sinh danh sách cột mốc hợp lệ (3..7 chặng tuần tự) sau khi tự sửa lỗi.",
+                    message="AI không thể sinh danh sách cột mốc thích ứng, đầy đủ và tuần tự sau khi tự sửa lỗi.",
                     code="AI_SCHEMA_VALIDATION_ERROR",
                     violations=[v.to_dict() for v in last_violations],
                 )
@@ -395,6 +425,23 @@ class ExecuteMilestoneGenerationUseCase:
                         if item.get("description") is not None
                         else None
                     ),
+                    learning_outcomes=tuple(
+                        str(value).strip()
+                        for value in item.get("learning_outcomes", [])
+                        if str(value).strip()
+                    ),
+                    completion_criteria=str(item.get("completion_criteria", "")).strip() or None,
+                    estimated_effort_minutes=int(item.get("estimated_effort_minutes", 60) or 60),
+                    required_concepts=tuple(
+                        str(value).strip()
+                        for value in item.get("required_concepts", [])
+                        if str(value).strip()
+                    ),
+                    unverified_concepts=tuple(
+                        str(value).strip()
+                        for value in item.get("unverified_concepts", [])
+                        if str(value).strip()
+                    ),
                     status=MilestoneStatus.PENDING,
                     created_at=effective_now,
                     updated_at=effective_now,
@@ -405,6 +452,7 @@ class ExecuteMilestoneGenerationUseCase:
 
             async with self._uow:
                 saved_milestones = await self._milestone_repo.save_many(roadmap_id, new_milestones)
+                await self._roadmap_repo.save(roadmap)
                 await self._quota_facade.commit_reservation(
                     reservation_id,
                     prompt_tokens=total_prompt_tokens,
@@ -419,6 +467,11 @@ class ExecuteMilestoneGenerationUseCase:
                     "sequence_order": m.sequence_order,
                     "title": m.title,
                     "description": m.description,
+                    "learning_outcomes": list(m.learning_outcomes),
+                    "completion_criteria": m.completion_criteria,
+                    "estimated_effort_minutes": m.estimated_effort_minutes,
+                    "required_concepts": list(m.required_concepts),
+                    "unverified_concepts": list(m.unverified_concepts),
                     "status": m.status.value,
                 }
                 for m in saved_milestones
@@ -441,15 +494,23 @@ class ExecuteMilestoneGenerationUseCase:
             return saved_milestones
 
         except Exception as exc:
+            error_code, error_message = _milestone_generation_error_details(exc)
             try:
                 async with self._uow:
                     await self._quota_facade.release_reservation(
                         reservation_id,
-                        reason=getattr(exc, "code", "MILESTONE_GEN_FAILED"),
+                        reason=error_code,
                     )
                     await self._uow.commit()
-            except Exception:
-                pass
+            except Exception as release_exc:
+                logging.getLogger(__name__).warning(
+                    "milestone_generation_quota_release_failed",
+                    extra={
+                        "job_id": str(job_id),
+                        "roadmap_id": str(roadmap_id),
+                        "error_type": type(release_exc).__name__,
+                    },
+                )
 
             await self._sse.append_event(
                 job_id=job_id,
@@ -458,8 +519,8 @@ class ExecuteMilestoneGenerationUseCase:
                 data={
                     "stage": "FAILED",
                     "progress": 100,
-                    "error": str(exc),
-                    "error_code": getattr(exc, "code", "MILESTONE_GEN_FAILED"),
+                    "error": error_message,
+                    "error_code": error_code,
                 },
             )
             raise
@@ -490,12 +551,14 @@ class InitiateMilestoneGenerationUseCase:
         roadmap_id: UUID,
         idempotency_key: str | None = None,
         run_inline: bool = True,
+        generation_strategy: str = "FULL_SCOPE",
     ) -> SseJobTicketDTO:
         roadmap = await self._roadmap_repo.get_by_id_for_user(roadmap_id, user_id)
         if roadmap is None:
             raise RoadmapNotFoundError()
 
-        operation = f"MILESTONE_GEN:{roadmap_id}"
+        strategy = GenerationStrategy(generation_strategy)
+        operation = f"MILESTONE_GEN:{strategy.value}:{roadmap_id}"
         if idempotency_key and idempotency_key.strip():
             existing_job = await self._sse.get_by_idempotency_key(
                 user_id=user_id,
@@ -525,7 +588,7 @@ class InitiateMilestoneGenerationUseCase:
                 user_id=user_id,
                 roadmap_id=roadmap_id,
                 reservation_id=reservation_id,
-                job_type="MILESTONE_GEN",
+                job_type=f"MILESTONE_GEN:{strategy.value}",
                 operation=operation,
                 idempotency_key=idempotency_key,
             )
@@ -549,10 +612,18 @@ class InitiateMilestoneGenerationUseCase:
                     user_id=user_id,
                     roadmap_id=roadmap_id,
                     reservation_id=reservation_id,
+                    generation_strategy=strategy.value,
                 )
-            except Exception:
+            except Exception as exec_exc:
                 # Error is already recorded in the SSE job stream and quota is released
-                pass
+                logging.getLogger(__name__).warning(
+                    "milestone_generation_inline_failed",
+                    extra={
+                        "job_id": str(job_id),
+                        "roadmap_id": str(roadmap_id),
+                        "error_type": type(exec_exc).__name__,
+                    },
+                )
 
         updated_job = await self._sse.get_job_for_user(job_id=job_id, user_id=user_id)
         return SseJobTicketDTO(
@@ -606,6 +677,32 @@ class UpdateMilestonesUseCase:
                     sequence_order=seq,
                     title=item.title,
                     description=item.description,
+                    learning_outcomes=(
+                        item.learning_outcomes
+                        if item.learning_outcomes
+                        else (prev.learning_outcomes if prev is not None else ())
+                    ),
+                    completion_criteria=(
+                        item.completion_criteria
+                        if item.completion_criteria is not None
+                        else (prev.completion_criteria if prev is not None else None)
+                    ),
+                    estimated_effort_minutes=(
+                        item.estimated_effort_minutes
+                        if item.estimated_effort_minutes is not None
+                        else (prev.estimated_effort_minutes if prev is not None else 60)
+                    ),
+                    required_concepts=(
+                        item.required_concepts
+                        if item.required_concepts
+                        else (prev.required_concepts if prev is not None else ())
+                    ),
+                    unverified_concepts=(
+                        item.unverified_concepts
+                        if item.unverified_concepts
+                        else (prev.unverified_concepts if prev is not None else ())
+                    ),
+                    prerequisite_milestone_ids=item.prerequisite_milestone_ids,
                     status=prev.status if prev is not None else MilestoneStatus.PENDING,
                     created_at=prev.created_at if prev is not None else effective_now,
                     updated_at=effective_now,

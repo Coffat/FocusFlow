@@ -606,7 +606,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Generate 2-3 diagnostic clarification questions for a goal (FR-GOAL-002) */
+        /** Generate 0-3 gap-aware clarification questions for a goal (FR-GOAL-002) */
         post: operations["generate_clarification_questions_api_v1_roadmaps_goals__goal_id__clarify_questions_post"];
         delete?: never;
         options?: never;
@@ -642,6 +642,23 @@ export interface paths {
         put?: never;
         /** Explicitly skip goal clarification survey and record unresolved assumptions (FR-GOAL-002) */
         post: operations["skip_clarification_questions_api_v1_roadmaps_goals__goal_id__clarify_skip_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/roadmaps/goals/{goal_id}/clarification-state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Resume clarification session without creating a new AI call */
+        get: operations["get_clarification_state_api_v1_roadmaps_goals__goal_id__clarification_state_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1073,6 +1090,16 @@ export interface components {
              * @default false
              */
             confirm_soft_overflow: boolean;
+            /**
+             * Confirm Warnings
+             * @default false
+             */
+            confirm_warnings: boolean;
+            /**
+             * Confirm Partial Schedule
+             * @default false
+             */
+            confirm_partial_schedule: boolean;
         };
         /** ApplyScheduleProposalResponse */
         ApplyScheduleProposalResponse: {
@@ -1111,6 +1138,16 @@ export interface components {
             total_shifted_minutes: number;
             /** Trigger Type */
             trigger_type: string;
+            /**
+             * Calendar Sync Status
+             * @default NOT_CONNECTED
+             */
+            calendar_sync_status: string;
+            /**
+             * Backlog Unscheduled Tasks Count
+             * @default 0
+             */
+            backlog_unscheduled_tasks_count: number;
             official_schedule: components["schemas"]["OfficialScheduleResponse"];
         };
         /** AvailabilityResponseDTO */
@@ -1190,8 +1227,22 @@ export interface components {
             question_id: string;
             /** Question Text */
             question_text?: string | null;
-            /** Answer */
+            /**
+             * Answer
+             * @default
+             */
             answer: string;
+            /** Selected Option Ids */
+            selected_option_ids?: string[];
+            /** Free Text */
+            free_text?: string | null;
+        };
+        /** ClarificationOption */
+        ClarificationOption: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
         };
         /** ClarificationQuestion */
         ClarificationQuestion: {
@@ -1227,15 +1278,15 @@ export interface components {
             placeholder: string;
             /**
              * Question Type
-             * @description Loại câu hỏi: 'single_choice' (trắc nghiệm chọn 1 đáp án nhanh bằng 1 click) hoặc 'text' (tự luận ngắn).
+             * @description Loại câu hỏi: 'single_choice' (trắc nghiệm chọn 1 đáp án), 'multiple_choice' (trắc nghiệm chọn nhiều đáp án) hoặc 'text' (tự luận ngắn).
              * @default single_choice
              */
             question_type: string;
             /**
              * Options
-             * @description Danh sách BẮT BUỘC gồm 3 đến 4 phương án lựa chọn thực tế, ngắn gọn khi question_type='single_choice' để người học chọn nhanh bằng 1 click. Để mảng rỗng [] khi question_type='text'.
+             * @description Danh sách gồm 3 đến 5 phương án lựa chọn thực tế, chuyên môn khi question_type='single_choice' hoặc 'multiple_choice'. Để mảng rỗng [] khi question_type='text'.
              */
-            options?: string[];
+            options?: components["schemas"]["ClarificationOption"][];
             /**
              * Question Purpose
              * @description Mục đích sư phạm của câu hỏi nhằm thu thập thông tin gì cho việc lập lộ trình.
@@ -1261,9 +1312,30 @@ export interface components {
             questions?: components["schemas"]["ClarificationQuestion"][];
             /**
              * Questions Version
-             * @default v1.0
+             * @default v2.0
              */
             questions_version: string;
+            /** Session Id */
+            session_id?: string | null;
+            /**
+             * Round
+             * @default 1
+             */
+            round: number;
+            /**
+             * Status
+             * @default WAITING_ANSWER
+             */
+            status: string;
+            /** Information Gaps */
+            information_gaps?: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Next Turn Quota Cost
+             * @default 0
+             */
+            next_turn_quota_cost: number;
         };
         /** ConfirmPasswordResetSchema */
         ConfirmPasswordResetSchema: {
@@ -1332,6 +1404,9 @@ export interface components {
             start_date?: string | null;
             /** Target Date */
             target_date?: string | null;
+            /** Weekly Commitment Hours */
+            weekly_commitment_hours?: number | null;
+            input_provenance?: components["schemas"]["GoalInputProvenanceSchema"];
         };
         /** DashboardActiveRoadmapDTO */
         DashboardActiveRoadmapDTO: {
@@ -1692,6 +1767,27 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** GoalInputProvenanceSchema */
+        GoalInputProvenanceSchema: {
+            /**
+             * Target Date
+             * @default SYSTEM_DEFAULT
+             * @enum {string}
+             */
+            target_date: "USER_CONFIRMED" | "USER_EXPLICIT" | "SYSTEM_OBSERVED" | "SYSTEM_DEFAULT" | "AI_INFERRED";
+            /**
+             * Prior Knowledge Level
+             * @default SYSTEM_DEFAULT
+             * @enum {string}
+             */
+            prior_knowledge_level: "USER_CONFIRMED" | "USER_EXPLICIT" | "SYSTEM_OBSERVED" | "SYSTEM_DEFAULT" | "AI_INFERRED";
+            /**
+             * Weekly Commitment Hours
+             * @default SYSTEM_DEFAULT
+             * @enum {string}
+             */
+            weekly_commitment_hours: "USER_CONFIRMED" | "USER_EXPLICIT" | "SYSTEM_OBSERVED" | "SYSTEM_DEFAULT" | "AI_INFERRED";
+        };
         /** GoalResponse */
         GoalResponse: {
             /**
@@ -1897,6 +1993,15 @@ export interface components {
             /** Message */
             message: string;
         };
+        /** MilestoneGenerationRequest */
+        MilestoneGenerationRequest: {
+            /**
+             * Generation Strategy
+             * @default FULL_SCOPE
+             * @enum {string}
+             */
+            generation_strategy: "FULL_SCOPE" | "FIT_CAPACITY";
+        };
         /** MilestoneListResponse */
         MilestoneListResponse: {
             /**
@@ -1927,6 +2032,17 @@ export interface components {
             confidence: number;
             /** Corrective Action */
             corrective_action: string | null;
+            /**
+             * Is Verified
+             * @default true
+             */
+            is_verified: boolean;
+            /** Calibration Error */
+            calibration_error?: number | null;
+            /** Answer Evidence */
+            answer_evidence?: {
+                [key: string]: unknown;
+            }[];
         };
         /** MilestoneResponse */
         MilestoneResponse: {
@@ -1946,6 +2062,21 @@ export interface components {
             title: string;
             /** Description */
             description?: string | null;
+            /** Learning Outcomes */
+            learning_outcomes?: string[];
+            /** Completion Criteria */
+            completion_criteria?: string | null;
+            /**
+             * Estimated Effort Minutes
+             * @default 60
+             */
+            estimated_effort_minutes: number;
+            /** Required Concepts */
+            required_concepts?: string[];
+            /** Unverified Concepts */
+            unverified_concepts?: string[];
+            /** Prerequisite Milestone Ids */
+            prerequisite_milestone_ids?: string[];
             /** Status */
             status: string;
             /**
@@ -1974,6 +2105,18 @@ export interface components {
             title: string;
             /** Description */
             description?: string | null;
+            /** Learning Outcomes */
+            learning_outcomes?: string[];
+            /** Completion Criteria */
+            completion_criteria?: string | null;
+            /** Estimated Effort Minutes */
+            estimated_effort_minutes?: number | null;
+            /** Required Concepts */
+            required_concepts?: string[];
+            /** Unverified Concepts */
+            unverified_concepts?: string[];
+            /** Prerequisite Milestone Ids */
+            prerequisite_milestone_ids?: string[];
         };
         /** OfficialScheduleResponse */
         OfficialScheduleResponse: {
@@ -2103,8 +2246,12 @@ export interface components {
             completion_criteria?: string | null;
             /** Learning Resources */
             learning_resources?: components["schemas"]["LearningResourceSchema"][];
+            /** Resources */
+            resources?: components["schemas"]["LearningResourceSchema"][];
             /** Concept Ids */
             concept_ids?: string[];
+            /** Covered Outcome Ids */
+            covered_outcome_ids?: string[];
             /**
              * Estimated Minutes
              * @default 45
@@ -2116,6 +2263,8 @@ export interface components {
             scheduled_start?: string | null;
             /** Scheduled End */
             scheduled_end?: string | null;
+            /** Unscheduled Reason */
+            unscheduled_reason?: string | null;
             /** Prerequisite Ids */
             prerequisite_ids?: (string)[];
         };
@@ -2244,6 +2393,44 @@ export interface components {
             updated_at: string;
             goal?: components["schemas"]["GoalResponse"] | null;
         };
+        /** ScheduleFeasibilitySchema */
+        ScheduleFeasibilitySchema: {
+            /**
+             * Status
+             * @default FEASIBLE
+             * @enum {string}
+             */
+            status: "FEASIBLE" | "PARTIAL" | "INFEASIBLE";
+            /**
+             * Required Minutes
+             * @default 0
+             */
+            required_minutes: number;
+            /**
+             * Available Minutes
+             * @default 0
+             */
+            available_minutes: number;
+            /**
+             * Scheduled Minutes
+             * @default 0
+             */
+            scheduled_minutes: number;
+            /**
+             * Schedulable Ratio
+             * @default 1
+             */
+            schedulable_ratio: number;
+            /**
+             * Unscheduled Minutes
+             * @default 0
+             */
+            unscheduled_minutes: number;
+            /** Reason Codes */
+            reason_codes?: string[];
+            /** Recommended Actions */
+            recommended_actions?: string[];
+        };
         /** ScheduleProposalResponse */
         ScheduleProposalResponse: {
             /**
@@ -2273,6 +2460,35 @@ export interface components {
              * @default false
              */
             has_soft_overflow: boolean;
+            /**
+             * Judge Status
+             * @default PASSED
+             */
+            judge_status: string;
+            /**
+             * Is Partial Schedule
+             * @default false
+             */
+            is_partial_schedule: boolean;
+            /**
+             * Scheduled Tasks Count
+             * @default 0
+             */
+            scheduled_tasks_count: number;
+            /**
+             * Unscheduled Tasks Count
+             * @default 0
+             */
+            unscheduled_tasks_count: number;
+            /** Unscheduled Tasks */
+            unscheduled_tasks?: {
+                [key: string]: unknown;
+            }[];
+            feasibility?: components["schemas"]["ScheduleFeasibilitySchema"];
+            /** Availability Source Metadata */
+            availability_source_metadata?: {
+                [key: string]: unknown;
+            };
             /** Tasks */
             tasks?: {
                 [key: string]: unknown;
@@ -2344,6 +2560,8 @@ export interface components {
         };
         /** SkipClarificationRequest */
         SkipClarificationRequest: {
+            /** Session Id */
+            session_id?: string | null;
             /** Skipped Question Ids */
             skipped_question_ids?: string[];
         };
@@ -2392,6 +2610,13 @@ export interface components {
         };
         /** SubmitClarificationAnswersRequest */
         SubmitClarificationAnswersRequest: {
+            /** Session Id */
+            session_id?: string | null;
+            /**
+             * Round
+             * @default 1
+             */
+            round: number;
             /** Answers */
             answers?: components["schemas"]["ClarificationAnswerItem"][];
             /**
@@ -2420,6 +2645,24 @@ export interface components {
             clarification_context: string;
             /** Unresolved Assumptions */
             unresolved_assumptions?: string[];
+            /** Session Id */
+            session_id?: string | null;
+            /**
+             * Round
+             * @default 1
+             */
+            round: number;
+            /** Questions */
+            questions?: components["schemas"]["ClarificationQuestion"][];
+            /** Information Gaps */
+            information_gaps?: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Next Turn Quota Cost
+             * @default 0
+             */
+            next_turn_quota_cost: number;
             /**
              * Message
              * @default Clarification context updated successfully
@@ -3727,7 +3970,9 @@ export interface operations {
     generate_clarification_questions_api_v1_roadmaps_goals__goal_id__clarify_questions_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
             path: {
                 goal_id: string;
             };
@@ -3812,6 +4057,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SubmitClarificationAnswersResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_clarification_state_api_v1_roadmaps_goals__goal_id__clarification_state_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClarificationQuestionsResponse"];
                 };
             };
             /** @description Validation Error */
@@ -4059,7 +4335,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["MilestoneGenerationRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             202: {
@@ -4285,7 +4565,9 @@ export interface operations {
     apply_schedule_proposal_api_v1_roadmaps__roadmap_id__proposals__proposal_id__apply_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
             path: {
                 roadmap_id: string;
                 proposal_id: string;

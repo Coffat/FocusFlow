@@ -102,6 +102,9 @@ class RoadmapORM(Base):
         DateTime(timezone=True), nullable=True
     )
     reset_ritual_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    planning_metadata: Mapped[dict[str, object]] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(UTC)
     )
@@ -141,6 +144,14 @@ class MilestoneORM(Base):
     sequence_order: Mapped[int] = mapped_column(Integer, nullable=False)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    learning_outcomes: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    completion_criteria: Mapped[str | None] = mapped_column(Text, nullable=True)
+    estimated_effort_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=60)
+    required_concepts: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    unverified_concepts: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    prerequisite_milestone_ids: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="PENDING")
     proof_status: Mapped[str] = mapped_column(String(20), nullable=False, default="UNVERIFIED")
     created_at: Mapped[datetime] = mapped_column(

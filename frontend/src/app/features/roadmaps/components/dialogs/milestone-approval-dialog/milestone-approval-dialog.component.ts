@@ -31,6 +31,7 @@ export class MilestoneApprovalDialogComponent {
   readonly approveMilestones = output<void>();
 
   readonly additionalContext = signal<string>('');
+  readonly isContextExpanded = signal<boolean>(false);
   readonly milestoneEstimatedHoursMap = signal<Record<number, number>>({});
 
   readonly editableMilestones = computed<MilestoneUpsertItemSchema[]>(() =>
@@ -38,6 +39,18 @@ export class MilestoneApprovalDialogComponent {
   );
 
   readonly sseProgress = computed(() => this.roadmapService.sseProgress());
+
+  readonly currentStageBadgeText = computed<string>(() => {
+    const sse = this.sseProgress();
+    if (sse.progress >= 50 || sse.stage === 'VALIDATING_TIER_1_2_3') {
+      return 'Giai đoạn 2/2: Cân đối thời lượng';
+    }
+    return 'Giai đoạn 1/2: Thiết kế cột mốc';
+  });
+
+  toggleAdditionalContext(): void {
+    this.isContextExpanded.update(v => !v);
+  }
 
   readonly totalEstimatedHours = computed<number>(() => {
     const list = this.editableMilestones();

@@ -26,6 +26,8 @@ export interface AiStreamChunkEvent<T = unknown> {
   readonly payload?: T;
   readonly error?: string;
   readonly error_code?: string;
+  readonly message?: string;
+  readonly code?: string;
 }
 
 /**
@@ -60,22 +62,26 @@ export class AiSseService {
         resolvedUrl = `${API_BASE_URL}${streamUrl.slice('/api/v1'.length)}`;
       }
       const eventSource = new EventSource(resolvedUrl, { withCredentials: true });
+      let terminalReceived = false;
 
       const handleEvent = (rawEvent: MessageEvent<string>, eventType: SseEventType) => {
         try {
           const parsed = JSON.parse(rawEvent.data) as AiStreamChunkEvent<TPayload>;
+          const isTerminal =
+            parsed.stage === 'COMPLETED' ||
+            parsed.stage === 'FAILED' ||
+            eventType === 'completed' ||
+            eventType === 'failed';
+          terminalReceived = isTerminal;
           const normalized: AiStreamChunkEvent<TPayload> = {
             ...parsed,
             eventType,
             deltaText: parsed.deltaText ?? parsed.delta_text,
+            error: parsed.error ?? parsed.message,
+            error_code: parsed.error_code ?? parsed.code,
           };
           subscriber.next(normalized);
-          if (
-            normalized.stage === 'COMPLETED' ||
-            normalized.stage === 'FAILED' ||
-            eventType === 'completed' ||
-            eventType === 'failed'
-          ) {
+          if (isTerminal) {
             eventSource.close();
             subscriber.complete();
           }
@@ -104,8 +110,15 @@ export class AiSseService {
       }
 
       eventSource.onerror = (error: Event) => {
-        eventSource.close();
-        subscriber.error(error);
+        if (terminalReceived || subscriber.closed) {
+          return;
+        }
+        // A transient network interruption moves EventSource to CONNECTING;
+        // keep it open so the browser reconnects with Last-Event-ID.
+        if (eventSource.readyState === EventSource.CLOSED) {
+          eventSource.close();
+          subscriber.error(error);
+        }
       };
 
       return () => {

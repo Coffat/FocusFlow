@@ -1,3 +1,4 @@
+import hashlib
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
@@ -18,6 +19,18 @@ class LearningResourceType(StrEnum):
     PRACTICE = "PRACTICE"
 
 
+def compute_deterministic_resource_id(
+    *,
+    concept_id: str = "",
+    url: str = "",
+    title: str = "",
+) -> str:
+    """Compute a deterministic canonical resource_id for curated knowledge base resources."""
+    canonical = f"{concept_id.strip().lower()}|{url.strip()}|{title.strip().lower()}"
+    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:12]
+    return f"res-{digest}"
+
+
 @dataclass(frozen=True, slots=True)
 class LearningResource:
     """Curated learning resource & pedagogical guidance attached to tasks and concepts."""
@@ -28,9 +41,23 @@ class LearningResource:
     description: str = ""
     domain: str = ""
     concept_id: str = ""
+    resource_id: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.resource_id or not self.resource_id.strip():
+            object.__setattr__(
+                self,
+                "resource_id",
+                compute_deterministic_resource_id(
+                    concept_id=self.concept_id,
+                    url=self.url,
+                    title=self.title,
+                ),
+            )
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "resource_id": self.resource_id,
             "title": self.title,
             "url": self.url,
             "type": self.type,
@@ -38,6 +65,9 @@ class LearningResource:
             "domain": self.domain,
             "concept_id": self.concept_id,
         }
+
+
+CuratedResource = LearningResource
 
 
 class PrerequisiteRelationType(StrEnum):

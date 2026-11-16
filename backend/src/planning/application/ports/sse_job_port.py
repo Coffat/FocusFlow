@@ -6,6 +6,10 @@ from uuid import UUID
 
 from src.planning.domain.exceptions.planning_exceptions import PlanningDomainError
 
+# Keep the transport alive beyond the Shared AI Harness hard timeout (110s),
+# leaving enough time to persist and deliver the terminal failure event.
+DEFAULT_SSE_STREAM_TIMEOUT_SECONDS = 210.0
+
 
 class SseJobNotFoundError(PlanningDomainError):
     """Raised when an SSE job does not exist or does not belong to the requesting user (IDOR 404)."""
@@ -91,5 +95,5 @@ class SseJobPort(Protocol):
         job_id: UUID,
         user_id: UUID,
         last_event_id: int | None = None,
-        timeout_seconds: float = 55.0,
+        timeout_seconds: float = DEFAULT_SSE_STREAM_TIMEOUT_SECONDS,
     ) -> AsyncIterator[SseEventRecord]: ...

@@ -27,7 +27,7 @@ import { DashboardActiveRoadmapsComponent } from './ui/dashboard-active-roadmaps
 import { DashboardTodayQueueComponent } from './ui/dashboard-today-queue.component';
 import { DashboardAiInsightsComponent } from './ui/dashboard-ai-insights.component';
 import { StarterTemplate } from '../../shared/components/blueprint-empty-state/blueprint-empty-state.component';
-import { PriorKnowledgeLevel } from '../roadmaps/models/roadmap.model';
+import { PlanningStep, PriorKnowledgeLevel } from '../roadmaps/models/roadmap.model';
 import { RoadmapWizardHostComponent } from '../roadmaps/components/dialogs/roadmap-wizard-host/roadmap-wizard-host.component';
 import { AdaptationModalDialogComponent } from '../roadmaps/components/dialogs/adaptation-modal-dialog/adaptation-modal-dialog.component';
 import { PrerequisiteAvailabilityDialogComponent } from '../roadmaps/components/dialogs/prerequisite-availability-dialog/prerequisite-availability-dialog.component';
@@ -80,9 +80,9 @@ export class DashboardComponent implements OnInit {
   // Prerequisite Availability Dialog State
   readonly prerequisiteDialogOpen = signal<boolean>(false);
 
-  // 4-Step Wizard Dialog State
+  // 5-Step Wizard Dialog State
   readonly wizardOpen = signal<boolean>(false);
-  readonly wizardStep = signal<1 | 2 | 3 | 4>(1);
+  readonly wizardStep = signal<PlanningStep>(1);
   readonly wizardInitialTitle = signal<string>('');
   readonly wizardInitialLevel = signal<PriorKnowledgeLevel>('BEGINNER');
   readonly wizardInitialWeeklyHours = signal<number>(12);
@@ -131,7 +131,7 @@ export class DashboardComponent implements OnInit {
     this.dashboardService.setWeekOffset(offset);
   }
 
-  openCreateWizard(step: 1 | 2 | 3 | 4 = 1): void {
+  openCreateWizard(step: PlanningStep = 1): void {
     this.checkAvailabilityAndProceed(() => {
       this.wizardInitialTitle.set('');
       this.wizardInitialLevel.set('BEGINNER');

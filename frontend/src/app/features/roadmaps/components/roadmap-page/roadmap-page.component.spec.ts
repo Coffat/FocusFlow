@@ -57,6 +57,7 @@ describe('RoadmapPageComponent (WBS 6.3 3-Step AI Planning & Approval Workspace)
         sequence_order: 1,
         title: 'Chặng 1: Cổng kiểm định 3 tầng',
         description: 'Tier 1, Tier 2, Tier 3',
+        estimated_effort_minutes: 60,
         status: 'PENDING',
         created_at: '2026-10-30T08:00:00Z',
         updated_at: '2026-10-30T08:00:00Z',
@@ -191,7 +192,11 @@ describe('RoadmapPageComponent (WBS 6.3 3-Step AI Planning & Approval Workspace)
           question_id: 'q1',
           text: 'Mức độ nắm vững Pydantic v2 của bạn?',
           question_type: 'single_choice',
-          options: ['Chưa rõ', 'Cơ bản', 'Chuyên sâu'],
+          options: [
+            { id: 'unknown', label: 'Chưa rõ' },
+            { id: 'basic', label: 'Cơ bản' },
+            { id: 'deep', label: 'Chuyên sâu' },
+          ],
         },
       ],
     });
@@ -210,7 +215,11 @@ describe('RoadmapPageComponent (WBS 6.3 3-Step AI Planning & Approval Workspace)
         question: 'Bạn đã quen thuộc với Hexagonal Architecture chưa?',
         placeholder: 'Chọn một đáp án',
         question_type: 'single_choice',
-        options: ['Chưa từng', 'Đã biết khái niệm', 'Đã triển khai thực tế'],
+        options: [
+          { id: 'none', label: 'Chưa từng' },
+          { id: 'concept', label: 'Đã biết khái niệm' },
+          { id: 'production', label: 'Đã triển khai thực tế' },
+        ],
         question_purpose: 'Đánh giá kinh nghiệm kiến trúc',
         expected_answer_format: 'text',
         diagnostic_dimension: 'EXPERIENCE',
@@ -259,7 +268,10 @@ describe('RoadmapPageComponent (WBS 6.3 3-Step AI Planning & Approval Workspace)
         question: 'Câu hỏi tùy chọn?',
         placeholder: 'Chọn đáp án',
         question_type: 'single_choice',
-        options: ['A', 'B'],
+        options: [
+          { id: 'a', label: 'A' },
+          { id: 'b', label: 'B' },
+        ],
         question_purpose: 'Thăm dò sở thích',
         expected_answer_format: 'text',
         diagnostic_dimension: 'PREFERENCE',
@@ -279,6 +291,7 @@ describe('RoadmapPageComponent (WBS 6.3 3-Step AI Planning & Approval Workspace)
     );
     expect(skipReq.request.method).toBe('POST');
     expect(skipReq.request.body).toEqual({
+      session_id: null,
       skipped_question_ids: ['q-skip-1'],
     });
     skipReq.flush({
@@ -384,6 +397,10 @@ describe('RoadmapPageComponent (WBS 6.3 3-Step AI Planning & Approval Workspace)
       status: 'DRAFT',
       is_valid: true,
       has_soft_overflow: true,
+      judge_status: 'PASSED',
+      is_partial_schedule: false,
+      scheduled_tasks_count: 1,
+      unscheduled_tasks_count: 0,
       tasks: [
         {
           task_id: 'task-1',

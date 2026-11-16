@@ -1,237 +1,268 @@
 <div class="flex-1 min-h-0 flex flex-col bg-[#FFFFFF] text-[#111111] overflow-hidden">
-  <!-- PART B: 7/5 TWO-COLUMN SPLIT WORKSPACE -->
-  <div class="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-[#EAEAE6]">
-    <!-- LEFT COLUMN (7 COLS): INTERACTIVE LEVEL-1 MILESTONES TREE -->
-    <div class="lg:col-span-7 lg:h-full lg:overflow-y-auto p-6 sm:p-7 bg-[#FFFFFF] flex flex-col space-y-4">
-      <!-- STEP TITLE IN CONTENT & ESTIMATE BADGE / ACTIONS -->
-      <div class="pb-4 border-b border-[#EAEAE6] space-y-3 shrink-0">
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <div class="space-y-0.5 min-w-0 flex-1">
-            <h2 class="font-serif text-lg sm:text-xl text-[#111111] font-semibold tracking-tight">
-              Phân rã Cấu trúc Kiến thức &amp; Phê duyệt Cột mốc Cấp 1
-            </h2>
-            <p class="text-xs text-[#555555]">
-              Kiểm tra, điều chỉnh thứ tự và số giờ ước tính của từng chặng cột mốc trước khi chuyển sang xếp lịch.
-            </p>
-          </div>
+  <!-- FULL-WIDTH 1-COLUMN WORKSPACE CONTAINER -->
+  <div class="flex-1 min-h-0 overflow-y-auto p-6 sm:p-7 bg-[#FFFFFF] flex flex-col space-y-6">
 
-          <div class="flex items-center gap-2 font-mono text-[11px] bg-[#FAFAFA] px-3 py-1.5 rounded-lg border border-[#DCDCDC] shrink-0">
-            <span class="text-[#555555]">Tổng ước tính:</span>
-            <span
-              data-testid="total-estimated-hours-badge"
-              class="font-bold text-[#246B4A]"
-            >
-              {{ totalEstimatedHours() }}h / {{ targetCapacityHours() }}h quỹ mục tiêu
-            </span>
-          </div>
+    @if (roadmapService.isGeneratingStream()) {
+      <!-- FULL CENTER LOADING SCREEN (ELEGANT MINIMALIST) -->
+      <div
+        data-testid="milestones-stream-generating-state"
+        class="flex-1 min-h-[380px] flex flex-col items-center justify-center p-8 text-center space-y-6"
+      >
+        <!-- Subtle smooth spinner -->
+        <div class="relative w-12 h-12 flex items-center justify-center">
+          <div class="w-10 h-10 rounded-full border-2 border-[#246B4A]/20 border-t-[#246B4A] animate-spin"></div>
         </div>
 
-        <div class="flex items-center justify-between gap-2 pt-1">
-          <h3 class="text-sm font-bold text-[#111111]">
-            Danh sách Cột mốc Cấp 1 ({{ editableMilestones().length }})
+        <!-- Elegant Status Title & Subtext -->
+        <div class="space-y-1.5 max-w-md mx-auto">
+          <h3 class="text-base sm:text-lg font-medium text-[#111111] tracking-tight">
+            Đang kiến trúc chuỗi cột mốc học tập...
           </h3>
-
-          <button
-            type="button"
-            (click)="onAddMilestone()"
-            data-testid="add-milestone-btn"
-            class="px-3.5 py-1.5 rounded-full bg-[#F3F3F1] hover:bg-[#EAEAE6] text-[#111111] border border-[#DCDCDC] text-xs font-semibold transition-colors cursor-pointer shrink-0"
+          <p
+            data-testid="stream-status-message"
+            class="text-xs text-[#777773] leading-relaxed"
           >
-            + Thêm cột mốc mới
-          </button>
-        </div>
-      </div>
-
-      @if (editableMilestones().length === 0) {
-        <div
-          data-testid="milestones-empty-state"
-          class="flex-1 min-h-[280px] flex flex-col items-center justify-center rounded-xl border border-dashed border-[#DCDCDC] bg-[#FAFAFA] p-8 text-center space-y-3"
-        >
-          <div class="w-11 h-11 rounded-full bg-[#EBF3EE] text-[#246B4A] mx-auto flex items-center justify-center">
-            <span class="material-symbols-outlined text-[22px]" aria-hidden="true">account_tree</span>
-          </div>
-          <p class="text-xs text-[#555555] max-w-md mx-auto leading-relaxed">
-            Chưa có cột mốc nào. Hãy bấm <strong>"Sinh Cột mốc bằng AI (2-Stage SSE)"</strong> ở bảng AI bên phải hoặc <strong>"+ Thêm cột mốc mới"</strong> để khởi tạo.
+            {{ sseProgress().message || 'Hệ thống đang cấu trúc hóa các chuyên đề và cân đối thời lượng học tập tối ưu.' }}
           </p>
         </div>
-      } @else {
-        <div class="space-y-3.5">
-          @for (ms of editableMilestones(); track idx; let idx = $index) {
+
+        <!-- Sleek thin progress bar (0% -> 100%) -->
+        <div class="w-72 sm:w-96 space-y-2">
+          <div class="w-full h-1 bg-[#EAEAE6] rounded-full overflow-hidden">
             <div
-              [attr.data-testid]="'editable-milestone-card-' + idx"
-              class="rounded-xl border border-[#DCDCDC] bg-[#FFFFFF] p-4 space-y-3 shadow-2xs"
-            >
-              <div class="flex items-center justify-between gap-2">
-                <div class="flex items-center gap-2 flex-1 min-w-0">
-                  <span class="w-6 h-6 rounded-full bg-[#EBF3EE] text-[#246B4A] font-mono text-xs font-bold flex items-center justify-center shrink-0">
-                    {{ idx + 1 }}
-                  </span>
-                  <input
-                    type="text"
-                    [attr.data-testid]="'milestone-title-input-' + idx"
-                    [ngModel]="ms.title"
-                    (ngModelChange)="onTitleChange(idx, $event)"
-                    placeholder="Tiêu đề cột mốc..."
-                    class="flex-1 text-xs sm:text-sm font-semibold text-[#111111] bg-[#FAFAFA] border border-[#DCDCDC] rounded-lg px-3 py-1.5 focus:bg-[#FFFFFF] focus:border-[#246B4A] focus:outline-none"
-                  />
-                </div>
+              class="h-full bg-[#246B4A] rounded-full transition-all duration-500 ease-out"
+              [style.width.%]="sseProgress().progress"
+            ></div>
+          </div>
+          <div class="flex items-center justify-between gap-2 text-[11px] font-mono text-[#8E8E8A] whitespace-nowrap">
+            <span data-testid="stream-stage-hero-badge" class="truncate">{{ currentStageBadgeText() }}</span>
+            <span class="font-semibold text-[#246B4A] shrink-0">{{ sseProgress().progress }}%</span>
+          </div>
+        </div>
+      </div>
+    } @else {
+      <!-- KHI SINH XONG: FULL KHUNG CÂY CỘT MỐC CẤP 1 (100% BỀ NGANG) -->
+      <div class="space-y-5">
+        <!-- NORMALIZED 2-LINE HEADER TOOLBAR -->
+        <div class="pb-3.5 border-b border-[#EAEAE6] space-y-1.5 shrink-0">
+          <!-- Line 1: Title + Total Estimated Hours Badge (Left) | Single-Row Action Buttons (Right) -->
+          <div class="flex items-center justify-between gap-3">
+            <div class="flex items-center gap-2.5 min-w-0 flex-1">
+              <h2 class="font-serif text-base sm:text-lg font-semibold text-[#111111] tracking-tight truncate">
+                Cột mốc học tập
+              </h2>
+              <span
+                data-testid="total-estimated-hours-badge"
+                class="font-mono text-xs font-medium text-[#246B4A] bg-[#EBF3EE] px-2.5 py-0.5 rounded-full border border-[#246B4A]/20 shrink-0"
+              >
+                Tổng ước tính: {{ totalEstimatedHours() }}h / {{ targetCapacityHours() }}h
+              </span>
+            </div>
 
-                <!-- Reorder & Delete Controls -->
-                <div class="flex items-center gap-1 shrink-0">
-                  <button
-                    type="button"
-                    (click)="onMoveMilestone(idx, 'UP')"
-                    [disabled]="idx === 0"
-                    [attr.data-testid]="'milestone-up-btn-' + idx"
-                    aria-label="Di chuyển cột mốc lên"
-                    class="p-1.5 rounded text-[#555555] hover:text-[#111111] hover:bg-[#F3F3F1] disabled:opacity-30 cursor-pointer"
-                  >
-                    ↑
-                  </button>
-                  <button
-                    type="button"
-                    (click)="onMoveMilestone(idx, 'DOWN')"
-                    [disabled]="idx === editableMilestones().length - 1"
-                    [attr.data-testid]="'milestone-down-btn-' + idx"
-                    aria-label="Di chuyển cột mốc xuống"
-                    class="p-1.5 rounded text-[#555555] hover:text-[#111111] hover:bg-[#F3F3F1] disabled:opacity-30 cursor-pointer"
-                  >
-                    ↓
-                  </button>
-                  <button
-                    type="button"
-                    (click)="onRemoveMilestone(idx)"
-                    [attr.data-testid]="'milestone-delete-btn-' + idx"
-                    aria-label="Xóa cột mốc"
-                    class="p-1.5 rounded text-[#B91C1C] hover:bg-[#FBEBEB] cursor-pointer"
-                  >
-                    ✕
-                  </button>
-                </div>
-              </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                (click)="onAddMilestone()"
+                data-testid="add-milestone-btn"
+                class="px-3 py-1.5 rounded-full bg-[#FFFFFF] hover:bg-[#F5F5F3] text-[#111111] border border-[#DCDCDC] text-xs font-medium transition-colors cursor-pointer inline-flex items-center gap-1 whitespace-nowrap"
+              >
+                <span class="material-symbols-outlined text-[15px] text-[#246B4A]" aria-hidden="true">add</span>
+                <span>+ Thêm cột mốc</span>
+              </button>
 
-              <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-start">
-                <div class="sm:col-span-9">
-                  <textarea
-                    rows="2"
-                    [attr.data-testid]="'milestone-desc-input-' + idx"
-                    [ngModel]="ms.description ?? ''"
-                    (ngModelChange)="onDescriptionChange(idx, $event)"
-                    placeholder="Mô tả mục tiêu đầu ra của cột mốc..."
-                    class="w-full text-xs text-[#555555] bg-[#FAFAFA] border border-[#DCDCDC] rounded-lg p-2.5 focus:bg-[#FFFFFF] focus:border-[#246B4A] focus:outline-none resize-none"
-                  ></textarea>
-                </div>
+              <button
+                type="button"
+                (click)="toggleAdditionalContext()"
+                data-testid="toggle-context-btn"
+                class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer inline-flex items-center gap-1 border whitespace-nowrap"
+                [class.bg-[#EBF3EE]]="isContextExpanded() || additionalContext().trim()"
+                [class.border-[#246B4A]]="isContextExpanded() || additionalContext().trim()"
+                [class.text-[#246B4A]]="isContextExpanded() || additionalContext().trim()"
+                [class.bg-[#FFFFFF]]="!isContextExpanded() && !additionalContext().trim()"
+                [class.border-[#DCDCDC]]="!isContextExpanded() && !additionalContext().trim()"
+                [class.text-[#777773]]="!isContextExpanded() && !additionalContext().trim()"
+                [class.hover:bg-[#F5F5F3]]="!isContextExpanded() && !additionalContext().trim()"
+              >
+                <span class="material-symbols-outlined text-[15px]" aria-hidden="true">tune</span>
+                <span>Ngữ cảnh</span>
+                @if (additionalContext().trim()) {
+                  <span class="w-1.5 h-1.5 rounded-full bg-[#246B4A]"></span>
+                }
+              </button>
 
-                <div class="sm:col-span-3">
-                  <label class="block text-[10px] font-mono uppercase text-[#555555] mb-1">
-                    Số giờ ước tính
-                  </label>
-                  <div class="flex items-center gap-1">
+              <button
+                type="button"
+                (click)="onGenerateMilestones()"
+                [disabled]="roadmapService.isGeneratingStream()"
+                data-testid="generate-milestones-btn"
+                class="px-3.5 py-1.5 rounded-full bg-[#246B4A] hover:bg-[#1B5338] disabled:opacity-50 text-white text-xs font-medium transition-colors cursor-pointer inline-flex items-center gap-1 whitespace-nowrap"
+              >
+                <span class="material-symbols-outlined text-[15px]" aria-hidden="true">bolt</span>
+                <span>Sinh lại AI</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Line 2: Concise 1-line Description -->
+          <p class="text-xs text-[#777773] truncate">
+            Kiểm tra, điều chỉnh nội dung và thời lượng từng chặng trước khi xếp lịch.
+          </p>
+        </div>
+
+        <!-- Collapsible Additional Context Panel -->
+        @if (isContextExpanded()) {
+          <div class="p-4 rounded-xl border border-[#EAEAE6] bg-[#FAFAFA] space-y-2.5 shadow-2xs">
+            <div class="flex items-center justify-between text-xs">
+              <label for="milestone-additional-context" class="font-medium text-[#111111] flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-[15px] text-[#246B4A]" aria-hidden="true">edit_note</span>
+                <span>Ngữ cảnh bổ sung cho AI (Tùy chọn)</span>
+              </label>
+              <button
+                type="button"
+                (click)="toggleAdditionalContext()"
+                class="text-[11px] text-[#777773] hover:text-[#111111] cursor-pointer"
+              >
+                Thu gọn ✕
+              </button>
+            </div>
+            <textarea
+              id="milestone-additional-context"
+              data-testid="milestone-additional-context-input"
+              rows="2"
+              [ngModel]="additionalContext()"
+              (ngModelChange)="additionalContext.set($event)"
+              placeholder="Ví dụ: Ưu tiên thêm các bài lab thực hành kiến trúc Microservices & bảo mật..."
+              class="w-full rounded-lg border border-[#EAEAE6] bg-[#FFFFFF] p-2.5 text-xs text-[#111111] placeholder-[#8E8E8A] focus:border-[#246B4A] focus:outline-none focus:ring-1 focus:ring-[#246B4A]/20 resize-none"
+            ></textarea>
+          </div>
+        }
+
+        @if (editableMilestones().length === 0) {
+          <!-- EMPTY MILESTONES STATE -->
+          <div
+            data-testid="milestones-empty-state"
+            class="flex-1 min-h-[280px] flex flex-col items-center justify-center rounded-2xl border border-dashed border-[#DCDCDC] bg-[#FAFAFA] p-8 text-center space-y-4 shadow-2xs"
+          >
+            <div class="w-12 h-12 rounded-full bg-[#EBF3EE] text-[#246B4A] mx-auto flex items-center justify-center shadow-xs">
+              <span class="material-symbols-outlined text-[24px]" aria-hidden="true">account_tree</span>
+            </div>
+            <div class="space-y-1.5 max-w-md mx-auto">
+              <h3 class="text-sm sm:text-base font-semibold text-[#111111]">
+                Chưa có cột mốc nào trong lộ trình
+              </h3>
+              <p class="text-xs text-[#555555] leading-relaxed">
+                Hãy bấm <strong>"Sinh lại bằng AI"</strong> hoặc <strong>"+ Thêm cột mốc mới"</strong> để bắt đầu xây dựng cấu trúc học tập.
+              </p>
+            </div>
+            <div class="flex flex-wrap items-center justify-center gap-2.5 pt-2">
+              <button
+                type="button"
+                (click)="onGenerateMilestones()"
+                [disabled]="roadmapService.isGeneratingStream()"
+                class="px-4 py-2 rounded-full bg-[#246B4A] hover:bg-[#1B5338] disabled:opacity-50 text-white text-xs font-semibold transition-colors cursor-pointer inline-flex items-center gap-1.5 shadow-xs"
+              >
+                <span class="material-symbols-outlined text-[15px]" aria-hidden="true">bolt</span>
+                <span>Sinh Cột mốc bằng AI</span>
+              </button>
+              <button
+                type="button"
+                (click)="onAddMilestone()"
+                class="px-4 py-2 rounded-full bg-[#FFFFFF] hover:bg-[#F3F3F1] text-[#111111] border border-[#DCDCDC] text-xs font-semibold transition-colors cursor-pointer shadow-2xs"
+              >
+                + Thêm cột mốc thủ công
+              </button>
+            </div>
+          </div>
+        } @else {
+          <!-- INTERACTIVE LEVEL-1 MILESTONES LIST (100% FULL-WIDTH, CLEAN MINIMALIST) -->
+          <div class="space-y-3.5">
+            @for (ms of editableMilestones(); track idx; let idx = $index) {
+              <div
+                [attr.data-testid]="'editable-milestone-card-' + idx"
+                class="rounded-xl border border-[#EAEAE6] bg-[#FFFFFF] p-5 space-y-4 shadow-2xs hover:border-[#246B4A]/40 transition-all"
+              >
+                <div class="flex items-center justify-between gap-3">
+                  <div class="flex items-center gap-2.5 flex-1 min-w-0">
+                    <span class="w-6 h-6 rounded-md bg-[#F4F9F6] text-[#246B4A] font-mono text-xs font-semibold flex items-center justify-center shrink-0 border border-[#246B4A]/20">
+                      {{ idx + 1 }}
+                    </span>
                     <input
-                      type="number"
-                      min="1"
-                      max="200"
-                      [attr.data-testid]="'milestone-hours-input-' + idx"
-                      [ngModel]="getMilestoneHours(idx)"
-                      (ngModelChange)="onMilestoneHoursChange(idx, $event)"
-                      class="w-full font-mono text-xs font-semibold text-[#111111] bg-[#FAFAFA] border border-[#DCDCDC] rounded-lg px-2.5 py-1.5 focus:bg-[#FFFFFF] focus:border-[#246B4A] focus:outline-none"
+                      type="text"
+                      [attr.data-testid]="'milestone-title-input-' + idx"
+                      [ngModel]="ms.title"
+                      (ngModelChange)="onTitleChange(idx, $event)"
+                      placeholder="Tiêu đề cột mốc..."
+                      class="flex-1 text-xs sm:text-sm font-semibold text-[#111111] bg-[#FAFAFA] border border-[#EAEAE6] rounded-lg px-3 py-1.5 focus:bg-white focus:border-[#246B4A] focus:outline-none focus:ring-1 focus:ring-[#246B4A]/20"
                     />
-                    <span class="text-xs font-mono text-[#555555]">giờ</span>
+                  </div>
+
+                  <!-- Reorder & Delete Controls -->
+                  <div class="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      (click)="onMoveMilestone(idx, 'UP')"
+                      [disabled]="idx === 0"
+                      [attr.data-testid]="'milestone-up-btn-' + idx"
+                      aria-label="Di chuyển cột mốc lên"
+                      class="p-1.5 rounded-md text-[#777773] hover:text-[#111111] hover:bg-[#F5F5F3] disabled:opacity-30 cursor-pointer transition-colors"
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      (click)="onMoveMilestone(idx, 'DOWN')"
+                      [disabled]="idx === editableMilestones().length - 1"
+                      [attr.data-testid]="'milestone-down-btn-' + idx"
+                      aria-label="Di chuyển cột mốc xuống"
+                      class="p-1.5 rounded-md text-[#777773] hover:text-[#111111] hover:bg-[#F5F5F3] disabled:opacity-30 cursor-pointer transition-colors"
+                    >
+                      ↓
+                    </button>
+                    <button
+                      type="button"
+                      (click)="onRemoveMilestone(idx)"
+                      [attr.data-testid]="'milestone-delete-btn-' + idx"
+                      aria-label="Xóa cột mốc"
+                      class="p-1.5 rounded-md text-[#999999] hover:text-[#B91C1C] hover:bg-[#FEE2E2]/40 cursor-pointer transition-colors"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-start">
+                  <div class="sm:col-span-9">
+                    <textarea
+                      rows="2"
+                      [attr.data-testid]="'milestone-desc-input-' + idx"
+                      [ngModel]="ms.description ?? ''"
+                      (ngModelChange)="onDescriptionChange(idx, $event)"
+                      placeholder="Mô tả mục tiêu đầu ra của cột mốc..."
+                      class="w-full text-xs text-[#555555] bg-[#FAFAFA] border border-[#EAEAE6] rounded-lg p-2.5 focus:bg-white focus:border-[#246B4A] focus:outline-none focus:ring-1 focus:ring-[#246B4A]/20 resize-none"
+                    ></textarea>
+                  </div>
+
+                  <div class="sm:col-span-3">
+                    <div class="flex items-center gap-1.5 sm:mt-1">
+                      <input
+                        type="number"
+                        min="1"
+                        max="200"
+                        [attr.data-testid]="'milestone-hours-input-' + idx"
+                        [ngModel]="getMilestoneHours(idx)"
+                        (ngModelChange)="onMilestoneHoursChange(idx, $event)"
+                        class="w-20 font-mono text-xs font-semibold text-[#111111] bg-[#FAFAFA] border border-[#EAEAE6] rounded-lg px-2.5 py-1.5 focus:bg-white focus:border-[#246B4A] focus:outline-none focus:ring-1 focus:ring-[#246B4A]/20"
+                      />
+                      <span class="text-xs text-[#777773] shrink-0 font-sans">giờ ước tính</span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          }
-        </div>
-      }
-    </div>
-
-    <!-- RIGHT COLUMN (5 COLS): 2-STAGE SSE AI REASONING STREAM & CONTROLS -->
-    <div class="lg:col-span-5 lg:h-full lg:overflow-y-auto p-6 sm:p-7 bg-[#FAFAFA] space-y-5">
-      <div class="flex items-center justify-between">
-        <h3 class="text-xs font-mono font-bold uppercase tracking-wider text-[#111111] flex items-center gap-2">
-          <span class="w-2 h-2 rounded-full bg-[#246B4A]" aria-hidden="true"></span>
-          <span>Luồng Suy Luận 2-Stage SSE</span>
-        </h3>
-        <span class="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-[#EBF3EE] text-[#246B4A] border border-[#246B4A]/20">
-          {{ sseProgress().stage }} • {{ sseProgress().progress }}%
-        </span>
-      </div>
-
-      <!-- 2-Stage Pipeline Indicators -->
-      <div class="space-y-2.5">
-        <div class="p-3 rounded-lg bg-[#FFFFFF] border border-[#DCDCDC] flex items-start gap-2.5">
-          <span class="w-5 h-5 rounded-full bg-[#EBF3EE] text-[#246B4A] font-mono text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">
-            1
-          </span>
-          <div class="text-xs">
-            <div class="font-semibold text-[#111111]">Stage 1: Phân rã cấu trúc kiến thức</div>
-            <p class="text-[11px] text-[#555555] mt-0.5">
-              Trích xuất cây khái niệm (Concept Graph) và chia thành các chặng cột mốc tuần tự.
-            </p>
+            }
           </div>
-        </div>
-
-        <div class="p-3 rounded-lg bg-[#FFFFFF] border border-[#DCDCDC] flex items-start gap-2.5">
-          <span class="w-5 h-5 rounded-full bg-[#EBF3EE] text-[#246B4A] font-mono text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">
-            2
-          </span>
-          <div class="text-xs">
-            <div class="font-semibold text-[#111111]">Stage 2: Phân bổ thời lượng &amp; điều kiện tiên quyết</div>
-            <p class="text-[11px] text-[#555555] mt-0.5">
-              Cân đối số giờ ước tính (`estimated_hours`) khớp với quỹ thời gian cam kết của người học.
-            </p>
-          </div>
-        </div>
+        }
       </div>
-
-      <!-- Live Telemetry Progress Bar & Log Box -->
-      <div class="bg-[#111111] text-[#FAFAFA] rounded-xl p-4 font-mono text-xs space-y-2.5">
-        <div class="flex items-center justify-between text-[11px] text-[#8E8E8A]">
-          <span>AI HARNESS STREAM</span>
-          <span class="text-[#34D399]">{{ sseProgress().progress }}%</span>
-        </div>
-        <div class="w-full h-1.5 bg-[#333333] rounded-full overflow-hidden">
-          <div
-            class="h-full bg-[#246B4A] rounded-full transition-all duration-300"
-            [style.width.%]="sseProgress().progress"
-          ></div>
-        </div>
-        <p class="text-[11px] text-[#DCDCDC] leading-relaxed">
-          {{ sseProgress().message || 'Sẵn sàng khởi chạy tiến trình phân rã cột mốc kiến thức qua giao thức 2-Stage SSE.' }}
-        </p>
-      </div>
-
-      <!-- Additional Context Input & Trigger Button -->
-      <div class="space-y-2.5 pt-2 border-t border-[#EAEAE6]">
-        <label
-          for="milestone-additional-context"
-          class="block text-xs font-semibold text-[#111111]"
-        >
-          Ngữ cảnh bổ sung cho AI (Tùy chọn)
-        </label>
-        <textarea
-          id="milestone-additional-context"
-          data-testid="milestone-additional-context-input"
-          rows="2"
-          [ngModel]="additionalContext()"
-          (ngModelChange)="additionalContext.set($event)"
-          placeholder="Ví dụ: Ưu tiên thêm các bài lab thực hành Docker & CI/CD..."
-          class="w-full rounded-lg border border-[#DCDCDC] bg-[#FFFFFF] p-2.5 text-xs text-[#111111] placeholder-[#8E8E8A] focus:border-[#246B4A] focus:outline-none focus:ring-2 focus:ring-[#246B4A]/20 resize-none"
-        ></textarea>
-
-        <button
-          type="button"
-          (click)="onGenerateMilestones()"
-          [disabled]="roadmapService.isGeneratingStream()"
-          data-testid="generate-milestones-btn"
-          class="w-full py-2.5 px-4 rounded-full bg-[#111111] hover:bg-[#246B4A] disabled:opacity-50 text-white text-xs font-semibold transition-colors cursor-pointer inline-flex items-center justify-center gap-2"
-        >
-          <span class="material-symbols-outlined text-[16px]" aria-hidden="true">bolt</span>
-          <span>Sinh Cột mốc bằng AI (2-Stage SSE)</span>
-        </button>
-      </div>
-    </div>
+    }
   </div>
 
   <!-- PART C: PINNED STICKY ACTION FOOTER -->
@@ -250,9 +281,9 @@
       <button
         type="button"
         (click)="onSaveMilestones()"
-        [disabled]="roadmapService.saving()"
+        [disabled]="roadmapService.saving() || roadmapService.isGeneratingStream()"
         data-testid="save-milestones-btn"
-        class="w-full sm:w-auto px-4 py-2 rounded-full text-xs font-semibold text-[#111111] bg-[#FFFFFF] hover:bg-[#F3F3F1] border border-[#DCDCDC] transition-colors cursor-pointer"
+        class="w-full sm:w-auto px-4 py-2 rounded-full text-xs font-semibold text-[#111111] bg-[#FFFFFF] hover:bg-[#F3F3F1] border border-[#DCDCDC] disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer shadow-2xs"
       >
         Lưu chỉnh sửa Cột mốc
       </button>
@@ -260,9 +291,9 @@
       <button
         type="button"
         (click)="onApproveMilestones()"
-        [disabled]="roadmapService.saving()"
+        [disabled]="roadmapService.saving() || roadmapService.isGeneratingStream()"
         data-testid="approve-milestones-btn"
-        class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-full bg-[#246B4A] hover:bg-[#1B5338] disabled:opacity-50 text-white text-xs sm:text-sm font-semibold transition-colors cursor-pointer"
+        class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-full bg-[#246B4A] hover:bg-[#1B5338] disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs sm:text-sm font-semibold transition-colors cursor-pointer shadow-xs"
       >
         <span>Phê duyệt Cột mốc Cấp 1 &amp; Xếp lịch</span>
         <span class="font-mono text-xs" aria-hidden="true">→</span>

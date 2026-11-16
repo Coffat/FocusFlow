@@ -17,6 +17,7 @@ from src.planning.presentation.deps import (
     get_llm_provider,
     get_milestone_repository,
     get_planning_availability_query_port,
+    get_planning_calendar_connection_query_port,
     get_planning_embedding_provider,
     get_planning_execution_sync_port,
     get_planning_learner_memory_port,
@@ -80,7 +81,7 @@ async def execute_ai_roadmap_generation(
         workflow_repo = get_planning_workflow_repository(session)
 
         try:
-            if job_type.upper() == "MILESTONE_GEN":
+            if job_type.upper().startswith("MILESTONE_GEN"):
                 ms_uc = get_execute_milestone_generation_use_case(
                     goal_repo=goal_repo,
                     roadmap_repo=roadmap_repo,
@@ -100,6 +101,9 @@ async def execute_ai_roadmap_generation(
                     user_id=UUID(user_id),
                     roadmap_id=UUID(roadmap_id),
                     reservation_id=UUID(reservation_id),
+                    generation_strategy=(
+                        job_type.split(":", 1)[1] if ":" in job_type else "FULL_SCOPE"
+                    ),
                 )
             else:
                 proposal_repo = get_schedule_proposal_repository(session)
@@ -108,6 +112,7 @@ async def execute_ai_roadmap_generation(
                 exec_sync_port = get_planning_execution_sync_port(session)
                 user_query_port = get_planning_user_query_port(session)
                 block_repo = get_schedule_block_repository(session)
+                cal_conn_port = get_planning_calendar_connection_query_port(session)
                 prop_uc = get_execute_schedule_proposal_generation_use_case(
                     goal_repo=goal_repo,
                     roadmap_repo=roadmap_repo,
@@ -127,6 +132,7 @@ async def execute_ai_roadmap_generation(
                     knowledge_source_repo=knowledge_source_repo,
                     embedding_provider=embedding_provider,
                     workflow_repo=workflow_repo,
+                    calendar_connection_query_port=cal_conn_port,
                 )
                 await prop_uc.execute(
                     job_id=UUID(job_id),

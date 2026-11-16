@@ -10,6 +10,7 @@ from src.account.public_api import (
     CalendarConnectionQueryPort,
     CalendarConnectionSnapshotDTO,
 )
+from src.shared_kernel.config import get_settings
 from src.shared_kernel.infrastructure.security.encryption import decrypt_token
 
 
@@ -55,7 +56,10 @@ class SqlAlchemyCalendarConnectionQueryAdapter(CalendarConnectionQueryPort):
             return []
 
         try:
-            refresh_token = decrypt_token(conn.oauth_refresh_token_encrypted)
+            refresh_token = decrypt_token(
+                conn.oauth_refresh_token_encrypted,
+                key=get_settings().calendar_encryption_key,
+            )
             calendar_ids = conn.source_calendars_json or ["primary"]
             intervals = await self._calendar_provider.get_free_busy_intervals(
                 refresh_token=refresh_token,

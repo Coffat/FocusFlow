@@ -66,8 +66,8 @@ from src.planning.infrastructure.repositories.sqlalchemy_knowledge_base_reposito
 )
 from src.shared_kernel.application.llm_port import LLMProviderPort
 from src.shared_kernel.application.uow import AsyncUnitOfWork
-from src.shared_kernel.infrastructure.external_ai.litellm_adapter import MockLLMAdapter
 from src.shared_kernel.infrastructure.sse.job_store import InMemorySseJobStore
+from tests.helpers.llm_stubs import StubLLMAdapter
 
 
 class _EvalGoalRepo(GoalRepositoryPort):
@@ -424,12 +424,12 @@ async def test_10_scenario_ai_roadmap_evaluation_dataset_end_to_end() -> None:
         clar_uc = GenerateClarificationQuestionsUseCase(
             goal_repo=goal_repo,
             quota_facade=clar_quota,
-            llm_provider=MockLLMAdapter(),
+            llm_provider=StubLLMAdapter(),
             uow=uow,
         )
         known_dims = set(RoadmapContextBuilder.extract_known_diagnostic_dimensions(goal))
         q_resp = await clar_uc.execute(user_id=user_id, goal_id=goal_id, now=now)
-        assert 2 <= len(q_resp.questions) <= 3
+        assert 1 <= len(q_resp.questions) <= 3
         if all(q.diagnostic_dimension not in known_dims for q in q_resp.questions):
             clarification_non_redundant_passed += 1
 
@@ -497,7 +497,7 @@ async def test_10_scenario_ai_roadmap_evaluation_dataset_end_to_end() -> None:
             roadmap_repo=roadmap_repo,
             milestone_repo=milestone_repo,
             quota_facade=ms_quota,
-            llm_provider=MockLLMAdapter(),
+            llm_provider=StubLLMAdapter(),
             sse_job_store=sse_store,
             uow=uow,
             knowledge_base=kb_repo,
@@ -509,7 +509,9 @@ async def test_10_scenario_ai_roadmap_evaluation_dataset_end_to_end() -> None:
             reservation_id=ms_res_id,
             now=now,
         )
-        assert 3 <= len(milestones) <= 7
+        assert milestones
+        assert [m.sequence_order for m in milestones] == list(range(1, len(milestones) + 1))
+        assert all(m.learning_outcomes and m.completion_criteria for m in milestones)
         kb_grounding_passed += 1
 
         approve_uc = ApproveMilestonesUseCase(
@@ -585,7 +587,7 @@ async def test_10_scenario_ai_roadmap_evaluation_dataset_end_to_end() -> None:
         custom_llm: LLMProviderPort
         if sid == "S06_MACHINE_LEARNING_DISABLED_WEEKDAYS_ALLOCATION":
             # LLM returns unscheduled atomic tasks -> SpatioTemporalRuleEngine.allocate_tasks_to_availability schedules them avoiding disabled_weekdays
-            custom_llm = MockLLMAdapter(
+            custom_llm = StubLLMAdapter(
                 canned_responses=[
                     {
                         "tasks": [
@@ -651,7 +653,7 @@ async def test_10_scenario_ai_roadmap_evaluation_dataset_end_to_end() -> None:
                 ],
                 "dependencies": [],
             }
-            custom_llm = MockLLMAdapter(canned_responses=[bad_attempt, good_attempt])
+            custom_llm = StubLLMAdapter(canned_responses=[bad_attempt, good_attempt])
         elif sid == "S09_TIER3_PEDAGOGICAL_JUDGE_WARNING_DETECTION":
             # Inverted prerequisites (Advanced DP before Basic Tree) -> Tier 3 Judge emits warning
             inverted_proposal = {
@@ -679,9 +681,9 @@ async def test_10_scenario_ai_roadmap_evaluation_dataset_end_to_end() -> None:
                 ],
                 "dependencies": [],
             }
-            custom_llm = MockLLMAdapter(canned_responses=[inverted_proposal])
+            custom_llm = StubLLMAdapter(canned_responses=[inverted_proposal])
         else:
-            custom_llm = MockLLMAdapter()
+            custom_llm = StubLLMAdapter()
 
         prop_uc = ExecuteScheduleProposalGenerationUseCase(
             goal_repo=goal_repo,
@@ -735,7 +737,7 @@ async def test_10_scenario_ai_roadmap_evaluation_dataset_end_to_end() -> None:
             with pytest.raises(UnauthorizedToolCallError):
                 await judge_dispatcher.dispatch("search_learning_concepts", {"query": "jwt"})
 
-            class _TimeoutJudgeLLM(MockLLMAdapter):
+            class _TimeoutJudgeLLM(StubLLMAdapter):
                 async def generate_structured(
                     self, *args: Any, **kwargs: Any
                 ) -> tuple[dict[str, Any], int, int]:

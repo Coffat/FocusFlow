@@ -6,12 +6,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.account.application.use_cases.calendar.sync_schedule_blocks_use_case import (
     SyncScheduleBlocksToGoogleUseCase,
 )
-from src.account.domain.ports.calendar_provider_port import CalendarProviderPort
+from src.account.domain.ports.calendar_provider_port import (
+    CalendarProviderError,
+    CalendarProviderPort,
+)
 from src.account.infrastructure.adapters.google_calendar_adapter import (
     GoogleCalendarAdapter,
-)
-from src.account.infrastructure.adapters.mock_calendar_adapter import (
-    MockCalendarAdapter,
 )
 from src.account.infrastructure.repositories.calendar_connection_repository import (
     SqlAlchemyCalendarConnectionRepository,
@@ -41,10 +41,12 @@ class CalendarSyncFacadeAdapter(CalendarSyncFacadePort):
             provider = calendar_provider
         else:
             provider_name = settings.calendar_provider.strip().lower()
-            if provider_name in ("mock", "local_mock"):
-                provider = MockCalendarAdapter()
-            else:
-                provider = GoogleCalendarAdapter(settings=settings)
+            if provider_name not in ("google", "google_calendar"):
+                raise CalendarProviderError(
+                    f"CALENDAR_PROVIDER_NOT_CONFIGURED: Unsupported calendar_provider={settings.calendar_provider!r}. Only 'google' is supported.",
+                    code="CALENDAR_PROVIDER_NOT_CONFIGURED",
+                )
+            provider = GoogleCalendarAdapter(settings=settings)
 
         repo = SqlAlchemyCalendarConnectionRepository(session)
         block_port = create_schedule_block_sync_port(session)
@@ -61,8 +63,15 @@ class CalendarSyncFacadeAdapter(CalendarSyncFacadePort):
         self,
         schedule_id: UUID,
         user_id: UUID,
-    ) -> None:
-        await self._sync_use_case.execute(schedule_id=schedule_id, user_id=user_id)
+    ) -> str:
+        res = await self._sync_use_case.execute(schedule_id=schedule_id, user_id=user_id)
+        if res.skipped:
+            if res.error_detail and "No active Google Calendar connection" in res.error_detail:
+                return "NOT_CONNECTED"
+            return "SYNC_FAILED"
+        if res.error_detail:
+            return "SYNC_FAILED" if res.synced_blocks_count == 0 else "PENDING_SYNC"
+        return "SYNCED"
 
 
 def _calendar_sync_facade_factory(session: Any) -> CalendarSyncFacadePort:

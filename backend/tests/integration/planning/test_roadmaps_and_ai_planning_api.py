@@ -1,3 +1,4 @@
+import json
 from collections.abc import AsyncGenerator
 from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
@@ -25,9 +26,9 @@ from src.main import app
 from src.planning.infrastructure.orm.planning_orm import ScheduleBlockORM
 from src.planning.presentation.deps import get_llm_provider
 from src.shared_kernel.infrastructure.database.session import async_session_factory
-from src.shared_kernel.infrastructure.external_ai.litellm_adapter import MockLLMAdapter
 from src.shared_kernel.infrastructure.outbox.models import OutboxEventORM
 from src.shared_kernel.infrastructure.sse import default_in_memory_sse_job_store
+from tests.helpers.llm_stubs import StubLLMAdapter
 
 
 @pytest.fixture
@@ -89,7 +90,7 @@ async def planning_users() -> AsyncGenerator[tuple[UUID, UUID], None]:
 
     app.dependency_overrides.clear()
     app.dependency_overrides[get_current_learner_id] = lambda: owner_id
-    app.dependency_overrides[get_llm_provider] = lambda: MockLLMAdapter()
+    app.dependency_overrides[get_llm_provider] = lambda: StubLLMAdapter()
 
     try:
         yield owner_id, other_id
@@ -213,6 +214,7 @@ async def test_e2e_ai_planning_flow_sse_approval_edit_and_os03_merge(
         updated_ms = put_ms_res.json()["milestones"]
         m1_id = updated_ms[0]["id"]
         m2_id = updated_ms[1]["id"]
+        m3_id = updated_ms[2]["id"]
 
         approve_res = await client.post(f"/api/v1/roadmaps/{roadmap_id}/milestones/approve")
         assert approve_res.status_code == 200
@@ -263,11 +265,11 @@ async def test_e2e_ai_planning_flow_sse_approval_edit_and_os03_merge(
             session.add(slot)
             await session.commit()
 
-        # Configure MockLLMAdapter so Attempt 1 has an invalid 15m AI task (< 30m Tier 1 bound),
+        # Configure StubLLMAdapter so Attempt 1 has an invalid 15m AI task (< 30m Tier 1 bound),
         # and Attempt 2 self-corrects to valid tasks with a 20m Soft Overflow (19:00-20:00 and 20:00-21:20)
         t1_id = str(uuid7())
         t2_id = str(uuid7())
-        canned_llm = MockLLMAdapter(
+        canned_llm = StubLLMAdapter(
             canned_responses=[
                 {
                     "tasks": [
@@ -336,7 +338,7 @@ async def test_e2e_ai_planning_flow_sse_approval_edit_and_os03_merge(
         assert curr_prop["status"] == "DRAFT"
         # AI-supplied dates are discarded; deterministic allocation avoids its overflow.
         assert curr_prop["has_soft_overflow"] is False
-        assert len(curr_prop["schedule_blocks"]) == 4
+        assert len(curr_prop["schedule_blocks"]) == 6
         assert len({block["block_date"] for block in curr_prop["schedule_blocks"]}) >= 2
         assert all(
             block["scheduled_start"].endswith("+07:00") for block in curr_prop["schedule_blocks"]
@@ -351,8 +353,8 @@ async def test_e2e_ai_planning_flow_sse_approval_edit_and_os03_merge(
         apply_data = apply_ok.json()
         assert apply_data["roadmap_status"] == "ACTIVE"
         assert apply_data["proposal_status"] == "APPLIED"
-        assert apply_data["total_sessions"] == 4
-        assert apply_data["total_planned_minutes"] == 140
+        assert apply_data["total_sessions"] == 6
+        assert apply_data["total_planned_minutes"] == 200
         assert apply_data["trigger_type"] == "INITIAL_APPLY"
         async with async_session_factory() as session:
             initial_blocks = list(
@@ -364,8 +366,8 @@ async def test_e2e_ai_planning_flow_sse_approval_edit_and_os03_merge(
                 .scalars()
                 .all()
             )
-            assert len(initial_blocks) == 4
-            assert sum(block.scheduled_duration_minutes for block in initial_blocks) == 140
+            assert len(initial_blocks) == 6
+            assert sum(block.scheduled_duration_minutes for block in initial_blocks) == 200
 
         # A protected session cannot be moved by a later Apply.
         async with async_session_factory() as session:
@@ -416,19 +418,63 @@ async def test_e2e_ai_planning_flow_sse_approval_edit_and_os03_merge(
 
         # Use manual/edit flow to create a new DRAFT proposal and edit it with a 15-minute task (valid in manual [15, 240]m)
         t3_id = str(uuid7())
+        t4_id = str(uuid7())
+        t5_id = str(uuid7())
         manual_replan_res = await client.post(
             f"/api/v1/roadmaps/{roadmap_id}/proposals/manual",
             json={
                 "tasks": [
                     {
+                        "task_id": t4_id,
+                        "milestone_id": m1_id,
+                        "title": "Củng cố nền tảng hệ phân tán",
+                        "task_type": "REVIEW",
+                        "learning_objective": "Củng cố toàn bộ outcome của chặng nền tảng.",
+                        "completion_criteria": "Hoàn thành bài kiểm tra củng cố.",
+                        "covered_outcome_ids": [
+                            f"M1-O{i}"
+                            for i in range(1, len(updated_ms[0]["learning_outcomes"]) + 1)
+                        ],
+                        "concept_ids": updated_ms[0]["required_concepts"],
+                        "estimated_minutes": 60,
+                        "scheduled_date": "2026-11-09",
+                        "scheduled_start": "2026-11-09T19:00:00+07:00",
+                        "scheduled_end": "2026-11-09T20:00:00+07:00",
+                    },
+                    {
                         "task_id": t3_id,
                         "milestone_id": m2_id,
                         "title": "Ôn tập nhanh Outbox Relay (15 phút thủ công)",
+                        "task_type": "PRACTICE",
+                        "learning_objective": "Vận dụng outcome của chặng Raft và replication.",
+                        "completion_criteria": "Hoàn thành bản triển khai chạy được.",
+                        "covered_outcome_ids": [
+                            f"M2-O{i}"
+                            for i in range(1, len(updated_ms[1]["learning_outcomes"]) + 1)
+                        ],
+                        "concept_ids": updated_ms[1]["required_concepts"],
                         "estimated_minutes": 15,
-                        "scheduled_date": "2026-11-09",
-                        "scheduled_start": "2026-11-09T19:00:00+07:00",
-                        "scheduled_end": "2026-11-09T19:15:00+07:00",
-                    }
+                        "scheduled_date": "2026-11-16",
+                        "scheduled_start": "2026-11-16T19:00:00+07:00",
+                        "scheduled_end": "2026-11-16T19:15:00+07:00",
+                    },
+                    {
+                        "task_id": t5_id,
+                        "milestone_id": m3_id,
+                        "title": "Tổng hợp Transactional Outbox và Saga",
+                        "task_type": "PROJECT",
+                        "learning_objective": "Vận dụng toàn bộ outcome của chặng tổng hợp.",
+                        "completion_criteria": "Hoàn thành demo Outbox và Saga.",
+                        "covered_outcome_ids": [
+                            f"M3-O{i}"
+                            for i in range(1, len(updated_ms[2]["learning_outcomes"]) + 1)
+                        ],
+                        "concept_ids": updated_ms[2]["required_concepts"],
+                        "estimated_minutes": 60,
+                        "scheduled_date": "2026-11-23",
+                        "scheduled_start": "2026-11-23T19:00:00+07:00",
+                        "scheduled_end": "2026-11-23T20:00:00+07:00",
+                    },
                 ],
                 "dependencies": [],
             },
@@ -442,14 +488,56 @@ async def test_e2e_ai_planning_flow_sse_approval_edit_and_os03_merge(
             json={
                 "tasks": [
                     {
-                        "task_id": t3_id,
-                        "milestone_id": m2_id,
-                        "title": "Cài đặt hoàn chỉnh Outbox Relay (45 phút)",
-                        "estimated_minutes": 45,
+                        "task_id": t4_id,
+                        "milestone_id": m1_id,
+                        "title": "Củng cố nền tảng hệ phân tán",
+                        "task_type": "REVIEW",
+                        "learning_objective": "Củng cố toàn bộ outcome của chặng nền tảng.",
+                        "completion_criteria": "Hoàn thành bài kiểm tra củng cố.",
+                        "covered_outcome_ids": [
+                            f"M1-O{i}"
+                            for i in range(1, len(updated_ms[0]["learning_outcomes"]) + 1)
+                        ],
+                        "concept_ids": updated_ms[0]["required_concepts"],
+                        "estimated_minutes": 60,
                         "scheduled_date": "2026-11-09",
                         "scheduled_start": "2026-11-09T19:00:00+07:00",
-                        "scheduled_end": "2026-11-09T19:45:00+07:00",
-                    }
+                        "scheduled_end": "2026-11-09T20:00:00+07:00",
+                    },
+                    {
+                        "task_id": t3_id,
+                        "milestone_id": m2_id,
+                        "title": "Cài đặt hoàn chỉnh Outbox Relay (60 phút)",
+                        "task_type": "PRACTICE",
+                        "learning_objective": "Vận dụng outcome của chặng Raft và replication.",
+                        "completion_criteria": "Hoàn thành bản triển khai chạy được.",
+                        "covered_outcome_ids": [
+                            f"M2-O{i}"
+                            for i in range(1, len(updated_ms[1]["learning_outcomes"]) + 1)
+                        ],
+                        "concept_ids": updated_ms[1]["required_concepts"],
+                        "estimated_minutes": 60,
+                        "scheduled_date": "2026-11-16",
+                        "scheduled_start": "2026-11-16T19:00:00+07:00",
+                        "scheduled_end": "2026-11-16T20:00:00+07:00",
+                    },
+                    {
+                        "task_id": t5_id,
+                        "milestone_id": m3_id,
+                        "title": "Tổng hợp Transactional Outbox và Saga",
+                        "task_type": "PROJECT",
+                        "learning_objective": "Vận dụng toàn bộ outcome của chặng tổng hợp.",
+                        "completion_criteria": "Hoàn thành demo Outbox và Saga.",
+                        "covered_outcome_ids": [
+                            f"M3-O{i}"
+                            for i in range(1, len(updated_ms[2]["learning_outcomes"]) + 1)
+                        ],
+                        "concept_ids": updated_ms[2]["required_concepts"],
+                        "estimated_minutes": 60,
+                        "scheduled_date": "2026-11-23",
+                        "scheduled_start": "2026-11-23T19:00:00+07:00",
+                        "scheduled_end": "2026-11-23T20:00:00+07:00",
+                    },
                 ],
                 "dependencies": [
                     {
@@ -461,7 +549,7 @@ async def test_e2e_ai_planning_flow_sse_approval_edit_and_os03_merge(
             },
         )
         assert edit_prop_res.status_code == 200
-        assert edit_prop_res.json()["is_valid"] is True
+        assert edit_prop_res.json()["is_valid"] is True, edit_prop_res.json()["violations"]
 
         # Apply Replan -> OS-03 Merge preserves COMPLETED t1_id, replaces TODO t2_id, inserts t3_id
         apply_replan = await client.post(
@@ -471,10 +559,10 @@ async def test_e2e_ai_planning_flow_sse_approval_edit_and_os03_merge(
         assert apply_replan.status_code == 200
         replan_data = apply_replan.json()
         assert replan_data["preserved_completed_tasks_count"] == 1
-        assert replan_data["replaced_tasks_count"] == 1
-        assert replan_data["inserted_tasks_count"] == 1
-        assert replan_data["total_sessions"] == 3
-        assert replan_data["total_planned_minutes"] == 105  # 60m completed + 45m new
+        assert replan_data["replaced_tasks_count"] == 2
+        assert replan_data["inserted_tasks_count"] == 3
+        assert replan_data["total_sessions"] == 5
+        assert replan_data["total_planned_minutes"] == 240
         assert replan_data["trigger_type"] == "REPLAN_MERGE"
         async with async_session_factory() as session:
             replanned_blocks = list(
@@ -487,15 +575,15 @@ async def test_e2e_ai_planning_flow_sse_approval_edit_and_os03_merge(
                 .all()
             )
             assert sum(block.status == "COMPLETED" for block in replanned_blocks) == 2
-            assert sum(block.status == "PLANNED" for block in replanned_blocks) == 1
+            assert sum(block.status == "PLANNED" for block in replanned_blocks) == 3
 
         # 9. Get Roadmap Detail & Archive
         detail_after = await client.get(f"/api/v1/roadmaps/{roadmap_id}")
         assert detail_after.status_code == 200
         detail_json = detail_after.json()
         assert detail_json["status"] == "ACTIVE"
-        assert len(detail_json["scheduled_tasks"]) == 2
-        assert detail_json["official_schedule"]["total_planned_minutes"] == 105
+        assert len(detail_json["scheduled_tasks"]) == 4
+        assert detail_json["official_schedule"]["total_planned_minutes"] == 240
 
         list_res = await client.get("/api/v1/roadmaps?status=ACTIVE")
         assert list_res.status_code == 200
@@ -639,7 +727,7 @@ async def test_ai_clarification_flow_and_idor(
     """Test AI Clarification questions generation and answers submission (FR-GOAL-002)."""
     owner_id, other_id = planning_users
     app.dependency_overrides[get_current_learner_id] = lambda: owner_id
-    app.dependency_overrides[get_llm_provider] = lambda: MockLLMAdapter()
+    app.dependency_overrides[get_llm_provider] = lambda: StubLLMAdapter()
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -658,7 +746,9 @@ async def test_ai_clarification_flow_and_idor(
         res_data = create_res.json()
         goal_data = res_data["goal"]
         assert goal_data["prior_knowledge_level"] == "INTERMEDIATE"
-        assert goal_data["clarification_context"] is None
+        initial_context = json.loads(goal_data["clarification_context"])
+        assert initial_context["schema_version"] == 2
+        assert initial_context["status"] == "PARTIAL"
         goal_id = UUID(goal_data["id"])
 
         # 2. Request clarification questions
@@ -666,7 +756,9 @@ async def test_ai_clarification_flow_and_idor(
         assert q_res.status_code == 200
         questions_data = q_res.json()
         assert "questions" in questions_data
-        assert len(questions_data["questions"]) >= 2
+        assert 0 <= len(questions_data["questions"]) <= 3
+        assert questions_data["session_id"] is not None
+        assert questions_data["questions"]
         q1 = questions_data["questions"][0]
         assert "question_id" in q1
         assert "text" in q1
@@ -675,24 +767,25 @@ async def test_ai_clarification_flow_and_idor(
         ans_res = await client.post(
             f"/api/v1/roadmaps/goals/{goal_id}/clarify-answers",
             json={
+                "session_id": questions_data["session_id"],
+                "round": questions_data["round"],
                 "answers": [
                     {
                         "question_id": q1["question_id"],
-                        "question_text": q1["text"],
                         "answer": "Đã có kinh nghiệm viết Python và gọi OpenAI API",
-                    },
-                    {
-                        "question_id": "q2",
-                        "question_text": "Thời gian cam kết",
-                        "answer": "1.5 giờ mỗi ngày vào buổi tối",
-                    },
-                ]
+                    }
+                ],
+                "skipped_question_ids": [
+                    item["question_id"] for item in questions_data["questions"][1:]
+                ],
+                "total_questions_count": len(questions_data["questions"]),
             },
         )
         assert ans_res.status_code == 200
         ans_data = ans_res.json()
         assert ans_data["goal_id"] == str(goal_id)
         assert "Đã có kinh nghiệm viết Python" in ans_data["clarification_context"]
+        assert ans_data["status"] in {"READY_TO_PLAN", "WAITING_FOLLOW_UP"}
 
         # 4. Verify IDOR protection: other user cannot access or answer owner's goal
         app.dependency_overrides[get_current_learner_id] = lambda: other_id

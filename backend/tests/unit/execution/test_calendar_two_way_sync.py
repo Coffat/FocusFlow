@@ -28,9 +28,6 @@ from src.account.domain.ports.calendar_provider_port import (
     CalendarEventDTO,
     get_deterministic_event_id,
 )
-from src.account.infrastructure.adapters.mock_calendar_adapter import (
-    MockCalendarAdapter,
-)
 from src.account.presentation.webhook_router import handle_google_calendar_webhook
 from src.planning.public_api import (
     ScheduleBlockSyncDTO,
@@ -42,6 +39,7 @@ from src.shared_kernel.infrastructure.security.encryption import (
     encrypt_token,
     generate_fernet_key,
 )
+from tests.helpers.calendar_stubs import InMemoryCalendarAdapter
 
 
 # --- In-Memory Implementations for Testing ---
@@ -161,14 +159,15 @@ class InMemoryScheduleBlockSyncPort(ScheduleBlockSyncPort):
 def test_settings() -> Settings:
     key = generate_fernet_key()
     return Settings(
+        calendar_provider="google",
         calendar_encryption_key=key,
         calendar_webhook_base_url="https://api.focusflow.test",
     )
 
 
 @pytest.fixture
-def mock_calendar() -> MockCalendarAdapter:
-    adapter = MockCalendarAdapter()
+def mock_calendar() -> InMemoryCalendarAdapter:
+    adapter = InMemoryCalendarAdapter()
     adapter.reset()
     return adapter
 
@@ -196,7 +195,7 @@ async def test_deterministic_event_id_format() -> None:
 @pytest.mark.asyncio
 async def test_outbound_sync_creates_events_and_updates_blocks(
     conn_repo: InMemoryCalendarConnectionRepository,
-    mock_calendar: MockCalendarAdapter,
+    mock_calendar: InMemoryCalendarAdapter,
     test_settings: Settings,
 ) -> None:
     user_id = uuid7()
@@ -285,7 +284,7 @@ async def test_outbound_sync_creates_events_and_updates_blocks(
 @pytest.mark.asyncio
 async def test_outbound_sync_409_conflict_recovery(
     conn_repo: InMemoryCalendarConnectionRepository,
-    mock_calendar: MockCalendarAdapter,
+    mock_calendar: InMemoryCalendarAdapter,
     test_settings: Settings,
 ) -> None:
     user_id = uuid7()
@@ -449,7 +448,7 @@ async def test_webhook_router_header_verification(
 @pytest.mark.asyncio
 async def test_inbound_sync_echo_check_and_strict_review(
     conn_repo: InMemoryCalendarConnectionRepository,
-    mock_calendar: MockCalendarAdapter,
+    mock_calendar: InMemoryCalendarAdapter,
     test_settings: Settings,
 ) -> None:
     channel_id = "chan_echo_test"
@@ -569,7 +568,7 @@ async def test_inbound_sync_echo_check_and_strict_review(
 @pytest.mark.asyncio
 async def test_event_deletion_matrix_preserves_completed_and_missed_blocks(
     conn_repo: InMemoryCalendarConnectionRepository,
-    mock_calendar: MockCalendarAdapter,
+    mock_calendar: InMemoryCalendarAdapter,
     test_settings: Settings,
 ) -> None:
     channel_id = "chan_deletion_matrix"
@@ -717,7 +716,7 @@ async def test_event_deletion_matrix_preserves_completed_and_missed_blocks(
 @pytest.mark.asyncio
 async def test_inbound_sync_410_gone_triggers_full_sync_without_deleting_blocks(
     conn_repo: InMemoryCalendarConnectionRepository,
-    mock_calendar: MockCalendarAdapter,
+    mock_calendar: InMemoryCalendarAdapter,
     test_settings: Settings,
 ) -> None:
     channel_id = "chan_410_test"
@@ -783,7 +782,7 @@ async def test_inbound_sync_410_gone_triggers_full_sync_without_deleting_blocks(
 @pytest.mark.asyncio
 async def test_renew_expiring_calendar_webhooks_sweeper(
     conn_repo: InMemoryCalendarConnectionRepository,
-    mock_calendar: MockCalendarAdapter,
+    mock_calendar: InMemoryCalendarAdapter,
     test_settings: Settings,
 ) -> None:
     now = utc_now()
@@ -838,7 +837,7 @@ async def test_renew_expiring_calendar_webhooks_sweeper(
 @pytest.mark.asyncio
 async def test_reconcile_calendar_connections_sweeper(
     conn_repo: InMemoryCalendarConnectionRepository,
-    mock_calendar: MockCalendarAdapter,
+    mock_calendar: InMemoryCalendarAdapter,
     test_settings: Settings,
 ) -> None:
     encrypted = encrypt_token("mock_refresh_token", key=test_settings.calendar_encryption_key)

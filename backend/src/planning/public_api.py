@@ -55,6 +55,12 @@ class MilestoneOwnershipDTO:
     roadmap_id: UUID
     user_id: UUID
     title: str
+    description: str | None = None
+    learning_outcomes: tuple[str, ...] = ()
+    completion_criteria: str | None = None
+    required_concepts: tuple[str, ...] = ()
+    unverified_concepts: tuple[str, ...] = ()
+    task_titles: tuple[str, ...] = ()
 
 
 class MilestoneOwnershipQueryPort(Protocol):

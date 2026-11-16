@@ -89,7 +89,11 @@ export function mapRawTasksToProposedItems(
     const prereqs = Array.isArray(t['prerequisite_ids'])
       ? t['prerequisite_ids'].map(p => String(p))
       : [];
-    const rawResources = Array.isArray(t['learning_resources']) ? t['learning_resources'] : [];
+    const rawResources = Array.isArray(t['learning_resources'])
+      ? t['learning_resources']
+      : Array.isArray(t['resources'])
+        ? t['resources']
+        : [];
     const learningResources = rawResources
       .filter((r): r is Record<string, unknown> =>
         typeof r === 'object' && r !== null &&
@@ -98,12 +102,25 @@ export function mapRawTasksToProposedItems(
         Boolean((r as Record<string, unknown>)['title']) &&
         Boolean((r as Record<string, unknown>)['url'])
       )
-      .map(r => ({
-        title: String(r['title']),
-        url: String(r['url']),
-        type: typeof r['type'] === 'string' && r['type'] ? r['type'] : 'DOCS',
-        description: typeof r['description'] === 'string' ? r['description'] : null,
-      }));
+      .map(r => {
+        const resType =
+          typeof r['type'] === 'string' && r['type']
+            ? r['type']
+            : typeof r['resource_type'] === 'string' && r['resource_type']
+              ? r['resource_type']
+              : 'DOCS';
+        return {
+          title: String(r['title']),
+          url: String(r['url']),
+          type: resType,
+          description: typeof r['description'] === 'string' ? r['description'] : null,
+        };
+      });
+
+    const unscheduledReason =
+      typeof t['unscheduled_reason'] === 'string' && t['unscheduled_reason']
+        ? t['unscheduled_reason']
+        : null;
 
     return {
       task_id: typeof t['task_id'] === 'string' ? t['task_id'] : `task-${index + 1}`,
@@ -122,6 +139,13 @@ export function mapRawTasksToProposedItems(
         typeof t['completion_criteria'] === 'string' ? t['completion_criteria'] : null,
       concept_ids: Array.isArray(t['concept_ids']) ? t['concept_ids'].map(String) : [],
       learning_resources: learningResources,
+      resources: learningResources.map(r => ({
+        title: r.title,
+        url: r.url,
+        resource_type: r.type,
+        type: r.type,
+        description: r.description,
+      })),
       estimated_minutes:
         typeof t['estimated_minutes'] === 'number' && !Number.isNaN(t['estimated_minutes'])
           ? t['estimated_minutes']
@@ -129,6 +153,7 @@ export function mapRawTasksToProposedItems(
       scheduled_date: scheduledDate,
       scheduled_start: rawStart ? normalizeTimeInput(rawStart, '') : null,
       scheduled_end: rawEnd ? normalizeTimeInput(rawEnd, '') : null,
+      unscheduled_reason: unscheduledReason,
       prerequisite_ids: prereqs,
     };
   });
@@ -176,13 +201,22 @@ export class RoadmapService {
   readonly activeStep = signal<PlanningStep>(1);
   readonly manualPlanningMode = signal<boolean>(false);
   readonly confirmSoftOverflow = signal<boolean>(false);
+  readonly confirmWarnings = signal<boolean>(false);
+  readonly confirmPartialSchedule = signal<boolean>(false);
+  readonly proposalCompletedCount = signal<number>(0);
   readonly lastApplyResult = signal<ApplyScheduleProposalResponse | null>(null);
+  private onProposalCompletedCallback: (() => void) | null = null;
 
   // AI Diagnostic Clarification Signals (FR-GOAL-002)
   readonly clarificationQuestions = signal<ClarificationQuestion[]>([]);
   readonly isGeneratingQuestions = signal<boolean>(false);
   readonly isSubmittingAnswers = signal<boolean>(false);
   readonly clarificationContext = signal<string | null>(null);
+  readonly clarificationSessionId = signal<string | null>(null);
+  readonly clarificationRound = signal<number>(1);
+  readonly clarificationStatus = signal<string>('ANALYZING');
+  readonly clarificationInformationGaps = signal<Record<string, unknown>[]>([]);
+  readonly clarificationNextTurnQuotaCost = signal<number>(0);
   readonly draftAttachments = signal<DraftKnowledgeAttachment[]>([]);
   readonly knowledgeSources = signal<KnowledgeSourceResponse[]>([]);
 
@@ -274,6 +308,99 @@ export class RoadmapService {
     return (prop.violations?.length ?? 0) > 0 || prop.is_valid === false;
   });
 
+  readonly judgeStatus = computed<'PASSED' | 'NEEDS_REVIEW' | 'REVIEW_PENDING' | 'SKIPPED'>(() => {
+    const prop = this.currentProposal();
+    const raw = prop?.judge_status ?? prop?.proposal_data?.['judge_status'];
+    if (raw === 'NEEDS_REVIEW' || raw === 'REVIEW_PENDING' || raw === 'SKIPPED') {
+      return raw;
+    }
+    return 'PASSED';
+  });
+
+  readonly advisoryWarnings = computed<string[]>(() => {
+    const prop = this.currentProposal();
+    if (Array.isArray(prop?.advisory_warnings) && prop.advisory_warnings.length > 0) {
+      return prop.advisory_warnings.map(String);
+    }
+    const raw = prop?.proposal_data?.['advisory_warnings'];
+    return Array.isArray(raw) ? raw.map(String) : [];
+  });
+
+  readonly needsJudgeConfirmation = computed<boolean>(() => {
+    const status = this.judgeStatus();
+    return status === 'REVIEW_PENDING' || status === 'NEEDS_REVIEW';
+  });
+
+  readonly unscheduledTasks = computed<ProposedTaskItemSchema[]>(() => {
+    const prop = this.currentProposal();
+    if (!prop) return [];
+    const rawList =
+      (Array.isArray(prop.unscheduled_tasks) ? prop.unscheduled_tasks : null) ??
+      (Array.isArray(prop.proposal_data?.['unscheduled_tasks'])
+        ? (prop.proposal_data?.['unscheduled_tasks'] as Record<string, unknown>[])
+        : []);
+    if (rawList.length > 0) {
+      return mapRawTasksToProposedItems(
+        rawList as unknown as Record<string, unknown>[],
+        this.milestones()[0]?.id ?? null
+      );
+    }
+    return this.editableTasks().filter(t => Boolean(t.unscheduled_reason));
+  });
+
+  readonly unscheduledTasksCount = computed<number>(() => {
+    const prop = this.currentProposal();
+    const listLen = this.unscheduledTasks().length;
+    if (listLen > 0) return listLen;
+    if (typeof prop?.unscheduled_tasks_count === 'number') {
+      return prop.unscheduled_tasks_count;
+    }
+    const rawCount = prop?.proposal_data?.['unscheduled_tasks_count'];
+    return typeof rawCount === 'number' ? rawCount : 0;
+  });
+
+  readonly scheduledTasksCount = computed<number>(() => {
+    const prop = this.currentProposal();
+    const tasks = this.editableTasks();
+    if (tasks.length > 0) {
+      const withDate = tasks.filter(t => Boolean(t.scheduled_date)).length;
+      if (withDate > 0) return withDate;
+    }
+    if (typeof prop?.scheduled_tasks_count === 'number' && prop.scheduled_tasks_count > 0) {
+      return prop.scheduled_tasks_count;
+    }
+    const rawCount = prop?.proposal_data?.['scheduled_tasks_count'];
+    if (typeof rawCount === 'number' && rawCount > 0) {
+      return rawCount;
+    }
+    return tasks.length;
+  });
+
+  readonly isPartialSchedule = computed<boolean>(() => {
+    const prop = this.currentProposal();
+    return Boolean(
+      prop?.is_partial_schedule ||
+        prop?.proposal_data?.['is_partial_schedule'] ||
+        this.unscheduledTasksCount() > 0
+    );
+  });
+
+  readonly feasibility = computed(() => this.currentProposal()?.feasibility ?? null);
+
+  readonly feasibilityStatus = computed<'FEASIBLE' | 'PARTIAL' | 'INFEASIBLE'>(() => {
+    const status = this.feasibility()?.status;
+    if (status === 'PARTIAL' || status === 'INFEASIBLE') return status;
+    return 'FEASIBLE';
+  });
+
+  readonly availabilitySourceMetadata = computed<Record<string, unknown>>(() => {
+    const prop = this.currentProposal();
+    const meta =
+      prop?.availability_source_metadata ??
+      (prop?.proposal_data?.['availability_source_metadata'] as Record<string, unknown> | undefined);
+    return meta && typeof meta === 'object' ? meta : {};
+  });
+
   readonly diffSummary = computed<{
     preserved_completed_tasks_count: number;
     replaced_tasks_count: number;
@@ -301,6 +428,15 @@ export class RoadmapService {
       return false;
     }
     if (this.hasSoftOverflow() && !this.confirmSoftOverflow()) {
+      return false;
+    }
+    if (this.needsJudgeConfirmation() && !this.confirmWarnings() && !this.confirmSoftOverflow()) {
+      return false;
+    }
+    if (this.feasibilityStatus() === 'INFEASIBLE') {
+      return false;
+    }
+    if (this.feasibilityStatus() === 'PARTIAL' && !this.confirmPartialSchedule()) {
       return false;
     }
     return this.editableTasks().length > 0;
@@ -424,6 +560,14 @@ export class RoadmapService {
 
   setConfirmSoftOverflow(confirmed: boolean): void {
     this.confirmSoftOverflow.set(confirmed);
+  }
+
+  setConfirmWarnings(confirmed: boolean): void {
+    this.confirmWarnings.set(confirmed);
+  }
+
+  setConfirmPartialSchedule(confirmed: boolean): void {
+    this.confirmPartialSchedule.set(confirmed);
   }
 
   clearMessages(): void {
@@ -577,28 +721,50 @@ export class RoadmapService {
         sequence_order: m.sequence_order || idx + 1,
         title: m.title,
         description: m.description ?? '',
+        learning_outcomes: m.learning_outcomes ?? [],
+        completion_criteria: m.completion_criteria ?? null,
+        estimated_effort_minutes: m.estimated_effort_minutes ?? null,
+        required_concepts: m.required_concepts ?? [],
+        unverified_concepts: m.unverified_concepts ?? [],
+        prerequisite_milestone_ids: m.prerequisite_milestone_ids ?? [],
       }))
     );
   }
 
   private syncProposalState(proposal: ScheduleProposalResponse | null): void {
     this.proposalDirty.set(false);
-    const previousId = this.currentProposal()?.id;
-    this.currentProposal.set(proposal);
-    if (!proposal) {
+    const previous = this.currentProposal();
+    const previousId = previous?.id;
+    const normalizedProposal =
+      proposal &&
+      previous &&
+      proposal.id === previous.id &&
+      !proposal.availability_source_metadata &&
+      previous.availability_source_metadata
+        ? {
+            ...proposal,
+            availability_source_metadata: previous.availability_source_metadata,
+          }
+        : proposal;
+    this.currentProposal.set(normalizedProposal);
+    if (!normalizedProposal) {
       if (!this.manualPlanningMode()) {
         this.editableTasks.set([]);
         this.editableDependencies.set([]);
       }
       this.confirmSoftOverflow.set(false);
+      this.confirmWarnings.set(false);
+      this.confirmPartialSchedule.set(false);
       return;
     }
-    if (proposal.id !== previousId) {
+    if (normalizedProposal.id !== previousId) {
       this.confirmSoftOverflow.set(false);
+      this.confirmWarnings.set(false);
+      this.confirmPartialSchedule.set(false);
     }
     const defaultMid = this.milestones()[0]?.id ?? null;
-    this.editableTasks.set(mapRawTasksToProposedItems(proposal.tasks, defaultMid));
-    this.editableDependencies.set(mapRawDependenciesToProposedItems(proposal.dependencies));
+    this.editableTasks.set(mapRawTasksToProposedItems(normalizedProposal.tasks, defaultMid));
+    this.editableDependencies.set(mapRawDependenciesToProposedItems(normalizedProposal.dependencies));
   }
 
   private extractErrorMessage(err: HttpErrorResponse, fallback: string): string {
@@ -701,6 +867,9 @@ export class RoadmapService {
     this.successMessage.set(null);
     this.clarificationQuestions.set([]);
     this.clarificationContext.set(null);
+    this.clarificationSessionId.set(null);
+    this.clarificationRound.set(1);
+    this.clarificationStatus.set('ANALYZING');
 
     this.http
       .post<RoadmapResponse>(API_ENDPOINTS.ROADMAPS.BASE, payload, { withCredentials: true })
@@ -787,21 +956,27 @@ export class RoadmapService {
   generateClarificationQuestions(goalId: string): void {
     this.isGeneratingQuestions.set(true);
     this.errorMessage.set(null);
+    this.clarificationStatus.set('ANALYZING');
 
     this.http
       .post<ClarificationQuestionsResponse>(
         API_ENDPOINTS.ROADMAPS.CLARIFY_QUESTIONS(goalId),
         {},
-        { withCredentials: true }
+        {
+          withCredentials: true,
+          headers: { 'Idempotency-Key': createIdempotencyKey() },
+        }
       )
       .pipe(
         tap(res => {
           this.clarificationQuestions.set(res.questions ?? []);
+          this.applyClarificationTurn(res);
         }),
         catchError((err: HttpErrorResponse) => {
           this.errorMessage.set(
             this.extractErrorMessage(err, 'Không thể tạo bộ câu hỏi phỏng vấn chẩn đoán.')
           );
+          this.clarificationStatus.set('ERROR');
           return of(null);
         }),
         finalize(() => {
@@ -821,8 +996,14 @@ export class RoadmapService {
     this.successMessage.set(null);
 
     const body: SubmitClarificationAnswersRequest = {
+      session_id: this.clarificationSessionId(),
+      round: this.clarificationRound(),
       answers,
       skipped: false,
+      skipped_question_ids: this.clarificationQuestions()
+        .map(question => question.question_id)
+        .filter(questionId => !answers.some(answer => answer.question_id === questionId)),
+      total_questions_count: this.clarificationQuestions().length,
     };
 
     this.http
@@ -834,9 +1015,12 @@ export class RoadmapService {
       .pipe(
         tap(res => {
           this.clarificationContext.set(res.clarification_context);
-          this.clarificationQuestions.set([]);
+          this.clarificationQuestions.set(res.questions ?? []);
+          this.applyClarificationTurn(res);
           this.successMessage.set('Đã lưu chẩn đoán mục tiêu thành công!');
-          this.activeStep.set(2);
+          if (res.status !== 'WAITING_FOLLOW_UP') {
+            this.activeStep.set(2);
+          }
           onSuccess?.(res);
         }),
         catchError((err: HttpErrorResponse) => {
@@ -857,12 +1041,10 @@ export class RoadmapService {
     const skippedIds = this.clarificationQuestions().map(q => q.question_id);
 
     if (!targetGoalId) {
-      if (onSuccess) {
-        this.errorMessage.set(
-          'Chưa tìm thấy mục tiêu học tập trên máy chủ. Vui lòng hoàn tất Bước 1 trước.'
-        );
-      }
-      this.activeStep.set(2);
+      this.errorMessage.set(
+        'Chưa tìm thấy mục tiêu học tập trên máy chủ. Vui lòng hoàn tất Bước 1 trước.'
+      );
+      this.clarificationStatus.set('ERROR');
       return;
     }
 
@@ -871,13 +1053,17 @@ export class RoadmapService {
     this.http
       .post<SubmitClarificationAnswersResponse>(
         API_ENDPOINTS.ROADMAPS.CLARIFY_SKIP(targetGoalId),
-        { skipped_question_ids: skippedIds },
+        {
+          session_id: this.clarificationSessionId(),
+          skipped_question_ids: skippedIds,
+        },
         { withCredentials: true }
       )
       .pipe(
         tap(res => {
           this.clarificationContext.set(res.clarification_context);
           this.clarificationQuestions.set([]);
+          this.applyClarificationTurn(res);
           this.activeStep.set(2);
           onSuccess?.();
         }),
@@ -885,7 +1071,7 @@ export class RoadmapService {
           this.errorMessage.set(
             this.extractErrorMessage(err, 'Không thể bỏ qua bước phỏng vấn chẩn đoán.')
           );
-          this.activeStep.set(2);
+          this.clarificationStatus.set('ERROR');
           return of(null);
         }),
         finalize(() => {
@@ -895,7 +1081,48 @@ export class RoadmapService {
       .subscribe();
   }
 
-  generateMilestonesWithAi(roadmapId: string, additionalContext?: string): void {
+  resumeClarification(goalId: string): void {
+    this.isGeneratingQuestions.set(true);
+    this.errorMessage.set(null);
+    this.http
+      .get<ClarificationQuestionsResponse>(
+        API_ENDPOINTS.ROADMAPS.CLARIFICATION_STATE(goalId),
+        { withCredentials: true }
+      )
+      .pipe(
+        tap(res => {
+          this.clarificationQuestions.set(res.questions ?? []);
+          this.applyClarificationTurn(res);
+        }),
+        catchError((err: HttpErrorResponse) => {
+          this.errorMessage.set(
+            this.extractErrorMessage(err, 'Không thể khôi phục phiên làm rõ mục tiêu.')
+          );
+          this.clarificationStatus.set('ERROR');
+          return of(null);
+        }),
+        finalize(() => this.isGeneratingQuestions.set(false))
+      )
+      .subscribe();
+  }
+
+  private applyClarificationTurn(
+    res: ClarificationQuestionsResponse | SubmitClarificationAnswersResponse
+  ): void {
+    this.clarificationSessionId.set(res.session_id ?? null);
+    this.clarificationRound.set(res.round ?? 1);
+    this.clarificationStatus.set(res.status ?? 'WAITING_ANSWER');
+    this.clarificationInformationGaps.set(
+      (res.information_gaps ?? []) as Record<string, unknown>[]
+    );
+    this.clarificationNextTurnQuotaCost.set(res.next_turn_quota_cost ?? 0);
+  }
+
+  generateMilestonesWithAi(
+    roadmapId: string,
+    additionalContext?: string,
+    generationStrategy: 'FULL_SCOPE' | 'FIT_CAPACITY' = 'FULL_SCOPE'
+  ): void {
     this.closeActiveStream();
     this.errorMessage.set(null);
     this.successMessage.set(null);
@@ -909,7 +1136,10 @@ export class RoadmapService {
       isStreaming: true,
     });
 
-    const body = additionalContext ? { additional_context: additionalContext } : {};
+    const body = {
+      generation_strategy: generationStrategy,
+      ...(additionalContext ? { additional_context: additionalContext } : {}),
+    };
     this.aiSseService
       .initiateStreamJob(API_ENDPOINTS.ROADMAPS.MILESTONES_GENERATE_JOBS(roadmapId), body, idemKey)
       .pipe(
@@ -1040,10 +1270,11 @@ export class RoadmapService {
       .subscribe();
   }
 
-  generateScheduleProposalWithAi(roadmapId: string): void {
+  generateScheduleProposalWithAi(roadmapId: string, onCompleted?: () => void): void {
     this.closeActiveStream();
     this.errorMessage.set(null);
     this.successMessage.set(null);
+    this.onProposalCompletedCallback = onCompleted ?? null;
 
     const idemKey = createIdempotencyKey();
     this.sseProgress.set({
@@ -1254,15 +1485,27 @@ export class RoadmapService {
     roadmapId: string,
     proposalId: string,
     confirmSoftOverflow: boolean = this.confirmSoftOverflow(),
-    onSuccess?: (res: ApplyScheduleProposalResponse) => void
+    onSuccess?: (res: ApplyScheduleProposalResponse) => void,
+    confirmWarnings: boolean = this.confirmWarnings(),
+    confirmPartialSchedule: boolean = this.confirmPartialSchedule()
   ): void {
     this.saving.set(true);
     this.errorMessage.set(null);
     this.successMessage.set(null);
 
-    const payload: ApplyScheduleProposalRequest = {
-      confirm_soft_overflow: confirmSoftOverflow,
-    };
+    const shouldSendConfirmWarnings =
+      confirmWarnings || this.needsJudgeConfirmation();
+    const payload: ApplyScheduleProposalRequest = shouldSendConfirmWarnings
+      ? {
+          confirm_soft_overflow: confirmSoftOverflow,
+          confirm_warnings: confirmWarnings || confirmSoftOverflow,
+          confirm_partial_schedule: confirmPartialSchedule,
+        }
+      : {
+          confirm_soft_overflow: confirmSoftOverflow,
+          confirm_warnings: false,
+          confirm_partial_schedule: confirmPartialSchedule,
+        };
 
     this.http
       .post<ApplyScheduleProposalResponse>(
@@ -1274,6 +1517,8 @@ export class RoadmapService {
         tap(res => {
           this.lastApplyResult.set(res);
           this.confirmSoftOverflow.set(false);
+          this.confirmWarnings.set(false);
+          this.confirmPartialSchedule.set(false);
           this.activeStep.set(4);
           this.successMessage.set(
             `Đã áp dụng lịch học chính thức thành công (${res.total_sessions} phiên, ${res.total_planned_minutes} phút)!`
@@ -1370,7 +1615,9 @@ export class RoadmapService {
           ? 'FAILED'
           : (evt.stage ?? prev.stage),
       progress: typeof evt.progress === 'number' ? evt.progress : prev.progress,
-      message: isFailed ? (evt.error ?? 'Tiến trình AI gặp lỗi.') : (text || prev.message),
+      message: isFailed
+        ? (evt.error ?? evt.message ?? 'Tiến trình AI gặp lỗi.')
+        : (text || prev.message),
       retryCount: isRetry
         ? (evt.retry_attempt ?? prev.retryCount + 1)
         : prev.retryCount,
@@ -1394,10 +1641,16 @@ export class RoadmapService {
         this.activeStep.set(3);
         this.loadCurrentProposal(roadmapId);
         this.loadRoadmapDetail(roadmapId);
+        this.proposalCompletedCount.update(c => c + 1);
+        const cb = this.onProposalCompletedCallback;
+        this.onProposalCompletedCallback = null;
+        cb?.();
       }
     } else if (isFailed) {
       this.errorMessage.set(
-        evt.error ?? 'Tiến trình sinh lộ trình bằng AI thất bại. Vui lòng thử lại hoặc lập kế hoạch thủ công.'
+        evt.error ??
+          evt.message ??
+          'Tiến trình sinh lộ trình bằng AI thất bại. Vui lòng thử lại hoặc lập kế hoạch thủ công.'
       );
     }
   }

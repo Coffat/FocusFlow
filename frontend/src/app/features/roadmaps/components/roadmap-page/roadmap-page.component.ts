@@ -228,11 +228,13 @@ export class RoadmapPageComponent implements OnInit {
   onSubmitClarification(goalId: string): void {
     const questions = this.roadmapService.clarificationQuestions();
     const map = this.userAnswers();
-    const answers: ClarificationAnswerItem[] = questions.map(q => ({
-      question_id: q.question_id,
-      question_text: q.text,
-      answer: (map[q.question_id] || '').trim() || (q.options?.[0] ?? 'Không có ý kiến cụ thể'),
-    }));
+    const answers: ClarificationAnswerItem[] = questions
+      .map(q => ({
+        question_id: q.question_id,
+        question_text: q.text,
+        answer: (map[q.question_id] || '').trim(),
+      }))
+      .filter(answer => answer.answer.length > 0);
     this.roadmapService.submitClarificationAnswers(goalId, answers);
   }
 

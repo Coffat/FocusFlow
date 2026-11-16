@@ -331,7 +331,7 @@
                   <span>Khởi Tạo Mục Tiêu Học Tập Mới (Goal & Roadmap — UC-07)</span>
                 </h2>
                 <p class="card-desc">
-                  Nhập mục tiêu học tập cụ thể và ngày hoàn thành dự kiến để AI phân rã thành 3–7 cột mốc tuần tự.
+                  Nhập mục tiêu học tập cụ thể và ngày hoàn thành dự kiến để AI phân rã thành các cột mốc thích ứng, đầy đủ và tuần tự.
                 </p>
               </div>
             </div>
@@ -552,18 +552,18 @@
 
                     @if (q.options && q.options.length > 0) {
                       <div class="options-cluster mb-3">
-                        @for (opt of q.options; track opt) {
+                        @for (opt of q.options; track opt.id) {
                           <button
                             type="button"
                             [attr.data-testid]="'question-' + qIdx + '-opt-' + $index"
-                            (click)="onSelectOption(q.question_id, opt)"
+                            (click)="onSelectOption(q.question_id, opt.label)"
                             class="option-chip-btn"
-                            [class.selected]="userAnswers()[q.question_id] === opt"
+                            [class.selected]="userAnswers()[q.question_id] === opt.label"
                           >
                             <span class="material-symbols-outlined text-xs">
-                              {{ userAnswers()[q.question_id] === opt ? 'check_circle' : 'radio_button_unchecked' }}
+                              {{ userAnswers()[q.question_id] === opt.label ? 'check_circle' : 'radio_button_unchecked' }}
                             </span>
-                            <span>{{ opt }}</span>
+                            <span>{{ opt.label }}</span>
                           </button>
                         }
                       </div>
@@ -706,7 +706,7 @@
                   <span>Cột Mốc Học Tập Cấp 1 (Milestones — FR-PLAN-001)</span>
                 </h2>
                 <p class="card-desc">
-                  Sinh tự động 3–7 cột mốc bằng AI hoặc tự thêm/chỉnh sửa/sắp xếp trước khi bấm Phê duyệt Cột mốc.
+                  Sinh cột mốc thích ứng bằng AI hoặc tự thêm, chỉnh sửa và sắp xếp trước khi bấm Phê duyệt Cột mốc.
                 </p>
               </div>
 

@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -51,6 +51,8 @@ class KnowledgeSourceResponse(BaseModel):
 
 
 class SubmitClarificationAnswersRequest(BaseModel):
+    session_id: UUID | None = None
+    round: int = Field(default=1, ge=1, le=2)
     answers: list[ClarificationAnswerItem] = Field(default_factory=list)
     skipped: bool = Field(default=False)
     skipped_question_ids: list[str] = Field(default_factory=list)
@@ -58,6 +60,7 @@ class SubmitClarificationAnswersRequest(BaseModel):
 
 
 class SkipClarificationRequest(BaseModel):
+    session_id: UUID | None = None
     skipped_question_ids: list[str] = Field(default_factory=list)
 
 
@@ -66,6 +69,11 @@ class SubmitClarificationAnswersResponse(BaseModel):
     status: str = "ANSWERED"
     clarification_context: str
     unresolved_assumptions: list[str] = Field(default_factory=list)
+    session_id: UUID | None = None
+    round: int = Field(default=1, ge=1, le=2)
+    questions: list[ClarificationQuestion] = Field(default_factory=list)
+    information_gaps: list[dict[str, Any]] = Field(default_factory=list)
+    next_turn_quota_cost: int = Field(default=0, ge=0, le=1)
     message: str = "Clarification context updated successfully"
 
 
@@ -75,6 +83,12 @@ class MilestoneUpsertItemSchema(BaseModel):
     sequence_order: int = Field(default=1, ge=1)
     title: str = Field(..., min_length=1, max_length=255)
     description: str | None = None
+    learning_outcomes: list[str] = Field(default_factory=list)
+    completion_criteria: str | None = None
+    estimated_effort_minutes: int | None = Field(default=None, gt=0)
+    required_concepts: list[str] = Field(default_factory=list)
+    unverified_concepts: list[str] = Field(default_factory=list)
+    prerequisite_milestone_ids: list[UUID] = Field(default_factory=list)
 
 
 class MilestoneResponse(BaseModel):
@@ -85,6 +99,12 @@ class MilestoneResponse(BaseModel):
     sequence_order: int
     title: str
     description: str | None = None
+    learning_outcomes: list[str] = Field(default_factory=list)
+    completion_criteria: str | None = None
+    estimated_effort_minutes: int = 60
+    required_concepts: list[str] = Field(default_factory=list)
+    unverified_concepts: list[str] = Field(default_factory=list)
+    prerequisite_milestone_ids: list[UUID] = Field(default_factory=list)
     status: str
     created_at: datetime
     updated_at: datetime
@@ -99,6 +119,25 @@ class UpdateMilestonesRequest(BaseModel):
     milestones: list[MilestoneUpsertItemSchema] = Field(..., min_length=1)
 
 
+class MilestoneGenerationRequest(BaseModel):
+    generation_strategy: Literal["FULL_SCOPE", "FIT_CAPACITY"] = "FULL_SCOPE"
+
+
+FactProvenanceValue = Literal[
+    "USER_CONFIRMED",
+    "USER_EXPLICIT",
+    "SYSTEM_OBSERVED",
+    "SYSTEM_DEFAULT",
+    "AI_INFERRED",
+]
+
+
+class GoalInputProvenanceSchema(BaseModel):
+    target_date: FactProvenanceValue = "SYSTEM_DEFAULT"
+    prior_knowledge_level: FactProvenanceValue = "SYSTEM_DEFAULT"
+    weekly_commitment_hours: FactProvenanceValue = "SYSTEM_DEFAULT"
+
+
 class CreateRoadmapRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)
     description: str | None = None
@@ -107,6 +146,8 @@ class CreateRoadmapRequest(BaseModel):
     prior_knowledge_level: str = "BEGINNER"
     start_date: date | None = None
     target_date: date | None = None
+    weekly_commitment_hours: float | None = Field(default=None, ge=0.5, le=80)
+    input_provenance: GoalInputProvenanceSchema = Field(default_factory=GoalInputProvenanceSchema)
 
 
 class UpdateRoadmapRequest(BaseModel):
@@ -162,11 +203,14 @@ class ProposedTaskItemSchema(BaseModel):
     learning_objective: str | None = None
     completion_criteria: str | None = None
     learning_resources: list[LearningResourceSchema] = Field(default_factory=list)
+    resources: list[LearningResourceSchema] = Field(default_factory=list)
     concept_ids: list[str] = Field(default_factory=list)
+    covered_outcome_ids: list[str] = Field(default_factory=list)
     estimated_minutes: int = Field(default=45)
     scheduled_date: date | str | None = None
     scheduled_start: datetime | str | None = None
     scheduled_end: datetime | str | None = None
+    unscheduled_reason: str | None = None
     prerequisite_ids: list[UUID | str] = Field(default_factory=list)
 
 
@@ -207,6 +251,17 @@ class ProposedScheduleBlockSchema(BaseModel):
     scheduled_duration_minutes: int = Field(..., ge=10, le=240)
 
 
+class ScheduleFeasibilitySchema(BaseModel):
+    status: Literal["FEASIBLE", "PARTIAL", "INFEASIBLE"] = "FEASIBLE"
+    required_minutes: int = 0
+    available_minutes: int = 0
+    scheduled_minutes: int = 0
+    schedulable_ratio: float = 1.0
+    unscheduled_minutes: int = 0
+    reason_codes: list[str] = Field(default_factory=list)
+    recommended_actions: list[str] = Field(default_factory=lambda: ["APPLY"])
+
+
 class ScheduleProposalResponse(BaseModel):
     id: UUID
     roadmap_id: UUID
@@ -214,6 +269,13 @@ class ScheduleProposalResponse(BaseModel):
     status: str
     is_valid: bool = True
     has_soft_overflow: bool = False
+    judge_status: str = "PASSED"
+    is_partial_schedule: bool = False
+    scheduled_tasks_count: int = 0
+    unscheduled_tasks_count: int = 0
+    unscheduled_tasks: list[dict[str, Any]] = Field(default_factory=list)
+    feasibility: ScheduleFeasibilitySchema = Field(default_factory=ScheduleFeasibilitySchema)
+    availability_source_metadata: dict[str, Any] = Field(default_factory=dict)
     tasks: list[dict[str, Any]] = Field(default_factory=list)
     schedule_blocks: list[ProposedScheduleBlockSchema] = Field(default_factory=list)
     dependencies: list[dict[str, Any]] = Field(default_factory=list)
@@ -241,6 +303,8 @@ class CreateManualRoadmapPlanRequest(BaseModel):
 
 class ApplyScheduleProposalRequest(BaseModel):
     confirm_soft_overflow: bool = False
+    confirm_warnings: bool = False
+    confirm_partial_schedule: bool = False
 
 
 class OfficialScheduleResponse(BaseModel):
@@ -286,6 +350,8 @@ class ApplyScheduleProposalResponse(BaseModel):
     affected_tasks_count: int
     total_shifted_minutes: int
     trigger_type: str
+    calendar_sync_status: str = "NOT_CONNECTED"
+    backlog_unscheduled_tasks_count: int = 0
     official_schedule: OfficialScheduleResponse
 
 

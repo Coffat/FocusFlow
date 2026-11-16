@@ -303,4 +303,50 @@ describe('AvailabilityConfigComponent', () => {
     component.onModeKeydown(eventLeft, 'MODE_B');
     expect(service.activeMode()).toBe('MODE_A');
   });
+
+  it('hiển thị hộp xác nhận khi chọn Đồng bộ Google Calendar (CONNECTED) cùng Rảnh Lai thủ công và cho phép chọn 1 chế độ chủ đạo', () => {
+    const compiled = fixture.nativeElement as HTMLElement;
+    const selectEl = compiled.querySelector('#calendar-mode-select') as HTMLSelectElement;
+    expect(selectEl).toBeTruthy();
+
+    selectEl.value = 'CONNECTED';
+    selectEl.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    expect(service.calendarIntegrationMode()).toBe('CONNECTED');
+    expect(component.showModeConflictBox()).toBe(true);
+    const conflictBox = compiled.querySelector('[data-testid="availability-mode-conflict-box"]');
+    expect(conflictBox).toBeTruthy();
+
+    // Lựa chọn 1: Dùng Rảnh Lai thủ công (Mode A/B) -> vô hiệu hóa đồng bộ tự động (NONE)
+    const manualBtn = compiled.querySelector(
+      '[data-testid="choose-manual-hybrid-mode-btn"]'
+    ) as HTMLButtonElement;
+    manualBtn.click();
+    fixture.detectChanges();
+
+    expect(service.calendarIntegrationMode()).toBe('NONE');
+    expect(component.showModeConflictBox()).toBe(false);
+
+    // Chọn lại CONNECTED và chọn Lựa chọn 2: Dùng Đồng bộ Google Calendar (CONNECTED)
+    selectEl.value = 'CONNECTED';
+    selectEl.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(component.showModeConflictBox()).toBe(true);
+
+    const googleBtn = compiled.querySelector(
+      '[data-testid="choose-google-calendar-mode-btn"]'
+    ) as HTMLButtonElement;
+    googleBtn.click();
+    fixture.detectChanges();
+
+    expect(service.calendarIntegrationMode()).toBe('CONNECTED');
+    expect(component.isGoogleCalendarPrimaryMode()).toBe(true);
+    expect(compiled.querySelector('[data-testid="google-calendar-primary-active-banner"]')).toBeTruthy();
+
+    // Nếu đang ở CONNECTED mà chỉnh sửa lịch Rảnh Lai thủ công -> hiện lại hộp xác nhận
+    component.adjustDayQuota('monday', 0.5);
+    fixture.detectChanges();
+    expect(component.showModeConflictBox()).toBe(true);
+  });
 });

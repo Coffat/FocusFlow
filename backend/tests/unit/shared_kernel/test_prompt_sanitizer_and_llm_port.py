@@ -1,14 +1,18 @@
+import asyncio
+from types import SimpleNamespace
+from typing import Any
+from uuid import uuid4
+
 import pytest
 from pydantic import BaseModel, Field, ValidationError
 
-from src.shared_kernel.application.llm_port import LLMUsageMetadata
-from src.shared_kernel.infrastructure.external_ai.litellm_adapter import (
-    LiteLLMAdapter,
-    MockLLMAdapter,
-)
+from src.planning.application.services.harness_support import load_planning_harness_context_inputs
+from src.shared_kernel.application.llm_port import LLMToolDeclarationDTO, LLMUsageMetadata
+from src.shared_kernel.infrastructure.external_ai.litellm_adapter import LiteLLMAdapter
 from src.shared_kernel.infrastructure.external_ai.prompt_sanitizer import (
     PromptSanitizer,
 )
+from tests.helpers.llm_stubs import StubLLMAdapter
 
 
 def test_prompt_sanitizer_masks_emails_phones_cards_and_secrets() -> None:
@@ -88,9 +92,11 @@ class SampleRoadmapOutput(BaseModel):
 
 
 @pytest.mark.asyncio
-async def test_mock_llm_adapter_supports_pydantic_model_and_dict_schema() -> None:
-    """Verify MockLLMAdapter and LiteLLMAdapter support both dict schema and Pydantic BaseModel."""
-    adapter = MockLLMAdapter()
+async def test_stub_llm_adapter_supports_pydantic_model_and_dict_schema_and_litellm_fails_closed() -> (
+    None
+):
+    """Verify StubLLMAdapter supports schemas for unit tests and LiteLLMAdapter fails closed on mock/missing key."""
+    adapter = StubLLMAdapter()
 
     # 1. Backward-compatible dict schema call
     data_dict, p_tok, c_tok = await adapter.generate_structured(
@@ -98,13 +104,13 @@ async def test_mock_llm_adapter_supports_pydantic_model_and_dict_schema() -> Non
         user_prompt="User",
         response_schema={"type": "object", "properties": {"status": {"type": "string"}}},
     )
-    assert data_dict["status"] == "mock_generated"
+    assert data_dict["status"] == "stub_generated"
     assert p_tok == 128
     assert c_tok == 256
 
     # 2. Pydantic BaseModel subclass call
     validated_dict, p_tok2, c_tok2 = await adapter.generate_structured(
-        prompt="Generate Python milestones",
+        user_prompt="Generate Python milestones",
         system_prompt="You are an SRL planner",
         response_schema=SampleRoadmapOutput,
     )
@@ -114,22 +120,515 @@ async def test_mock_llm_adapter_supports_pydantic_model_and_dict_schema() -> Non
     assert LLMUsageMetadata(p_tok2, c_tok2).total_tokens == 384
 
     # 3. Invalid canned response raises Pydantic ValidationError when BaseModel is passed
-    bad_adapter = MockLLMAdapter(
+    bad_adapter = StubLLMAdapter(
         canned_responses=[{"status": "ok", "summary": "x", "milestones": []}]
     )
     with pytest.raises(ValidationError):
         await bad_adapter.generate_structured(
-            prompt="Fail validation",
+            user_prompt="Fail validation",
             system_prompt="Sys",
             response_schema=SampleRoadmapOutput,
         )
 
-    # 4. LiteLLMAdapter delegates to MockLLMAdapter when llm_provider == "mock"
-    litellm_adapter = LiteLLMAdapter()
-    if litellm_adapter._settings.llm_provider.lower() == "mock":
-        res_dict, _, _ = await litellm_adapter.generate_structured(
-            prompt="Test",
+    # 4. LiteLLMAdapter fails closed when provider is mock/local_mock or lacks real api_key
+    for bad_provider in ("mock", "local_mock"):
+        litellm_mock_provider = LiteLLMAdapter()
+        litellm_mock_provider._settings = SimpleNamespace(  # type: ignore[assignment]
+            llm_provider=bad_provider,
+            llm_model="gemini-3.8-flash",
+            llm_api_key="real-key",
+            llm_base_url="",
+        )
+        assert litellm_mock_provider.supports_native_structured_output is False
+        assert litellm_mock_provider._should_use_google_genai_sdk() is False
+        with pytest.raises(RuntimeError, match="AI_PROVIDER_NOT_CONFIGURED"):
+            await litellm_mock_provider.generate_structured(
+                user_prompt="Test",
+                system_prompt="Sys",
+                response_schema=SampleRoadmapOutput,
+            )
+
+    litellm_missing_key = LiteLLMAdapter()
+    litellm_missing_key._settings = SimpleNamespace(  # type: ignore[assignment]
+        llm_provider="gemini",
+        llm_model="gemini-3.8-flash",
+        llm_api_key="",
+        llm_base_url="",
+    )
+    with pytest.raises(RuntimeError, match="AI_PROVIDER_NOT_CONFIGURED"):
+        await litellm_missing_key.generate_structured(
+            user_prompt="Test",
             system_prompt="Sys",
             response_schema=SampleRoadmapOutput,
         )
-        assert len(res_dict["milestones"]) == 3
+
+    litellm_missing_base_url = LiteLLMAdapter()
+    litellm_missing_base_url._settings = SimpleNamespace(  # type: ignore[assignment]
+        llm_provider="gemini",
+        llm_model="gemini-3.8-flash",
+        llm_api_key="real-key",
+        llm_base_url="",
+    )
+    with pytest.raises(RuntimeError, match="Missing LLM_BASE_URL for cobhub gateway"):
+        await litellm_missing_base_url.generate_structured(
+            user_prompt="Test",
+            system_prompt="Sys",
+            response_schema=SampleRoadmapOutput,
+        )
+
+
+@pytest.mark.asyncio
+async def test_google_genai_adapter_falls_back_on_429_and_reuses_successful_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify _generate_with_google_genai falls back from tier model to configured llm_model on 429 and pins working model."""
+    from google import genai
+
+    call_log: list[tuple[str, str | None]] = []
+    tool_turn_emitted = False
+
+    class FakeModels:
+        async def generate_content(
+            self,
+            *,
+            model: str,
+            contents: Any,
+            config: Any,
+        ) -> Any:
+            nonlocal tool_turn_emitted
+            del contents
+            thinking_cfg = getattr(config, "thinking_config", None)
+            raw_level = getattr(thinking_cfg, "thinking_level", None)
+            level = str(raw_level).split(".")[-1] if raw_level is not None else None
+            call_log.append((model, level))
+            if model == "custom-tier-flash":
+                raise RuntimeError("429 RESOURCE_EXHAUSTED: Free tier quota exceeded")
+            if getattr(config, "tools", None) and not tool_turn_emitted:
+                tool_turn_emitted = True
+                return SimpleNamespace(
+                    usage_metadata=SimpleNamespace(prompt_token_count=20, candidates_token_count=5),
+                    function_calls=[
+                        SimpleNamespace(
+                            id="fc_1",
+                            name="search_learning_concepts",
+                            args={"query": "fastapi"},
+                        )
+                    ],
+                )
+            if getattr(config, "tools", None):
+                return SimpleNamespace(
+                    usage_metadata=SimpleNamespace(prompt_token_count=5, candidates_token_count=3),
+                    function_calls=[],
+                )
+            return SimpleNamespace(
+                usage_metadata=SimpleNamespace(prompt_token_count=30, candidates_token_count=40),
+                text='{"status": "ok", "summary": "done", "milestones": [{"sequence_order": 1, "title": "M1", "description": "D1"}]}',
+            )
+
+    class FakeClient:
+        def __init__(self, **kwargs: Any) -> None:
+            self.kwargs = kwargs
+            self.aio = SimpleNamespace(models=FakeModels())
+
+    monkeypatch.setattr(genai, "Client", FakeClient)
+
+    adapter = LiteLLMAdapter()
+    adapter._settings = SimpleNamespace(  # type: ignore[assignment]
+        llm_provider="gemini",
+        llm_model="gemini-3.8-flash",
+        llm_model_low="gemini-3.8-flash",
+        llm_model_medium="custom-tier-flash",
+        llm_model_high="gemini-3.8-flash",
+        llm_api_key="real-test-key",
+        llm_base_url="http://127.0.0.1:8045",
+        llm_thinking_level="MEDIUM",
+    )
+
+    async def fake_tool_exec(name: str, args: dict[str, Any]) -> dict[str, Any]:
+        return {"tool": name, "args": args, "concepts": []}
+
+    tool_decl = LLMToolDeclarationDTO(
+        name="search_learning_concepts",
+        description="Search",
+        parameters_schema={"type": "object", "properties": {"query": {"type": "string"}}},
+    )
+
+    result, p_tok, c_tok = await adapter._generate_with_google_genai(
+        system_prompt="Sys",
+        user_prompt="Plan FastAPI",
+        response_schema=SampleRoadmapOutput,
+        tools=[tool_decl],
+        tool_executor=fake_tool_exec,
+        max_tool_calls=2,
+        thinking_level="MEDIUM",
+    )
+
+    assert result["status"] == "ok"
+    assert p_tok == 55
+    assert c_tok == 48
+    # Tool stage retries 429 on configured tier model -> falls back to configured llm_model (gemini-3.8-flash)
+    # Turn 2 of tool loop + final structured stage reuse pinned gemini-3.8-flash directly!
+    assert call_log == [
+        ("custom-tier-flash", "LOW"),
+        ("gemini-3.8-flash", "LOW"),
+        ("gemini-3.8-flash", "LOW"),
+        ("gemini-3.8-flash", "MEDIUM"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_load_planning_harness_skips_embedding_when_goal_has_no_sources() -> None:
+    """Verify load_planning_harness_context_inputs skips embedding_provider.embed when goal has 0 RAG sources."""
+    embed_calls = 0
+
+    class FakeEmbeddingProvider:
+        async def embed(self, texts: list[str]) -> list[list[float]]:
+            nonlocal embed_calls
+            embed_calls += 1
+            await asyncio.sleep(0.01)
+            return [[0.1] * 768 for _ in texts]
+
+    class FakeKnowledgeSourceRepo:
+        async def list_sources_for_goal(self, goal_id: Any, user_id: Any) -> list[Any]:
+            del goal_id, user_id
+            return []
+
+        async def hybrid_search(self, **kwargs: Any) -> list[Any]:
+            del kwargs
+            raise AssertionError("hybrid_search should not be called when goal has no sources")
+
+    inputs = await load_planning_harness_context_inputs(
+        user_id=uuid4(),
+        goal_id=uuid4(),
+        query_text="FastAPI Hexagonal Architecture",
+        knowledge_source_repo=FakeKnowledgeSourceRepo(),  # type: ignore[arg-type]
+        embedding_provider=FakeEmbeddingProvider(),
+    )
+
+    assert embed_calls == 0
+    assert inputs.knowledge_chunks == ()
+
+
+@pytest.mark.asyncio
+async def test_google_genai_adapter_falls_back_on_malformed_function_call_and_adds_final_directive(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify JSON stage adds FINAL_OUTPUT_STAGE directive and retries next model on empty/MALFORMED_FUNCTION_CALL."""
+    from google import genai
+
+    attempts: list[tuple[str, str | None]] = []
+
+    class FakeModels:
+        async def generate_content(
+            self,
+            *,
+            model: str,
+            contents: Any,
+            config: Any,
+        ) -> Any:
+            del contents
+            sys_inst = getattr(config, "system_instruction", None)
+            attempts.append((model, sys_inst))
+            if model == "custom-high-flash":
+                return SimpleNamespace(
+                    usage_metadata=SimpleNamespace(prompt_token_count=10, candidates_token_count=0),
+                    text="",
+                    candidates=[SimpleNamespace(finish_reason="MALFORMED_FUNCTION_CALL")],
+                )
+            return SimpleNamespace(
+                usage_metadata=SimpleNamespace(prompt_token_count=25, candidates_token_count=30),
+                text='{"status": "ok", "summary": "recovered", "milestones": [{"sequence_order": 1, "title": "M1", "description": "D1"}]}',
+                candidates=[SimpleNamespace(finish_reason="STOP")],
+            )
+
+    class FakeClient:
+        def __init__(self, **kwargs: Any) -> None:
+            self.kwargs = kwargs
+            self.aio = SimpleNamespace(models=FakeModels())
+
+    monkeypatch.setattr(genai, "Client", FakeClient)
+
+    adapter = LiteLLMAdapter()
+    adapter._settings = SimpleNamespace(  # type: ignore[assignment]
+        llm_provider="gemini",
+        llm_model="gemini-3.8-flash",
+        llm_model_low="gemini-3.8-flash",
+        llm_model_medium="gemini-3.8-flash",
+        llm_model_high="custom-high-flash",
+        llm_api_key="antigravity-proxy-key",
+        llm_base_url="http://127.0.0.1:8045",
+        llm_thinking_level="MEDIUM",
+    )
+
+    result, p_tok, c_tok = await adapter._generate_with_google_genai(
+        system_prompt="Base sys prompt",
+        user_prompt="Plan",
+        response_schema=SampleRoadmapOutput,
+        tools=None,
+        tool_executor=None,
+        max_tool_calls=0,
+        thinking_level="HIGH",
+    )
+
+    assert result["summary"] == "recovered"
+    assert (p_tok, c_tok) == (25, 30)
+    assert attempts[0][0] == "custom-high-flash"
+    assert attempts[1][0] == "gemini-3.8-flash"
+    assert "[FINAL_OUTPUT_STAGE]" in (attempts[0][1] or "")
+    assert adapter.last_model_used == "gemini-3.8-flash"
+
+
+@pytest.mark.asyncio
+async def test_google_genai_multi_turn_tool_loop_sequential_parallel_and_thought_signatures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """T3.1: Multi-turn Google tool loop runs 2 sequential turns + parallel tool calls, preserves IDs & thought_signature, and counts thoughts tokens."""
+    from google import genai
+
+    recorded_contents_lengths: list[int] = []
+    recorded_model_turns: list[Any] = []
+    turn = 0
+
+    class FakeModels:
+        async def generate_content(
+            self,
+            *,
+            model: str,
+            contents: Any,
+            config: Any,
+        ) -> Any:
+            nonlocal turn
+            del model
+            if getattr(config, "tools", None):
+                turn += 1
+                recorded_contents_lengths.append(len(contents))
+                if turn == 1:
+                    model_content = SimpleNamespace(
+                        role="model",
+                        parts=[
+                            SimpleNamespace(
+                                function_call=SimpleNamespace(
+                                    id="fc_seq_1",
+                                    name="search_learning_concepts",
+                                    args={"query": "python"},
+                                    thought_signature=b"sig-turn-1",
+                                ),
+                                thought_signature=b"sig-turn-1",
+                            )
+                        ],
+                    )
+                    recorded_model_turns.append(model_content)
+                    return SimpleNamespace(
+                        usage_metadata=SimpleNamespace(
+                            prompt_token_count=10,
+                            candidates_token_count=4,
+                            thoughts_token_count=6,
+                        ),
+                        candidates=[SimpleNamespace(content=model_content)],
+                        function_calls=[model_content.parts[0].function_call],
+                    )
+                if turn == 2:
+                    fc_a = SimpleNamespace(
+                        id="fc_par_2a",
+                        name="get_concept_prerequisite_graph",
+                        args={"concept_id": "py-1"},
+                        thought_signature=b"sig-turn-2a",
+                    )
+                    fc_b = SimpleNamespace(
+                        id="fc_par_2b",
+                        name="search_learning_concepts",
+                        args={"query": "fastapi"},
+                    )
+                    model_content = SimpleNamespace(
+                        role="model",
+                        parts=[
+                            SimpleNamespace(function_call=fc_a, thought_signature=b"sig-turn-2a"),
+                            SimpleNamespace(function_call=fc_b),
+                        ],
+                    )
+                    recorded_model_turns.append(model_content)
+                    return SimpleNamespace(
+                        usage_metadata=SimpleNamespace(
+                            prompt_token_count=15,
+                            candidates_token_count=8,
+                            thoughts_token_count=5,
+                        ),
+                        candidates=[SimpleNamespace(content=model_content)],
+                        function_calls=[fc_a, fc_b],
+                    )
+                return SimpleNamespace(
+                    usage_metadata=SimpleNamespace(
+                        prompt_token_count=12,
+                        candidates_token_count=3,
+                        thoughts_token_count=2,
+                    ),
+                    function_calls=[],
+                )
+            return SimpleNamespace(
+                usage_metadata=SimpleNamespace(
+                    prompt_token_count=40,
+                    candidates_token_count=20,
+                    thoughts_token_count=10,
+                ),
+                text='{"status": "ok", "summary": "multi-turn", "milestones": [{"sequence_order": 1, "title": "M1", "description": "D1"}]}',
+            )
+
+    class FakeClient:
+        def __init__(self, **kwargs: Any) -> None:
+            del kwargs
+            self.aio = SimpleNamespace(models=FakeModels())
+
+    monkeypatch.setattr(genai, "Client", FakeClient)
+
+    adapter = LiteLLMAdapter()
+    adapter._settings = SimpleNamespace(  # type: ignore[assignment]
+        llm_provider="gemini",
+        llm_model="gemini-3.8-flash",
+        llm_model_low="gemini-3.8-flash",
+        llm_model_medium="gemini-3.8-flash",
+        llm_model_high="gemini-3.8-flash",
+        llm_api_key="real-test-key",
+        llm_base_url="http://127.0.0.1:8045",
+        llm_thinking_level="MEDIUM",
+    )
+
+    executed: list[tuple[str, dict[str, Any]]] = []
+
+    async def tool_exec(name: str, args: dict[str, Any]) -> dict[str, Any]:
+        executed.append((name, args))
+        return {"ok": True, "name": name}
+
+    tools = [
+        LLMToolDeclarationDTO(
+            name="search_learning_concepts",
+            description="Search",
+            parameters_schema={"type": "object", "properties": {"query": {"type": "string"}}},
+        ),
+        LLMToolDeclarationDTO(
+            name="get_concept_prerequisite_graph",
+            description="Graph",
+            parameters_schema={"type": "object", "properties": {"concept_id": {"type": "string"}}},
+        ),
+    ]
+
+    gen_res = await adapter.generate_structured(
+        system_prompt="Sys",
+        user_prompt="Plan",
+        response_schema=SampleRoadmapOutput,
+        tools=tools,
+        tool_executor=tool_exec,
+        max_tool_calls=5,
+        thinking_level="MEDIUM",
+    )
+
+    assert len(executed) == 3
+    assert recorded_contents_lengths == [1, 3, 5]
+    assert recorded_model_turns[0].parts[0].thought_signature == b"sig-turn-1"
+    assert gen_res.payload["summary"] == "multi-turn"
+    assert gen_res.prompt_tokens == 77
+    assert gen_res.thinking_tokens == 23
+    # Billable completion = candidates (4+8+3+20=35) + thoughts (6+5+2+10=23) = 58
+    assert gen_res.output_tokens == 58
+    assert len(gen_res.raw_tool_results) == 3
+
+
+@pytest.mark.asyncio
+async def test_supports_native_structured_output_and_non_gemini_fallback_fail_safe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """T3.3: Capability flag differentiates native Gemini vs non-Gemini fallback & invalid JSON fails safely."""
+    import json
+    import sys
+    import types as py_types
+
+    gemini_adapter = LiteLLMAdapter()
+    gemini_adapter._settings = SimpleNamespace(  # type: ignore[assignment]
+        llm_provider="gemini",
+        llm_model="gemini-3.8-flash",
+        llm_api_key="real-key",
+        llm_base_url="http://127.0.0.1:8045",
+    )
+    assert gemini_adapter.supports_native_structured_output is True
+
+    openai_adapter = LiteLLMAdapter()
+    openai_adapter._settings = SimpleNamespace(  # type: ignore[assignment]
+        llm_provider="openai",
+        llm_model="gpt-4o-mini",
+        llm_api_key="sk-test",
+        llm_base_url="",
+    )
+    assert openai_adapter.supports_native_structured_output is False
+
+    # 1. Valid fenced JSON parses cleanly on fallback branch
+    async def fake_acompletion_ok(**kwargs: Any) -> Any:
+        del kwargs
+        return SimpleNamespace(
+            choices=[
+                SimpleNamespace(
+                    message=SimpleNamespace(
+                        content='```json\n{"status": "ok", "summary": "non-gemini", "milestones": [{"sequence_order": 1, "title": "M1", "description": "D1"}]}\n```'
+                    )
+                )
+            ],
+            usage=SimpleNamespace(prompt_tokens=15, completion_tokens=20),
+        )
+
+    monkeypatch.setitem(
+        sys.modules, "litellm", py_types.SimpleNamespace(acompletion=fake_acompletion_ok)
+    )
+    ok_res = await openai_adapter.generate_structured(
+        system_prompt="Sys",
+        user_prompt="Plan",
+        response_schema=SampleRoadmapOutput,
+    )
+    assert ok_res.payload["summary"] == "non-gemini"
+
+    # 2. Invalid fallback JSON must raise JSONDecodeError (fail-safe)
+    async def fake_acompletion_bad(**kwargs: Any) -> Any:
+        del kwargs
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="not-json-output"))],
+            usage=SimpleNamespace(prompt_tokens=10, completion_tokens=5),
+        )
+
+    monkeypatch.setitem(
+        sys.modules, "litellm", py_types.SimpleNamespace(acompletion=fake_acompletion_bad)
+    )
+    with pytest.raises(json.JSONDecodeError):
+        await openai_adapter.generate_structured(
+            system_prompt="Sys",
+            user_prompt="Plan",
+            response_schema=SampleRoadmapOutput,
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.skipif(
+    __import__("os").getenv("RUN_LIVE_GEMINI_SDK_TEST") != "1",
+    reason="Opt-in live Google GenAI SDK contract test (set RUN_LIVE_GEMINI_SDK_TEST=1)",
+)
+async def test_live_google_genai_sdk_contract() -> None:
+    """T3.4: Live opt-in contract check against Gemini 3.8 Flash with custom tools + structured output."""
+    adapter = LiteLLMAdapter()
+    if not adapter.supports_native_structured_output:
+        pytest.skip("Configured provider is not native Gemini")
+
+    async def echo_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
+        return {"tool": name, "args": args, "concepts": [{"concept_id": "py-syntax-variables"}]}
+
+    tool = LLMToolDeclarationDTO(
+        name="search_learning_concepts",
+        description="Search verified concepts",
+        parameters_schema={"type": "object", "properties": {"query": {"type": "string"}}},
+    )
+    res = await adapter.generate_structured(
+        system_prompt="Use tool once then return structured milestones.",
+        user_prompt="Create 1 Python milestone.",
+        response_schema=SampleRoadmapOutput,
+        tools=[tool],
+        tool_executor=echo_tool,
+        max_tool_calls=2,
+        thinking_level="LOW",
+    )
+    assert len(res.payload["milestones"]) >= 1
+    assert res.model_id

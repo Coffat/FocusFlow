@@ -727,6 +727,7 @@ class SpatioTemporalRuleEngine:
 
             min_date = start_date
             min_minute_on_min_date = 0
+            has_unplaced_predecessor = False
             for p_idx in preds_by_idx.get(idx, []):
                 p_tid = str(
                     cloned_tasks[p_idx].get("task_id")
@@ -734,13 +735,21 @@ class SpatioTemporalRuleEngine:
                     or f"idx-{p_idx}"
                 )
                 anchor = task_end_anchor.get(p_tid)
-                if anchor is not None:
-                    p_date, p_end_min = anchor
-                    if p_date > min_date:
-                        min_date = p_date
-                        min_minute_on_min_date = p_end_min
-                    elif p_date == min_date:
-                        min_minute_on_min_date = max(min_minute_on_min_date, p_end_min)
+                if anchor is None:
+                    has_unplaced_predecessor = True
+                    break
+                p_date, p_end_min = anchor
+                if p_date > min_date:
+                    min_date = p_date
+                    min_minute_on_min_date = p_end_min
+                elif p_date == min_date:
+                    min_minute_on_min_date = max(min_minute_on_min_date, p_end_min)
+
+            if has_unplaced_predecessor:
+                t_item["scheduled_date"] = None
+                t_item["scheduled_start"] = None
+                t_item["scheduled_end"] = None
+                continue
 
             allocated = False
             for day_step in range(366):
@@ -997,7 +1006,7 @@ class SpatioTemporalRuleEngine:
                 ),
                 default=0,
             )
-        session_limit = min(max(10, preferred_session_minutes), 60, capacity)
+        session_limit = min(max(10, preferred_session_minutes), 120, capacity)
         if session_limit < 10:
             return ([{**task, "scheduled_date": None} for task in tasks], [])
 

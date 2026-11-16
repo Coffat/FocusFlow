@@ -248,7 +248,7 @@ class AIUsageLogORM(Base):
     __tablename__ = "ai_usage_logs"
     __table_args__ = (
         CheckConstraint(
-            "action_type IN ('ROADMAP_GENERATION', 'SCHEDULE_PROPOSAL', 'AI_REVIEW_WEEKLY', 'AI_REVIEW_MILESTONE', 'MILESTONE_BREAKDOWN', 'CHAT_ASSISTANT', 'KNOWLEDGE_INGESTION', 'WHAT_IF_SIMULATION', 'OVERDUE_RECOVERY', 'CONTINUOUS_LEARNING')",
+            "action_type IN ('ROADMAP_GENERATION', 'SCHEDULE_PROPOSAL', 'AI_REVIEW_WEEKLY', 'AI_REVIEW_MILESTONE', 'MILESTONE_BREAKDOWN', 'CHAT_ASSISTANT', 'KNOWLEDGE_INGESTION', 'WHAT_IF_SIMULATION', 'OVERDUE_RECOVERY', 'CONTINUOUS_LEARNING', 'GOAL_CLARIFICATION')",
             name="chk_ai_usage_logs_action",
         ),
         CheckConstraint(
@@ -276,7 +276,7 @@ class AIUsageLogORM(Base):
     action_type: Mapped[str] = mapped_column(
         String(50), nullable=False, default="ROADMAP_GENERATION"
     )
-    model_name: Mapped[str] = mapped_column(String(100), nullable=False, default="gemini-2.5-flash")
+    model_name: Mapped[str] = mapped_column(String(100), nullable=False, default="gemini-3.8-flash")
     prompt_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     completion_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -298,7 +298,7 @@ class AIUsageLogORM(Base):
             kwargs["action_type"] = kwargs.pop("operation_type")
         kwargs.setdefault("id", uuid7())
         kwargs.setdefault("action_type", "ROADMAP_GENERATION")
-        kwargs.setdefault("model_name", "gemini-2.5-flash")
+        kwargs.setdefault("model_name", "gemini-3.8-flash")
         p_tok = int(kwargs.get("prompt_tokens", 0) or 0)
         c_tok = int(kwargs.get("completion_tokens", 0) or 0)
         kwargs.setdefault("prompt_tokens", p_tok)

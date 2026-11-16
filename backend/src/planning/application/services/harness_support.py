@@ -1,3 +1,5 @@
+import asyncio
+import logging
 from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
@@ -13,7 +15,11 @@ from src.planning.application.ports.knowledge_source_repository_port import (
 )
 from src.planning.domain.models.knowledge_source import KnowledgeChunk
 from src.shared_kernel.application.embedding_port import EmbeddingProviderPort
+from src.shared_kernel.application.harness.models import PromptTemplate
+from src.shared_kernel.application.harness.prompt_registry import build_prompt_audit_metadata
 from src.shared_kernel.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,35 +60,59 @@ async def load_planning_harness_context_inputs(
 
     clean_query = query_text.strip()
     if settings.knowledge_rag_enabled and knowledge_source_repo is not None and clean_query:
-        query_embedding: list[float] = [0.0] * 768
-        if embedding_provider is not None:
-            vectors = await embedding_provider.embed([clean_query[:1000]])
-            if vectors and len(vectors[0]) == 768:
-                query_embedding = vectors[0]
-        raw_chunks = await knowledge_source_repo.hybrid_search(
-            goal_id=goal_id,
-            query=clean_query[:300],
-            query_embedding=query_embedding,
-            limit=rag_limit,
-        )
-        if len(raw_chunks) > 1:
-            # Fuse semantic & lexical ordering deterministically using shared RRF utility
-            semantic_order = list(raw_chunks)
-            lexical_order = sorted(
-                raw_chunks,
-                key=lambda c: sum(
-                    1 for token in clean_query.lower().split() if token in c.content.lower()
-                ),
-                reverse=True,
-            )
-            fused_chunks = reciprocal_rank_fusion(
-                lexical_order,
-                semantic_order,
+        has_sources = True
+        list_sources_fn = getattr(knowledge_source_repo, "list_sources_for_goal", None)
+        if callable(list_sources_fn):
+            try:
+                goal_sources = await list_sources_fn(goal_id, user_id)
+                if isinstance(goal_sources, (list, tuple)):
+                    has_sources = len(goal_sources) > 0
+            except (ValueError, RuntimeError, OSError) as exc:
+                logger.warning(
+                    "harness_list_sources_failed",
+                    extra={"goal_id": str(goal_id), "error_type": type(exc).__name__},
+                )
+                has_sources = True
+
+        if has_sources:
+            query_embedding: list[float] = [0.0] * 768
+            if embedding_provider is not None:
+                try:
+                    vectors = await asyncio.wait_for(
+                        embedding_provider.embed([clean_query[:1000]]),
+                        timeout=3.0,
+                    )
+                    if vectors and len(vectors[0]) == 768:
+                        query_embedding = vectors[0]
+                except (TimeoutError, ValueError, RuntimeError, OSError) as exc:
+                    logger.warning(
+                        "harness_query_embedding_fallback",
+                        extra={"goal_id": str(goal_id), "error_type": type(exc).__name__},
+                    )
+            raw_chunks = await knowledge_source_repo.hybrid_search(
+                goal_id=goal_id,
+                query=clean_query[:300],
+                query_embedding=query_embedding,
                 limit=rag_limit,
             )
-            chunks = tuple(fused_chunks)
-        else:
-            chunks = tuple(raw_chunks[:rag_limit])
+            if len(raw_chunks) > 1:
+                # Fuse semantic & lexical ordering deterministically using shared RRF utility
+                semantic_order = list(raw_chunks)
+                lexical_order = sorted(
+                    raw_chunks,
+                    key=lambda c: sum(
+                        1 for token in clean_query.lower().split() if token in c.content.lower()
+                    ),
+                    reverse=True,
+                )
+                fused_chunks = reciprocal_rank_fusion(
+                    lexical_order,
+                    semantic_order,
+                    limit=rag_limit,
+                )
+                chunks = tuple(fused_chunks)
+            else:
+                chunks = tuple(raw_chunks[:rag_limit])
 
     return PlanningHarnessContextInputs(
         memory_items=memories,
@@ -98,9 +128,10 @@ def compact_context_snapshot(
     stage: str,
     inputs: PlanningHarnessContextInputs,
     layer_tokens: dict[Any, int] | None = None,
+    prompt_template: PromptTemplate | None = None,
 ) -> dict[str, Any]:
     """Build a PII-free workflow context snapshot for WorkflowRun auditing."""
-    return {
+    snapshot: dict[str, Any] = {
         "goal_id": str(goal_id),
         "roadmap_id": str(roadmap_id) if roadmap_id is not None else None,
         "stage": stage,
@@ -111,3 +142,6 @@ def compact_context_snapshot(
             getattr(k, "value", str(k)): int(v) for k, v in (layer_tokens or {}).items()
         },
     }
+    if prompt_template is not None:
+        snapshot.update(build_prompt_audit_metadata(prompt_template))
+    return snapshot

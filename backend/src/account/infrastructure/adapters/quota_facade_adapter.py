@@ -24,6 +24,7 @@ _VALID_ACTION_TYPES: frozenset[str] = frozenset(
         "AI_REVIEW_MILESTONE",
         "MILESTONE_BREAKDOWN",
         "CHAT_ASSISTANT",
+        "GOAL_CLARIFICATION",
     }
 )
 
@@ -149,7 +150,7 @@ class QuotaFacadeAdapter(QuotaFacadePort):
         reservation_id: UUID,
         prompt_tokens: int = 0,
         completion_tokens: int = 0,
-        model_name: str = "gemini-2.5-flash",
+        model_name: str = "gemini-3.8-flash",
     ) -> None:
         stmt = (
             select(AIQuotaReservationORM)
@@ -196,7 +197,7 @@ class QuotaFacadeAdapter(QuotaFacadePort):
             id=uuid7(),
             user_id=res.user_id,
             action_type=normalize_action_type(res.operation_type),
-            model_name=model_name or "gemini-2.5-flash",
+            model_name=model_name or "gemini-3.8-flash",
             prompt_tokens=max(0, int(prompt_tokens)),
             completion_tokens=max(0, int(completion_tokens)),
             total_tokens=total_tok,

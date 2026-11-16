@@ -9,6 +9,7 @@ from uuid import UUID
 import redis.asyncio as aioredis
 
 from src.planning.application.ports.sse_job_port import (
+    DEFAULT_SSE_STREAM_TIMEOUT_SECONDS,
     SseEventRecord,
     SseJobNotFoundError,
     SseJobPort,
@@ -153,7 +154,7 @@ class InMemorySseJobStore(SseJobPort):
         job_id: UUID,
         user_id: UUID,
         last_event_id: int | None = None,
-        timeout_seconds: float = 55.0,
+        timeout_seconds: float = DEFAULT_SSE_STREAM_TIMEOUT_SECONDS,
     ) -> AsyncIterator[SseEventRecord]:
         job = await self.get_job_for_user(job_id=job_id, user_id=user_id)
         cursor = int(last_event_id) if last_event_id is not None else 0
@@ -429,7 +430,7 @@ class RedisSseJobStore(SseJobPort):
         job_id: UUID,
         user_id: UUID,
         last_event_id: int | None = None,
-        timeout_seconds: float = 55.0,
+        timeout_seconds: float = DEFAULT_SSE_STREAM_TIMEOUT_SECONDS,
     ) -> AsyncIterator[SseEventRecord]:
         job = await self.get_job_for_user(job_id=job_id, user_id=user_id)
         cursor = int(last_event_id) if last_event_id is not None else 0

@@ -14,7 +14,13 @@ from src.planning.application.dtos.planning_dtos import (
 )
 from src.planning.application.ports.sse_job_port import SseJobNotFoundError
 from src.planning.domain.exceptions.planning_exceptions import (
+    AIExecutionError,
+    FreshCalendarConflictDetectedError,
     GoalNotFoundError,
+    InvalidClarificationSessionError,
+    JudgeReviewConfirmationRequiredError,
+    PartialScheduleConfirmationRequiredError,
+    PlanInfeasibleError,
     PlanningDomainError,
     ProposalValidationGateError,
     RoadmapNotFoundError,
@@ -62,6 +68,7 @@ from src.planning.presentation.schemas.planning_schemas import (
     CreateRoadmapRequest,
     GoalResponse,
     KnowledgeSourceResponse,
+    MilestoneGenerationRequest,
     MilestoneListResponse,
     MilestoneResponse,
     OfficialScheduleResponse,
@@ -108,6 +115,11 @@ def _handle_planning_error(exc: DomainError) -> JSONResponse:
             status_code=status.HTTP_409_CONFLICT,
             content={"code": exc.code, "message": exc.message, "detail": exc.message},
         )
+    if isinstance(exc, InvalidClarificationSessionError):
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"code": exc.code, "message": exc.message, "detail": exc.message},
+        )
     if isinstance(exc, SoftOverflowConfirmationRequiredError):
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
@@ -119,9 +131,50 @@ def _handle_planning_error(exc: DomainError) -> JSONResponse:
                 "soft_overflow_warnings": getattr(exc, "warnings", []),
             },
         )
+    if isinstance(exc, JudgeReviewConfirmationRequiredError):
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                "code": exc.code,
+                "message": exc.message,
+                "detail": exc.message,
+                "judge_status": exc.judge_status,
+                "advisory_warnings": exc.advisory_warnings,
+            },
+        )
+    if isinstance(exc, PartialScheduleConfirmationRequiredError):
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"code": exc.code, "message": exc.message, "detail": exc.message},
+        )
+    if isinstance(exc, PlanInfeasibleError):
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                "code": exc.code,
+                "message": exc.message,
+                "detail": exc.message,
+                "schedulable_ratio": exc.schedulable_ratio,
+            },
+        )
+    if isinstance(exc, FreshCalendarConflictDetectedError):
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                "code": exc.code,
+                "message": exc.message,
+                "detail": exc.message,
+                "conflicts": exc.conflicts,
+            },
+        )
     if isinstance(exc, QuotaExceededError):
         return JSONResponse(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content={"code": exc.code, "message": exc.message, "detail": exc.message},
+        )
+    if isinstance(exc, AIExecutionError):
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={"code": exc.code, "message": exc.message, "detail": exc.message},
         )
     if isinstance(exc, ProposalValidationGateError):
@@ -193,6 +246,12 @@ def _to_milestone_response(m: Milestone) -> MilestoneResponse:
         sequence_order=m.sequence_order,
         title=m.title,
         description=m.description,
+        learning_outcomes=list(m.learning_outcomes),
+        completion_criteria=m.completion_criteria,
+        estimated_effort_minutes=m.estimated_effort_minutes,
+        required_concepts=list(m.required_concepts),
+        unverified_concepts=list(m.unverified_concepts),
+        prerequisite_milestone_ids=list(m.prerequisite_milestone_ids),
         status=m.status.value,
         created_at=m.created_at,
         updated_at=m.updated_at,
@@ -231,9 +290,17 @@ def _to_proposal_response_from_domain(proposal: ScheduleProposal) -> SchedulePro
     raw_violations = list(proposal.proposal_data.get("validation_violations", []))
     raw_warnings = list(proposal.proposal_data.get("soft_overflow_warnings", []))
     raw_advisories = [str(w) for w in proposal.proposal_data.get("advisory_warnings", [])]
+    raw_unscheduled = list(proposal.proposal_data.get("unscheduled_tasks", []))
 
     violations = [ConstraintViolationSchema.model_validate(v) for v in raw_violations]
     warnings = [SoftOverflowWarningSchema.model_validate(w) for w in raw_warnings]
+
+    default_scheduled_count = len(
+        [t for t in raw_tasks if isinstance(t, dict) and t.get("scheduled_date") is not None]
+    )
+    default_unscheduled_count = len(
+        [t for t in raw_tasks if isinstance(t, dict) and t.get("scheduled_date") is None]
+    )
 
     return ScheduleProposalResponse(
         id=proposal.id,
@@ -242,6 +309,21 @@ def _to_proposal_response_from_domain(proposal: ScheduleProposal) -> SchedulePro
         status=proposal.status.value,
         is_valid=len(violations) == 0,
         has_soft_overflow=len(warnings) > 0,
+        judge_status=str(proposal.proposal_data.get("judge_status") or "PASSED"),
+        is_partial_schedule=bool(
+            proposal.proposal_data.get("is_partial_schedule", default_unscheduled_count > 0)
+        ),
+        scheduled_tasks_count=int(
+            proposal.proposal_data.get("scheduled_tasks_count", default_scheduled_count)
+        ),
+        unscheduled_tasks_count=int(
+            proposal.proposal_data.get("unscheduled_tasks_count", default_unscheduled_count)
+        ),
+        unscheduled_tasks=raw_unscheduled,
+        feasibility=proposal.proposal_data.get("feasibility", {}),
+        availability_source_metadata=dict(
+            proposal.proposal_data.get("availability_source_metadata", {})
+        ),
         tasks=raw_tasks,
         schedule_blocks=list(proposal.proposal_data.get("schedule_blocks", [])),
         dependencies=raw_deps,
@@ -432,6 +514,8 @@ async def create_roadmap(
             prior_knowledge_level=request.prior_knowledge_level,
             start_date=request.start_date,
             target_date=request.target_date,
+            weekly_commitment_hours=request.weekly_commitment_hours,
+            input_provenance=request.input_provenance.model_dump(mode="json"),
         )
         return _to_roadmap_response(res.roadmap, res.goal)
     except DomainError as exc:
@@ -442,17 +526,19 @@ async def create_roadmap(
     "/goals/{goal_id}/clarify-questions",
     response_model=ClarificationQuestionsResponse,
     status_code=status.HTTP_200_OK,
-    summary="Generate 2-3 diagnostic clarification questions for a goal (FR-GOAL-002)",
+    summary="Generate 0-3 gap-aware clarification questions for a goal (FR-GOAL-002)",
 )
 async def generate_clarification_questions(
     goal_id: UUID,
     user_id: CurrentLearnerIdDep,
     use_case: GenerateClarificationQuestionsUseCaseDep,
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> ClarificationQuestionsResponse | JSONResponse:
     try:
         return await use_case.execute(
             goal_id=goal_id,
             user_id=user_id,
+            idempotency_key=idempotency_key,
         )
     except DomainError as exc:
         return _handle_planning_error(exc)
@@ -471,20 +557,38 @@ async def submit_clarification_answers(
     use_case: SubmitClarificationAnswersUseCaseDep,
 ) -> SubmitClarificationAnswersResponse | JSONResponse:
     try:
-        goal = await use_case.execute(
-            goal_id=goal_id,
-            user_id=user_id,
-            answers=request.answers,
-            skipped=request.skipped,
-            skipped_question_ids=request.skipped_question_ids,
-            total_questions_count=request.total_questions_count,
-        )
+        if request.session_id is not None:
+            turn = await use_case.execute_turn(
+                goal_id=goal_id,
+                user_id=user_id,
+                session_id=request.session_id,
+                round_number=request.round,
+                answers=request.answers,
+                skipped_question_ids=request.skipped_question_ids,
+                total_questions_count=request.total_questions_count,
+            )
+            goal = turn.goal
+        else:
+            turn = None
+            goal = await use_case.execute(
+                goal_id=goal_id,
+                user_id=user_id,
+                answers=request.answers,
+                skipped=request.skipped,
+                skipped_question_ids=request.skipped_question_ids,
+                total_questions_count=request.total_questions_count,
+            )
         parsed = parse_clarification_context(goal.clarification_context)
         return SubmitClarificationAnswersResponse(
             goal_id=goal.id,
-            status=parsed.status if parsed else "ANSWERED",
+            status=turn.status if turn is not None else parsed.status,
             clarification_context=goal.clarification_context or "",
-            unresolved_assumptions=list(parsed.unresolved_assumptions) if parsed else [],
+            unresolved_assumptions=list(parsed.unresolved_assumptions),
+            session_id=turn.session_id if turn is not None else None,
+            round=turn.round if turn is not None else request.round,
+            questions=list(turn.questions) if turn is not None else [],
+            information_gaps=list(turn.information_gaps) if turn is not None else [],
+            next_turn_quota_cost=turn.next_turn_quota_cost if turn is not None else 0,
             message="Clarification context updated successfully",
         )
     except DomainError as exc:
@@ -505,19 +609,49 @@ async def skip_clarification_questions(
 ) -> SubmitClarificationAnswersResponse | JSONResponse:
     try:
         skipped_ids = request.skipped_question_ids if request else None
-        goal = await use_case.skip(
-            user_id=user_id,
-            goal_id=goal_id,
-            skipped_question_ids=skipped_ids,
-        )
+        if request is not None and request.session_id is not None:
+            turn = await use_case.skip_session(
+                user_id=user_id,
+                goal_id=goal_id,
+                session_id=request.session_id,
+                skipped_question_ids=skipped_ids or [],
+            )
+            goal = turn.goal
+        else:
+            turn = None
+            goal = await use_case.skip(
+                user_id=user_id,
+                goal_id=goal_id,
+                skipped_question_ids=skipped_ids,
+            )
         parsed = parse_clarification_context(goal.clarification_context)
         return SubmitClarificationAnswersResponse(
             goal_id=goal.id,
-            status=parsed.status if parsed else "SKIPPED",
+            status=turn.status if turn is not None else parsed.status,
             clarification_context=goal.clarification_context or "",
-            unresolved_assumptions=list(parsed.unresolved_assumptions) if parsed else [],
+            unresolved_assumptions=list(parsed.unresolved_assumptions),
+            session_id=turn.session_id if turn is not None else None,
+            round=turn.round if turn is not None else 1,
+            information_gaps=list(turn.information_gaps) if turn is not None else [],
             message="Clarification survey skipped and assumptions recorded",
         )
+    except DomainError as exc:
+        return _handle_planning_error(exc)
+
+
+@roadmaps_router.get(
+    "/goals/{goal_id}/clarification-state",
+    response_model=ClarificationQuestionsResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Resume clarification session without creating a new AI call",
+)
+async def get_clarification_state(
+    goal_id: UUID,
+    user_id: CurrentLearnerIdDep,
+    use_case: GenerateClarificationQuestionsUseCaseDep,
+) -> ClarificationQuestionsResponse | JSONResponse:
+    try:
+        return await use_case.get_state(goal_id=goal_id, user_id=user_id)
     except DomainError as exc:
         return _handle_planning_error(exc)
 
@@ -738,6 +872,7 @@ async def initiate_milestone_generation_job(
     roadmap_id: UUID,
     user_id: CurrentLearnerIdDep,
     use_case: InitiateMilestoneGenUseCaseDep,
+    request: MilestoneGenerationRequest | None = None,
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> SseJobTicketResponse | JSONResponse:
     try:
@@ -746,6 +881,9 @@ async def initiate_milestone_generation_job(
             roadmap_id=roadmap_id,
             idempotency_key=idempotency_key,
             run_inline=False,
+            generation_strategy=(
+                request.generation_strategy if request is not None else "FULL_SCOPE"
+            ),
         )
         if not ticket.is_existing:
             await dispatch_ai_roadmap_generation(
@@ -779,6 +917,12 @@ async def update_milestones(
                 sequence_order=m.sequence_order,
                 title=m.title,
                 description=m.description,
+                learning_outcomes=tuple(m.learning_outcomes),
+                completion_criteria=m.completion_criteria,
+                estimated_effort_minutes=m.estimated_effort_minutes,
+                required_concepts=tuple(m.required_concepts),
+                unverified_concepts=tuple(m.unverified_concepts),
+                prerequisite_milestone_ids=tuple(m.prerequisite_milestone_ids),
             )
             for m in request.milestones
         ]
@@ -944,14 +1088,20 @@ async def apply_schedule_proposal(
     user_id: CurrentLearnerIdDep,
     use_case: ApplyProposalUseCaseDep,
     request: ApplyScheduleProposalRequest | None = None,
+    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> ApplyScheduleProposalResponse | JSONResponse:
     confirm_overflow = request.confirm_soft_overflow if request is not None else False
+    confirm_warnings = request.confirm_warnings if request is not None else False
+    confirm_partial = request.confirm_partial_schedule if request is not None else False
     try:
         res = await use_case.execute(
             user_id=user_id,
             roadmap_id=roadmap_id,
             proposal_id=proposal_id,
             confirm_soft_overflow=confirm_overflow,
+            confirm_warnings=confirm_warnings,
+            confirm_partial_schedule=confirm_partial,
+            idempotency_key=idempotency_key,
         )
         return ApplyScheduleProposalResponse(
             roadmap_id=res.roadmap.id,
@@ -967,6 +1117,8 @@ async def apply_schedule_proposal(
             affected_tasks_count=res.affected_tasks_count,
             total_shifted_minutes=res.total_shifted_minutes,
             trigger_type=res.trigger_type,
+            calendar_sync_status=res.calendar_sync_status,
+            backlog_unscheduled_tasks_count=res.backlog_unscheduled_tasks_count,
             official_schedule=_to_official_schedule_response(res.official_schedule),
         )
     except (PlanningDomainError, DomainError) as exc:

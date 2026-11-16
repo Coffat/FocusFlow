@@ -1,5 +1,5 @@
+import logging
 from collections.abc import Sequence
-from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
@@ -7,13 +7,17 @@ from uuid import UUID
 from src.account.public_api import (
     AvailabilityQueryPort,
     AvailabilitySnapshotDTO,
+    CalendarConnectionQueryPort,
     LearnerMemoryQueryPort,
     LearnerProfileQueryPort,
     QuotaFacadePort,
     UserQueryPort,
 )
 from src.execution.public_api import ExecutionScheduleSyncPort
-from src.planning.application.dtos.planning_dtos import SseJobTicketDTO
+from src.planning.application.dtos.planning_dtos import (
+    SseJobTicketDTO,
+    TaskProposalLLMOutput,
+)
 from src.planning.application.ports.knowledge_base_port import KnowledgeBasePort
 from src.planning.application.ports.knowledge_source_repository_port import (
     KnowledgeSourceRepositoryPort,
@@ -28,6 +32,9 @@ from src.planning.application.ports.schedule_block_repository_port import (
     ScheduleBlockRepositoryPort,
 )
 from src.planning.application.ports.sse_job_port import SseJobPort
+from src.planning.application.services.effective_availability_service import (
+    GetEffectiveAvailabilityUseCase,
+)
 from src.planning.application.services.existing_schedule_occupancy import (
     expand_existing_schedule_occupancy,
 )
@@ -39,11 +46,13 @@ from src.planning.application.services.knowledge_tool_dispatcher import (
     KnowledgeToolDispatcher,
     RoadmapPipelineStage,
 )
+from src.planning.application.services.learning_quality import assess_schedule_feasibility
 from src.planning.application.services.roadmap_context_builder import (
     RoadmapContextBuilder,
 )
 from src.planning.application.services.roadmap_skills import (
     TASK_DECOMPOSER_SKILL,
+    build_planning_prompt_registry,
     build_task_decomposer_prompt,
 )
 from src.planning.application.services.validation_gate import (
@@ -54,14 +63,14 @@ from src.planning.domain.exceptions.planning_exceptions import (
     RoadmapNotFoundError,
     UnapprovedMilestonesError,
 )
+from src.planning.domain.models.knowledge_concept import LearningResource
 from src.planning.domain.models.milestone import MilestoneStatus
 from src.planning.domain.models.schedule import (
     ScheduleProposal,
     ScheduleProposalStatus,
 )
+from src.planning.domain.services.spatio_temporal_engine import SpatioTemporalRuleEngine
 from src.planning.domain.services.validation_types import (
-    AI_BLOCK_MAX_MINUTES,
-    AI_BLOCK_MIN_MINUTES,
     AvailabilityConfigurationDTO,
     AvailabilitySlotDTO,
     ConstraintViolationDTO,
@@ -74,81 +83,83 @@ from src.shared_kernel.application.harness.models import (
     WorkflowStepStatus,
     WorkflowType,
 )
+from src.shared_kernel.application.harness.untrusted_context import (
+    UntrustedBlockKind,
+    format_untrusted_block,
+    sanitize_untrusted_text,
+)
 from src.shared_kernel.application.harness.workflow_port import WorkflowRepositoryPort
 from src.shared_kernel.application.llm_port import LLMProviderPort
 from src.shared_kernel.application.uow import AsyncUnitOfWork
 from src.shared_kernel.domain.base import generate_uuid7
-from src.shared_kernel.infrastructure.external_ai.prompt_sanitizer import (
-    PromptSanitizer,
-)
 
-SCHEDULE_PROPOSAL_RESPONSE_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
-        "tasks": {
-            "type": "array",
-            "minItems": 1,
-            "items": {
-                "type": "object",
-                "properties": {
-                    "task_id": {"type": "string"},
-                    "milestone_id": {"type": "string"},
-                    "title": {"type": "string", "minLength": 1},
-                    "description": {"type": "string"},
-                    "task_type": {
-                        "type": "string",
-                        "enum": ["THEORY", "PRACTICE", "REVIEW", "PROJECT"],
-                    },
-                    "learning_objective": {"type": "string"},
-                    "completion_criteria": {"type": "string"},
-                    "learning_resources": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "title": {"type": "string"},
-                                "url": {"type": "string"},
-                                "type": {
-                                    "type": "string",
-                                    "enum": ["DOCS", "TUTORIAL", "VIDEO", "BOOK", "PRACTICE"],
-                                },
-                                "description": {"type": "string"},
-                            },
-                            "required": ["title", "url"],
-                        },
-                    },
-                    "concept_ids": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                    },
-                    "estimated_minutes": {
-                        "type": "integer",
-                        "minimum": AI_BLOCK_MIN_MINUTES,
-                        "maximum": AI_BLOCK_MAX_MINUTES,
-                    },
-                },
-                "required": [
-                    "milestone_id",
-                    "title",
-                    "estimated_minutes",
-                ],
-            },
-        },
-        "dependencies": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "predecessor_id": {"type": "string"},
-                    "successor_id": {"type": "string"},
-                    "is_mandatory": {"type": "boolean"},
-                },
-                "required": ["predecessor_id", "successor_id"],
-            },
-        },
-    },
-    "required": ["tasks"],
-}
+SCHEDULE_PROPOSAL_RESPONSE_SCHEMA: dict[str, Any] = TaskProposalLLMOutput.model_json_schema()
+
+
+def resolve_task_resources_from_tool_results(
+    proposal_data: dict[str, Any],
+    collected_resources: Sequence[LearningResource | dict[str, Any]],
+    *,
+    strict: bool = True,
+) -> dict[str, Any]:
+    """Resolve `resource_ids` on each task against verified tool results; drop hallucinated IDs."""
+    if not isinstance(proposal_data, dict):
+        return proposal_data
+    raw_tasks = proposal_data.get("tasks")
+    if not isinstance(raw_tasks, list):
+        return proposal_data
+
+    resource_lookup: dict[str, dict[str, str]] = {}
+    for item in collected_resources:
+        if isinstance(item, LearningResource):
+            r_dict = item.to_dict()
+            rid = item.resource_id
+        elif isinstance(item, dict):
+            rid = str(item.get("resource_id") or "").strip()
+            r_dict = {
+                "resource_id": rid,
+                "title": str(item.get("title") or "").strip(),
+                "url": str(item.get("url") or "").strip(),
+                "type": str(item.get("type") or item.get("resource_type") or "DOCS").strip(),
+                "resource_type": str(
+                    item.get("resource_type") or item.get("type") or "DOCS"
+                ).strip(),
+                "description": str(item.get("description") or "").strip(),
+            }
+        else:
+            continue
+        if rid:
+            resource_lookup[rid] = r_dict
+
+    resolved_tasks: list[Any] = []
+    for task in raw_tasks:
+        if not isinstance(task, dict):
+            resolved_tasks.append(task)
+            continue
+        t_copy = dict(task)
+        has_resource_ids_field = "resource_ids" in t_copy
+        raw_rids = t_copy.get("resource_ids")
+        if isinstance(raw_rids, list):
+            clean_rids: list[str] = []
+            for raw_id in raw_rids:
+                rid_str = str(raw_id or "").strip()
+                if rid_str and rid_str not in clean_rids:
+                    clean_rids.append(rid_str)
+                if len(clean_rids) >= 3:
+                    break
+            t_copy["resource_ids"] = clean_rids
+            if not resource_lookup:
+                t_copy["learning_resources"] = []
+            else:
+                t_copy["learning_resources"] = [
+                    dict(resource_lookup[rid]) for rid in clean_rids if rid in resource_lookup
+                ]
+        elif strict or has_resource_ids_field:
+            t_copy["resource_ids"] = []
+            t_copy["learning_resources"] = []
+        resolved_tasks.append(t_copy)
+
+    return {**proposal_data, "tasks": resolved_tasks}
 
 
 def build_availability_config_from_snapshot(
@@ -271,6 +282,16 @@ def normalize_proposal_task_ids_and_dependencies(
             for block in raw_blocks
             if isinstance(block, dict)
         ]
+    raw_unscheduled = normalized.get("unscheduled_tasks")
+    if isinstance(raw_unscheduled, list):
+        normalized["unscheduled_tasks"] = [
+            {
+                **t_item,
+                "task_id": id_remap.get(str(t_item.get("task_id")), str(t_item.get("task_id"))),
+            }
+            for t_item in raw_unscheduled
+            if isinstance(t_item, dict)
+        ]
     return normalized
 
 
@@ -299,6 +320,7 @@ class ExecuteScheduleProposalGenerationUseCase:
         knowledge_source_repo: KnowledgeSourceRepositoryPort | None = None,
         embedding_provider: EmbeddingProviderPort | None = None,
         workflow_repo: WorkflowRepositoryPort | None = None,
+        calendar_connection_query_port: CalendarConnectionQueryPort | None = None,
     ) -> None:
         self._goal_repo = goal_repo
         self._roadmap_repo = roadmap_repo
@@ -319,6 +341,7 @@ class ExecuteScheduleProposalGenerationUseCase:
         self._knowledge_source_repo = knowledge_source_repo
         self._embedding_provider = embedding_provider
         self._workflow_repo = workflow_repo
+        self._calendar_connection_port = calendar_connection_query_port
 
     async def execute(
         self,
@@ -342,14 +365,13 @@ class ExecuteScheduleProposalGenerationUseCase:
                 raise UnapprovedMilestonesError()
 
             goal = await self._goal_repo.get_by_id(roadmap.goal_id)
-            avail_snapshot = await self._availability_port.get_active_availability(user_id)
-            avail_config = build_availability_config_from_snapshot(avail_snapshot)
+            user_tz = "Asia/Ho_Chi_Minh"
             if self._user_query_port is not None:
                 user_snapshot = await self._user_query_port.get_user_by_id(user_id)
-                if user_snapshot is not None:
-                    avail_config = replace(avail_config, timezone=user_snapshot.timezone)
+                if user_snapshot is not None and user_snapshot.timezone:
+                    user_tz = user_snapshot.timezone
+
             learner_profile = await self._learner_profile_port.get_learner_profile(user_id)
-            goal = await self._goal_repo.get_by_id(roadmap.goal_id)
             prior_knowledge = goal.prior_knowledge_level if goal is not None else "BEGINNER"
             clarification_ctx = (goal.clarification_context or "") if goal is not None else ""
 
@@ -367,6 +389,22 @@ class ExecuteScheduleProposalGenerationUseCase:
                     await self._block_repo.list_by_roadmap_ids(other_roadmap_ids),
                 )
 
+            effective_avail_uc = GetEffectiveAvailabilityUseCase(
+                availability_query_port=self._availability_port,
+                calendar_connection_query_port=self._calendar_connection_port,
+                execution_sync_port=self._execution_sync_port,
+            )
+            effective_avail = await effective_avail_uc.execute(
+                user_id=user_id,
+                start_date=roadmap.start_date or effective_now.date(),
+                target_date=roadmap.target_date,
+                timezone=user_tz,
+                existing_tasks=existing_tasks,
+                exclude_roadmap_id=roadmap_id,
+            )
+            avail_config = effective_avail.availability_config
+            existing_tasks = list(effective_avail.effective_existing_tasks)
+
             await self._sse.append_event(
                 job_id=job_id,
                 event="stage",
@@ -379,10 +417,18 @@ class ExecuteScheduleProposalGenerationUseCase:
                 },
             )
 
-            sanitized_title = PromptSanitizer.sanitize(roadmap.title, wrap_xml=True)
-            sanitized_desc = PromptSanitizer.sanitize(roadmap.description or "", wrap_xml=True)
+            sanitized_title = format_untrusted_block(UntrustedBlockKind.GOAL_TITLE, roadmap.title)
+            sanitized_desc = format_untrusted_block(
+                UntrustedBlockKind.GOAL_RAW_DESCRIPTION, roadmap.description or ""
+            )
             milestone_lines = [
-                f"- id={m.id} | seq={m.sequence_order} | title={PromptSanitizer.sanitize(m.title, wrap_xml=True)}"
+                (
+                    f"- id={m.id} | seq={m.sequence_order} | "
+                    f"title={format_untrusted_block(UntrustedBlockKind.MILESTONE_DATA, m.title)} | "
+                    f"outcome_ids={','.join(f'M{m.sequence_order}-O{i}' for i in range(1, len(m.learning_outcomes) + 1))} | "
+                    f"required_concepts={','.join(m.required_concepts)} | "
+                    f"estimated_effort_minutes={m.estimated_effort_minutes}"
+                )
                 for m in milestones
             ]
             slot_lines = [
@@ -392,9 +438,10 @@ class ExecuteScheduleProposalGenerationUseCase:
             ]
             start_date_str = (roadmap.start_date or effective_now.date()).isoformat()
 
-            system_prompt = TASK_DECOMPOSER_SKILL.system_instruction
-            # Keep deterministic machine-readable markers for offline MockLLMAdapter while
-            # eliminating duplicated goal/milestone/availability prose when Goal exists.
+            decomposer_tpl = build_planning_prompt_registry().latest(TASK_DECOMPOSER_SKILL.skill_id)
+            system_prompt = decomposer_tpl.system_template
+            # Structured machine-readable header markers paired with unified context builder
+            # without duplicating Goal/Milestone/Availability prose.
             header_markers = (
                 "GENERATE_PROPOSAL_TASKS\n"
                 f"Start Date: {start_date_str}\n"
@@ -425,25 +472,26 @@ class ExecuteScheduleProposalGenerationUseCase:
                 structured_ctx = (
                     f"Roadmap: {sanitized_title}\n"
                     f"Description: {sanitized_desc}\n"
-                    f"Prior Knowledge Level: {prior_knowledge}\n"
+                    f"Prior Knowledge Level: {sanitize_untrusted_text(prior_knowledge)}\n"
                     + (
-                        f"Clarification Context:\n{PromptSanitizer.sanitize(clarification_ctx, wrap_xml=True)}\n"
+                        "Clarification Context:\n"
+                        + format_untrusted_block(
+                            UntrustedBlockKind.CLARIFICATION_DATA, clarification_ctx
+                        )
+                        + "\n"
                         if clarification_ctx
                         else ""
                     )
                     + f"Availability Mode: {avail_config.mode}\n"
-                    f"Learner Optimal Session Minutes: {learner_profile.opt_session_minutes} "
-                    f"(beta={learner_profile.estimation_bias_beta})"
+                    f"Learner Optimal Session Minutes: {learner_profile.opt_session_minutes}"
                 )
 
             assembled = RoadmapContextBuilder.assemble_harness_context(
-                system_instruction=system_prompt,
                 workflow_stage="TASK_DECOMPOSITION",
                 base_context_text=structured_ctx,
                 learner_diagnostic={
                     "prior_knowledge_level": prior_knowledge,
                     "opt_session_minutes": learner_profile.opt_session_minutes,
-                    "estimation_bias_beta": float(learner_profile.estimation_bias_beta),
                 },
                 workflow_constraints={
                     "start_date": start_date_str,
@@ -483,8 +531,8 @@ class ExecuteScheduleProposalGenerationUseCase:
                 data={
                     "stage": "VALIDATING_TIER_1_2_3",
                     "progress": 60,
-                    "delta_text": "Đang chạy cổng kiểm định 3 tầng (Tier 1 Schema, Tier 2 Spatio-Temporal/DAG, Tier 3 Judge)...",
-                    "deltaText": "Đang chạy cổng kiểm định 3 tầng (Tier 1 Schema, Tier 2 Spatio-Temporal/DAG, Tier 3 Judge)...",
+                    "delta_text": "Đang phân rã nhiệm vụ bằng AI và chạy cổng kiểm định 3 tầng (Schema, DAG & Sư phạm)...",
+                    "deltaText": "Đang phân rã nhiệm vụ bằng AI và chạy cổng kiểm định 3 tầng (Schema, DAG & Sư phạm)...",
                 },
             )
 
@@ -515,6 +563,10 @@ class ExecuteScheduleProposalGenerationUseCase:
             orchestrator = ProposalValidationGateOrchestrator(
                 llm_provider=self._llm,
                 enable_tier3_judge=self._enable_tier3_judge,
+                workflow_repo=self._workflow_repo,
+                user_id=user_id,
+                goal_id=roadmap.goal_id,
+                roadmap_id=roadmap_id,
             )
             valid_mids: set[UUID | str] = {m.id for m in milestones}
             milestone_order_map = {str(m.id): m.sequence_order for m in milestones}
@@ -527,6 +579,7 @@ class ExecuteScheduleProposalGenerationUseCase:
                 existing_tasks=existing_tasks,
                 current_roadmap_target_date=roadmap.target_date,
                 goal_title=goal.title if goal is not None else roadmap.title,
+                learner_level=prior_knowledge,
                 max_retries=max_retries,
                 on_retry_callback=_on_retry,
                 start_date=roadmap.start_date or effective_now.date(),
@@ -541,17 +594,63 @@ class ExecuteScheduleProposalGenerationUseCase:
                 preferred_session_minutes=learner_profile.opt_session_minutes,
                 estimation_bias_beta=float(learner_profile.estimation_bias_beta),
                 peak_productivity_slots=getattr(learner_profile, "peak_productivity_slots", ()),
+                milestones=milestones,
+                resource_resolver=lambda raw_prop: resolve_task_resources_from_tool_results(
+                    raw_prop,
+                    dispatcher.collected_resources if dispatcher is not None else (),
+                    strict=dispatcher is not None,
+                ),
+                prompt_template=decomposer_tpl,
+            )
+
+            await self._sse.append_event(
+                job_id=job_id,
+                event="chunk",
+                status="STREAMING",
+                data={
+                    "stage": "VALIDATING_TIER_1_2_3",
+                    "progress": 85,
+                    "delta_text": "Đã hoàn tất phân rã, kiểm định 3 tầng và xếp thời gian biểu tất định. Đang lưu bản đề xuất...",
+                    "deltaText": "Đã hoàn tất phân rã, kiểm định 3 tầng và xếp thời gian biểu tất định. Đang lưu bản đề xuất...",
+                },
             )
 
             normalized_data = normalize_proposal_task_ids_and_dependencies(
                 gate_result.validated_proposal_data
             )
             normalized_data["availability_mode"] = avail_config.mode
+            available_minutes = SpatioTemporalRuleEngine.calculate_available_capacity_minutes(
+                avail_config,
+                start_date=roadmap.start_date or effective_now.date(),
+                target_date=roadmap.target_date,
+                existing_tasks=existing_tasks,
+            )
+            normalized_data["feasibility"] = assess_schedule_feasibility(
+                [task for task in normalized_data.get("tasks", []) if isinstance(task, dict)],
+                available_minutes=available_minutes,
+            ).to_dict()
+            normalized_data["availability_source_metadata"] = effective_avail.source_metadata
+            if effective_avail.warnings:
+                existing_adv = list(normalized_data.get("advisory_warnings", []) or [])
+                for w in effective_avail.warnings:
+                    if w not in existing_adv:
+                        existing_adv.append(w)
+                normalized_data["advisory_warnings"] = existing_adv
             normalized_data["attempts_used"] = gate_result.attempts_used
             normalized_data["retry_history"] = list(gate_result.retry_history)
             normalized_data["judge_skipped"] = gate_result.judge_skipped
+            normalized_data["judge_status"] = gate_result.judge_status
+            normalized_data["is_partial_schedule"] = gate_result.is_partial_schedule
+            normalized_data["scheduled_tasks_count"] = gate_result.scheduled_tasks_count
+            normalized_data["unscheduled_tasks_count"] = gate_result.unscheduled_tasks_count
             if gate_result.pedagogical_score is not None:
                 normalized_data["pedagogical_score"] = gate_result.pedagogical_score
+            model_used = getattr(self._llm, "last_model_used", None)
+            if model_used:
+                normalized_data["model_used"] = model_used
+            normalized_data["degraded_model_used"] = bool(
+                getattr(self._llm, "last_degraded_model_used", False)
+            )
 
             proposal = ScheduleProposal(
                 id=generate_uuid7(),
@@ -587,6 +686,7 @@ class ExecuteScheduleProposalGenerationUseCase:
                                 stage="TASK_DECOMPOSITION",
                                 inputs=harness_inputs,
                                 layer_tokens=assembled.layer_tokens,
+                                prompt_template=decomposer_tpl,
                             ),
                             started_at=effective_now,
                             goal_id=roadmap.goal_id,
@@ -640,6 +740,11 @@ class ExecuteScheduleProposalGenerationUseCase:
                         "soft_overflow_warnings": [
                             w.to_dict() for w in gate_result.soft_overflow_warnings
                         ],
+                        "judge_status": gate_result.judge_status,
+                        "is_partial_schedule": gate_result.is_partial_schedule,
+                        "scheduled_tasks_count": gate_result.scheduled_tasks_count,
+                        "unscheduled_tasks_count": gate_result.unscheduled_tasks_count,
+                        "unscheduled_tasks": normalized_data.get("unscheduled_tasks", []),
                         "attempts_used": gate_result.attempts_used,
                     },
                 },
@@ -654,8 +759,15 @@ class ExecuteScheduleProposalGenerationUseCase:
                         reason=getattr(exc, "code", "SCHEDULE_PROPOSAL_GEN_FAILED"),
                     )
                     await self._uow.commit()
-            except Exception:
-                pass
+            except Exception as release_exc:
+                logging.getLogger(__name__).warning(
+                    "proposal_generation_quota_release_failed",
+                    extra={
+                        "job_id": str(job_id),
+                        "roadmap_id": str(roadmap_id),
+                        "error_type": type(release_exc).__name__,
+                    },
+                )
 
             await self._sse.append_event(
                 job_id=job_id,
@@ -764,8 +876,15 @@ class InitiateScheduleProposalGenerationUseCase:
                     roadmap_id=roadmap_id,
                     reservation_id=reservation_id,
                 )
-            except Exception:
-                pass
+            except Exception as exec_exc:
+                logging.getLogger(__name__).warning(
+                    "proposal_generation_inline_failed",
+                    extra={
+                        "job_id": str(job_id),
+                        "roadmap_id": str(roadmap_id),
+                        "error_type": type(exec_exc).__name__,
+                    },
+                )
 
         updated_job = await self._sse.get_job_for_user(job_id=job_id, user_id=user_id)
         return SseJobTicketDTO(

@@ -21,7 +21,6 @@ from src.planning.application.services.roadmap_skills import (
     build_milestone_planner_prompt,
     build_pedagogical_judge_prompt,
     build_task_decomposer_prompt,
-    build_task_repair_prompt,
     get_roadmap_skill,
 )
 from src.planning.application.services.validation_gate import (
@@ -76,6 +75,5 @@ __all__ = [
     "build_milestone_planner_prompt",
     "build_pedagogical_judge_prompt",
     "build_task_decomposer_prompt",
-    "build_task_repair_prompt",
     "get_roadmap_skill",
 ]

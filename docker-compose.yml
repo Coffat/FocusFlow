@@ -65,9 +65,13 @@ services:
       - FERNET_KEY=${FERNET_KEY:-}
       - LLM_PROVIDER=${LLM_PROVIDER:-gemini}
       - LLM_MODEL=${LLM_MODEL:-gemini-3.8-flash}
-      - LLM_API_KEY=${LLM_API_KEY:-${GEMINI_API_KEY:-mock-key}}
-      - LLM_BASE_URL=${LLM_BASE_URL:-}
-      - PAYMENT_PROVIDER=${PAYMENT_PROVIDER:-mock}
+      - LLM_MODEL_LOW=${LLM_MODEL_LOW:-gemini-3.8-flash}
+      - LLM_MODEL_MEDIUM=${LLM_MODEL_MEDIUM:-gemini-3.8-flash}
+      - LLM_MODEL_HIGH=${LLM_MODEL_HIGH:-gemini-3.8-flash}
+      - LLM_EMBEDDING_MODEL=${LLM_EMBEDDING_MODEL:-gemini/gemini-embedding-2}
+      - LLM_API_KEY=${LLM_API_KEY:-${GEMINI_API_KEY:-}}
+      - LLM_BASE_URL=${LLM_BASE_URL:-http://127.0.0.1:8045}
+      - PAYMENT_PROVIDER=${PAYMENT_PROVIDER:-sepay}
       - CALENDAR_PROVIDER=${CALENDAR_PROVIDER:-google}
       - CALENDAR_ENCRYPTION_KEY=${CALENDAR_ENCRYPTION_KEY:-hOS_brn4ckcgaKn4-wP1cQ048RRb21roVkYFG5PmfhU=}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-227549369009-v57ekq00ntij7ni9or1k6k30mani1ojt.apps.googleusercontent.com}

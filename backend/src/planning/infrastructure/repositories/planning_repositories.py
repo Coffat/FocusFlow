@@ -127,6 +127,7 @@ class SqlAlchemyRoadmapRepository(RoadmapRepositoryPort):
             status=RoadmapStatus(row.status),
             start_date=row.start_date,
             target_date=row.target_date,
+            planning_metadata=dict(getattr(row, "planning_metadata", {}) or {}),
             created_at=row.created_at,
             updated_at=row.updated_at,
         )
@@ -146,6 +147,7 @@ class SqlAlchemyRoadmapRepository(RoadmapRepositoryPort):
                 status=roadmap.status.value,
                 start_date=roadmap.start_date,
                 target_date=roadmap.target_date,
+                planning_metadata=dict(roadmap.planning_metadata),
                 created_at=created,
                 updated_at=now,
             )
@@ -156,6 +158,7 @@ class SqlAlchemyRoadmapRepository(RoadmapRepositoryPort):
             row.status = roadmap.status.value
             row.start_date = roadmap.start_date
             row.target_date = roadmap.target_date
+            row.planning_metadata = dict(roadmap.planning_metadata)
             row.updated_at = now
 
         await self._session.flush()
@@ -223,6 +226,14 @@ class SqlAlchemyMilestoneRepository(MilestoneRepositoryPort):
             sequence_order=row.sequence_order,
             title=row.title,
             description=row.description,
+            learning_outcomes=tuple(getattr(row, "learning_outcomes", []) or []),
+            completion_criteria=getattr(row, "completion_criteria", None),
+            estimated_effort_minutes=int(getattr(row, "estimated_effort_minutes", 60) or 60),
+            required_concepts=tuple(getattr(row, "required_concepts", []) or []),
+            unverified_concepts=tuple(getattr(row, "unverified_concepts", []) or []),
+            prerequisite_milestone_ids=tuple(
+                UUID(str(item)) for item in (getattr(row, "prerequisite_milestone_ids", []) or [])
+            ),
             status=MilestoneStatus(row.status),
             created_at=row.created_at,
             updated_at=row.updated_at,
@@ -253,6 +264,14 @@ class SqlAlchemyMilestoneRepository(MilestoneRepositoryPort):
                 row.sequence_order = seq
                 row.title = m.title
                 row.description = m.description
+                row.learning_outcomes = list(m.learning_outcomes)
+                row.completion_criteria = m.completion_criteria
+                row.estimated_effort_minutes = m.estimated_effort_minutes
+                row.required_concepts = list(m.required_concepts)
+                row.unverified_concepts = list(m.unverified_concepts)
+                row.prerequisite_milestone_ids = [
+                    str(item) for item in m.prerequisite_milestone_ids
+                ]
                 row.status = m.status.value
                 row.updated_at = now
             else:
@@ -262,6 +281,12 @@ class SqlAlchemyMilestoneRepository(MilestoneRepositoryPort):
                     sequence_order=seq,
                     title=m.title,
                     description=m.description,
+                    learning_outcomes=list(m.learning_outcomes),
+                    completion_criteria=m.completion_criteria,
+                    estimated_effort_minutes=m.estimated_effort_minutes,
+                    required_concepts=list(m.required_concepts),
+                    unverified_concepts=list(m.unverified_concepts),
+                    prerequisite_milestone_ids=[str(item) for item in m.prerequisite_milestone_ids],
                     status=m.status.value,
                     created_at=created,
                     updated_at=now,

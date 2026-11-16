@@ -36,6 +36,7 @@ export type ProposalTask = ProposedTaskItemSchema;
 export type PriorKnowledgeLevel = 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED';
 
 export type ClarificationQuestion = components['schemas']['ClarificationQuestion'];
+export type ClarificationOption = components['schemas']['ClarificationOption'];
 export type ClarificationQuestionsResponse = components['schemas']['ClarificationQuestionsResponse'];
 export type ClarificationAnswerItem = components['schemas']['ClarificationAnswerItem'];
 export type SubmitClarificationAnswersRequest = components['schemas']['SubmitClarificationAnswersRequest'];

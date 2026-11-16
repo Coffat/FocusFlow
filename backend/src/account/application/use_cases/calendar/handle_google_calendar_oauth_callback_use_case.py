@@ -65,40 +65,49 @@ class HandleGoogleCalendarOAuthCallbackUseCase:
 
         # Exchange authorization code for refresh token
         provider_name = self._settings.calendar_provider.strip().lower()
-        if provider_name in ("mock", "local_mock"):
-            refresh_token = f"mock_refresh_token_{user_id.hex[:8]}"
-        else:
-            client = self._http_client or httpx.AsyncClient(timeout=15.0)
-            token_payload = {
-                "client_id": self._settings.google_client_id,
-                "client_secret": self._settings.google_client_secret,
-                "code": request.code,
-                "grant_type": "authorization_code",
-                "redirect_uri": effective_redirect_uri,
-            }
-            try:
-                resp = await client.post(GOOGLE_TOKEN_URL, data=token_payload)
-                if resp.is_error:
-                    raise CalendarAuthError(
-                        f"OAuth code exchange failed ({resp.status_code}): {resp.text}"
+        if provider_name not in ("google", "google_calendar"):
+            raise CalendarAuthError(
+                f"CALENDAR_PROVIDER_NOT_CONFIGURED: Unsupported calendar_provider={self._settings.calendar_provider!r}. Only 'google' is supported."
+            )
+        if (
+            not self._settings.google_client_id.strip()
+            or not self._settings.google_client_secret.strip()
+        ):
+            raise CalendarAuthError(
+                "CALENDAR_OAUTH_NOT_CONFIGURED: Missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET."
+            )
+
+        client = self._http_client or httpx.AsyncClient(timeout=15.0)
+        token_payload = {
+            "client_id": self._settings.google_client_id,
+            "client_secret": self._settings.google_client_secret,
+            "code": request.code,
+            "grant_type": "authorization_code",
+            "redirect_uri": effective_redirect_uri,
+        }
+        try:
+            resp = await client.post(GOOGLE_TOKEN_URL, data=token_payload)
+            if resp.is_error:
+                raise CalendarAuthError(
+                    f"OAuth code exchange failed ({resp.status_code}): {resp.text}"
+                )
+            data = resp.json()
+            refresh_token_opt = data.get("refresh_token")
+            if not refresh_token_opt:
+                existing = await self._repository.get_by_user_id_and_provider(user_id, "GOOGLE")
+                if existing and existing.oauth_refresh_token_encrypted:
+                    refresh_token = decrypt_token(
+                        existing.oauth_refresh_token_encrypted,
+                        key=self._settings.calendar_encryption_key or None,
                     )
-                data = resp.json()
-                refresh_token_opt = data.get("refresh_token")
-                if not refresh_token_opt:
-                    existing = await self._repository.get_by_user_id_and_provider(user_id, "GOOGLE")
-                    if existing and existing.oauth_refresh_token_encrypted:
-                        refresh_token = decrypt_token(
-                            existing.oauth_refresh_token_encrypted,
-                            key=self._settings.calendar_encryption_key or None,
-                        )
-                    else:
-                        raise CalendarAuthError(
-                            "Google OAuth did not return a refresh token. Re-consent required."
-                        )
                 else:
-                    refresh_token = refresh_token_opt
-            except httpx.HTTPError as exc:
-                raise CalendarAuthError(f"HTTP network error exchanging OAuth code: {exc}") from exc
+                    raise CalendarAuthError(
+                        "Google OAuth did not return a refresh token. Re-consent required."
+                    )
+            else:
+                refresh_token = refresh_token_opt
+        except httpx.HTTPError as exc:
+            raise CalendarAuthError(f"HTTP network error exchanging OAuth code: {exc}") from exc
 
         encrypted_refresh_token = encrypt_token(
             refresh_token,

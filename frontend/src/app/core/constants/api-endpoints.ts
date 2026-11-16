@@ -36,6 +36,8 @@ export const API_ENDPOINTS = {
     CLARIFY_QUESTIONS: (goalId: string) => `/api/v1/roadmaps/goals/${goalId}/clarify-questions`,
     CLARIFY_ANSWERS: (goalId: string) => `/api/v1/roadmaps/goals/${goalId}/clarify-answers`,
     CLARIFY_SKIP: (goalId: string) => `/api/v1/roadmaps/goals/${goalId}/clarify-skip`,
+    CLARIFICATION_STATE: (goalId: string) =>
+      `/api/v1/roadmaps/goals/${goalId}/clarification-state`,
     KNOWLEDGE_FILES: (goalId: string) => `/api/v1/planning/goals/${goalId}/knowledge-sources/files`,
     KNOWLEDGE_URLS: (goalId: string) => `/api/v1/planning/goals/${goalId}/knowledge-sources/urls`,
     KNOWLEDGE_LIST: (goalId: string) => `/api/v1/planning/goals/${goalId}/knowledge-sources`,

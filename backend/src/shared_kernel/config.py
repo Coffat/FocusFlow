@@ -52,19 +52,24 @@ class Settings(BaseSettings):
     otp_cooldown_seconds: int = 60
     otp_max_attempts: int = 3
 
-    # Provider-Agnostic LLM (ADR-006: gemini | openai | anthropic | ollama | mock)
+    # Provider-Agnostic LLM (ADR-006: gemini | openai | anthropic | ollama)
     llm_provider: str = "gemini"
     llm_model: str = "gemini-3.8-flash"
+    llm_model_low: str = "gemini-3.8-flash"
+    llm_model_medium: str = "gemini-3.8-flash"
+    llm_model_high: str = "gemini-3.8-flash"
+    llm_embedding_model: str = "gemini/gemini-embedding-2"
     llm_api_key: str = Field(
-        default="mock-key",
+        default="",
         validation_alias=AliasChoices("llm_api_key", "gemini_api_key", "llm_key"),
     )
-    llm_base_url: str = ""
+    llm_base_url: str = "http://127.0.0.1:8045"
     llm_thinking_level: str = "MEDIUM"
     llm_max_tool_calls: int = 4
     llm_tool_timeout_seconds: float = 5.0
     enable_tier3_judge: bool = True
     ai_harness_v2_enabled: bool = False
+    clarification_engine_v2_enabled: bool = True
     knowledge_rag_enabled: bool = True
     learner_memory_enabled: bool = True
     ai_circuit_failure_threshold: int = 3
@@ -75,9 +80,9 @@ class Settings(BaseSettings):
     knowledge_url_max_bytes: int = 5 * 1024 * 1024
     knowledge_url_timeout_seconds: float = 8.0
 
-    # External Providers (Sandbox / Mock fallback for offline thesis defense)
-    payment_provider: str = "mock"
-    calendar_provider: str = "mock"
+    # External Providers
+    payment_provider: str = "sepay"
+    calendar_provider: str = "google"
     calendar_encryption_key: str = ""
     google_client_secret: str = ""
     google_redirect_uri: str = "http://localhost:3000/api/v1/account/calendar/google/callback"

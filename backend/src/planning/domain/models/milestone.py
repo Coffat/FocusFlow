@@ -9,9 +9,6 @@ from src.planning.domain.exceptions.planning_exceptions import (
 )
 from src.shared_kernel.domain.base import Entity, generate_uuid7
 
-AI_MILESTONE_MIN_COUNT: int = 3
-AI_MILESTONE_MAX_COUNT: int = 7
-
 
 class MilestoneStatus(StrEnum):
     PENDING = "PENDING"
@@ -28,6 +25,12 @@ class Milestone(Entity):
     sequence_order: int = 1
     title: str = ""
     description: str | None = None
+    learning_outcomes: tuple[str, ...] = ()
+    completion_criteria: str | None = None
+    estimated_effort_minutes: int = 60
+    required_concepts: tuple[str, ...] = ()
+    unverified_concepts: tuple[str, ...] = ()
+    prerequisite_milestone_ids: tuple[UUID, ...] = ()
     status: MilestoneStatus = MilestoneStatus.PENDING
     created_at: datetime = field(default_factory=lambda: datetime.min)
     updated_at: datetime = field(default_factory=lambda: datetime.min)
@@ -44,6 +47,19 @@ class Milestone(Entity):
                 message="Tiêu đề cột mốc (Milestone.title) không được để trống."
             )
         self.title = self.title.strip()
+        self.learning_outcomes = tuple(
+            outcome.strip() for outcome in self.learning_outcomes if outcome.strip()
+        )
+        self.required_concepts = tuple(
+            concept.strip() for concept in self.required_concepts if concept.strip()
+        )
+        self.unverified_concepts = tuple(
+            concept.strip() for concept in self.unverified_concepts if concept.strip()
+        )
+        if self.estimated_effort_minutes <= 0:
+            raise InvalidMilestoneSequenceError(
+                message="Nỗ lực ước tính của Milestone phải lớn hơn 0 phút."
+            )
 
     def approve(self, now: datetime) -> None:
         if self.status == MilestoneStatus.PENDING:
@@ -64,15 +80,13 @@ def validate_milestone_sequence(
     *,
     enforce_ai_bounds: bool = False,
 ) -> None:
-    """Validate that milestones have contiguous 1..N sequence_order and optional AI 3..7 count."""
+    """Validate a non-empty adaptive milestone list with contiguous 1..N ordering.
+
+    ``enforce_ai_bounds`` remains for compatibility. FR-PLAN-001 no longer
+    imposes a pedagogical count bound.
+    """
     count = len(milestones)
-    if enforce_ai_bounds and not (AI_MILESTONE_MIN_COUNT <= count <= AI_MILESTONE_MAX_COUNT):
-        raise InvalidMilestoneSequenceError(
-            message=(
-                f"Số lượng cột mốc do AI sinh phải nằm trong khoảng "
-                f"[{AI_MILESTONE_MIN_COUNT}, {AI_MILESTONE_MAX_COUNT}], nhận được {count}."
-            )
-        )
+    _ = enforce_ai_bounds
     if count == 0:
         raise InvalidMilestoneSequenceError(message="Danh sách cột mốc không được rỗng.")
 
