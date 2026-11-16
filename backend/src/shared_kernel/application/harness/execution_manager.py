@@ -334,10 +334,21 @@ class AIExecutionManager:
             if reservation_finalized or not effective_release:
                 return
             reservation_finalized = True
-            await self._quota.release_reservation(
-                reservation_id,
-                reason=reason,
-            )
+            try:
+                await self._quota.release_reservation(
+                    reservation_id,
+                    reason=reason,
+                )
+            except Exception as rel_exc:
+                if getattr(rel_exc, "code", None) == "QUOTA_RESERVATION_NOT_FOUND" or (
+                    type(rel_exc).__name__ == "QuotaReservationNotFoundError"
+                ):
+                    logger.info(
+                        "ai_execution_release_not_found",
+                        extra={"reservation_id": str(reservation_id)},
+                    )
+                    return
+                raise
 
         async def _cleanup_on_cancel() -> None:
             await _release_once("CANCELLED")

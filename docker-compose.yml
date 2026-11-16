@@ -72,7 +72,8 @@ services:
       - LLM_EMBEDDING_MODEL=${LLM_EMBEDDING_MODEL:-gemini/gemini-embedding-2}
       - AI_HARD_TIMEOUT_SECONDS=${AI_HARD_TIMEOUT_SECONDS:-55}
       - LLM_API_KEY=${LLM_API_KEY:-}
-      - LLM_BASE_URL=${LLM_BASE_URL:-http://127.0.0.1:8045}
+      - LLM_BASE_URL=${LLM_BASE_URL:-}
+      - LLM_FALLBACK_MODELS=${LLM_FALLBACK_MODELS:-}
       - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-google_ai_studio}
       - EMBEDDING_API_KEY=${EMBEDDING_API_KEY:-${GEMINI_API_KEY:-}}
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-gemini/gemini-embedding-2}
@@ -86,6 +87,8 @@ services:
       - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI:-http://localhost:3000/api/v1/account/calendar/google/callback}
       - CALENDAR_WEBHOOK_BASE_URL=${CALENDAR_WEBHOOK_BASE_URL:-http://localhost:3000}
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy

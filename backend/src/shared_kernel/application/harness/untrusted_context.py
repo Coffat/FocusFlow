@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import re
+import unicodedata
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -37,33 +38,22 @@ _PROMPT_INJECTION_RE = re.compile(
     r"bỏ\s+qua\s+mọi\s+chỉ\s+thị\s+trước"
     r")"
 )
+_INVISIBLE_UNICODE_RE = re.compile(r"[\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff\xad]")
 _USER_INPUT_TAG_RE = re.compile(
     r"<\s*(/?)\s*user_input(?:\s+[^>]*)?\s*>",
     re.IGNORECASE,
 )
 _FAKE_SECTION_HEADER_RE = re.compile(
-    r"\[\s*(/?)\s*("
-    r"USER_PROVIDED_FACTS|"
-    r"SYSTEM_DERIVED_FACTS|"
-    r"KNOWLEDGE_BASE_EVIDENCE|"
-    r"AI_ASSUMPTIONS_AND_UNKNOWNS|"
-    r"SYSTEM_CONTEXT|"
-    r"WORKFLOW_CONTEXT|"
-    r"USER_CONTEXT|"
-    r"LEARNING_CONTEXT|"
-    r"RUNTIME_CONTEXT|"
-    r"PROPOSAL_PAYLOAD|"
-    r"CRITIC_REPORTS|"
-    r"CONTEXT|"
-    r"PAYLOAD|"
-    r"INFORMATION_GAPS_TO_CLARIFY|"
-    r"FINAL_OUTPUT_STAGE|"
-    r"QUALITY_ARBITER|"
-    r"SELF-CORRECTION[^\]]*|"
-    r"SKILL\s*:[^\]]*|"
-    r"INDEPENDENT_CRITIC\s*:[^\]]*"
-    r")\s*\]",
-    re.IGNORECASE,
+    r"\[\s*(/?)\s*([A-Za-z][A-Za-z0-9_:-]{1,64}(?:\s+[^\]]*)?)\s*\]"
+)
+_INTERNAL_SAFE_MARKERS: frozenset[str] = frozenset(
+    {
+        "REDACTED_EMAIL",
+        "REDACTED_SECRET",
+        "REDACTED_CARD",
+        "REDACTED_PHONE",
+        "FILTERED_INJECTION",
+    }
 )
 
 SENSITIVE_DICT_KEYS: frozenset[str] = frozenset(
@@ -102,11 +92,20 @@ class UntrustedBlockKind(StrEnum):
     MILESTONE_DATA = "milestone_data"
 
 
+def normalize_untrusted_unicode(text: str) -> str:
+    """Apply NFKC normalization and strip invisible zero-width, bidi, and soft-hyphen chars."""
+    if not text:
+        return ""
+    normalized = unicodedata.normalize("NFKC", text)
+    return _INVISIBLE_UNICODE_RE.sub("", normalized)
+
+
 def mask_pii_and_secrets(text: str) -> str:
     """Strip/mask PII and secret assignments from raw text."""
     if not text:
         return ""
-    sanitized = _EMAIL_RE.sub("[REDACTED_EMAIL]", text)
+    sanitized = normalize_untrusted_unicode(text)
+    sanitized = _EMAIL_RE.sub("[REDACTED_EMAIL]", sanitized)
     sanitized = _SECRET_ASSIGNMENT_RE.sub(r"\1\2[REDACTED_SECRET]", sanitized)
     sanitized = _CREDIT_CARD_RE.sub("[REDACTED_CARD]", sanitized)
     sanitized = _PHONE_RE.sub("[REDACTED_PHONE]", sanitized)
@@ -117,10 +116,16 @@ def escape_fake_section_headers(text: str) -> str:
     """Neutralize bracketed section markers inside untrusted text (case-insensitive)."""
     if not text:
         return ""
-    return _FAKE_SECTION_HEADER_RE.sub(
-        lambda m: f"&#91;{m.group(1)}{m.group(2)}&#93;",
-        text,
-    )
+    normalized = normalize_untrusted_unicode(text)
+
+    def _replace_marker(match: re.Match[str]) -> str:
+        slash = match.group(1)
+        body = match.group(2)
+        if not slash and body.strip().upper() in _INTERNAL_SAFE_MARKERS:
+            return match.group(0)
+        return f"&#91;{slash}{body}&#93;"
+
+    return _FAKE_SECTION_HEADER_RE.sub(_replace_marker, normalized)
 
 
 def sanitize_untrusted_text(
@@ -130,8 +135,8 @@ def sanitize_untrusted_text(
 ) -> str:
     """Mask PII, strip scripts/injection directives, html-escape XML, and neutralize section headers.
 
-    Preserves Vietnamese Unicode characters while escaping all XML/HTML angle brackets
-    and bracketed section headers case-insensitively without double-escaping.
+    Preserves Vietnamese Unicode characters while normalizing NFKC, stripping invisible
+    characters, escaping XML/HTML angle brackets, and neutralizing bracketed section headers.
     """
     if not text:
         return ""
@@ -193,7 +198,7 @@ def format_untrusted_block(
     for attr_key, attr_val in (attributes or {}).items():
         clean_key = re.sub(r"[^a-zA-Z0-9_-]", "_", str(attr_key).strip())
         if clean_key:
-            safe_val = html.escape(str(attr_val), quote=True)
+            safe_val = html.escape(normalize_untrusted_unicode(str(attr_val)), quote=True)
             attr_parts.append(f'{clean_key}="{safe_val}"')
     attr_str = f" {' '.join(attr_parts)}" if attr_parts else ""
     if multiline:
@@ -237,6 +242,7 @@ __all__ = [
     "escape_fake_section_headers",
     "format_untrusted_block",
     "mask_pii_and_secrets",
+    "normalize_untrusted_unicode",
     "redact_sensitive_keys",
     "sanitize_untrusted_text",
     "sanitize_untrusted_value",

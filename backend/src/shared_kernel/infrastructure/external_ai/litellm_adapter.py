@@ -268,7 +268,8 @@ class LiteLLMAdapter(LLMProviderPort):
         base_url = (getattr(self._settings, "llm_base_url", "") or "").strip()
         if provider == "gemini" and not base_url:
             raise RuntimeError(
-                "AI_PROVIDER_NOT_CONFIGURED: Missing LLM_BASE_URL for cobhub gateway."
+                "AI_PROVIDER_NOT_CONFIGURED: Thiếu LLM_BASE_URL cho gateway cobhub. "
+                "Hãy đặt LLM_BASE_URL trong .env (xem .env.example)."
             )
         api_key = (getattr(self._settings, "llm_api_key", "") or "").strip()
         if not base_url and api_key in ("", "mock-key", "your-api-key"):
@@ -311,22 +312,28 @@ class LiteLLMAdapter(LLMProviderPort):
             getattr(self._settings, "llm_model", "") or "gemini-3.8-flash-medium"
         ).split("/")[-1].strip() or "gemini-3.8-flash-medium"
         if self._resolve_thinking_control() == "param":
-            return [default_model], set()
-
-        tier_attr = {
-            "LOW": "llm_model_low",
-            "MEDIUM": "llm_model_medium",
-            "HIGH": "llm_model_high",
-        }.get(effective_level, "llm_model_medium")
-        if hasattr(self._settings, tier_attr):
-            raw_tier_model = getattr(self._settings, tier_attr, "") or ""
-            tier_model = raw_tier_model.split("/")[-1].strip() or default_model
+            candidates = [default_model]
         else:
-            tier_model = default_model
+            tier_attr = {
+                "LOW": "llm_model_low",
+                "MEDIUM": "llm_model_medium",
+                "HIGH": "llm_model_high",
+            }.get(effective_level, "llm_model_medium")
+            if hasattr(self._settings, tier_attr):
+                raw_tier_model = getattr(self._settings, tier_attr, "") or ""
+                tier_model = raw_tier_model.split("/")[-1].strip() or default_model
+            else:
+                tier_model = default_model
 
-        candidates: list[str] = [tier_model]
-        if default_model and default_model not in candidates:
-            candidates.append(default_model)
+            candidates = [tier_model]
+            if default_model and default_model not in candidates:
+                candidates.append(default_model)
+
+        raw_fallbacks = str(getattr(self._settings, "llm_fallback_models", "") or "")
+        for raw_item in raw_fallbacks.split(","):
+            fallback_model = raw_item.strip()
+            if fallback_model and fallback_model not in candidates:
+                candidates.append(fallback_model)
 
         return candidates, set()
 
@@ -397,7 +404,8 @@ class LiteLLMAdapter(LLMProviderPort):
         base_url = self._resolve_base_url()
         if not base_url:
             raise RuntimeError(
-                "AI_PROVIDER_NOT_CONFIGURED: Missing LLM_BASE_URL for cobhub gateway."
+                "AI_PROVIDER_NOT_CONFIGURED: Thiếu LLM_BASE_URL cho gateway cobhub. "
+                "Hãy đặt LLM_BASE_URL trong .env (xem .env.example)."
             )
         client = self.build_google_genai_client(self._settings.llm_api_key or "", base_url)
         effective_level = _normalize_thinking_level(

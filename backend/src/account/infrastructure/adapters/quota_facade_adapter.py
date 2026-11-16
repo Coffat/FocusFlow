@@ -221,13 +221,10 @@ class QuotaFacadeAdapter(QuotaFacadePort):
         )
         res = (await self._session.execute(stmt)).scalar_one_or_none()
         if res is None:
-            raise QuotaReservationNotFoundError(f"Không tìm thấy reservation_id={reservation_id}.")
-
-        # Idempotent if already RELEASED or EXPIRED
-        if res.status in ("RELEASED", "EXPIRED"):
             return
 
-        if res.status == "COMMITTED":
+        # Idempotent if already RELEASED, EXPIRED, or COMMITTED
+        if res.status in ("RELEASED", "EXPIRED", "COMMITTED"):
             return
 
         quota_stmt = select(AIQuotaORM).where(AIQuotaORM.id == res.quota_id).with_for_update()

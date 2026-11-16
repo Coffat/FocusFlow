@@ -558,3 +558,96 @@ async def test_t5_3_weekly_review_insufficient_data_does_not_fabricate_numbers()
         workflow_repo.steps[0].output_payload["fallback_reason_code"]
         == "INSUFFICIENT_QUANTITATIVE_DATA"
     )
+
+
+@pytest.mark.asyncio
+async def test_weekly_review_includes_task_type_breakdown_and_wow_metrics_100_faithful() -> None:
+    """Weekly review quantitative_summary propagates task_type_breakdown & WoW delta and passes faithfulness 100%."""
+    user_id = uuid4()
+    roadmap_id = uuid4()
+    repo = _InMemoryEvalRepo()
+    workflow_repo = _RecordingWorkflowRepo()
+    uow = _TrackingUoW("uow", [])
+
+    class _Ownership:
+        async def get_milestone(self, mid: UUID) -> Any:
+            del mid
+            return None
+
+        async def roadmap_belongs_to(self, rid: UUID, uid: UUID) -> bool:
+            return rid == roadmap_id and uid == user_id
+
+    class _RichMetricsPort:
+        async def get_roadmap_period_metrics(self, **kwargs: Any) -> WeeklyExecutionMetricsDTO:
+            del kwargs
+            return WeeklyExecutionMetricsDTO(
+                completed_minutes=180,
+                planned_minutes=210,
+                completed_sessions_count=3,
+                completed_tasks_count=3,
+                planned_tasks_count=4,
+                overdue_tasks_count=1,
+                adherence_rate_pct=75.0,
+                task_type_breakdown={
+                    "THEORY": {"completed_tasks_count": 1, "completed_minutes": 45},
+                    "PRACTICE": {"completed_tasks_count": 2, "completed_minutes": 135},
+                    "REVIEW": {"completed_tasks_count": 0, "completed_minutes": 0},
+                    "PROJECT": {"completed_tasks_count": 0, "completed_minutes": 0},
+                },
+                previous_week_completed_minutes=120,
+                week_over_week_delta_pct=50.0,
+            )
+
+    class _FaithfulLLM:
+        async def generate_structured(self, **kwargs: Any) -> LLMGenerationResult:
+            del kwargs
+            return LLMGenerationResult(
+                payload={
+                    "strengths_feedback": (
+                        "Tuần này bạn học 180 phút (tăng 50.0% so với 120 phút tuần trước), "
+                        "gồm 45 phút THEORY và 135 phút PRACTICE."
+                    ),
+                    "bottlenecks_feedback": "Tỷ lệ tuân thủ đạt 75.0% và còn 1 nhiệm vụ quá hạn.",
+                    "action_recommendations": "Ưu tiên hoàn thành 1 nhiệm vụ còn lại trong tuần tới.",
+                },
+                prompt_tokens=30,
+                output_tokens=20,
+                model_id="gemini-3.8-flash-medium",
+            )
+
+        async def stream_structured(self, **kwargs: Any) -> AsyncIterator[str]:
+            del kwargs
+            yield "{}"
+
+    uc = GenerateWeeklyReviewUseCase(
+        repository=repo,
+        ownership=_Ownership(),  # type: ignore[arg-type]
+        uow=uow,  # type: ignore[arg-type]
+        execution_metrics_port=_RichMetricsPort(),
+        workflow_repo=workflow_repo,
+        llm_provider=_FaithfulLLM(),  # type: ignore[arg-type]
+    )
+    res = await uc.execute(
+        user_id,
+        GenerateWeeklyReviewRequestDTO(
+            roadmap_id=roadmap_id,
+            period_start=date(2026, 11, 9),
+            period_end=date(2026, 11, 15),
+            reflection={"note": "Tiến bộ đều"},
+        ),
+    )
+
+    assert res.quantitative_summary["previous_week_completed_minutes"] == 120
+    assert res.quantitative_summary["week_over_week_delta_pct"] == 50.0
+    assert res.quantitative_summary["task_type_breakdown"]["THEORY"] == {
+        "completed_tasks_count": 1,
+        "completed_minutes": 45,
+    }
+    assert res.quantitative_summary["task_type_breakdown"]["PRACTICE"] == {
+        "completed_tasks_count": 2,
+        "completed_minutes": 135,
+    }
+    assert "45 phút THEORY" in res.strengths_feedback
+    assert "135 phút PRACTICE" in res.strengths_feedback
+    assert "50.0%" in res.strengths_feedback
+    assert workflow_repo.steps[0].output_payload["quantitative_faithfulness"] == 1.0

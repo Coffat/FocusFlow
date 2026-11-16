@@ -133,6 +133,26 @@ class ExecuteMilestoneGenerationUseCase:
         generation_strategy: str = "FULL_SCOPE",
     ) -> list[Milestone]:
         effective_now = now or datetime.now(UTC)
+        reservation_finalized = False
+
+        async def _release_once(reason: str) -> None:
+            nonlocal reservation_finalized
+            if reservation_finalized:
+                return
+            reservation_finalized = True
+            async with self._uow:
+                try:
+                    await self._quota_facade.release_reservation(
+                        reservation_id,
+                        reason=reason,
+                    )
+                except Exception as rel_exc:
+                    if getattr(rel_exc, "code", None) == "QUOTA_RESERVATION_NOT_FOUND" or (
+                        type(rel_exc).__name__ == "QuotaReservationNotFoundError"
+                    ):
+                        return
+                    raise
+                await self._uow.commit()
 
         try:
             roadmap = await self._roadmap_repo.get_by_id_for_user(roadmap_id, user_id)
@@ -537,6 +557,7 @@ class ExecuteMilestoneGenerationUseCase:
                     model_name=last_model_id,
                 )
                 await self._uow.commit()
+            reservation_finalized = True
             logger.info(
                 "milestone_generation_completed",
                 extra={
@@ -583,15 +604,39 @@ class ExecuteMilestoneGenerationUseCase:
             )
             return saved_milestones
 
+        except asyncio.CancelledError:
+
+            async def _cancel_cleanup() -> None:
+                await _release_once("CANCELLED")
+                await self._sse.append_event(
+                    job_id=job_id,
+                    event="failed",
+                    status="FAILED",
+                    data={
+                        "stage": "FAILED",
+                        "progress": 100,
+                        "error": "Yêu cầu tạo cột mốc học tập đã bị hủy.",
+                        "error_code": "CANCELLED",
+                    },
+                )
+
+            try:
+                await asyncio.shield(_cancel_cleanup())
+            except Exception as release_exc:
+                logging.getLogger(__name__).warning(
+                    "milestone_generation_cancel_release_failed",
+                    extra={
+                        "job_id": str(job_id),
+                        "roadmap_id": str(roadmap_id),
+                        "error_type": type(release_exc).__name__,
+                    },
+                )
+            raise
+
         except Exception as exc:
             error_code, error_message = _milestone_generation_error_details(exc)
             try:
-                async with self._uow:
-                    await self._quota_facade.release_reservation(
-                        reservation_id,
-                        reason=error_code,
-                    )
-                    await self._uow.commit()
+                await _release_once(error_code)
             except Exception as release_exc:
                 logging.getLogger(__name__).warning(
                     "milestone_generation_quota_release_failed",

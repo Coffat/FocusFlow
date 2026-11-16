@@ -65,7 +65,8 @@ class Settings(BaseSettings):
         default="",
         validation_alias=AliasChoices("llm_api_key", "llm_key"),
     )
-    llm_base_url: str = "http://127.0.0.1:8045"
+    llm_base_url: str = ""
+    llm_fallback_models: str = ""
     llm_thinking_level: str = "MEDIUM"
     llm_schema_enforced_by_gateway: bool = False
     llm_max_tool_calls: int = 4

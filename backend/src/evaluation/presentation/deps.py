@@ -223,5 +223,11 @@ def get_dashboard_summary_use_case(
     planning_port: PlanningDashboardQueryPort = Depends(get_planning_dashboard_port),
     execution_port: ExecutionDashboardQueryPort = Depends(get_execution_dashboard_port),
     intelligence_repo: EvaluationIntelligenceRepositoryPort = Depends(get_intelligence_repository),
+    user_query_port: UserQueryPort = Depends(get_evaluation_user_query_port),
 ) -> GetDashboardSummaryUseCase:
-    return GetDashboardSummaryUseCase(planning_port, execution_port, intelligence_repo)
+    return GetDashboardSummaryUseCase(
+        planning_port,
+        execution_port,
+        intelligence_repo,
+        user_query_port=user_query_port,
+    )

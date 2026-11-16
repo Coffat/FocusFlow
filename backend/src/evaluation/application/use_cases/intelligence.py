@@ -535,6 +535,22 @@ class SubmitMilestoneProofUseCase:
         )
 
 
+def _extract_allowed_numbers(value: Any) -> list[float]:
+    """Recursively collect numeric metrics from quantitative_summary for faithfulness checks."""
+    nums: list[float] = []
+    if isinstance(value, bool):
+        return nums
+    if isinstance(value, (int, float)):
+        nums.append(float(value))
+    elif isinstance(value, dict):
+        for item in value.values():
+            nums.extend(_extract_allowed_numbers(item))
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            nums.extend(_extract_allowed_numbers(item))
+    return nums
+
+
 class GenerateWeeklyReviewUseCase:
     def __init__(
         self,
@@ -599,6 +615,9 @@ class GenerateWeeklyReviewUseCase:
             "planned_tasks_count": exec_metrics.planned_tasks_count,
             "overdue_tasks_count": exec_metrics.overdue_tasks_count,
             "adherence_rate_pct": exec_metrics.adherence_rate_pct,
+            "task_type_breakdown": dict(exec_metrics.task_type_breakdown),
+            "previous_week_completed_minutes": exec_metrics.previous_week_completed_minutes,
+            "week_over_week_delta_pct": exec_metrics.week_over_week_delta_pct,
             "mastery_count": len(masteries),
             "avg_mastery_score": avg_mastery_score,
             "lowest_mastery_concept": lowest_concept,
@@ -702,11 +721,7 @@ class GenerateWeeklyReviewUseCase:
             None if has_sufficient_data else "INSUFFICIENT_QUANTITATIVE_DATA"
         )
 
-        allowed_numbers = [
-            float(val)
-            for val in quantitative_summary.values()
-            if isinstance(val, (int, float)) and not isinstance(val, bool)
-        ]
+        allowed_numbers = _extract_allowed_numbers(quantitative_summary)
         raw_faithfulness = QuantitativeFaithfulnessValidator.compute_raw_faithfulness(
             (final_strengths, final_bottlenecks, final_actions),
             allowed_numbers,

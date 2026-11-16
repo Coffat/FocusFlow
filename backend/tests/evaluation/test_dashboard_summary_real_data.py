@@ -6,6 +6,7 @@ from sqlalchemy import delete
 from uuid6 import uuid7
 
 from src.account.infrastructure.orm import UserORM
+from src.account.public_api import create_user_query_port
 from src.evaluation.application.use_cases.dashboard_summary import (
     GetDashboardSummaryUseCase,
 )
@@ -37,6 +38,7 @@ async def test_dashboard_summary_new_user_empty_state() -> None:
     Trả về DTO 0 giờ, 0 streak, mảng rỗng, insight nhắc nhở hoàn thành buổi học đầu tiên.
     """
     user_id: UUID = uuid7()
+    fixed_now = datetime(2026, 11, 16, 2, 30, tzinfo=UTC)
 
     async with async_session_factory() as session:
         user = UserORM(
@@ -62,9 +64,10 @@ async def test_dashboard_summary_new_user_empty_state() -> None:
                 planning_port=planning_port,
                 execution_port=execution_port,
                 intelligence_repo=intel_repo,
+                user_query_port=create_user_query_port(session),
             )
 
-            summary = await use_case.execute(user_id)
+            summary = await use_case.execute(user_id, now=fixed_now)
 
             # KPIs check for empty state
             assert summary.kpi.monthly_hours == 0.0
@@ -104,11 +107,11 @@ async def test_dashboard_summary_active_user_real_data() -> None:
     """Test Case 2: Người dùng có lộ trình đang hoạt động và buổi học thật.
 
     Kiểm tra tính toán KPI (monthly_hours, streak, adherence), today queue và
-    schedule blocks khớp chính xác dữ liệu trong DB.
+    schedule blocks khớp chính xác dữ liệu trong DB với đồng hồ cố định.
     """
     user_id: UUID = uuid7()
-    today = date.today()
-    now = datetime.now(UTC)
+    now = datetime(2026, 11, 16, 4, 30, tzinfo=UTC)  # 11:30 +07:00 on 2026-11-16
+    today = date(2026, 11, 16)
 
     async with async_session_factory() as session:
         user = UserORM(
@@ -161,7 +164,7 @@ async def test_dashboard_summary_active_user_real_data() -> None:
         session.add(official_sched)
         await session.flush()
 
-        # Task 1: Completed
+        # Task 1: Completed yesterday
         task_comp = TaskORM(
             roadmap_id=roadmap.id,
             milestone_id=milestone.id,
@@ -203,7 +206,7 @@ async def test_dashboard_summary_active_user_real_data() -> None:
         )
         session.add(sched_block)
 
-        # Study session completed yesterday
+        # Study session completed yesterday (09:30-10:30 +07:00)
         session_past = StudySessionORM(
             user_id=user_id,
             roadmap_id=roadmap.id,
@@ -214,7 +217,7 @@ async def test_dashboard_summary_active_user_real_data() -> None:
             status="COMPLETED",
             last_heartbeat_at=now - timedelta(days=1, hours=1),
         )
-        # Study session completed today
+        # Study session completed today (08:30-09:30 +07:00)
         session_today = StudySessionORM(
             user_id=user_id,
             roadmap_id=roadmap.id,
@@ -258,14 +261,15 @@ async def test_dashboard_summary_active_user_real_data() -> None:
                 planning_port=planning_port,
                 execution_port=execution_port,
                 intelligence_repo=intel_repo,
+                user_query_port=create_user_query_port(session),
             )
 
-            summary = await use_case.execute(user_id)
+            summary = await use_case.execute(user_id, now=now)
 
             # KPIs check
             assert summary.kpi.monthly_hours >= 2.0
             assert summary.kpi.target_hours > 0.0
-            assert summary.kpi.streak_days >= 2
+            assert summary.kpi.streak_days == 2
             assert summary.kpi.completed_pomodoro_count >= 2
             assert summary.kpi.deep_work_hours >= 2.0
 
@@ -310,7 +314,8 @@ async def test_dashboard_summary_overdue_tasks_adaptation() -> None:
     Xác nhận adaptation_status.is_balanced == False và domino_shift_ready == True.
     """
     user_id: UUID = uuid7()
-    today = date.today()
+    fixed_now = datetime(2026, 11, 16, 2, 30, tzinfo=UTC)
+    today = date(2026, 11, 16)
 
     async with async_session_factory() as session:
         user = UserORM(
@@ -385,15 +390,152 @@ async def test_dashboard_summary_overdue_tasks_adaptation() -> None:
                 planning_port=planning_port,
                 execution_port=execution_port,
                 intelligence_repo=intel_repo,
+                user_query_port=create_user_query_port(session),
             )
 
-            summary = await use_case.execute(user_id)
+            summary = await use_case.execute(user_id, now=fixed_now)
 
             # Adaptation status check
             assert summary.adaptation_status.is_balanced is False
             assert summary.adaptation_status.domino_shift_ready is True
             assert "2 nhiệm vụ trễ hạn" in summary.adaptation_status.message
             assert "Domino Shift" in summary.adaptation_status.message
+    finally:
+        async with async_session_factory() as session:
+            await session.execute(delete(UserORM).where(UserORM.id == user_id))
+            await session.commit()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    (
+        "simulated_now",
+        "expected_today_label",
+        "expected_streak",
+        "expected_history_tail",
+    ),
+    [
+        # 2026-11-16T02:30:00Z == 2026-11-16 09:30 +07:00 (Monday)
+        # Task completed at 2026-11-14T18:00:00Z -> 2026-11-15 01:00 +07:00 (Sunday in VN, Nov 14 in UTC)
+        # Session at 2026-11-15T18:00:00Z -> 2026-11-16 01:00 +07:00 (Monday in VN, Nov 15 in UTC)
+        # Both map to Nov 15 and Nov 16 in Asia/Ho_Chi_Minh -> streak == 2, today is Mon.
+        (datetime(2026, 11, 16, 2, 30, tzinfo=UTC), "Mon", 2, [True, True]),
+        # 2026-11-16T18:30:00Z == 2026-11-17 01:30 +07:00 (Tuesday)
+        # Plus session at 2026-11-16T17:30:00Z -> 2026-11-17 00:30 +07:00 (Tuesday in VN, Nov 16 in UTC)
+        # Dates in Asia/Ho_Chi_Minh: Nov 15, Nov 16, Nov 17 -> streak == 3, today is Tue.
+        (datetime(2026, 11, 16, 18, 30, tzinfo=UTC), "Tue", 3, [True, True, True]),
+    ],
+)
+async def test_dashboard_summary_streak_respects_user_timezone_fixed_clock(
+    simulated_now: datetime,
+    expected_today_label: str,
+    expected_streak: int,
+    expected_history_tail: list[bool],
+) -> None:
+    """Verify streak_days and study_distribution convert UTC timestamps to Asia/Ho_Chi_Minh."""
+    user_id: UUID = uuid7()
+
+    async with async_session_factory() as session:
+        user = UserORM(
+            id=user_id,
+            email=f"tz_learner_{user_id.hex[:8]}@focusflow.vn",
+            password_hash="argon2id$mockhash",
+            full_name="Timezone Learner",
+            timezone="Asia/Ho_Chi_Minh",
+            role="LEARNER",
+            tier="FREE",
+            is_locked=False,
+        )
+        session.add(user)
+
+        goal = GoalORM(
+            user_id=user_id,
+            title="Timezone Accuracy Check",
+            raw_description="Check +07:00 rollover",
+            target_date=date(2026, 12, 31),
+            status="ACTIVE",
+        )
+        session.add(goal)
+        await session.flush()
+
+        roadmap = RoadmapORM(
+            user_id=user_id,
+            goal_id=goal.id,
+            title="TZ Roadmap",
+            status="ACTIVE",
+            start_date=date(2026, 11, 1),
+            target_date=date(2026, 12, 31),
+        )
+        session.add(roadmap)
+        await session.flush()
+
+        milestone = MilestoneORM(
+            roadmap_id=roadmap.id,
+            sequence_order=1,
+            title="M1",
+            status="IN_PROGRESS",
+        )
+        session.add(milestone)
+        await session.flush()
+
+        # 2026-11-15 01:00 +07:00 (Nov 14 UTC) via completed task
+        task_vn_nov15 = TaskORM(
+            roadmap_id=roadmap.id,
+            milestone_id=milestone.id,
+            title="Task VN Nov 15",
+            estimated_minutes=45,
+            status="COMPLETED",
+            scheduled_date=date(2026, 11, 15),
+            completed_at=datetime(2026, 11, 14, 18, 0, tzinfo=UTC),
+        )
+        session.add(task_vn_nov15)
+
+        # 2026-11-16 01:00 +07:00 (Nov 15 UTC) via study session
+        sess_vn_nov16 = StudySessionORM(
+            user_id=user_id,
+            roadmap_id=roadmap.id,
+            started_at=datetime(2026, 11, 15, 18, 0, tzinfo=UTC),
+            ended_at=datetime(2026, 11, 15, 18, 45, tzinfo=UTC),
+            planned_minutes=45,
+            actual_minutes=45,
+            status="COMPLETED",
+            last_heartbeat_at=datetime(2026, 11, 15, 18, 45, tzinfo=UTC),
+        )
+        session.add(sess_vn_nov16)
+
+        if expected_streak == 3:
+            # 2026-11-17 00:30 +07:00 (Nov 16 17:30 UTC) via study session
+            sess_vn_nov17 = StudySessionORM(
+                user_id=user_id,
+                roadmap_id=roadmap.id,
+                started_at=datetime(2026, 11, 16, 17, 30, tzinfo=UTC),
+                ended_at=datetime(2026, 11, 16, 18, 15, tzinfo=UTC),
+                planned_minutes=45,
+                actual_minutes=45,
+                status="COMPLETED",
+                last_heartbeat_at=datetime(2026, 11, 16, 18, 15, tzinfo=UTC),
+            )
+            session.add(sess_vn_nov17)
+
+        await session.commit()
+
+    try:
+        async with async_session_factory() as session:
+            use_case = GetDashboardSummaryUseCase(
+                planning_port=PlanningDashboardAdapter(session),
+                execution_port=ExecutionDashboardAdapter(session),
+                intelligence_repo=SqlAlchemyEvaluationIntelligenceRepository(session),
+                user_query_port=create_user_query_port(session),
+            )
+            summary = await use_case.execute(user_id, now=simulated_now)
+
+            assert summary.kpi.streak_days == expected_streak
+            assert summary.kpi.streak_history_last_7_days[-len(expected_history_tail) :] == (
+                expected_history_tail
+            )
+            today_bars = [d for d in summary.study_distribution if d.is_today]
+            assert len(today_bars) == 1
+            assert today_bars[0].day_label == expected_today_label
     finally:
         async with async_session_factory() as session:
             await session.execute(delete(UserORM).where(UserORM.id == user_id))

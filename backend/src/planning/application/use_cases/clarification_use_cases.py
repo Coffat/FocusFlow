@@ -561,7 +561,14 @@ class _ClarificationSessionMixin:
             if reservation_finalized or self._quota is None:
                 return
             reservation_finalized = True
-            await self._quota.release_reservation(reservation_id, reason=reason)
+            try:
+                await self._quota.release_reservation(reservation_id, reason=reason)
+            except Exception as rel_exc:
+                if getattr(rel_exc, "code", None) == "QUOTA_RESERVATION_NOT_FOUND" or (
+                    type(rel_exc).__name__ == "QuotaReservationNotFoundError"
+                ):
+                    return
+                raise
 
         async def _commit_once(
             *,
@@ -645,7 +652,17 @@ class _ClarificationSessionMixin:
                 prompt_template=followup_tpl,
             )
         except asyncio.CancelledError:
-            await _release_once("CANCELLED")
+            try:
+                await asyncio.shield(_release_once("CANCELLED"))
+            except Exception as release_exc:
+                logger.warning(
+                    "clarification_followup_cancel_release_failed",
+                    extra={
+                        "goal_id": str(goal_id),
+                        "session_id": str(session_id),
+                        "error_type": type(release_exc).__name__,
+                    },
+                )
             raise
         except Exception as exc:
             category = classify_ai_error(exc)
@@ -973,6 +990,25 @@ class GenerateClarificationQuestionsUseCase:
             )
 
         clarifier_tpl = build_planning_prompt_registry().latest(GOAL_CLARIFIER_SKILL.skill_id)
+        reservation_finalized = False
+
+        async def _release_questions_reservation(reason: str) -> None:
+            nonlocal reservation_finalized
+            if reservation_finalized or self._quota is None:
+                return
+            reservation_finalized = True
+            try:
+                await self._quota.release_reservation(
+                    reservation_id=reservation_id,
+                    reason=reason,
+                )
+            except Exception as rel_exc:
+                if getattr(rel_exc, "code", None) == "QUOTA_RESERVATION_NOT_FOUND" or (
+                    type(rel_exc).__name__ == "QuotaReservationNotFoundError"
+                ):
+                    return
+                raise
+
         try:
             context_block = RoadmapContextBuilder.build_clarification_context(goal)
             harness_inputs = await load_planning_harness_context_inputs(
@@ -1057,7 +1093,7 @@ class GenerateClarificationQuestionsUseCase:
                     exc,
                     exc_info=True,
                 )
-                await self._quota.release_reservation(reservation_id=reservation_id)
+                await _release_questions_reservation(type(exc).__name__)
                 raise AIExecutionError(
                     "Hệ thống AI hiện đang bận hoặc gặp sự cố kết nối. Vui lòng bấm 'Thử lại' sau giây lát."
                 ) from exc
@@ -1262,6 +1298,7 @@ class GenerateClarificationQuestionsUseCase:
                 completion_tokens=c_tok,
                 model_name=resolved_clarifier_model,
             )
+            reservation_finalized = True
             if not self._v2_enabled:
                 return ClarificationQuestionsResponse(
                     questions=reindexed,
@@ -1311,12 +1348,23 @@ class GenerateClarificationQuestionsUseCase:
                 next_turn_quota_cost=1,
             )
 
+        except asyncio.CancelledError:
+            try:
+                await asyncio.shield(_release_questions_reservation("CANCELLED"))
+            except Exception as release_exc:
+                logger.warning(
+                    "clarification_questions_cancel_release_failed",
+                    extra={
+                        "goal_id": str(goal_id),
+                        "session_id": str(session_id),
+                        "error_type": type(release_exc).__name__,
+                    },
+                )
+            raise
         except (QuotaExceededError, AIExecutionError):
             raise
-        except Exception:
-            await self._quota.release_reservation(
-                reservation_id=reservation_id,
-            )
+        except Exception as exc:
+            await _release_questions_reservation(type(exc).__name__)
             raise
 
     async def _get_active_run(self, *, goal_id: UUID, user_id: UUID) -> WorkflowRun | None:

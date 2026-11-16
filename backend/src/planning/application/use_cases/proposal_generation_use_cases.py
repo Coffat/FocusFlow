@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from collections.abc import Sequence
@@ -358,6 +359,26 @@ class ExecuteScheduleProposalGenerationUseCase:
         now: datetime | None = None,
     ) -> ScheduleProposal:
         effective_now = now or datetime.now(UTC)
+        reservation_finalized = False
+
+        async def _release_once(reason: str) -> None:
+            nonlocal reservation_finalized
+            if reservation_finalized:
+                return
+            reservation_finalized = True
+            async with self._uow:
+                try:
+                    await self._quota_facade.release_reservation(
+                        reservation_id,
+                        reason=reason,
+                    )
+                except Exception as rel_exc:
+                    if getattr(rel_exc, "code", None) == "QUOTA_RESERVATION_NOT_FOUND" or (
+                        type(rel_exc).__name__ == "QuotaReservationNotFoundError"
+                    ):
+                        return
+                    raise
+                await self._uow.commit()
 
         try:
             roadmap = await self._roadmap_repo.get_by_id_for_user(roadmap_id, user_id)
@@ -762,6 +783,7 @@ class ExecuteScheduleProposalGenerationUseCase:
                         )
                     )
                 await self._uow.commit()
+            reservation_finalized = True
 
             tasks_list = saved_proposal.proposal_data.get("tasks", [])
             total_minutes = sum(
@@ -797,14 +819,38 @@ class ExecuteScheduleProposalGenerationUseCase:
             )
             return saved_proposal
 
+        except asyncio.CancelledError:
+
+            async def _cancel_cleanup() -> None:
+                await _release_once("CANCELLED")
+                await self._sse.append_event(
+                    job_id=job_id,
+                    event="failed",
+                    status="FAILED",
+                    data={
+                        "stage": "FAILED",
+                        "progress": 100,
+                        "error": "Yêu cầu tạo đề xuất lịch học đã bị hủy.",
+                        "error_code": "CANCELLED",
+                    },
+                )
+
+            try:
+                await asyncio.shield(_cancel_cleanup())
+            except Exception as release_exc:
+                logging.getLogger(__name__).warning(
+                    "proposal_generation_cancel_release_failed",
+                    extra={
+                        "job_id": str(job_id),
+                        "roadmap_id": str(roadmap_id),
+                        "error_type": type(release_exc).__name__,
+                    },
+                )
+            raise
+
         except Exception as exc:
             try:
-                async with self._uow:
-                    await self._quota_facade.release_reservation(
-                        reservation_id,
-                        reason=getattr(exc, "code", "SCHEDULE_PROPOSAL_GEN_FAILED"),
-                    )
-                    await self._uow.commit()
+                await _release_once(getattr(exc, "code", "SCHEDULE_PROPOSAL_GEN_FAILED"))
             except Exception as release_exc:
                 logging.getLogger(__name__).warning(
                     "proposal_generation_quota_release_failed",

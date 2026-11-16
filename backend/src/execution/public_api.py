@@ -1,5 +1,5 @@
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Protocol
 from uuid import UUID
@@ -449,13 +449,32 @@ class ExecutionDayStudyDTO:
 
 
 class ExecutionDashboardQueryPort(Protocol):
-    async def get_today_queue(self, user_id: UUID, today: date) -> list[ExecutionTodayTaskDTO]: ...
+    async def get_today_queue(
+        self,
+        user_id: UUID,
+        today: date | None = None,
+        *,
+        user_timezone: str | None = None,
+        now: datetime | None = None,
+    ) -> list[ExecutionTodayTaskDTO]: ...
 
     async def get_7day_study_distribution(
-        self, user_id: UUID, today: date
+        self,
+        user_id: UUID,
+        today: date | None = None,
+        *,
+        user_timezone: str | None = None,
+        now: datetime | None = None,
     ) -> list[ExecutionDayStudyDTO]: ...
 
-    async def get_execution_kpis(self, user_id: UUID, today: date) -> ExecutionKpiStatsDTO: ...
+    async def get_execution_kpis(
+        self,
+        user_id: UUID,
+        today: date | None = None,
+        *,
+        user_timezone: str | None = None,
+        now: datetime | None = None,
+    ) -> ExecutionKpiStatsDTO: ...
 
 
 _execution_dashboard_factory: object = None
@@ -488,6 +507,9 @@ class WeeklyExecutionMetricsDTO:
     planned_tasks_count: int = 0
     overdue_tasks_count: int = 0
     adherence_rate_pct: float | None = None
+    task_type_breakdown: dict[str, dict[str, int]] = field(default_factory=dict)
+    previous_week_completed_minutes: int = 0
+    week_over_week_delta_pct: float | None = None
 
 
 class WeeklyExecutionMetricsQueryPort(Protocol):
