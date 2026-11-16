@@ -91,6 +91,7 @@ class FakeQuotaFacade:
     def __init__(self, available: bool = True) -> None:
         self.available = available
         self.released_reservations: list[UUID] = []
+        self.committed_reservations: list[UUID] = []
 
     async def check_quota_available(self, user_id: UUID, min_credits: int = 1) -> bool:
         _ = (user_id, min_credits)
@@ -113,7 +114,8 @@ class FakeQuotaFacade:
         completion_tokens: int = 0,
         model_name: str = "gemini-3.8-flash",
     ) -> None:
-        _ = (reservation_id, prompt_tokens, completion_tokens, model_name)
+        _ = (prompt_tokens, completion_tokens, model_name)
+        self.committed_reservations.append(reservation_id)
 
     async def release_reservation(self, reservation_id: UUID, reason: str = "RELEASED") -> None:
         _ = reason
@@ -612,3 +614,125 @@ async def test_v2_session_validates_answers_and_is_idempotently_resumable() -> N
 
     assert result.status in {"WAITING_FOLLOW_UP", "READY_TO_PLAN"}
     assert result.round in {1, 2}
+
+
+@pytest.mark.asyncio
+async def test_followup_clarification_empty_list_repairs_once_and_fails_safe_releasing_quota() -> (
+    None
+):
+    """Mục 4.6: Follow-up returning [] triggers 1-shot repair; persistent failure releases quota (0 commit) and returns READY_TO_PLAN."""
+    from collections.abc import AsyncIterator
+
+    from src.shared_kernel.application.llm_port import LLMGenerationResult
+
+    async def _run_followup_scenario(
+        *, recover_on_repair: bool
+    ) -> tuple[Any, FakeQuotaFacade, FakeWorkflowRepository, int]:
+        goal_repo = FakeGoalRepository()
+        workflow_repo = FakeWorkflowRepository()
+        quota = FakeQuotaFacade(available=True)
+        uow = FakeUnitOfWork()
+        user_id = uuid7()
+        goal = Goal(id=uuid7(), user_id=user_id, title="Học FastAPI nâng cao", raw_description="")
+        await goal_repo.save(goal)
+
+        generator = GenerateClarificationQuestionsUseCase(
+            goal_repo=goal_repo,
+            quota_facade=quota,
+            llm_provider=StubLLMAdapter(),
+            uow=uow,
+            workflow_repo=workflow_repo,
+        )
+        round1 = await generator.execute(goal_id=goal.id, user_id=user_id)
+        # Clear round 1 commit/release counts so we isolate round 2 follow-up quota behavior.
+        quota.committed_reservations.clear()
+        quota.released_reservations.clear()
+
+        # Ensure at least one high-priority PARTIAL gap exists so round 2 follow-up triggers.
+        assert round1.session_id is not None
+        run = workflow_repo.runs[round1.session_id]
+        run.context_snapshot["information_gaps"] = [
+            {"dimension": "TIMELINE", "status": "PARTIAL", "priority": 95},
+        ]
+
+        followup_calls = 0
+
+        class _FollowupProvider(LLMProviderPort):
+            async def generate_structured(self, **kwargs: Any) -> LLMGenerationResult:
+                nonlocal followup_calls
+                del kwargs
+                followup_calls += 1
+                if followup_calls == 1 or not recover_on_repair:
+                    return LLMGenerationResult(
+                        payload={"questions": []},
+                        prompt_tokens=15,
+                        output_tokens=5,
+                        model_id="gemini-3.8-flash",
+                    )
+                return LLMGenerationResult(
+                    payload={
+                        "questions": [
+                            {
+                                "text": "Bạn dự kiến hoàn thành mục tiêu này trong bao nhiêu tuần?",
+                                "question_type": "single_choice",
+                                "options": ["2 - 4 tuần", "1 - 2 tháng", "3 tháng"],
+                                "question_purpose": "Chốt deadline lập lịch.",
+                                "expected_answer_format": "Chọn 1 phương án.",
+                                "diagnostic_dimension": "TIMELINE",
+                            }
+                        ]
+                    },
+                    prompt_tokens=20,
+                    output_tokens=15,
+                    model_id="gemini-3.8-flash",
+                )
+
+            async def stream_structured(self, **kwargs: Any) -> AsyncIterator[str]:
+                del kwargs
+                yield "{}"
+
+        q0 = round1.questions[0]
+        ans = ClarificationAnswerItem(
+            question_id=q0.question_id,
+            selected_option_ids=[q0.options[0].id] if q0.options else [],
+            free_text="Xác nhận" if not q0.options else None,
+        )
+        submitter = SubmitClarificationAnswersUseCase(
+            goal_repo=goal_repo,
+            uow=uow,
+            workflow_repo=workflow_repo,
+            quota_facade=quota,
+            llm_provider=_FollowupProvider(),
+        )
+        turn_res = await submitter.execute_turn(
+            user_id=user_id,
+            goal_id=goal.id,
+            session_id=round1.session_id,
+            round_number=1,
+            answers=[ans],
+            skipped_question_ids=[q.question_id for q in round1.questions[1:]],
+            total_questions_count=len(round1.questions),
+        )
+        return turn_res, quota, workflow_repo, followup_calls
+
+    # Scenario A: Follow-up returns [] -> 1-shot repair recovers -> commits 1 reservation.
+    ok_res, ok_quota, _, ok_calls = await _run_followup_scenario(recover_on_repair=True)
+    assert ok_calls == 2
+    assert ok_res.status == "WAITING_FOLLOW_UP"
+    assert len(ok_res.questions) == 1
+    assert len(ok_quota.committed_reservations) == 1
+    assert ok_quota.released_reservations == []
+
+    # Scenario B: Follow-up returns [] on initial + repair -> releases quota (0 commit), returns READY_TO_PLAN safely.
+    fail_res, fail_quota, fail_wf, fail_calls = await _run_followup_scenario(
+        recover_on_repair=False
+    )
+    assert fail_calls == 2
+    assert fail_res.status == "READY_TO_PLAN"
+    assert fail_res.questions == ()
+    assert fail_quota.committed_reservations == []
+    assert len(fail_quota.released_reservations) == 1
+    fallback_step = next(
+        s for s in fail_wf.steps if s.step_name == "CLARIFICATION_FOLLOW_UP_FALLBACK"
+    )
+    assert fallback_step.output_payload["error_category"] == "SCHEMA_MISMATCH"

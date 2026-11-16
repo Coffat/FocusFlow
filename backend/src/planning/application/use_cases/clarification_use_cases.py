@@ -15,6 +15,7 @@ from src.account.public_api import (
 from src.planning.application.dtos.planning_dtos import (
     ClarificationAnswerItem,
     ClarificationContextPayload,
+    ClarificationFollowupLLMOutput,
     ClarificationOption,
     ClarificationQuestion,
     ClarificationQuestionLLMOutput,
@@ -57,7 +58,10 @@ from src.planning.domain.exceptions.planning_exceptions import (
 )
 from src.planning.domain.models.goal import Goal
 from src.shared_kernel.application.embedding_port import EmbeddingProviderPort
-from src.shared_kernel.application.harness.execution_manager import AIExecutionManager
+from src.shared_kernel.application.harness.execution_manager import (
+    AIExecutionManager,
+    default_ai_retry_predicate,
+)
 from src.shared_kernel.application.harness.models import (
     WorkflowRun,
     WorkflowStatus,
@@ -66,7 +70,11 @@ from src.shared_kernel.application.harness.models import (
     WorkflowType,
 )
 from src.shared_kernel.application.harness.workflow_port import WorkflowRepositoryPort
-from src.shared_kernel.application.llm_port import LLMProviderPort
+from src.shared_kernel.application.llm_port import (
+    AIErrorCategory,
+    LLMProviderPort,
+    classify_ai_error,
+)
 from src.shared_kernel.application.uow import AsyncUnitOfWork
 from src.shared_kernel.domain.base import generate_uuid7
 
@@ -262,21 +270,8 @@ def normalize_choice_options_with_other_last(
 
 
 def _is_retryable_clarification_error(exc: Exception) -> bool:
-    """Retry only transient provider failures and recoverable schema output."""
-
-    if isinstance(exc, (TimeoutError, asyncio.TimeoutError)):
-        return True
-    message = str(exc).lower()
-    return any(
-        marker in message
-        for marker in (
-            "429",
-            "503",
-            "timeout",
-            "timed out",
-            "ai_schema_validation_error",
-        )
-    )
+    """Retry only transient provider/timeout failures (never schema mismatches)."""
+    return default_ai_retry_predicate(exc)
 
 
 class _ClarificationSessionMixin:
@@ -549,6 +544,67 @@ class _ClarificationSessionMixin:
             operation_type="GOAL_CLARIFICATION",
             cost=1,
         )
+        reservation_finalized = False
+
+        async def _release_once(reason: str) -> None:
+            nonlocal reservation_finalized
+            if reservation_finalized or self._quota is None:
+                return
+            reservation_finalized = True
+            await self._quota.release_reservation(reservation_id, reason=reason)
+
+        async def _commit_once(
+            *,
+            prompt_tokens: int,
+            completion_tokens: int,
+            model_name: str,
+        ) -> None:
+            nonlocal reservation_finalized
+            if reservation_finalized or self._quota is None:
+                return
+            reservation_finalized = True
+            await self._quota.commit_reservation(
+                reservation_id,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                model_name=model_name,
+            )
+
+        async def _record_followup_fallback(
+            *,
+            error_category: AIErrorCategory,
+            error_type: str,
+        ) -> None:
+            logger.warning(
+                "clarification_followup_generation_failed",
+                extra={
+                    "goal_id": str(goal_id),
+                    "session_id": str(session_id),
+                    "reason_code": "FOLLOWUP_GENERATION_FAILED",
+                    "error_category": error_category.value,
+                    "error_type": error_type,
+                },
+            )
+            if self._workflow_repo is not None:
+                await self._workflow_repo.add_step(
+                    WorkflowStepExecution(
+                        id=generate_uuid7(),
+                        workflow_run_id=session_id,
+                        step_name="CLARIFICATION_FOLLOW_UP_FALLBACK",
+                        step_order=3,
+                        status=WorkflowStepStatus.FAILED,
+                        input_summary={"dimension": str(gap.get("dimension", ""))},
+                        output_payload={
+                            "fallback_reason_code": "FOLLOWUP_GENERATION_FAILED",
+                            "error_category": error_category.value,
+                            "error_type": error_type,
+                        },
+                        retry_count=0,
+                        started_at=datetime.now(UTC),
+                        completed_at=datetime.now(UTC),
+                    )
+                )
+
         followup_tpl = build_planning_prompt_registry().latest(
             GOAL_CLARIFIER_FOLLOWUP_PROMPT.prompt_id
         )
@@ -564,53 +620,53 @@ class _ClarificationSessionMixin:
                 operation_type="GOAL_CLARIFICATION",
                 system_prompt=followup_tpl.system_template,
                 user_prompt=prompt,
-                response_schema=ClarificationQuestionsLLMOutput,
+                response_schema=ClarificationFollowupLLMOutput,
                 model_name=getattr(self._llm, "model_identifier", "gemini-3.8-flash"),
                 thinking_level=GOAL_CLARIFIER_FOLLOWUP_PROMPT.thinking_level,
                 existing_reservation_id=reservation_id,
-                commit_on_success=True,
-                release_on_failure=True,
+                commit_on_success=False,
+                release_on_failure=False,
                 prompt_template=followup_tpl,
             )
-        except (TimeoutError, ValueError, RuntimeError, OSError) as exc:
-            logger.warning(
-                "clarification_followup_generation_failed",
-                extra={
-                    "goal_id": str(goal_id),
-                    "session_id": str(session_id),
-                    "reason_code": "FOLLOWUP_GENERATION_FAILED",
-                    "error_type": type(exc).__name__,
-                },
-            )
-            if self._workflow_repo is not None:
-                await self._workflow_repo.add_step(
-                    WorkflowStepExecution(
-                        id=generate_uuid7(),
-                        workflow_run_id=session_id,
-                        step_name="CLARIFICATION_FOLLOW_UP_FALLBACK",
-                        step_order=3,
-                        status=WorkflowStepStatus.FAILED,
-                        input_summary={"dimension": str(gap.get("dimension", ""))},
-                        output_payload={
-                            "fallback_reason_code": "FOLLOWUP_GENERATION_FAILED",
-                            "error_type": type(exc).__name__,
-                        },
-                        retry_count=0,
-                        started_at=datetime.now(UTC),
-                        completed_at=datetime.now(UTC),
-                    )
-                )
+        except asyncio.CancelledError:
+            await _release_once("CANCELLED")
+            raise
+        except Exception as exc:
+            category = classify_ai_error(exc)
+            await _release_once(type(exc).__name__)
+            await _record_followup_fallback(error_category=category, error_type=type(exc).__name__)
             return None
+
         raw_questions = (
             result.value.questions
             if isinstance(
-                result.value, (ClarificationQuestionsLLMOutput, ClarificationQuestionsResponse)
+                result.value,
+                (
+                    ClarificationFollowupLLMOutput,
+                    ClarificationQuestionsLLMOutput,
+                    ClarificationQuestionsResponse,
+                ),
             )
             else []
         )
-        if not raw_questions:
+        if len(raw_questions) != 1:
+            await _release_once("INVALID_FOLLOWUP_COUNT")
+            await _record_followup_fallback(
+                error_category=AIErrorCategory.SCHEMA_MISMATCH,
+                error_type="InvalidFollowupQuestionCount",
+            )
             return None
+
         raw = raw_questions[0]
+        q_text = str(getattr(raw, "text", "") or getattr(raw, "question", "")).strip()
+        if not q_text:
+            await _release_once("EMPTY_FOLLOWUP_QUESTION")
+            await _record_followup_fallback(
+                error_category=AIErrorCategory.SCHEMA_MISMATCH,
+                error_type="EmptyFollowupQuestionText",
+            )
+            return None
+
         dimension = normalize_diagnostic_dimension(str(gap.get("dimension", "PRIOR_KNOWLEDGE")))
         raw_labels = [
             opt.label if hasattr(opt, "label") else str(opt) for opt in getattr(raw, "options", [])
@@ -626,8 +682,7 @@ class _ClarificationSessionMixin:
             ]
         else:
             options = []
-        q_text = str(getattr(raw, "text", "") or getattr(raw, "question", "")).strip()
-        return ClarificationQuestion(
+        question = ClarificationQuestion(
             id=f"{session_id}-r2-q1",
             question_id=f"{session_id}-r2-q1",
             question=q_text,
@@ -638,6 +693,13 @@ class _ClarificationSessionMixin:
             expected_answer_format=str(getattr(raw, "expected_answer_format", "") or ""),
             diagnostic_dimension=dimension,
         )
+        await _commit_once(
+            prompt_tokens=result.prompt_tokens,
+            completion_tokens=result.completion_tokens,
+            model_name=result.model_id
+            or getattr(self._llm, "model_identifier", "gemini-3.8-flash"),
+        )
+        return question
 
     async def skip_session(
         self,

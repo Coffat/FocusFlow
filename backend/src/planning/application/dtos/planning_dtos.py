@@ -238,6 +238,32 @@ class ClarificationQuestionsLLMOutput(BaseModel):
         return data
 
 
+class ClarificationFollowupLLMOutput(BaseModel):
+    """Pure LLM output schema for Goal Clarifier round-2 follow-up (strictly 1 question)."""
+
+    questions: list[ClarificationQuestionLLMOutput] = Field(
+        ...,
+        min_length=1,
+        max_length=1,
+        description="Danh sách gồm ĐÚNG 1 câu hỏi follow-up bằng tiếng Việt.",
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_followup_wrapper(cls, data: Any) -> Any:
+        if isinstance(data, list):
+            return {"questions": data}
+        if isinstance(data, dict):
+            copied = dict(data)
+            if "questions" not in copied:
+                for alt in ("data", "result", "items", "clarification_questions"):
+                    if isinstance(copied.get(alt), list):
+                        copied["questions"] = copied.pop(alt)
+                        break
+            return copied
+        return data
+
+
 class MilestoneItemLLMOutput(BaseModel):
     """LLM output schema for a single adaptive Milestone (T2.1 / B1)."""
 

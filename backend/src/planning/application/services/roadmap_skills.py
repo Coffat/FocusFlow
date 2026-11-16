@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from src.planning.application.dtos.planning_dtos import (
+    ClarificationFollowupLLMOutput,
     ClarificationQuestionsLLMOutput,
     CriticQualityLLMOutput,
     MilestoneGenerationLLMOutput,
@@ -179,7 +180,7 @@ GOAL_CLARIFIER_FOLLOWUP_PROMPT = AuxiliaryPromptDefinition(
     workflow_type=WorkflowType.PLAN_CREATION.value,
     skill_id=GOAL_CLARIFIER_SKILL.skill_id,
     thinking_level="LOW",
-    output_model=ClarificationQuestionsLLMOutput,
+    output_model=ClarificationFollowupLLMOutput,
     system_instruction=(
         "[SKILL: goal-clarifier-followup@v2.0.0]\n"
         f"{UNTRUSTED_DATA_SYSTEM_RULE}\n"

@@ -18,9 +18,9 @@
       "workflow_type": "PLAN_CREATION"
     },
     {
-      "prompt_checksum": "60a2dc739eb1c1e057946d865f32b689ff09d1ffd2633c916f5e3d76ab30a1a8",
+      "prompt_checksum": "96cbae5c1e60a314b19322365ffd8d1fd58926a4ced0aae24315fdde5417c5cd",
       "prompt_id": "goal-clarifier-followup",
-      "schema_checksum": "c289714d0bdac9356f993285e4549b299f9b932e2214d436a4f1f97991d5ae44",
+      "schema_checksum": "8649c6f45b373579b7cd566225a8dfce08ef795c459ef74e52559d23d97b01c5",
       "skill_id": "goal-clarifier",
       "version": "2.0.0",
       "workflow_type": "PLAN_CREATION"

@@ -7,8 +7,15 @@ import pytest
 from pydantic import BaseModel, Field, ValidationError
 
 from src.planning.application.services.harness_support import load_planning_harness_context_inputs
-from src.shared_kernel.application.llm_port import LLMToolDeclarationDTO, LLMUsageMetadata
-from src.shared_kernel.infrastructure.external_ai.litellm_adapter import LiteLLMAdapter
+from src.shared_kernel.application.llm_port import (
+    LLMToolDeclarationDTO,
+    LLMUsageMetadata,
+    SchemaMismatchError,
+)
+from src.shared_kernel.infrastructure.external_ai.litellm_adapter import (
+    LiteLLMAdapter,
+    render_compact_schema_spec,
+)
 from src.shared_kernel.infrastructure.external_ai.prompt_sanitizer import (
     PromptSanitizer,
 )
@@ -603,6 +610,266 @@ async def test_supports_native_structured_output_and_non_gemini_fallback_fail_sa
 
 
 @pytest.mark.asyncio
+async def test_render_compact_schema_spec_and_gateway_schema_injection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify compact schema rendering and injection toggle via llm_schema_enforced_by_gateway."""
+    from typing import Literal
+
+    from google import genai
+
+    class _CompactProbe(BaseModel):
+        status: Literal["PASS", "FAIL"]
+        score: int = Field(ge=0, le=100, description="Verbose description omitted in compact spec")
+        items: list[SampleMilestoneItem] = Field(min_length=1, max_length=3)
+
+    compact = render_compact_schema_spec(_CompactProbe.model_json_schema())
+    assert "[COMPACT_JSON_SCHEMA]" in compact
+    assert "status (required):" in compact
+    assert '"PASS"' in compact and '"FAIL"' in compact
+    assert "min=0, max=100" in compact
+    assert "minItems=1, maxItems=3" in compact
+    assert "sequence_order (required): integer(min=1)" in compact
+    assert "Verbose description omitted" not in compact
+    assert "$defs" not in compact
+
+    captured_configs: list[Any] = []
+
+    class FakeModels:
+        async def generate_content(self, *, model: str, contents: Any, config: Any) -> Any:
+            del model, contents
+            captured_configs.append(config)
+            return SimpleNamespace(
+                usage_metadata=SimpleNamespace(prompt_token_count=10, candidates_token_count=10),
+                text='{"status": "ok", "summary": "ok", "milestones": [{"sequence_order": 1, "title": "M1", "description": "D1"}]}',
+            )
+
+    monkeypatch.setattr(
+        genai,
+        "Client",
+        lambda **kwargs: SimpleNamespace(aio=SimpleNamespace(models=FakeModels())),
+    )
+
+    for enforced in (False, True):
+        captured_configs.clear()
+        adapter = LiteLLMAdapter()
+        adapter._settings = SimpleNamespace(  # type: ignore[assignment]
+            llm_provider="gemini",
+            llm_model="gemini-3.8-flash",
+            llm_model_low="gemini-3.8-flash",
+            llm_model_medium="gemini-3.8-flash",
+            llm_model_high="gemini-3.8-flash",
+            llm_api_key="real-test-key",
+            llm_base_url="http://127.0.0.1:8045",
+            llm_thinking_level="LOW",
+            llm_schema_enforced_by_gateway=enforced,
+        )
+        await adapter.generate_structured(
+            system_prompt="Sys",
+            user_prompt="Plan",
+            response_schema=SampleRoadmapOutput,
+            thinking_level="LOW",
+        )
+        assert len(captured_configs) == 1
+        cfg = captured_configs[0]
+        assert cfg.response_json_schema is not None
+        if enforced:
+            assert "[COMPACT_JSON_SCHEMA]" not in (cfg.system_instruction or "")
+        else:
+            assert "[COMPACT_JSON_SCHEMA]" in (cfg.system_instruction or "")
+            assert "milestones (required):" in (cfg.system_instruction or "")
+
+
+@pytest.mark.asyncio
+async def test_google_genai_adapter_tool_stage_final_turn_repair_runs_zero_tools_on_repair(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Tool stage performs 1-shot final-turn JSON repair with 0 tool re-runs and raises already_repaired=True on double fail."""
+    from google import genai
+
+    async def _build_and_run(second_json_valid: bool) -> tuple[Any, int, list[Any]]:
+        call_configs: list[Any] = []
+        call_contents: list[Any] = []
+        tool_exec_calls = 0
+        final_turn = 0
+
+        class FakeModels:
+            async def generate_content(self, *, model: str, contents: Any, config: Any) -> Any:
+                nonlocal final_turn
+                del model
+                call_configs.append(config)
+                call_contents.append(contents)
+                if getattr(config, "tools", None):
+                    if len(call_configs) == 1:
+                        return SimpleNamespace(
+                            usage_metadata=SimpleNamespace(
+                                prompt_token_count=10,
+                                candidates_token_count=4,
+                                thoughts_token_count=2,
+                            ),
+                            function_calls=[
+                                SimpleNamespace(
+                                    id="fc_1",
+                                    name="search_learning_concepts",
+                                    args={"query": "python"},
+                                )
+                            ],
+                        )
+                    return SimpleNamespace(
+                        usage_metadata=SimpleNamespace(
+                            prompt_token_count=5,
+                            candidates_token_count=2,
+                            thoughts_token_count=1,
+                        ),
+                        function_calls=[],
+                    )
+
+                final_turn += 1
+                if final_turn == 1:
+                    return SimpleNamespace(
+                        usage_metadata=SimpleNamespace(
+                            prompt_token_count=20,
+                            candidates_token_count=8,
+                            thoughts_token_count=3,
+                        ),
+                        text='{"status": "ok", "summary": "missing milestones", "milestones": []}',
+                    )
+                valid_text = '{"status": "ok", "summary": "repaired", "milestones": [{"sequence_order": 1, "title": "M1", "description": "D1"}]}'
+                invalid_text = '{"status": "ok", "summary": "still missing"}'
+                return SimpleNamespace(
+                    usage_metadata=SimpleNamespace(
+                        prompt_token_count=30,
+                        candidates_token_count=12,
+                        thoughts_token_count=4,
+                    ),
+                    text=valid_text if second_json_valid else invalid_text,
+                )
+
+        monkeypatch.setattr(
+            genai,
+            "Client",
+            lambda **kwargs: SimpleNamespace(aio=SimpleNamespace(models=FakeModels())),
+        )
+
+        adapter = LiteLLMAdapter()
+        adapter._settings = SimpleNamespace(  # type: ignore[assignment]
+            llm_provider="gemini",
+            llm_model="gemini-3.8-flash",
+            llm_model_low="gemini-3.8-flash",
+            llm_model_medium="gemini-3.8-flash",
+            llm_model_high="gemini-3.8-flash",
+            llm_api_key="real-test-key",
+            llm_base_url="http://127.0.0.1:8045",
+            llm_thinking_level="MEDIUM",
+            llm_schema_enforced_by_gateway=False,
+        )
+
+        async def fake_tool_exec(name: str, args: dict[str, Any]) -> dict[str, Any]:
+            nonlocal tool_exec_calls
+            tool_exec_calls += 1
+            return {"tool": name, "args": args, "concepts": []}
+
+        tool_decl = LLMToolDeclarationDTO(
+            name="search_learning_concepts",
+            description="Search",
+            parameters_schema={"type": "object", "properties": {"query": {"type": "string"}}},
+        )
+        res = await adapter.generate_structured(
+            system_prompt="Sys",
+            user_prompt="Plan",
+            response_schema=SampleRoadmapOutput,
+            tools=[tool_decl],
+            tool_executor=fake_tool_exec,
+            max_tool_calls=2,
+            thinking_level="MEDIUM",
+        )
+        return res, tool_exec_calls, list(zip(call_configs, call_contents, strict=True))
+
+    # Case 1: 1-shot final-turn repair succeeds; tool handler only ran once in initial loop.
+    res, exec_count, calls = await _build_and_run(second_json_valid=True)
+    assert exec_count == 1
+    assert res.payload["summary"] == "repaired"
+    assert res.repair_attempts == 1
+    assert res.prompt_tokens == 65  # 10 + 5 + 20 + 30
+    assert res.thinking_tokens == 10  # 2 + 1 + 3 + 4
+    assert res.output_tokens == 36  # (4+2+8+12) + (2+1+3+4)
+    repair_cfg, repair_contents = calls[-1]
+    assert getattr(repair_cfg, "tools", None) is None
+    assert isinstance(repair_contents, list) and len(repair_contents) == 3
+
+    # Case 2: Repair turn also invalid -> raises SchemaMismatchError(already_repaired=True).
+    with pytest.raises(SchemaMismatchError) as exc_info:
+        await _build_and_run(second_json_valid=False)
+    assert exc_info.value.already_repaired is True
+    assert exc_info.value.prompt_tokens == 65
+
+
+@pytest.mark.asyncio
+async def test_google_genai_adapter_http500_stream_interrupted_retries_at_most_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """HTTP 500 Stream interrupted is retried at most once per _call_model invocation."""
+    from google import genai
+
+    call_count = 0
+    fail_threshold = 1
+
+    class FakeModels:
+        async def generate_content(self, *, model: str, contents: Any, config: Any) -> Any:
+            nonlocal call_count
+            del model, contents, config
+            call_count += 1
+            if call_count <= fail_threshold:
+                raise RuntimeError("500 INTERNAL: Stream interrupted")
+            return SimpleNamespace(
+                usage_metadata=SimpleNamespace(prompt_token_count=10, candidates_token_count=10),
+                text='{"status": "ok", "summary": "recovered", "milestones": [{"sequence_order": 1, "title": "M1", "description": "D1"}]}',
+            )
+
+    monkeypatch.setattr(
+        genai,
+        "Client",
+        lambda **kwargs: SimpleNamespace(aio=SimpleNamespace(models=FakeModels())),
+    )
+
+    adapter = LiteLLMAdapter()
+    adapter._settings = SimpleNamespace(  # type: ignore[assignment]
+        llm_provider="gemini",
+        llm_model="gemini-3.8-flash",
+        llm_model_low="gemini-3.8-flash",
+        llm_model_medium="gemini-3.8-flash",
+        llm_model_high="gemini-3.8-flash",
+        llm_api_key="real-test-key",
+        llm_base_url="http://127.0.0.1:8045",
+        llm_thinking_level="LOW",
+        llm_schema_enforced_by_gateway=False,
+    )
+
+    # 1st fails with 500 Stream interrupted -> retries once -> succeeds (2 total calls).
+    res = await adapter.generate_structured(
+        system_prompt="Sys",
+        user_prompt="Plan",
+        response_schema=SampleRoadmapOutput,
+        thinking_level="LOW",
+    )
+    assert call_count == 2
+    assert res.payload["summary"] == "recovered"
+
+    # Both initial and 1st retry fail with 500 -> stops after 2 calls (no infinite retry).
+    call_count = 0
+    fail_threshold = 10
+    with pytest.raises(RuntimeError, match="Stream interrupted"):
+        await adapter.generate_structured(
+            system_prompt="Sys",
+            user_prompt="Plan",
+            response_schema=SampleRoadmapOutput,
+            thinking_level="LOW",
+        )
+    assert call_count == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.live_cobhub
 @pytest.mark.skipif(
     __import__("os").getenv("RUN_LIVE_GEMINI_SDK_TEST") != "1",
     reason="Opt-in live Google GenAI SDK contract test (set RUN_LIVE_GEMINI_SDK_TEST=1)",

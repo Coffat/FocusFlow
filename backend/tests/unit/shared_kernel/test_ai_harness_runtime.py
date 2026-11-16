@@ -7,21 +7,31 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from src.shared_kernel.application.harness.context_engine import ContextEngine
-from src.shared_kernel.application.harness.execution_manager import AIExecutionManager
+from src.shared_kernel.application.harness.execution_manager import (
+    AIExecutionManager,
+    default_ai_retry_predicate,
+)
 from src.shared_kernel.application.harness.models import (
     HarnessContext,
     PromptTemplate,
     ToolResultEnvelope,
     WorkflowRun,
     WorkflowStatus,
+    WorkflowStepExecution,
     WorkflowType,
 )
 from src.shared_kernel.application.harness.prompt_registry import PromptRegistry
 from src.shared_kernel.application.harness.tool_registry import RegisteredTool, ToolRegistry
-from src.shared_kernel.application.llm_port import LLMToolDeclarationDTO
+from src.shared_kernel.application.llm_port import (
+    AIErrorCategory,
+    LLMGenerationResult,
+    LLMToolDeclarationDTO,
+    SchemaMismatchError,
+    classify_ai_error,
+)
 from src.shared_kernel.infrastructure.external_ai.circuit_breaker import (
     AIServiceUnavailableError,
     CircuitBreakingLLMProvider,
@@ -523,3 +533,291 @@ async def test_tool_registry_dispatch_validation_timeout_error_truncation_and_re
     )
     assert boom_env["status"] == "error"
     assert boom_env["data"]["error_code"] == "TOOL_EXECUTION_ERROR"
+
+
+class _RecordingWorkflowRepo:
+    def __init__(self) -> None:
+        self.runs: list[WorkflowRun] = []
+        self.steps: list[WorkflowStepExecution] = []
+
+    async def add_run(self, run: WorkflowRun) -> None:
+        self.runs.append(run)
+
+    async def add_step(self, step: WorkflowStepExecution) -> None:
+        self.steps.append(step)
+
+
+def _make_validation_error() -> ValidationError:
+    try:
+        _Output.model_validate({})
+    except ValidationError as exc:
+        return exc
+    raise AssertionError("Expected ValidationError")
+
+
+def test_classify_ai_error_taxonomy_covers_all_six_categories() -> None:
+    """classify_ai_error classifies every exception type into the canonical 6 categories."""
+
+    class _QuotaError(RuntimeError):
+        code = "QUOTA_EXCEEDED"
+
+    class _ValidationGateError(RuntimeError):
+        code = "VALIDATION_GATE"
+
+    assert (
+        classify_ai_error(SchemaMismatchError("bad", already_repaired=False))
+        is AIErrorCategory.SCHEMA_MISMATCH
+    )
+    assert classify_ai_error(_make_validation_error()) is AIErrorCategory.SCHEMA_MISMATCH
+    assert classify_ai_error(json.JSONDecodeError("bad", "x", 0)) is AIErrorCategory.SCHEMA_MISMATCH
+    assert (
+        classify_ai_error(ValueError("AI_SCHEMA_VALIDATION_ERROR: missing key"))
+        is AIErrorCategory.SCHEMA_MISMATCH
+    )
+
+    assert classify_ai_error(TimeoutError("timed out")) is AIErrorCategory.TIMEOUT
+    assert classify_ai_error(TimeoutError()) is AIErrorCategory.TIMEOUT
+
+    assert (
+        classify_ai_error(RuntimeError("429 RESOURCE_EXHAUSTED")) is AIErrorCategory.GATEWAY_ERROR
+    )
+    assert (
+        classify_ai_error(RuntimeError("500 INTERNAL: Stream interrupted"))
+        is AIErrorCategory.GATEWAY_ERROR
+    )
+    assert (
+        classify_ai_error(RuntimeError("503 Service Unavailable")) is AIErrorCategory.GATEWAY_ERROR
+    )
+    assert classify_ai_error(RuntimeError("401 Unauthorized")) is AIErrorCategory.GATEWAY_ERROR
+    assert classify_ai_error(RuntimeError("403 Forbidden")) is AIErrorCategory.GATEWAY_ERROR
+    assert classify_ai_error(ConnectionError("reset")) is AIErrorCategory.GATEWAY_ERROR
+
+    assert classify_ai_error(_ValidationGateError("gate failed")) is AIErrorCategory.VALIDATION_GATE
+    assert classify_ai_error(_QuotaError("no credits")) is AIErrorCategory.QUOTA
+
+    assert classify_ai_error(TypeError("bad type")) is AIErrorCategory.OTHER
+    assert classify_ai_error(PermissionError("local permission denied")) is AIErrorCategory.OTHER
+    assert classify_ai_error(RuntimeError("unexpected internal bug")) is AIErrorCategory.OTHER
+
+
+def test_default_ai_retry_predicate_excludes_schema_mismatch_and_non_retryable() -> None:
+    """default_ai_retry_predicate retries only TIMEOUT and transient GATEWAY_ERROR (no blind SCHEMA_MISMATCH retry)."""
+
+    class _QuotaError(RuntimeError):
+        code = "QUOTA_EXCEEDED"
+
+    class _ValidationGateError(RuntimeError):
+        code = "VALIDATION_GATE"
+
+    # Must NOT retry
+    assert default_ai_retry_predicate(_make_validation_error()) is False
+    assert default_ai_retry_predicate(json.JSONDecodeError("bad", "x", 0)) is False
+    assert default_ai_retry_predicate(SchemaMismatchError("bad")) is False
+    assert default_ai_retry_predicate(ValueError("AI_SCHEMA_VALIDATION_ERROR: bad")) is False
+    assert default_ai_retry_predicate(RuntimeError("400 Bad Request")) is False
+    assert default_ai_retry_predicate(RuntimeError("401 Unauthorized")) is False
+    assert default_ai_retry_predicate(RuntimeError("403 Forbidden")) is False
+    assert default_ai_retry_predicate(_QuotaError("quota")) is False
+    assert default_ai_retry_predicate(_ValidationGateError("gate")) is False
+    assert default_ai_retry_predicate(TypeError("wrong")) is False
+    assert default_ai_retry_predicate(PermissionError("denied")) is False
+
+    # MUST retry
+    assert default_ai_retry_predicate(TimeoutError("timeout")) is True
+    assert default_ai_retry_predicate(RuntimeError("429 RESOURCE_EXHAUSTED")) is True
+    assert default_ai_retry_predicate(RuntimeError("500 INTERNAL: Stream interrupted")) is True
+    assert default_ai_retry_predicate(RuntimeError("503 Service Unavailable")) is True
+
+
+@pytest.mark.asyncio
+async def test_execution_manager_non_tool_one_shot_repair_succeeds_and_accumulates_tokens() -> None:
+    """Non-tool SCHEMA_MISMATCH triggers exactly 1 targeted repair with [SCHEMA_REPAIR_ERRORS] and accumulates tokens."""
+    seen_user_prompts: list[str] = []
+
+    class _RepairableProvider:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def generate_structured(self, **kwargs: Any) -> LLMGenerationResult:
+            seen_user_prompts.append(str(kwargs.get("user_prompt", "")))
+            self.calls += 1
+            if self.calls == 1:
+                return LLMGenerationResult(
+                    payload={"wrong_key": 123},
+                    prompt_tokens=20,
+                    output_tokens=10,
+                    thinking_tokens=4,
+                    model_id="gemini-3.8-flash",
+                )
+            return LLMGenerationResult(
+                payload={"answer": "repaired"},
+                prompt_tokens=30,
+                output_tokens=15,
+                thinking_tokens=2,
+                model_id="gemini-3.8-flash",
+            )
+
+        async def stream_structured(self, **kwargs: object) -> AsyncIterator[str]:
+            del kwargs
+            yield "{}"
+
+    quota = _Quota()
+    wf_repo = _RecordingWorkflowRepo()
+    provider = _RepairableProvider()
+    manager = AIExecutionManager(
+        provider=provider,
+        quota=quota,
+        max_retries=2,
+        timeout_seconds=10.0,
+        workflow_repo=wf_repo,  # type: ignore[arg-type]
+    )
+
+    res = await manager.execute(
+        user_id=uuid4(),
+        operation_type="PLAN_CREATION",
+        system_prompt="sys",
+        user_prompt="original user prompt",
+        response_schema=_Output,
+        model_name="gemini-3.8-flash",
+        workflow_type=WorkflowType.PLAN_CREATION,
+    )
+
+    assert provider.calls == 2
+    assert len(seen_user_prompts) == 2
+    assert "[SCHEMA_REPAIR_ERRORS]" in seen_user_prompts[1]
+    assert res.value == _Output(answer="repaired")
+    assert res.repair_attempts == 1
+    assert res.error_category is None
+    assert res.prompt_tokens == 50
+    assert res.completion_tokens == 25
+    assert res.thinking_tokens == 6
+    assert quota.committed == 1
+    assert quota.released == []
+    assert wf_repo.steps[-1].output_payload["repair_attempts"] == 1
+
+
+@pytest.mark.asyncio
+async def test_execution_manager_non_tool_repair_failure_records_taxonomy_and_releases_quota() -> (
+    None
+):
+    """When 1-shot repair still fails schema validation, no blind retry runs, taxonomy is recorded, and quota is released."""
+
+    class _AlwaysBadSchemaProvider:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def generate_structured(self, **kwargs: Any) -> LLMGenerationResult:
+            del kwargs
+            self.calls += 1
+            return LLMGenerationResult(
+                payload={"bad": True},
+                prompt_tokens=10,
+                output_tokens=5,
+                model_id="gemini-3.8-flash",
+            )
+
+        async def stream_structured(self, **kwargs: object) -> AsyncIterator[str]:
+            del kwargs
+            yield "{}"
+
+    quota = _Quota()
+    wf_repo = _RecordingWorkflowRepo()
+    provider = _AlwaysBadSchemaProvider()
+    manager = AIExecutionManager(
+        provider=provider,
+        quota=quota,
+        max_retries=2,
+        timeout_seconds=10.0,
+        workflow_repo=wf_repo,  # type: ignore[arg-type]
+    )
+
+    with pytest.raises(ValueError, match="AI_SCHEMA_VALIDATION_ERROR"):
+        await manager.execute(
+            user_id=uuid4(),
+            operation_type="PLAN_CREATION",
+            system_prompt="sys",
+            user_prompt="usr",
+            response_schema=_Output,
+            model_name="gemini-3.8-flash",
+            workflow_type=WorkflowType.PLAN_CREATION,
+        )
+
+    assert provider.calls == 2  # 1 initial + 1 repair (NO blind retries!)
+    assert quota.committed == 0
+    assert len(quota.released) == 1
+    assert wf_repo.steps[-1].output_payload["error_category"] == "SCHEMA_MISMATCH"
+    assert wf_repo.steps[-1].output_payload["repair_attempts"] == 1
+
+
+@pytest.mark.asyncio
+async def test_execution_manager_skips_repair_when_already_repaired_in_adapter() -> None:
+    """When adapter raises SchemaMismatchError(already_repaired=True), manager performs 0 extra repair calls."""
+    quota = _Quota()
+    wf_repo = _RecordingWorkflowRepo()
+    provider = _Provider(
+        [
+            SchemaMismatchError(
+                "AI_SCHEMA_VALIDATION_ERROR: missing milestones",
+                already_repaired=True,
+                validation_summary="milestones: Field required",
+            )
+        ]
+    )
+    manager = AIExecutionManager(
+        provider=provider,
+        quota=quota,
+        max_retries=2,
+        timeout_seconds=10.0,
+        workflow_repo=wf_repo,  # type: ignore[arg-type]
+    )
+
+    with pytest.raises(SchemaMismatchError):
+        await manager.execute(
+            user_id=uuid4(),
+            operation_type="TASK_DECOMPOSITION",
+            system_prompt="sys",
+            user_prompt="usr",
+            response_schema=_Output,
+            model_name="gemini-3.8-flash",
+            workflow_type=WorkflowType.SCHEDULE_GENERATION,
+        )
+
+    assert provider.calls == 1
+    assert quota.committed == 0
+    assert len(quota.released) == 1
+    assert wf_repo.steps[-1].output_payload["error_category"] == "SCHEMA_MISMATCH"
+    assert wf_repo.steps[-1].output_payload["repair_attempts"] == 1
+
+
+@pytest.mark.asyncio
+async def test_execution_manager_limits_http500_stream_interrupted_retry_to_one() -> None:
+    """HTTP 500 Stream interrupted is retried at most 1 time even when max_retries=2."""
+    quota = _Quota()
+    provider = _Provider(
+        [
+            RuntimeError("500 INTERNAL: Stream interrupted"),
+            RuntimeError("500 INTERNAL: Stream interrupted"),
+            {"answer": "should_not_be_reached"},
+        ]
+    )
+    manager = AIExecutionManager(
+        provider=provider,
+        quota=quota,
+        max_retries=2,
+        timeout_seconds=10.0,
+        sleep=lambda _delay: asyncio.sleep(0),
+    )
+
+    with pytest.raises(RuntimeError, match="Stream interrupted"):
+        await manager.execute(
+            user_id=uuid4(),
+            operation_type="PLAN_CREATION",
+            system_prompt="sys",
+            user_prompt="usr",
+            response_schema=_Output,
+            model_name="gemini-3.8-flash",
+        )
+
+    assert provider.calls == 2  # 1 initial + 1 retry
+    assert quota.committed == 0
+    assert len(quota.released) == 1

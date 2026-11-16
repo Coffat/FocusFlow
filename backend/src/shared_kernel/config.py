@@ -65,6 +65,7 @@ class Settings(BaseSettings):
     )
     llm_base_url: str = "http://127.0.0.1:8045"
     llm_thinking_level: str = "MEDIUM"
+    llm_schema_enforced_by_gateway: bool = False
     llm_max_tool_calls: int = 4
     llm_tool_timeout_seconds: float = 5.0
     enable_tier3_judge: bool = True

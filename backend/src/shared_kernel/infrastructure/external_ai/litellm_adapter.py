@@ -5,7 +5,7 @@ import re
 from collections.abc import AsyncIterator, Sequence
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from src.shared_kernel.application.llm_port import (
     LLMGenerationResult,
@@ -13,6 +13,8 @@ from src.shared_kernel.application.llm_port import (
     LLMToolCallResultDTO,
     LLMToolDeclarationDTO,
     LLMToolExecutor,
+    SchemaMismatchError,
+    format_concise_schema_errors,
 )
 from src.shared_kernel.config import get_settings
 
@@ -102,6 +104,115 @@ def _extract_json_schema(
     if isinstance(response_schema, dict):
         return response_schema
     return {}
+
+
+def _resolve_schema_ref(
+    node: dict[str, Any],
+    defs: dict[str, Any],
+    seen_refs: frozenset[str],
+) -> tuple[dict[str, Any], frozenset[str], str | None]:
+    ref = node.get("$ref")
+    if not isinstance(ref, str) or not ref:
+        return node, seen_refs, None
+    if ref in seen_refs:
+        return {}, seen_refs, ref.rsplit("/", 1)[-1]
+    ref_name = ref.rsplit("/", 1)[-1]
+    target = defs.get(ref_name)
+    if isinstance(target, dict):
+        return target, seen_refs | {ref}, None
+    return node, seen_refs, ref_name
+
+
+def _format_compact_type(
+    node: dict[str, Any],
+    defs: dict[str, Any],
+    seen_refs: frozenset[str],
+    indent: int,
+) -> str:
+    resolved, next_seen, cycle_name = _resolve_schema_ref(node, defs, seen_refs)
+    if cycle_name is not None and not resolved:
+        return f"object({cycle_name})"
+
+    if "const" in resolved:
+        return f"const({json.dumps(resolved['const'], ensure_ascii=False)})"
+    if "enum" in resolved and isinstance(resolved["enum"], list):
+        enum_vals = ", ".join(json.dumps(v, ensure_ascii=False) for v in resolved["enum"])
+        base = str(resolved.get("type") or "enum")
+        return f"{base}[enum=({enum_vals})]"
+
+    for union_key in ("anyOf", "oneOf"):
+        variants = resolved.get(union_key)
+        if isinstance(variants, list) and variants:
+            parts = [
+                _format_compact_type(v, defs, next_seen, indent)
+                for v in variants
+                if isinstance(v, dict)
+            ]
+            return " | ".join(parts) if parts else "any"
+
+    schema_type = resolved.get("type")
+    if isinstance(schema_type, list):
+        return " | ".join(str(t) for t in schema_type)
+
+    if schema_type == "array" or "items" in resolved:
+        arr_constraints: list[str] = []
+        if "minItems" in resolved:
+            arr_constraints.append(f"minItems={resolved['minItems']}")
+        if "maxItems" in resolved:
+            arr_constraints.append(f"maxItems={resolved['maxItems']}")
+        items_node = resolved.get("items")
+        inner = (
+            _format_compact_type(items_node, defs, next_seen, indent)
+            if isinstance(items_node, dict)
+            else "any"
+        )
+        constraint_str = f"[{', '.join(arr_constraints)}]" if arr_constraints else ""
+        return f"array{constraint_str}<{inner}>"
+
+    if schema_type == "object" or "properties" in resolved:
+        props = resolved.get("properties")
+        if not isinstance(props, dict) or not props:
+            return "object"
+        req_set = {str(r) for r in (resolved.get("required") or [])}
+        pad = "  " * (indent + 1)
+        close_pad = "  " * indent
+        lines: list[str] = ["object {"]
+        for key, prop_schema in props.items():
+            req_tag = " (required)" if key in req_set else ""
+            prop_str = (
+                _format_compact_type(prop_schema, defs, next_seen, indent + 1)
+                if isinstance(prop_schema, dict)
+                else "any"
+            )
+            lines.append(f"{pad}{key}{req_tag}: {prop_str}")
+        lines.append(f"{close_pad}}}")
+        return "\n".join(lines)
+
+    base_type = str(schema_type or "any")
+    constraints: list[str] = []
+    if "minimum" in resolved:
+        constraints.append(f"min={resolved['minimum']}")
+    elif "exclusiveMinimum" in resolved:
+        constraints.append(f"min>{resolved['exclusiveMinimum']}")
+    if "maximum" in resolved:
+        constraints.append(f"max={resolved['maximum']}")
+    elif "exclusiveMaximum" in resolved:
+        constraints.append(f"max<{resolved['exclusiveMaximum']}")
+    if constraints:
+        return f"{base_type}({', '.join(constraints)})"
+    return base_type
+
+
+def render_compact_schema_spec(schema_dict: dict[str, Any]) -> str:
+    """Render a compact, token-efficient schema spec (fields, types, required, enum, min/max, items)."""
+    if not schema_dict:
+        return ""
+    raw_defs = schema_dict.get("$defs") or schema_dict.get("definitions") or {}
+    defs = raw_defs if isinstance(raw_defs, dict) else {}
+    body = _format_compact_type(schema_dict, defs, frozenset(), 0)
+    if not body or body == "any":
+        return ""
+    return f"[COMPACT_JSON_SCHEMA]\nReturn ONLY a JSON matching:\n{body}"
 
 
 def _tool_name(tool: LLMToolDeclarationDTO | dict[str, Any]) -> str:
@@ -299,62 +410,81 @@ class LiteLLMAdapter(LLMProviderPort):
                 ordered_candidates.remove(preferred_model)
                 ordered_candidates.insert(0, preferred_model)
 
+            http500_retries = 0
             last_err: Exception | None = None
             for cand in ordered_candidates:
-                try:
-                    resp = await asyncio.wait_for(
-                        client.aio.models.generate_content(
-                            model=cand,
-                            contents=contents,
-                            config=config,
-                        ),
-                        timeout=call_timeout,
-                    )
-                    if parse_json_fn is not None:
-                        parsed = parse_json_fn(resp)
+                while True:
+                    try:
+                        resp = await asyncio.wait_for(
+                            client.aio.models.generate_content(
+                                model=cand,
+                                contents=contents,
+                                config=config,
+                            ),
+                            timeout=call_timeout,
+                        )
+                        if parse_json_fn is not None:
+                            parsed = parse_json_fn(resp)
+                            preferred_model = cand
+                            self.model_used = cand
+                            self.last_model_used = cand
+                            is_degraded = cand in degraded_set
+                            self.degraded_model_used = is_degraded
+                            self.last_degraded_model_used = is_degraded
+                            return resp, parsed
                         preferred_model = cand
                         self.model_used = cand
                         self.last_model_used = cand
                         is_degraded = cand in degraded_set
                         self.degraded_model_used = is_degraded
                         self.last_degraded_model_used = is_degraded
-                        return resp, parsed
-                    preferred_model = cand
-                    self.model_used = cand
-                    self.last_model_used = cand
-                    is_degraded = cand in degraded_set
-                    self.degraded_model_used = is_degraded
-                    self.last_degraded_model_used = is_degraded
-                    return resp
-                except TimeoutError as e:
-                    last_err = e
-                    continue
-                except (json.JSONDecodeError, ValueError) as e:
-                    if parse_json_fn is not None:
+                        return resp
+                    except TimeoutError as e:
                         last_err = e
-                        continue
-                    raise
-                except Exception as e:
-                    err_str = str(e)
-                    last_err = e
-                    if (
-                        "503" in err_str
-                        or "UNAVAILABLE" in err_str
-                        or "high demand" in err_str
-                        or "RESOURCE_EXHAUSTED" in err_str
-                        or "429" in err_str
-                        or "quota" in err_str.lower()
-                        or "404" in err_str
-                        or "NOT_FOUND" in err_str
-                    ):
-                        continue
-                    raise
+                        break
+                    except (json.JSONDecodeError, ValueError) as e:
+                        if parse_json_fn is not None:
+                            last_err = e
+                            break
+                        raise
+                    except Exception as e:
+                        err_str = str(e)
+                        err_lower = err_str.lower()
+                        last_err = e
+                        status_code = getattr(e, "status_code", None)
+                        if status_code is None and isinstance(getattr(e, "code", None), int):
+                            status_code = getattr(e, "code", None)
+                        is_http_500 = (
+                            status_code == 500
+                            or "500" in err_str
+                            or "stream interrupted" in err_lower
+                            or "INTERNAL" in err_str
+                        )
+                        if is_http_500:
+                            if http500_retries < 1:
+                                http500_retries += 1
+                                await asyncio.sleep(0.05)
+                                continue
+                            break
+                        if (
+                            "503" in err_str
+                            or "UNAVAILABLE" in err_str
+                            or "high demand" in err_str
+                            or "RESOURCE_EXHAUSTED" in err_str
+                            or "429" in err_str
+                            or "quota" in err_lower
+                            or "404" in err_str
+                            or "NOT_FOUND" in err_str
+                        ):
+                            break
+                        raise
             if last_err is not None:
                 raise last_err
             raise RuntimeError("No candidate models available for Google GenAI")
 
         schema_dict = _extract_json_schema(response_schema)
         tool_thinking_level = "LOW" if effective_level in ("LOW", "MEDIUM") else "MEDIUM"
+        used_tool_stage = bool(tools and tool_executor is not None and max_tool_calls > 0)
 
         total_prompt_tokens = 0
         total_completion_tokens = 0
@@ -362,7 +492,18 @@ class LiteLLMAdapter(LLMProviderPort):
         tool_evidence_blocks: list[str] = []
         tool_call_records: list[LLMToolCallResultDTO] = []
 
-        if tools and tool_executor is not None and max_tool_calls > 0:
+        def _accumulate_usage(resp_obj: Any) -> None:
+            nonlocal total_prompt_tokens, total_completion_tokens, total_thinking_tokens
+            usage = getattr(resp_obj, "usage_metadata", None)
+            if usage is None:
+                return
+            total_prompt_tokens += int(getattr(usage, "prompt_token_count", 0) or 0)
+            cand_tokens = int(getattr(usage, "candidates_token_count", 0) or 0)
+            thought_tokens = int(getattr(usage, "thoughts_token_count", 0) or 0)
+            total_completion_tokens += cand_tokens + thought_tokens
+            total_thinking_tokens += thought_tokens
+
+        if used_tool_stage and tool_executor is not None and tools is not None:
             fn_decls = [
                 types.FunctionDeclaration(
                     name=_tool_name(t),
@@ -385,13 +526,7 @@ class LiteLLMAdapter(LLMProviderPort):
                     config=tool_cfg,
                     call_timeout=18.0,
                 )
-                usage = getattr(resp, "usage_metadata", None)
-                if usage is not None:
-                    total_prompt_tokens += int(getattr(usage, "prompt_token_count", 0) or 0)
-                    cand_tokens = int(getattr(usage, "candidates_token_count", 0) or 0)
-                    thought_tokens = int(getattr(usage, "thoughts_token_count", 0) or 0)
-                    total_completion_tokens += cand_tokens + thought_tokens
-                    total_thinking_tokens += thought_tokens
+                _accumulate_usage(resp)
 
                 fn_calls = list(getattr(resp, "function_calls", None) or [])
                 candidates_list = getattr(resp, "candidates", None) or []
@@ -482,15 +617,20 @@ class LiteLLMAdapter(LLMProviderPort):
                 tool_evidence_blocks
             )
 
-        final_system_instruction = (
-            f"{system_prompt}\n\n"
+        schema_enforced_by_gateway = bool(
+            getattr(self._settings, "llm_schema_enforced_by_gateway", False)
+        )
+        compact_schema_spec = (
+            render_compact_schema_spec(schema_dict)
+            if (schema_dict and not schema_enforced_by_gateway)
+            else ""
+        )
+        final_directive = (
             "[FINAL_OUTPUT_STAGE]: KHÔNG gọi thêm bất kỳ tool/function call nào ở bước này. "
             "Chỉ xuất DUY NHẤT JSON hợp lệ theo schema."
-            if system_prompt
-            else (
-                "[FINAL_OUTPUT_STAGE]: KHÔNG gọi thêm bất kỳ tool/function call nào ở bước này. "
-                "Chỉ xuất DUY NHẤT JSON hợp lệ theo schema."
-            )
+        )
+        final_system_instruction = "\n\n".join(
+            part for part in (system_prompt, final_directive, compact_schema_spec) if part
         )
         json_cfg = self.build_generate_content_config(
             system_instruction=final_system_instruction,
@@ -534,15 +674,84 @@ class LiteLLMAdapter(LLMProviderPort):
             call_timeout=final_call_timeout,
             parse_json_fn=_parse_json_response,
         )
-        usage = getattr(final_resp, "usage_metadata", None)
-        if usage is not None:
-            total_prompt_tokens += int(getattr(usage, "prompt_token_count", 0) or 0)
-            cand_tokens = int(getattr(usage, "candidates_token_count", 0) or 0)
-            thought_tokens = int(getattr(usage, "thoughts_token_count", 0) or 0)
-            total_completion_tokens += cand_tokens + thought_tokens
-            total_thinking_tokens += thought_tokens
+        _accumulate_usage(final_resp)
 
-        validated = _normalize_schema_and_validate(parsed, response_schema)
+        repair_attempts = 0
+        try:
+            validated = _normalize_schema_and_validate(parsed, response_schema)
+        except (ValidationError, ValueError) as val_err:
+            concise_err = format_concise_schema_errors(val_err)
+            if not used_tool_stage:
+                raise SchemaMismatchError(
+                    f"AI_SCHEMA_VALIDATION_ERROR: {concise_err}",
+                    already_repaired=False,
+                    validation_summary=concise_err,
+                    prompt_tokens=total_prompt_tokens,
+                    output_tokens=total_completion_tokens,
+                    thinking_tokens=total_thinking_tokens,
+                    model_id=self.last_model_used,
+                ) from val_err
+
+            invalid_model_text = (
+                getattr(final_resp, "text", None) or json.dumps(parsed, ensure_ascii=False)
+            ).strip()
+            contents_until_now = [
+                types.Content(
+                    role="user",
+                    parts=[types.Part.from_text(text=final_user_prompt)],
+                )
+            ]
+            invalid_model_text_turn = types.Content(
+                role="model",
+                parts=[types.Part.from_text(text=invalid_model_text)],
+            )
+            repair_prompt_turn = types.Content(
+                role="user",
+                parts=[
+                    types.Part.from_text(
+                        text=(
+                            f"[SCHEMA_REPAIR_ERRORS]\n{concise_err}\n\n"
+                            "Hãy sửa lại JSON ở lượt trên cho đúng hoàn toàn schema yêu cầu. "
+                            "KHÔNG gọi thêm tool, chỉ xuất DUY NHẤT JSON hợp lệ."
+                        )
+                    )
+                ],
+            )
+            repair_contents = [*contents_until_now, invalid_model_text_turn, repair_prompt_turn]
+            repair_attempts = 1
+            try:
+                repair_resp, repair_parsed = await _call_model(
+                    contents=repair_contents,
+                    config=json_cfg,
+                    call_timeout=final_call_timeout,
+                    parse_json_fn=_parse_json_response,
+                )
+            except (json.JSONDecodeError, ValueError) as repair_parse_err:
+                repair_concise = format_concise_schema_errors(repair_parse_err)
+                raise SchemaMismatchError(
+                    f"AI_SCHEMA_VALIDATION_ERROR: {repair_concise}",
+                    already_repaired=True,
+                    validation_summary=repair_concise,
+                    prompt_tokens=total_prompt_tokens,
+                    output_tokens=total_completion_tokens,
+                    thinking_tokens=total_thinking_tokens,
+                    model_id=self.last_model_used,
+                ) from repair_parse_err
+            _accumulate_usage(repair_resp)
+            try:
+                validated = _normalize_schema_and_validate(repair_parsed, response_schema)
+            except (ValidationError, ValueError) as repair_val_err:
+                repair_concise = format_concise_schema_errors(repair_val_err)
+                raise SchemaMismatchError(
+                    f"AI_SCHEMA_VALIDATION_ERROR: {repair_concise}",
+                    already_repaired=True,
+                    validation_summary=repair_concise,
+                    prompt_tokens=total_prompt_tokens,
+                    output_tokens=total_completion_tokens,
+                    thinking_tokens=total_thinking_tokens,
+                    model_id=self.last_model_used,
+                ) from repair_val_err
+
         return LLMGenerationResult(
             payload=validated,
             prompt_tokens=total_prompt_tokens,
@@ -550,6 +759,7 @@ class LiteLLMAdapter(LLMProviderPort):
             thinking_tokens=total_thinking_tokens,
             model_id=self.last_model_used,
             raw_tool_results=tuple(tool_call_records),
+            repair_attempts=repair_attempts,
         )
 
     async def generate_structured(
@@ -582,12 +792,17 @@ class LiteLLMAdapter(LLMProviderPort):
         from litellm import acompletion
 
         schema_dict = _extract_json_schema(response_schema)
-        sys_content = system_prompt
-        if schema_dict:
-            sys_content = (
-                f"{system_prompt}\n\nRespond strictly with JSON conforming to this schema:\n"
-                f"{json.dumps(schema_dict, ensure_ascii=False)}"
-            )
+        schema_enforced_by_gateway = bool(
+            getattr(self._settings, "llm_schema_enforced_by_gateway", False)
+        )
+        compact_spec = (
+            render_compact_schema_spec(schema_dict)
+            if (schema_dict and not schema_enforced_by_gateway)
+            else ""
+        )
+        sys_content = (
+            f"{system_prompt}\n\n{compact_spec}".strip() if compact_spec else system_prompt
+        )
 
         response = await acompletion(
             model=self.model_identifier,
@@ -606,9 +821,21 @@ class LiteLLMAdapter(LLMProviderPort):
         prompt_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
         completion_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
         parsed = json.loads(content)
-        validated_dict = _normalize_schema_and_validate(parsed, response_schema)
         self.model_used = self.model_identifier.split("/")[-1]
         self.last_model_used = self.model_used
+        try:
+            validated_dict = _normalize_schema_and_validate(parsed, response_schema)
+        except (ValidationError, ValueError) as val_err:
+            concise_err = format_concise_schema_errors(val_err)
+            raise SchemaMismatchError(
+                f"AI_SCHEMA_VALIDATION_ERROR: {concise_err}",
+                already_repaired=False,
+                validation_summary=concise_err,
+                prompt_tokens=prompt_tokens,
+                output_tokens=completion_tokens,
+                thinking_tokens=0,
+                model_id=self.last_model_used,
+            ) from val_err
         return LLMGenerationResult(
             payload=validated_dict,
             prompt_tokens=prompt_tokens,

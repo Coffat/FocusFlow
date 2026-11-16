@@ -795,6 +795,7 @@ class StubLLMAdapter(LLMProviderPort):
             elif schema_name in (
                 "ClarificationQuestionsResponse",
                 "ClarificationQuestionsLLMOutput",
+                "ClarificationFollowupLLMOutput",
             ):
                 candidate_questions = [
                     {
@@ -926,11 +927,16 @@ class StubLLMAdapter(LLMProviderPort):
                     q for q in candidate_questions if q["diagnostic_dimension"] not in known_dims
                 ]
                 selected = (filtered if len(filtered) >= 3 else candidate_questions)[:5]
+                if schema_name == "ClarificationFollowupLLMOutput":
+                    selected = selected[:1]
                 stub_payload["questions"] = [
                     {**q, "id": f"q{idx + 1}"} for idx, q in enumerate(selected)
                 ]
-                stub_payload["initial_assumptions"] = []
-                stub_payload["missing_dimensions"] = [q["diagnostic_dimension"] for q in selected]
+                if schema_name != "ClarificationFollowupLLMOutput":
+                    stub_payload["initial_assumptions"] = []
+                    stub_payload["missing_dimensions"] = [
+                        q["diagnostic_dimension"] for q in selected
+                    ]
             else:
                 stub_payload["questions"] = [
                     {
