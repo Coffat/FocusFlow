@@ -479,19 +479,163 @@ def build_task_decomposer_prompt(
     return "\n\n".join(parts)
 
 
+def build_compact_judge_payload(
+    proposal_data: dict[str, Any],
+    milestones_metadata: Sequence[Any] | None = None,
+) -> dict[str, Any]:
+    """Build compact Judge payload stripping noisy fields while keeping dependencies, objectives, and criteria."""
+    raw_deps_input = proposal_data.get("dependencies")
+    normalized_deps: list[dict[str, Any]] = []
+    preds_by_task: dict[str, list[str]] = {}
+    seen_edges: set[tuple[str, str]] = set()
+    if isinstance(raw_deps_input, list):
+        for dep in raw_deps_input:
+            if not isinstance(dep, dict):
+                continue
+            pred = str(dep.get("predecessor_id") or "").strip()
+            succ = str(dep.get("successor_id") or "").strip()
+            if not pred or not succ:
+                continue
+            edge_key = (pred, succ)
+            if edge_key not in seen_edges:
+                seen_edges.add(edge_key)
+                normalized_deps.append(
+                    {
+                        "predecessor_id": pred,
+                        "successor_id": succ,
+                        "is_mandatory": bool(dep.get("is_mandatory", True)),
+                    }
+                )
+            preds_by_task.setdefault(succ, [])
+            if pred not in preds_by_task[succ]:
+                preds_by_task[succ].append(pred)
+
+    compact_tasks: list[dict[str, Any]] = []
+    raw_tasks = proposal_data.get("tasks")
+    if isinstance(raw_tasks, list):
+        for task in raw_tasks:
+            if not isinstance(task, dict):
+                continue
+            raw_tid = task.get("task_id") if task.get("task_id") is not None else task.get("id")
+            tid = str(raw_tid).strip() if raw_tid is not None else ""
+            task_deps: list[str] = []
+            for dep_key in ("depends_on_task_ids", "dependencies"):
+                raw_t_deps = task.get(dep_key)
+                if isinstance(raw_t_deps, (list, tuple)):
+                    for item in raw_t_deps:
+                        dep_id = (
+                            str(item.get("predecessor_id") or item.get("task_id") or "").strip()
+                            if isinstance(item, dict)
+                            else str(item).strip()
+                        )
+                        if dep_id and dep_id not in task_deps:
+                            task_deps.append(dep_id)
+            if tid and tid in preds_by_task:
+                for pred in preds_by_task[tid]:
+                    if pred not in task_deps:
+                        task_deps.append(pred)
+            if tid:
+                for pred in task_deps:
+                    edge_key = (pred, tid)
+                    if edge_key not in seen_edges:
+                        seen_edges.add(edge_key)
+                        normalized_deps.append(
+                            {
+                                "predecessor_id": pred,
+                                "successor_id": tid,
+                                "is_mandatory": True,
+                            }
+                        )
+
+            compact_task: dict[str, Any] = {
+                "task_id": tid,
+                "milestone_id": str(task.get("milestone_id") or ""),
+                "title": str(task.get("title") or ""),
+                "task_type": str(task.get("task_type") or ""),
+                "estimated_minutes": task.get("estimated_minutes"),
+                "scheduled_date": task.get("scheduled_date"),
+                "learning_objective": str(task.get("learning_objective") or ""),
+                "completion_criteria": str(task.get("completion_criteria") or ""),
+                "depends_on_task_ids": task_deps,
+            }
+            if "dependencies" in task:
+                raw_task_deps = task["dependencies"]
+                compact_task["dependencies"] = (
+                    list(raw_task_deps)
+                    if isinstance(raw_task_deps, (list, tuple))
+                    else raw_task_deps
+                )
+            if task.get("covered_outcome_ids"):
+                compact_task["covered_outcome_ids"] = list(task["covered_outcome_ids"])
+            compact_tasks.append(compact_task)
+
+    raw_milestones: list[Any]
+    if milestones_metadata is not None:
+        raw_milestones = list(milestones_metadata)
+    elif isinstance(proposal_data.get("milestones"), list):
+        raw_milestones = list(proposal_data["milestones"])
+    else:
+        raw_milestones = []
+
+    compact_milestones: list[dict[str, Any]] = []
+    for m in raw_milestones:
+        if isinstance(m, dict):
+            mid = str(m.get("milestone_id") or m.get("id") or "")
+            seq = m.get("sequence_order")
+            title = str(m.get("title") or "")
+            raw_outcomes = m.get("learning_outcomes")
+            outcomes = (
+                [str(o) for o in raw_outcomes] if isinstance(raw_outcomes, (list, tuple)) else []
+            )
+            raw_obj = m.get("learning_objective")
+            comp_criteria = str(m.get("completion_criteria") or "")
+        else:
+            mid = str(getattr(m, "id", getattr(m, "milestone_id", "")) or "")
+            seq = getattr(m, "sequence_order", None)
+            title = str(getattr(m, "title", "") or "")
+            raw_outcomes = getattr(m, "learning_outcomes", ()) or ()
+            outcomes = [str(o) for o in raw_outcomes]
+            raw_obj = getattr(m, "learning_objective", None)
+            comp_criteria = str(getattr(m, "completion_criteria", None) or "")
+
+        m_entry: dict[str, Any] = {
+            "milestone_id": mid,
+            "sequence_order": seq,
+            "title": title,
+            "learning_outcomes": outcomes,
+            "completion_criteria": comp_criteria,
+        }
+        if raw_obj is not None and str(raw_obj).strip():
+            m_entry["learning_objective"] = str(raw_obj)
+        compact_milestones.append(m_entry)
+
+    compact_payload: dict[str, Any] = {
+        "tasks": compact_tasks,
+        "dependencies": normalized_deps,
+    }
+    if compact_milestones:
+        compact_payload["milestones"] = compact_milestones
+    return compact_payload
+
+
 def build_pedagogical_judge_prompt(
     proposal_payload: dict[str, Any] | str,
     *,
     context_block: str = "",
     milestones_summary: str = "",
     learner_level: str = "",
+    milestones_metadata: Sequence[Any] | None = None,
 ) -> str:
     """Build user prompt for `pedagogical-quality-judge` (Tier 3) with untrusted boundaries (T6.2)."""
     if isinstance(proposal_payload, str):
         serialized = sanitize_untrusted_text(proposal_payload)
     else:
+        compact_payload = build_compact_judge_payload(
+            proposal_payload,
+            milestones_metadata=milestones_metadata,
+        )
         serialized = json.dumps(
-            sanitize_untrusted_value(proposal_payload),
+            sanitize_untrusted_value(compact_payload),
             ensure_ascii=False,
             default=str,
         )

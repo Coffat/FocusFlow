@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import json
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 from uuid import UUID, uuid4
@@ -15,16 +17,27 @@ from src.planning.application.services.roadmap_skills import (
     build_pedagogical_judge_prompt,
     build_planning_prompt_registry,
 )
+from src.planning.application.services.roadmap_skills import (
+    build_compact_judge_payload as build_compact_judge_payload,
+)
 from src.shared_kernel.application.harness.execution_manager import AIExecutionManager
-from src.shared_kernel.application.harness.models import WorkflowType
+from src.shared_kernel.application.harness.models import (
+    WorkflowRun,
+    WorkflowStepExecution,
+    WorkflowType,
+)
 from src.shared_kernel.application.harness.untrusted_context import sanitize_untrusted_text
-from src.shared_kernel.application.harness.workflow_port import WorkflowRepositoryPort
+from src.shared_kernel.application.harness.workflow_port import (
+    BufferedWorkflowRepo,
+    WorkflowRepositoryPort,
+)
 from src.shared_kernel.application.llm_port import LLMProviderPort
 from src.shared_kernel.config import get_settings
 
 logger = structlog.get_logger(__name__)
 
-TIER3_JUDGE_TIMEOUT_SECONDS: float = 15.0
+TIER3_JUDGE_TIMEOUT_SECONDS: float = 8.0
+DEFAULT_MIN_JUDGE_REMAINING_SECONDS: float = 3.0
 PEDAGOGICAL_JUDGE_RESPONSE_SCHEMA: dict[str, Any] = PedagogicalJudgeLLMOutput.model_json_schema()
 
 
@@ -83,12 +96,15 @@ async def execute_tier3_pedagogical_judge(
     *,
     enable_tier3_judge: bool = True,
     tier3_timeout_seconds: float | None = None,
+    min_judge_remaining_seconds: float | None = None,
     thinking_level: str | None = None,
     goal_title: str = "",
     learner_level: str = "",
     milestone_summary: str = "",
+    milestones_metadata: Sequence[Any] | None = None,
     remaining_budget_seconds: float | None = None,
     workflow_repo: WorkflowRepositoryPort | None = None,
+    step_records_out: list[tuple[WorkflowRun, WorkflowStepExecution]] | None = None,
     user_id: UUID | None = None,
     goal_id: UUID | None = None,
     roadmap_id: UUID | None = None,
@@ -103,25 +119,36 @@ async def execute_tier3_pedagogical_judge(
         )
 
     settings = get_settings()
-    judge_tpl = build_planning_prompt_registry().latest(PEDAGOGICAL_JUDGE_SKILL.skill_id)
-    judge_user_prompt = build_pedagogical_judge_prompt(
-        proposal_data,
-        context_block=(
-            f"Mục tiêu: {sanitize_untrusted_text(goal_title)}\n"
-            f"Số nhiệm vụ: {len(proposal_data.get('tasks', []))}"
-        ),
-        milestones_summary=milestone_summary,
-        learner_level=learner_level,
+    effective_min_remaining = (
+        float(min_judge_remaining_seconds)
+        if min_judge_remaining_seconds is not None
+        else float(
+            getattr(settings, "ai_min_judge_remaining_seconds", DEFAULT_MIN_JUDGE_REMAINING_SECONDS)
+        )
     )
+    if remaining_budget_seconds is not None and (
+        remaining_budget_seconds <= 0 or remaining_budget_seconds < effective_min_remaining
+    ):
+        return Tier3JudgeOutcome(
+            judge_skipped=True,
+            pedagogical_score=None,
+            advisory_warnings=[
+                "Tier 3 Pedagogical Judge không còn đủ thời gian trong ngân sách pipeline — trạng thái REVIEW_PENDING."
+            ],
+            judge_status="REVIEW_PENDING",
+        )
 
     configured_timeout = (
         float(tier3_timeout_seconds)
         if tier3_timeout_seconds is not None
-        else float(settings.tier3_judge_timeout_seconds)
+        else float(getattr(settings, "tier3_judge_timeout_seconds", TIER3_JUDGE_TIMEOUT_SECONDS))
     )
-    attempt_timeout = min(configured_timeout, float(settings.ai_hard_timeout_seconds))
+    attempt_timeout = min(
+        configured_timeout,
+        float(getattr(settings, "ai_hard_timeout_seconds", 55.0)),
+    )
     if remaining_budget_seconds is not None:
-        attempt_timeout = min(attempt_timeout, remaining_budget_seconds)
+        attempt_timeout = min(attempt_timeout, float(remaining_budget_seconds))
     if attempt_timeout <= 0:
         return Tier3JudgeOutcome(
             judge_skipped=True,
@@ -132,19 +159,44 @@ async def execute_tier3_pedagogical_judge(
             judge_status="REVIEW_PENDING",
         )
 
+    compact_payload = build_compact_judge_payload(
+        proposal_data,
+        milestones_metadata=milestones_metadata,
+    )
+    effective_milestone_summary = milestone_summary
+    if not effective_milestone_summary.strip() and compact_payload.get("milestones"):
+        effective_milestone_summary = json.dumps(compact_payload["milestones"], ensure_ascii=False)
+
+    judge_tpl = build_planning_prompt_registry().latest(PEDAGOGICAL_JUDGE_SKILL.skill_id)
+    judge_user_prompt = build_pedagogical_judge_prompt(
+        compact_payload,
+        context_block=(
+            f"Mục tiêu: {sanitize_untrusted_text(goal_title)}\n"
+            f"Số nhiệm vụ: {len(compact_payload.get('tasks', []))}"
+        ),
+        milestones_summary=effective_milestone_summary,
+        learner_level=learner_level,
+    )
+
     judge_dict: dict[str, Any] | None = None
     last_exc: Exception | None = None
     prompt_tokens = 0
     completion_tokens = 0
     thinking_tokens = 0
     effective_thinking_level = thinking_level or PEDAGOGICAL_JUDGE_SKILL.thinking_level
+    buffered_repo = (
+        BufferedWorkflowRepo() if (workflow_repo is None and step_records_out is not None) else None
+    )
+    effective_wf_repo: WorkflowRepositoryPort | None = (
+        workflow_repo if workflow_repo is not None else buffered_repo
+    )
     try:
         exec_mgr = AIExecutionManager(
             provider=llm_provider,
             manage_quota=False,
             max_retries=0,
             timeout_seconds=attempt_timeout,
-            workflow_repo=workflow_repo,
+            workflow_repo=effective_wf_repo,
         )
         exec_res = await exec_mgr.execute(
             user_id=user_id or uuid4(),
@@ -178,6 +230,9 @@ async def execute_tier3_pedagogical_judge(
             attempt=1,
             error=str(exc),
         )
+    finally:
+        if buffered_repo is not None and step_records_out is not None:
+            step_records_out.extend(buffered_repo.drain_pairs())
 
     if judge_dict is None or last_exc is not None:
         if isinstance(last_exc, (TimeoutError, asyncio.TimeoutError)):

@@ -28,6 +28,7 @@ from src.planning.application.services.validation_gate import (
     TIER3_JUDGE_TIMEOUT_SECONDS,
     ProposalValidationGateOrchestrator,
     ValidationGateResultDTO,
+    build_compact_judge_payload,
 )
 from src.planning.domain.services.validation_types import (
     AI_BLOCK_MAX_MINUTES,
@@ -71,6 +72,7 @@ __all__ = [
     "TASK_DECOMPOSER_SKILL",
     "TIER3_JUDGE_TIMEOUT_SECONDS",
     "ValidationGateResultDTO",
+    "build_compact_judge_payload",
     "build_goal_clarifier_prompt",
     "build_milestone_planner_prompt",
     "build_pedagogical_judge_prompt",

@@ -91,11 +91,12 @@ class Settings(BaseSettings):
     ai_tool_call_timeout_seconds: float = 40.0
     ai_quality_critic_timeout_seconds: float = 15.0
     ai_quality_arbiter_timeout_seconds: float = 14.5
-    tier3_judge_timeout_seconds: float = 15.0
+    tier3_judge_timeout_seconds: float = 8.0
     ai_weekly_review_timeout_seconds: float = 10.5
     ai_prove_question_timeout_seconds: float = 8.5
     ai_prove_grader_timeout_seconds: float = 7.5
     ai_min_critic_remaining_seconds: float = 6.0
+    ai_min_judge_remaining_seconds: float = 3.0
     ai_min_retry_remaining_seconds: float = 12.0
 
     enable_tier3_judge: bool = True
@@ -141,6 +142,7 @@ class Settings(BaseSettings):
             "ai_prove_question_timeout_seconds",
             "ai_prove_grader_timeout_seconds",
             "ai_min_critic_remaining_seconds",
+            "ai_min_judge_remaining_seconds",
             "ai_min_retry_remaining_seconds",
         )
         for field_name in stage_fields:

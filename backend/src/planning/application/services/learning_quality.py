@@ -33,7 +33,10 @@ from src.shared_kernel.application.harness.untrusted_context import (
     sanitize_untrusted_text,
     sanitize_untrusted_value,
 )
-from src.shared_kernel.application.harness.workflow_port import WorkflowRepositoryPort
+from src.shared_kernel.application.harness.workflow_port import (
+    BufferedWorkflowRepo,
+    WorkflowRepositoryPort,
+)
 from src.shared_kernel.application.llm_port import LLMProviderPort
 from src.shared_kernel.domain.base import generate_uuid7
 
@@ -322,13 +325,27 @@ async def run_dual_quality_critics(
     milestone_summary: str = "",
     timeout_seconds: float = DEFAULT_QUALITY_CRITIC_TIMEOUT_SECONDS,
     arbiter_timeout_seconds: float = DEFAULT_QUALITY_ARBITER_TIMEOUT_SECONDS,
+    remaining_budget_seconds: float | None = None,
     workflow_repo: WorkflowRepositoryPort | None = None,
+    step_records_out: list[tuple[WorkflowRun, WorkflowStepExecution]] | None = None,
     user_id: UUID | None = None,
     goal_id: UUID | None = None,
     roadmap_id: UUID | None = None,
     workflow_type: WorkflowType | None = None,
     token_accumulator: dict[str, int] | None = None,
 ) -> tuple[list[ConstraintViolationDTO], list[dict[str, Any]], int, int]:
+    if remaining_budget_seconds is not None and remaining_budget_seconds <= 0:
+        if token_accumulator is not None:
+            token_accumulator["prompt_tokens"] = 0
+            token_accumulator["completion_tokens"] = 0
+            token_accumulator["thinking_tokens"] = 0
+        return (
+            [],
+            [{"critic": "QUALITY_CRITIC", "status": "SKIPPED_LOW_BUDGET", "issues": []}],
+            0,
+            0,
+        )
+
     registry = build_planning_prompt_registry()
     serialized = json.dumps(sanitize_untrusted_value(payload), ensure_ascii=False, default=str)
     safe_level = sanitize_untrusted_text(learner_level) or "UNSPECIFIED"
@@ -343,6 +360,9 @@ async def run_dual_quality_critics(
     effective_user_id = user_id or uuid4()
     effective_critic_timeout = max(0.01, float(timeout_seconds))
     effective_arbiter_timeout = max(0.01, float(arbiter_timeout_seconds))
+    if remaining_budget_seconds is not None:
+        effective_critic_timeout = min(effective_critic_timeout, float(remaining_budget_seconds))
+        effective_arbiter_timeout = min(effective_arbiter_timeout, float(remaining_budget_seconds))
     roles = (
         (
             "COVERAGE_PREREQUISITE_CRITIC",
@@ -403,6 +423,14 @@ async def run_dual_quality_critics(
             audit_meta,
         )
 
+    async def _persist_or_buffer(run: WorkflowRun, step: WorkflowStepExecution) -> None:
+        if workflow_repo is not None:
+            await workflow_repo.add_run(run)
+            await workflow_repo.add_step(step)
+        elif step_records_out is not None:
+            step_records_out.append((run, step))
+
+    critic_loop_start = asyncio.get_running_loop().time()
     started_at = datetime.now(UTC)
     results = await asyncio.gather(*(_run(*role) for role in roles), return_exceptions=True)
     finished_at = datetime.now(UTC)
@@ -416,7 +444,9 @@ async def run_dual_quality_critics(
         tpl = registry.latest(prompt_id)
         audit_meta = build_prompt_audit_metadata(tpl)
         if isinstance(result, BaseException):
-            if workflow_repo is not None and workflow_type is not None:
+            if (
+                workflow_repo is not None or step_records_out is not None
+            ) and workflow_type is not None:
                 run = WorkflowRun(
                     id=generate_uuid7(),
                     user_id=effective_user_id,
@@ -430,27 +460,25 @@ async def run_dual_quality_critics(
                     started_at=started_at,
                     completed_at=finished_at,
                 )
-                await workflow_repo.add_run(run)
-                await workflow_repo.add_step(
-                    WorkflowStepExecution(
-                        id=generate_uuid7(),
-                        workflow_run_id=run.id,
-                        step_name=role,
-                        step_order=1,
-                        status=WorkflowStepStatus.FAILED,
-                        input_summary={"operation_type": f"QUALITY_CRITIC:{role}", **audit_meta},
-                        output_payload={
-                            "error": str(result),
-                            "prompt_tokens": 0,
-                            "output_tokens": 0,
-                            "completion_tokens": 0,
-                            "thinking_tokens": 0,
-                        },
-                        retry_count=0,
-                        started_at=started_at,
-                        completed_at=finished_at,
-                    )
+                step = WorkflowStepExecution(
+                    id=generate_uuid7(),
+                    workflow_run_id=run.id,
+                    step_name=role,
+                    step_order=1,
+                    status=WorkflowStepStatus.FAILED,
+                    input_summary={"operation_type": f"QUALITY_CRITIC:{role}", **audit_meta},
+                    output_payload={
+                        "error": str(result),
+                        "prompt_tokens": 0,
+                        "output_tokens": 0,
+                        "completion_tokens": 0,
+                        "thinking_tokens": 0,
+                    },
+                    retry_count=0,
+                    started_at=started_at,
+                    completed_at=finished_at,
                 )
+                await _persist_or_buffer(run, step)
             violations.append(
                 _violation(None, "quality_review", "QUALITY_CRITIC_UNAVAILABLE", role)
             )
@@ -470,7 +498,9 @@ async def run_dual_quality_critics(
                 "issues": filtered_issues,
                 "unsupported_issues_filtered": dropped_count,
             }
-        if workflow_repo is not None and workflow_type is not None:
+        if (
+            workflow_repo is not None or step_records_out is not None
+        ) and workflow_type is not None:
             run = WorkflowRun(
                 id=generate_uuid7(),
                 user_id=effective_user_id,
@@ -483,32 +513,30 @@ async def run_dual_quality_critics(
                 started_at=started_at,
                 completed_at=finished_at,
             )
-            await workflow_repo.add_run(run)
-            await workflow_repo.add_step(
-                WorkflowStepExecution(
-                    id=generate_uuid7(),
-                    workflow_run_id=run.id,
-                    step_name=role,
-                    step_order=1,
-                    status=WorkflowStepStatus.COMPLETED,
-                    input_summary={
-                        "operation_type": f"QUALITY_CRITIC:{role}",
-                        "model": model_id,
-                        **run_audit,
-                    },
-                    output_payload={
-                        "status": str(report.get("status", "")),
-                        "prompt_tokens": p_tokens,
-                        "output_tokens": c_tokens,
-                        "completion_tokens": c_tokens,
-                        "thinking_tokens": t_tokens,
-                        "model_id": model_id,
-                    },
-                    retry_count=0,
-                    started_at=started_at,
-                    completed_at=finished_at,
-                )
+            step = WorkflowStepExecution(
+                id=generate_uuid7(),
+                workflow_run_id=run.id,
+                step_name=role,
+                step_order=1,
+                status=WorkflowStepStatus.COMPLETED,
+                input_summary={
+                    "operation_type": f"QUALITY_CRITIC:{role}",
+                    "model": model_id,
+                    **run_audit,
+                },
+                output_payload={
+                    "status": str(report.get("status", "")),
+                    "prompt_tokens": p_tokens,
+                    "output_tokens": c_tokens,
+                    "completion_tokens": c_tokens,
+                    "thinking_tokens": t_tokens,
+                    "model_id": model_id,
+                },
+                retry_count=0,
+                started_at=started_at,
+                completed_at=finished_at,
             )
+            await _persist_or_buffer(run, step)
         report = {**report, "critic": role}
         reports.append(report)
         prompt_tokens += int(p_tokens or 0)
@@ -522,6 +550,34 @@ async def run_dual_quality_critics(
     }
     decisive_reports = reports
     if not violations and "FAIL" in critic_statuses and critic_statuses & {"PASS", "WARN"}:
+        if remaining_budget_seconds is not None:
+            arbiter_remaining = float(remaining_budget_seconds) - (
+                asyncio.get_running_loop().time() - critic_loop_start
+            )
+            if arbiter_remaining < 1.5:
+                logger.warning(
+                    "quality_arbiter_skipped_low_budget",
+                    extra={
+                        "stage": stage,
+                        "remaining_seconds": round(arbiter_remaining, 2),
+                    },
+                )
+                violations.append(
+                    _violation(
+                        None,
+                        "quality_review",
+                        "QUALITY_ARBITER_UNAVAILABLE",
+                        "QUALITY_ARBITER",
+                    )
+                )
+                reports.append({"critic": "QUALITY_ARBITER", "status": "ERROR", "issues": []})
+                if token_accumulator is not None:
+                    token_accumulator["prompt_tokens"] = prompt_tokens
+                    token_accumulator["completion_tokens"] = completion_tokens
+                    token_accumulator["thinking_tokens"] = thinking_tokens
+                return violations, reports, prompt_tokens, completion_tokens
+            effective_arbiter_timeout = min(effective_arbiter_timeout, arbiter_remaining)
+
         arbiter_tpl = registry.latest(QUALITY_ARBITER_PROMPT.prompt_id)
         arbiter_context_parts = [
             f"learner_level: {safe_level}",
@@ -538,13 +594,21 @@ async def run_dual_quality_critics(
             f"{json.dumps(sanitize_untrusted_value(reports), ensure_ascii=False, default=str)}\n"
             f"[PAYLOAD]\n{serialized}"
         )
+        arbiter_buffered = (
+            BufferedWorkflowRepo()
+            if (workflow_repo is None and step_records_out is not None)
+            else None
+        )
+        arbiter_wf_repo: WorkflowRepositoryPort | None = (
+            workflow_repo if workflow_repo is not None else arbiter_buffered
+        )
         try:
             arbiter_mgr = AIExecutionManager(
                 provider=llm,
                 manage_quota=False,
                 max_retries=0,
                 timeout_seconds=effective_arbiter_timeout,
-                workflow_repo=workflow_repo,
+                workflow_repo=arbiter_wf_repo,
             )
             arbiter_res = await arbiter_mgr.execute(
                 user_id=effective_user_id,
@@ -596,6 +660,9 @@ async def run_dual_quality_critics(
                 token_accumulator["completion_tokens"] = completion_tokens
                 token_accumulator["thinking_tokens"] = thinking_tokens
             return violations, reports, prompt_tokens, completion_tokens
+        finally:
+            if arbiter_buffered is not None and step_records_out is not None:
+                step_records_out.extend(arbiter_buffered.drain_pairs())
 
         arbiter_report = {**arbiter_report, "critic": "QUALITY_ARBITER"}
         reports.append(arbiter_report)

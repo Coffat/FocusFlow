@@ -36,6 +36,7 @@ from src.planning.application.services.roadmap_skills import (
 )
 from src.planning.application.services.validation_gate import ProposalValidationGateOrchestrator
 from src.planning.domain.exceptions.planning_exceptions import ProposalValidationGateError
+from src.planning.domain.models.milestone import Milestone, MilestoneStatus
 from src.planning.domain.services.validation_types import (
     AvailabilityConfigurationDTO,
     AvailabilitySlotDTO,
@@ -478,6 +479,36 @@ class _ScenarioEvalResult:
     decomposer_error_categories: list[str] = field(default_factory=list)
 
 
+def _build_milestone_entities(milestones: Sequence[dict[str, Any]]) -> list[Milestone]:
+    roadmap_uuid = uuid4()
+    entities: list[Milestone] = []
+    for m in milestones:
+        raw_outcomes = m.get("learning_outcomes") or []
+        outcomes_tuple = tuple(
+            str(o.get("description") or o.get("id") or o) if isinstance(o, dict) else str(o)
+            for o in raw_outcomes
+        )
+        completion_criteria = str(
+            m.get("completion_criteria")
+            or "; ".join(outcomes_tuple)
+            or f"Hoàn thành cột mốc {m.get('title', '')}"
+        )
+        entities.append(
+            Milestone(
+                id=UUID(str(m["milestone_id"])),
+                roadmap_id=roadmap_uuid,
+                sequence_order=int(m.get("sequence_order", len(entities) + 1)),
+                title=str(m.get("title", "Milestone")),
+                learning_outcomes=outcomes_tuple,
+                completion_criteria=completion_criteria,
+                estimated_effort_minutes=int(m.get("estimated_effort_minutes", 120)),
+                required_concepts=tuple(str(c) for c in (m.get("required_concepts") or [])),
+                status=MilestoneStatus.APPROVED,
+            )
+        )
+    return entities
+
+
 async def _evaluate_scenario(
     idx: int,
     scenario: dict[str, Any],
@@ -489,12 +520,14 @@ async def _evaluate_scenario(
     judge_thinking_level: str | None = None,
     judge_timeout_seconds: float | None = None,
     include_weekly: bool = True,
+    parallel_critics_and_judge: bool = False,
     decomposer_provider_factory: ProviderFactory | None = None,
     judge_provider_factory: ProviderFactory | None = None,
     weekly_provider_factory: ProviderFactory | None = None,
 ) -> _ScenarioEvalResult:
     availability = _build_availability(scenario["availability"])
     milestones = list(scenario["milestones"])
+    milestone_entities = _build_milestone_entities(milestones) if parallel_critics_and_judge else []
     valid_milestone_ids = {UUID(str(m["milestone_id"])) for m in milestones}
     milestone_json = json.dumps(
         [
@@ -504,6 +537,11 @@ async def _evaluate_scenario(
                 "title": m["title"],
                 "required_concepts": m.get("required_concepts", []),
                 "learning_outcomes": m.get("learning_outcomes", []),
+                "completion_criteria": m.get("completion_criteria")
+                or "; ".join(
+                    str(o.get("description") or o.get("id") or o) if isinstance(o, dict) else str(o)
+                    for o in (m.get("learning_outcomes") or [])
+                ),
                 "estimated_effort_minutes": m.get("estimated_effort_minutes", 120),
             }
             for m in milestones
@@ -513,12 +551,21 @@ async def _evaluate_scenario(
     sanitized_goal = PromptSanitizer.sanitize(
         str(scenario["goal"].get("raw_description", "")), wrap_xml=True
     )
+    all_required_concepts = list(
+        dict.fromkeys(
+            str(c).strip()
+            for m in milestones
+            for c in (m.get("required_concepts") or [])
+            if str(c).strip()
+        )
+    )
     user_prompt = (
         f"GENERATE_PROPOSAL_TASKS\n"
         f"GOAL: {PromptSanitizer.sanitize(str(scenario['goal'].get('title', '')), wrap_xml=True)}\n"
         f"DESCRIPTION: {sanitized_goal}\n"
         f"PLANNING_WINDOW: {scenario['start_date']}..{scenario['target_date']}\n"
         f"MILESTONE_IDS: {','.join(str(m['milestone_id']) for m in milestones)}\n"
+        f"required_concepts={','.join(all_required_concepts)}\n"
         f"approved_milestones={milestone_json}\n"
         f"skill=learning-task-decomposer"
     )
@@ -539,6 +586,11 @@ async def _evaluate_scenario(
     case_has_valid_output = False
     last_valid_proposal: dict[str, Any] = {}
 
+    case_judge_status = "SKIPPED_NO_PROPOSAL"
+    case_pedagogical_score: float | None = None
+    judge_error_category: str | None = None
+    parallel_wf_repo = _EvalWorkflowRepo()
+
     for trial in range(effective_trials):
         result.total_runs += 1
         if decomposer_provider_factory is not None:
@@ -546,9 +598,16 @@ async def _evaluate_scenario(
         else:
             provider = LiteLLMAdapter() if use_live else StubLLMAdapter()
 
+        effective_judge_timeout = (
+            judge_timeout_seconds
+            if judge_timeout_seconds is not None
+            else float(get_settings().tier3_judge_timeout_seconds)
+        )
         orchestrator = ProposalValidationGateOrchestrator(
             llm_provider=provider,
-            enable_tier3_judge=False,
+            enable_tier3_judge=parallel_critics_and_judge,
+            tier3_timeout_seconds=effective_judge_timeout if parallel_critics_and_judge else None,
+            workflow_repo=parallel_wf_repo if parallel_critics_and_judge else None,
         )
         t0 = time.perf_counter()
         proposal: dict[str, Any] = {}
@@ -571,6 +630,9 @@ async def _evaluate_scenario(
                 start_date=date.fromisoformat(str(scenario["start_date"])),
                 current_roadmap_target_date=date.fromisoformat(str(scenario["target_date"])),
                 goal_title=str(scenario["goal"].get("title", "")),
+                learner_level=str(scenario.get("learner_level", "")),
+                milestone_summary=milestone_json if parallel_critics_and_judge else "",
+                milestones=milestone_entities if parallel_critics_and_judge else (),
                 thinking_level=decomposer_thinking_level or TASK_DECOMPOSER_SKILL.thinking_level,
                 deterministic_allocation=True,
                 max_retries=2,
@@ -588,6 +650,14 @@ async def _evaluate_scenario(
                 and len(proposal.get("tasks", []))
                 >= int(scenario["expected_invariants"].get("min_tasks", 1))
             )
+            if parallel_critics_and_judge and gate_result.is_valid:
+                case_judge_status = gate_result.judge_status
+                case_pedagogical_score = gate_result.pedagogical_score
+                result.pedagogical_score = gate_result.pedagogical_score
+                if gate_result.judge_status == "REVIEW_PENDING":
+                    judge_error_category = classify_eval_error(
+                        error_message=" ".join(gate_result.advisory_warnings)
+                    )
             if not passed:
                 trial_error = "INSUFFICIENT_TASKS"
         except ProposalValidationGateError as exc:
@@ -648,15 +718,12 @@ async def _evaluate_scenario(
             case_t_tok = t_tok
             case_error = trial_error
 
-    # Tier 3 Pedagogical Judge
-    case_judge_status = "SKIPPED_NO_PROPOSAL"
-    case_pedagogical_score: float | None = None
-    judge_error_category: str | None = None
+    # Tier 3 Pedagogical Judge (skipped here when already evaluated in parallel inside orchestrator)
     min_tasks_required = int(scenario["expected_invariants"].get("min_tasks", 1))
     last_tasks_count = len(last_valid_proposal.get("tasks", []))
     result.tasks_count = last_tasks_count
     result.min_tasks_met = last_tasks_count >= min_tasks_required
-    if last_valid_proposal.get("tasks"):
+    if not parallel_critics_and_judge and last_valid_proposal.get("tasks"):
         judge_workflow_repo = _EvalWorkflowRepo()
         if judge_provider_factory is not None:
             judge_provider = judge_provider_factory(idx, scenario)
@@ -690,6 +757,9 @@ async def _evaluate_scenario(
             ) = await judge_orch.run_tier3_pedagogical_judge(
                 last_valid_proposal,
                 goal_title=str(scenario["goal"].get("title", "")),
+                learner_level=str(scenario.get("learner_level", "")),
+                milestone_summary=milestone_json,
+                milestones_metadata=milestones,
                 thinking_level=judge_thinking_level,
             )
             case_judge_status = judge_status
@@ -995,6 +1065,7 @@ async def run_planning_eval_suite(
     judge_thinking_level: str | None = None,
     judge_timeout_seconds: float | None = None,
     include_weekly: bool = True,
+    parallel_critics_and_judge: bool = False,
     decomposer_provider_factory: ProviderFactory | None = None,
     judge_provider_factory: ProviderFactory | None = None,
     weekly_provider_factory: ProviderFactory | None = None,
@@ -1019,6 +1090,7 @@ async def run_planning_eval_suite(
                 judge_thinking_level=judge_thinking_level,
                 judge_timeout_seconds=judge_timeout_seconds,
                 include_weekly=include_weekly,
+                parallel_critics_and_judge=parallel_critics_and_judge,
                 decomposer_provider_factory=decomposer_provider_factory,
                 judge_provider_factory=judge_provider_factory,
                 weekly_provider_factory=weekly_provider_factory,
@@ -1040,6 +1112,7 @@ async def run_planning_eval_suite(
                     judge_thinking_level=judge_thinking_level,
                     judge_timeout_seconds=judge_timeout_seconds,
                     include_weekly=include_weekly,
+                    parallel_critics_and_judge=parallel_critics_and_judge,
                     decomposer_provider_factory=decomposer_provider_factory,
                     judge_provider_factory=judge_provider_factory,
                     weekly_provider_factory=weekly_provider_factory,
@@ -1282,6 +1355,11 @@ def parse_cli_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default=Path(out) if (out := os.getenv("EVAL_REPORT_OUTPUT_PATH")) else None,
         help="Optional output JSON report file path.",
     )
+    parser.add_argument(
+        "--parallel-critics-judge",
+        action="store_true",
+        help="Run Dual Critics and Tier 3 Judge in parallel inside orchestrator.",
+    )
     mode_group = parser.add_mutually_exclusive_group()
     mode_group.add_argument(
         "--live",
@@ -1308,6 +1386,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             output_path=args.output,
             live=args.live,
             concurrency=args.concurrency,
+            parallel_critics_and_judge=args.parallel_critics_judge,
         )
     )
     print(json.dumps({k: v for k, v in res.items() if k != "per_case_outcomes"}, indent=2))

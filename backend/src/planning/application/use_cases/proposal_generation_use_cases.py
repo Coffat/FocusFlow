@@ -1,3 +1,4 @@
+import json
 import logging
 from collections.abc import Sequence
 from datetime import UTC, datetime
@@ -573,6 +574,21 @@ class ExecuteScheduleProposalGenerationUseCase:
             )
             valid_mids: set[UUID | str] = {m.id for m in milestones}
             milestone_order_map = {str(m.id): m.sequence_order for m in milestones}
+            milestone_summary_for_gate = json.dumps(
+                [
+                    {
+                        "milestone_id": str(m.id),
+                        "sequence_order": m.sequence_order,
+                        "title": m.title,
+                        "learning_outcomes": list(m.learning_outcomes),
+                        "completion_criteria": m.completion_criteria or "",
+                        "estimated_effort_minutes": m.estimated_effort_minutes,
+                        "required_concepts": list(m.required_concepts),
+                    }
+                    for m in sorted(milestones, key=lambda item: item.sequence_order)
+                ],
+                ensure_ascii=False,
+            )
             gate_result = await orchestrator.generate_and_validate_proposal_with_retry(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
@@ -583,6 +599,7 @@ class ExecuteScheduleProposalGenerationUseCase:
                 current_roadmap_target_date=roadmap.target_date,
                 goal_title=goal.title if goal is not None else roadmap.title,
                 learner_level=prior_knowledge,
+                milestone_summary=milestone_summary_for_gate,
                 max_retries=max_retries,
                 on_retry_callback=_on_retry,
                 start_date=roadmap.start_date or effective_now.date(),

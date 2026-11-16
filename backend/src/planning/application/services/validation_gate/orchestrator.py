@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
@@ -29,6 +30,7 @@ from src.planning.application.services.validation_gate.tier2_deterministic impor
     run_tier2_gate,
 )
 from src.planning.application.services.validation_gate.tier3_judge import (
+    Tier3JudgeOutcome,
     execute_tier3_pedagogical_judge,
 )
 from src.planning.domain.exceptions.planning_exceptions import (
@@ -46,7 +48,12 @@ from src.planning.domain.services.validation_types import (
     parse_iso_date,
 )
 from src.shared_kernel.application.harness.execution_manager import AIExecutionManager
-from src.shared_kernel.application.harness.models import PromptTemplate, WorkflowType
+from src.shared_kernel.application.harness.models import (
+    PromptTemplate,
+    WorkflowRun,
+    WorkflowStepExecution,
+    WorkflowType,
+)
 from src.shared_kernel.application.harness.prompt_registry import build_prompt_audit_metadata
 from src.shared_kernel.application.harness.untrusted_context import sanitize_untrusted_text
 from src.shared_kernel.application.harness.workflow_port import WorkflowRepositoryPort
@@ -91,15 +98,19 @@ class ValidationGateResultDTO:
 def _summarize_milestones(milestones: Sequence[Milestone]) -> str:
     if not milestones:
         return ""
-    lines = []
-    for m in sorted(milestones, key=lambda item: item.sequence_order):
-        outcomes = "; ".join(m.learning_outcomes[:3])
-        concepts = ", ".join(m.required_concepts[:5])
-        lines.append(
-            f"M{m.sequence_order} ({m.title}): effort={m.estimated_effort_minutes}m | "
-            f"outcomes=[{outcomes}] | concepts=[{concepts}]"
-        )
-    return "\n".join(lines)
+    items = [
+        {
+            "milestone_id": str(m.id),
+            "sequence_order": m.sequence_order,
+            "title": m.title,
+            "learning_outcomes": list(m.learning_outcomes),
+            "completion_criteria": m.completion_criteria or "",
+            "estimated_effort_minutes": m.estimated_effort_minutes,
+            "required_concepts": list(m.required_concepts),
+        }
+        for m in sorted(milestones, key=lambda item: item.sequence_order)
+    ]
+    return json.dumps(items, ensure_ascii=False)
 
 
 class ProposalValidationGateOrchestrator:
@@ -177,22 +188,33 @@ class ProposalValidationGateOrchestrator:
         goal_title: str = "",
         learner_level: str = "",
         milestone_summary: str = "",
+        milestones_metadata: Sequence[Any] | None = None,
         remaining_budget_seconds: float | None = None,
+        min_judge_remaining_seconds: float | None = None,
         workflow_repo: WorkflowRepositoryPort | None = None,
+        step_records_out: list[tuple[WorkflowRun, WorkflowStepExecution]] | None = None,
         thinking_level: str | None = None,
     ) -> tuple[bool, float | None, list[str], str]:
         """Execute Tier 3 Pedagogical LLM-as-a-Judge with configurable timeout & honest status."""
+        effective_wf_repo = (
+            None
+            if step_records_out is not None
+            else (workflow_repo if workflow_repo is not None else self._workflow_repo)
+        )
         outcome = await execute_tier3_pedagogical_judge(
             self._llm,
             proposal_data,
             enable_tier3_judge=self._enable_tier3_judge,
             tier3_timeout_seconds=self._tier3_timeout_seconds,
+            min_judge_remaining_seconds=min_judge_remaining_seconds,
             thinking_level=thinking_level,
             goal_title=goal_title,
             learner_level=learner_level,
             milestone_summary=milestone_summary,
+            milestones_metadata=milestones_metadata,
             remaining_budget_seconds=remaining_budget_seconds,
-            workflow_repo=workflow_repo or self._workflow_repo,
+            workflow_repo=effective_wf_repo,
+            step_records_out=step_records_out,
             user_id=self._user_id,
             goal_id=self._goal_id,
             roadmap_id=self._roadmap_id,
@@ -205,6 +227,94 @@ class ProposalValidationGateOrchestrator:
             outcome.pedagogical_score,
             outcome.advisory_warnings,
             outcome.judge_status,
+        )
+
+    def _build_valid_gate_result(
+        self,
+        proposal_data: dict[str, Any],
+        *,
+        soft_warnings: Sequence[SoftOverflowWarningDTO],
+        judge_skipped: bool,
+        score: float | None,
+        advisories: list[str],
+        judge_status: str,
+        prompt_tokens: int,
+        completion_tokens: int,
+        thinking_tokens: int,
+        attempts_used: int = 1,
+        retry_history: tuple[dict[str, Any], ...] = (),
+    ) -> ValidationGateResultDTO:
+        raw_tasks_obj = proposal_data.get("tasks")
+        raw_tasks = raw_tasks_obj if isinstance(raw_tasks_obj, list) else []
+        capacity_overflow = proposal_data.get("_capacity_overflow")
+        avail_mins = (
+            int(capacity_overflow.get("available_minutes", 0) or 0)
+            if isinstance(capacity_overflow, dict)
+            else 1
+        )
+        default_unscheduled_reason = (
+            "NO_AVAILABILITY_CONFIGURED: Chưa có khung giờ rảnh khả dụng"
+            if avail_mins <= 0
+            else "DEADLINE_CAPACITY_EXCEEDED: Không đủ thời gian rảnh trước ngày mục tiêu"
+        )
+
+        updated_tasks: list[dict[str, Any]] = []
+        scheduled_tasks_count = 0
+        unscheduled_list: list[dict[str, Any]] = []
+        for task in raw_tasks:
+            if not isinstance(task, dict):
+                continue
+            t_copy = dict(task)
+            if parse_iso_date(t_copy.get("scheduled_date")) is not None:
+                scheduled_tasks_count += 1
+            else:
+                if not t_copy.get("unscheduled_reason"):
+                    t_copy["unscheduled_reason"] = default_unscheduled_reason
+                unscheduled_list.append(t_copy)
+            updated_tasks.append(t_copy)
+
+        is_partial = len(unscheduled_list) > 0
+        merged_advisories = list(advisories)
+        if is_partial:
+            partial_msg = (
+                f"Lịch học khả thi một phần: Đã xếp lịch {scheduled_tasks_count}/{len(updated_tasks)} nhiệm vụ; "
+                f"còn {len(unscheduled_list)} nhiệm vụ trong danh sách chờ ({default_unscheduled_reason})."
+            )
+            if partial_msg not in merged_advisories:
+                merged_advisories.append(partial_msg)
+        merged_advisories = list(dict.fromkeys(merged_advisories))
+
+        enriched_data = dict(proposal_data)
+        enriched_data["tasks"] = updated_tasks
+        enriched_data["soft_overflow_warnings"] = [w.to_dict() for w in soft_warnings]
+        enriched_data["judge_status"] = judge_status
+        enriched_data["is_partial_schedule"] = is_partial
+        enriched_data["scheduled_tasks_count"] = scheduled_tasks_count
+        enriched_data["unscheduled_tasks_count"] = len(unscheduled_list)
+        enriched_data["unscheduled_tasks"] = unscheduled_list
+        if merged_advisories:
+            enriched_data["advisory_warnings"] = merged_advisories
+        if judge_skipped:
+            enriched_data["judge_skipped"] = True
+
+        return ValidationGateResultDTO(
+            is_valid=True,
+            violations=(),
+            soft_overflow_warnings=tuple(soft_warnings),
+            advisory_warnings=tuple(merged_advisories),
+            judge_skipped=judge_skipped,
+            judge_status=judge_status,
+            pedagogical_score=score,
+            is_partial_schedule=is_partial,
+            scheduled_tasks_count=scheduled_tasks_count,
+            unscheduled_tasks_count=len(unscheduled_list),
+            unscheduled_tasks=tuple(unscheduled_list),
+            attempts_used=attempts_used,
+            retry_history=retry_history,
+            validated_proposal_data=enriched_data,
+            total_prompt_tokens=prompt_tokens,
+            total_completion_tokens=completion_tokens,
+            total_thinking_tokens=thinking_tokens,
         )
 
     async def validate_proposal(
@@ -221,8 +331,10 @@ class ProposalValidationGateOrchestrator:
         goal_title: str = "",
         learner_level: str = "",
         milestone_summary: str = "",
+        milestones_metadata: Sequence[Any] | None = None,
         allow_unscheduled_tasks: bool = False,
         remaining_budget_seconds: float | None = None,
+        precomputed_judge_outcome: Tier3JudgeOutcome | None = None,
     ) -> ValidationGateResultDTO:
         """Run all 3 Tiers on a single proposal payload."""
         self._last_judge_prompt_tokens = 0
@@ -255,81 +367,34 @@ class ProposalValidationGateOrchestrator:
             total_overflow = sum(w.overflow_minutes for w in soft_warnings)
             raise SoftOverflowConfirmationRequiredError(overflow_minutes=total_overflow)
 
-        judge_skipped, score, advisories, judge_status = await self.run_tier3_pedagogical_judge(
-            proposal_data,
-            goal_title=goal_title,
-            learner_level=learner_level,
-            milestone_summary=milestone_summary,
-            remaining_budget_seconds=remaining_budget_seconds,
-        )
-
-        raw_tasks_obj = proposal_data.get("tasks")
-        raw_tasks = raw_tasks_obj if isinstance(raw_tasks_obj, list) else []
-        capacity_overflow = proposal_data.get("_capacity_overflow")
-        avail_mins = (
-            int(capacity_overflow.get("available_minutes", 0) or 0)
-            if isinstance(capacity_overflow, dict)
-            else 1
-        )
-        default_unscheduled_reason = (
-            "NO_AVAILABILITY_CONFIGURED: Chưa có khung giờ rảnh khả dụng"
-            if avail_mins <= 0
-            else "DEADLINE_CAPACITY_EXCEEDED: Không đủ thời gian rảnh trước ngày mục tiêu"
-        )
-
-        updated_tasks: list[dict[str, Any]] = []
-        scheduled_tasks_count = 0
-        unscheduled_list: list[dict[str, Any]] = []
-        for task in raw_tasks:
-            if not isinstance(task, dict):
-                continue
-            t_copy = dict(task)
-            if parse_iso_date(t_copy.get("scheduled_date")) is not None:
-                scheduled_tasks_count += 1
-            else:
-                if not t_copy.get("unscheduled_reason"):
-                    t_copy["unscheduled_reason"] = default_unscheduled_reason
-                unscheduled_list.append(t_copy)
-            updated_tasks.append(t_copy)
-
-        is_partial = len(unscheduled_list) > 0
-        if is_partial:
-            partial_msg = (
-                f"Lịch học khả thi một phần: Đã xếp lịch {scheduled_tasks_count}/{len(updated_tasks)} nhiệm vụ; "
-                f"còn {len(unscheduled_list)} nhiệm vụ trong danh sách chờ ({default_unscheduled_reason})."
+        if precomputed_judge_outcome is not None:
+            judge_skipped = precomputed_judge_outcome.judge_skipped
+            score = precomputed_judge_outcome.pedagogical_score
+            advisories = list(precomputed_judge_outcome.advisory_warnings)
+            judge_status = precomputed_judge_outcome.judge_status
+            self._last_judge_prompt_tokens = precomputed_judge_outcome.prompt_tokens
+            self._last_judge_completion_tokens = precomputed_judge_outcome.completion_tokens
+            self._last_judge_thinking_tokens = precomputed_judge_outcome.thinking_tokens
+        else:
+            judge_skipped, score, advisories, judge_status = await self.run_tier3_pedagogical_judge(
+                proposal_data,
+                goal_title=goal_title,
+                learner_level=learner_level,
+                milestone_summary=milestone_summary,
+                milestones_metadata=milestones_metadata,
+                remaining_budget_seconds=remaining_budget_seconds,
             )
-            if partial_msg not in advisories:
-                advisories.append(partial_msg)
 
-        enriched_data = dict(proposal_data)
-        enriched_data["tasks"] = updated_tasks
-        enriched_data["soft_overflow_warnings"] = [w.to_dict() for w in soft_warnings]
-        enriched_data["judge_status"] = judge_status
-        enriched_data["is_partial_schedule"] = is_partial
-        enriched_data["scheduled_tasks_count"] = scheduled_tasks_count
-        enriched_data["unscheduled_tasks_count"] = len(unscheduled_list)
-        enriched_data["unscheduled_tasks"] = unscheduled_list
-        if advisories:
-            enriched_data["advisory_warnings"] = advisories
-        if judge_skipped:
-            enriched_data["judge_skipped"] = True
-
-        return ValidationGateResultDTO(
-            is_valid=True,
-            violations=(),
-            soft_overflow_warnings=tuple(soft_warnings),
-            advisory_warnings=tuple(advisories),
+        return self._build_valid_gate_result(
+            proposal_data,
+            soft_warnings=soft_warnings,
             judge_skipped=judge_skipped,
+            score=score,
+            advisories=advisories,
             judge_status=judge_status,
-            pedagogical_score=score,
-            is_partial_schedule=is_partial,
-            scheduled_tasks_count=scheduled_tasks_count,
-            unscheduled_tasks_count=len(unscheduled_list),
-            unscheduled_tasks=tuple(unscheduled_list),
-            validated_proposal_data=enriched_data,
-            total_prompt_tokens=self._last_judge_prompt_tokens,
-            total_completion_tokens=self._last_judge_completion_tokens,
-            total_thinking_tokens=self._last_judge_thinking_tokens,
+            prompt_tokens=self._last_judge_prompt_tokens,
+            completion_tokens=self._last_judge_completion_tokens,
+            thinking_tokens=self._last_judge_thinking_tokens,
         )
 
     @staticmethod
@@ -398,6 +463,7 @@ class ProposalValidationGateOrchestrator:
             raise ValueError(
                 "LLMProviderPort is required for generate_and_validate_proposal_with_retry."
             )
+        llm_provider: LLMProviderPort = self._llm
 
         registry = build_planning_prompt_registry()
         effective_tpl = prompt_template or registry.latest(TASK_DECOMPOSER_SKILL.skill_id)
@@ -471,134 +537,29 @@ class ProposalValidationGateOrchestrator:
                 raw_proposal = resource_resolver(raw_proposal)
 
             raw_tasks = raw_proposal.get("tasks") if isinstance(raw_proposal, dict) else None
-            quality_violations: list[ConstraintViolationDTO] = []
-            critic_advisory_warnings: list[str] = []
             if isinstance(raw_proposal, dict) and isinstance(raw_tasks, list) and milestones:
-                quality_violations.extend(validate_task_coverage(raw_tasks, milestones))
-                remaining_seconds = pipeline_deadline - asyncio.get_running_loop().time()
-                if remaining_seconds < float(settings.ai_min_critic_remaining_seconds):
-                    logger.warning(
-                        "proposal_quality_critic_skipped_low_budget",
-                        extra={
-                            "roadmap_id": str(self._roadmap_id) if self._roadmap_id else None,
-                            "remaining_seconds": round(remaining_seconds, 2),
-                            "min_required_seconds": float(settings.ai_min_critic_remaining_seconds),
-                        },
-                    )
-                    critic_advisory_warnings.append(
-                        "Ngân sách thời gian còn lại không đủ cho AI Critic — đã bỏ qua bước Critic và giữ kiểm định Tier 1/2."
-                    )
-                    raw_proposal = {
-                        **raw_proposal,
-                        "quality_reviews": [
-                            {
-                                "critic": "QUALITY_CRITIC",
-                                "status": "SKIPPED_LOW_BUDGET",
-                                "issues": [],
-                            }
-                        ],
-                    }
-                else:
-                    critic_timeout = min(
-                        float(settings.ai_quality_critic_timeout_seconds), remaining_seconds
-                    )
-                    arbiter_timeout = min(
-                        float(settings.ai_quality_arbiter_timeout_seconds), remaining_seconds
-                    )
-                    critic_tokens: dict[str, int] = {}
-                    try:
-                        (
-                            critic_violations,
-                            quality_reports,
-                            critic_p,
-                            critic_c,
-                        ) = await asyncio.wait_for(
-                            run_dual_quality_critics(
-                                self._llm,
-                                stage="TASK_DECOMPOSITION",
-                                payload=raw_proposal,
-                                context=f"Goal: {sanitize_untrusted_text(goal_title)}",
-                                learner_level=learner_level,
-                                milestone_summary=effective_milestone_summary,
-                                timeout_seconds=critic_timeout,
-                                arbiter_timeout_seconds=arbiter_timeout,
-                                workflow_repo=self._workflow_repo,
-                                user_id=self._user_id,
-                                goal_id=self._goal_id,
-                                roadmap_id=self._roadmap_id,
-                                workflow_type=WorkflowType.SCHEDULE_GENERATION,
-                                token_accumulator=critic_tokens,
-                            ),
-                            timeout=remaining_seconds,
-                        )
-                        total_prompt_tokens += critic_p
-                        total_completion_tokens += critic_c
-                        total_thinking_tokens += int(critic_tokens.get("thinking_tokens", 0))
-                        if has_operational_quality_review_failure(critic_violations):
-                            logger.warning(
-                                "proposal_quality_critic_degraded",
-                                extra={
-                                    "roadmap_id": str(self._roadmap_id)
-                                    if self._roadmap_id
-                                    else None
-                                },
-                            )
-                            critic_advisory_warnings.append(
-                                "AI Critic tạm thời quá thời gian chờ — đã tiếp tục kiểm định Tier 1/2."
-                            )
-                            critic_violations = [
-                                v
-                                for v in critic_violations
-                                if v.rule_code
-                                not in {
-                                    "QUALITY_CRITIC_UNAVAILABLE",
-                                    "QUALITY_ARBITER_UNAVAILABLE",
-                                }
-                            ]
-                        quality_violations.extend(critic_violations)
-                        raw_proposal = {**raw_proposal, "quality_reviews": quality_reports}
-                    except TimeoutError:
-                        logger.warning(
-                            "proposal_quality_critic_timeout_skipped",
-                            extra={
-                                "roadmap_id": str(self._roadmap_id) if self._roadmap_id else None
-                            },
-                        )
-                        critic_advisory_warnings.append(
-                            "AI Critic hết ngân sách thời gian — đã bỏ qua bước Critic và giữ kiểm định Tier 1/2."
-                        )
-                        raw_proposal = {
-                            **raw_proposal,
-                            "quality_reviews": [
-                                {
-                                    "critic": "QUALITY_CRITIC",
-                                    "status": "SKIPPED_LOW_BUDGET",
-                                    "issues": [],
-                                }
-                            ],
+                coverage_violations = validate_task_coverage(raw_tasks, milestones)
+                if coverage_violations:
+                    last_violations = coverage_violations
+                    retry_history.append(
+                        {
+                            "attempt": attempt,
+                            "violations": [v.to_dict() for v in coverage_violations],
                         }
-
-            if quality_violations:
-                last_violations = quality_violations
-                retry_history.append(
-                    {
-                        "attempt": attempt,
-                        "violations": [v.to_dict() for v in quality_violations],
-                    }
-                )
-                remaining_for_retry = pipeline_deadline - asyncio.get_running_loop().time()
-                if attempt < max_attempts and remaining_for_retry >= min_retry_remaining:
-                    if on_retry_callback is not None:
-                        maybe_coro = on_retry_callback(attempt, last_violations)
-                        if asyncio.iscoroutine(maybe_coro):
-                            await maybe_coro
-                    current_prompt = self.build_self_correction_prompt(
-                        user_prompt,
-                        last_violations,
-                        attempt_number=attempt,
                     )
-                    continue
-                break
+                    remaining_for_retry = pipeline_deadline - asyncio.get_running_loop().time()
+                    if attempt < max_attempts and remaining_for_retry >= min_retry_remaining:
+                        if on_retry_callback is not None:
+                            maybe_coro = on_retry_callback(attempt, last_violations)
+                            if asyncio.iscoroutine(maybe_coro):
+                                await maybe_coro
+                        current_prompt = self.build_self_correction_prompt(
+                            user_prompt,
+                            last_violations,
+                            attempt_number=attempt,
+                        )
+                        continue
+                    break
 
             if deterministic_allocation and isinstance(raw_tasks, list):
                 unscheduled_tasks = [
@@ -703,52 +664,31 @@ class ProposalValidationGateOrchestrator:
                     else:
                         allow_unscheduled_in_attempt = True
 
-            remaining_for_judge = max(0.0, pipeline_deadline - asyncio.get_running_loop().time())
-            gate_result = await self.validate_proposal(
+            # Tier 1 & Tier 2 deterministic gates run BEFORE parallel Critic + Tier 3 Judge.
+            tier1_violations = self.run_tier1_gate(
+                raw_proposal,
+                valid_milestone_ids=valid_milestone_ids,
+                is_ai_generated=True,
+                allow_unscheduled_tasks=allow_unscheduled_in_attempt,
+            )
+            tier2_violations, soft_warnings = self.run_tier2_gate(
                 raw_proposal,
                 availability=availability,
-                valid_milestone_ids=valid_milestone_ids,
                 existing_tasks=existing_tasks,
                 current_roadmap_target_date=current_roadmap_target_date,
-                is_ai_generated=True,
-                goal_title=goal_title,
-                learner_level=learner_level,
-                milestone_summary=effective_milestone_summary,
                 allow_unscheduled_tasks=allow_unscheduled_in_attempt,
-                remaining_budget_seconds=remaining_for_judge,
             )
-            total_prompt_tokens += self._last_judge_prompt_tokens
-            total_completion_tokens += self._last_judge_completion_tokens
-            total_thinking_tokens += self._last_judge_thinking_tokens
-
-            if gate_result.is_valid:
+            deterministic_violations = [*tier1_violations, *tier2_violations]
+            if deterministic_violations:
+                last_violations = deterministic_violations
+                retry_history.append(
+                    {
+                        "attempt": attempt,
+                        "violations": [v.to_dict() for v in last_violations],
+                    }
+                )
                 remaining_for_retry = pipeline_deadline - asyncio.get_running_loop().time()
-                if (
-                    gate_result.judge_status == "NEEDS_REVIEW"
-                    and attempt < max_attempts
-                    and not pedagogical_retry_used
-                    and remaining_for_retry >= min_retry_remaining
-                ):
-                    pedagogical_retry_used = True
-                    judge_violation = ConstraintViolationDTO(
-                        task_index=None,
-                        field="tasks",
-                        rule_code="PEDAGOGICAL_QUALITY_ISSUE",
-                        expected_bound="Pedagogical score >= 60% & overall_status != FAIL",
-                        actual_value=f"score={gate_result.pedagogical_score}",
-                        suggested_fix=(
-                            "; ".join(gate_result.advisory_warnings)
-                            if gate_result.advisory_warnings
-                            else "Cải thiện trình tự sư phạm, độ rõ ràng và tính thực hành của các nhiệm vụ học tập."
-                        ),
-                    )
-                    last_violations = [judge_violation]
-                    retry_history.append(
-                        {
-                            "attempt": attempt,
-                            "violations": [judge_violation.to_dict()],
-                        }
-                    )
+                if attempt < max_attempts and remaining_for_retry >= min_retry_remaining:
                     if on_retry_callback is not None:
                         maybe_coro = on_retry_callback(attempt, last_violations)
                         if asyncio.iscoroutine(maybe_coro):
@@ -759,39 +699,244 @@ class ProposalValidationGateOrchestrator:
                         attempt_number=attempt,
                     )
                     continue
+                break
 
-                merged_advisory_warnings = tuple(
-                    dict.fromkeys([*critic_advisory_warnings, *gate_result.advisory_warnings])
+            # Proposal passed Tier 1 & Tier 2: run Dual Critics + Tier 3 Judge in parallel with remaining budget.
+            remaining_budget = max(0.0, pipeline_deadline - asyncio.get_running_loop().time())
+            should_run_critics = bool(
+                isinstance(raw_proposal, dict) and isinstance(raw_tasks, list) and milestones
+            )
+            min_critic_remaining = float(getattr(settings, "ai_min_critic_remaining_seconds", 6.0))
+            min_judge_remaining = float(getattr(settings, "ai_min_judge_remaining_seconds", 3.0))
+            critics_budget_ok = should_run_critics and remaining_budget >= min_critic_remaining
+
+            critic_advisory_warnings: list[str] = []
+            quality_violations: list[ConstraintViolationDTO] = []
+            quality_reports: list[dict[str, Any]] = []
+            critic_step_records: list[tuple[WorkflowRun, WorkflowStepExecution]] = []
+            judge_step_records: list[tuple[WorkflowRun, WorkflowStepExecution]] = []
+
+            if should_run_critics and not critics_budget_ok:
+                logger.warning(
+                    "proposal_quality_critic_skipped_low_budget",
+                    extra={
+                        "roadmap_id": str(self._roadmap_id) if self._roadmap_id else None,
+                        "remaining_seconds": round(remaining_budget, 2),
+                        "min_required_seconds": min_critic_remaining,
+                    },
                 )
-                return ValidationGateResultDTO(
-                    is_valid=True,
-                    violations=(),
-                    soft_overflow_warnings=gate_result.soft_overflow_warnings,
-                    advisory_warnings=merged_advisory_warnings,
-                    judge_skipped=gate_result.judge_skipped,
-                    judge_status=gate_result.judge_status,
-                    pedagogical_score=gate_result.pedagogical_score,
-                    is_partial_schedule=gate_result.is_partial_schedule,
-                    scheduled_tasks_count=gate_result.scheduled_tasks_count,
-                    unscheduled_tasks_count=gate_result.unscheduled_tasks_count,
-                    unscheduled_tasks=gate_result.unscheduled_tasks,
-                    attempts_used=attempt,
-                    retry_history=tuple(retry_history),
-                    validated_proposal_data=gate_result.validated_proposal_data,
-                    total_prompt_tokens=total_prompt_tokens,
-                    total_completion_tokens=total_completion_tokens,
-                    total_thinking_tokens=total_thinking_tokens,
+                critic_advisory_warnings.append(
+                    "Ngân sách thời gian còn lại không đủ cho AI Critic — đã bỏ qua bước Critic và giữ kiểm định Tier 1/2."
+                )
+                quality_reports = [
+                    {
+                        "critic": "QUALITY_CRITIC",
+                        "status": "SKIPPED_LOW_BUDGET",
+                        "issues": [],
+                    }
+                ]
+
+            async def _run_critics_coro() -> tuple[
+                list[ConstraintViolationDTO], list[dict[str, Any]], int, int, int, bool
+            ]:
+                critic_timeout = min(
+                    float(settings.ai_quality_critic_timeout_seconds), remaining_budget
+                )
+                arbiter_timeout = min(
+                    float(settings.ai_quality_arbiter_timeout_seconds), remaining_budget
+                )
+                critic_tokens: dict[str, int] = {}
+                try:
+                    c_violations, c_reports, c_p, c_c = await asyncio.wait_for(
+                        run_dual_quality_critics(
+                            llm_provider,
+                            stage="TASK_DECOMPOSITION",
+                            payload=raw_proposal,
+                            context=f"Goal: {sanitize_untrusted_text(goal_title)}",
+                            learner_level=learner_level,
+                            milestone_summary=effective_milestone_summary,
+                            timeout_seconds=critic_timeout,
+                            arbiter_timeout_seconds=arbiter_timeout,
+                            remaining_budget_seconds=remaining_budget,
+                            workflow_repo=None,
+                            step_records_out=critic_step_records,
+                            user_id=self._user_id,
+                            goal_id=self._goal_id,
+                            roadmap_id=self._roadmap_id,
+                            workflow_type=WorkflowType.SCHEDULE_GENERATION,
+                            token_accumulator=critic_tokens,
+                        ),
+                        timeout=remaining_budget,
+                    )
+                    return (
+                        c_violations,
+                        c_reports,
+                        c_p,
+                        c_c,
+                        int(critic_tokens.get("thinking_tokens", 0)),
+                        False,
+                    )
+                except TimeoutError:
+                    return (
+                        [],
+                        [
+                            {
+                                "critic": "QUALITY_CRITIC",
+                                "status": "SKIPPED_LOW_BUDGET",
+                                "issues": [],
+                            }
+                        ],
+                        0,
+                        0,
+                        0,
+                        True,
+                    )
+
+            async def _run_judge_coro() -> Tier3JudgeOutcome:
+                return await execute_tier3_pedagogical_judge(
+                    self._llm,
+                    raw_proposal,
+                    enable_tier3_judge=self._enable_tier3_judge,
+                    tier3_timeout_seconds=self._tier3_timeout_seconds,
+                    min_judge_remaining_seconds=min_judge_remaining,
+                    goal_title=goal_title,
+                    learner_level=learner_level,
+                    milestone_summary=effective_milestone_summary,
+                    milestones_metadata=milestones,
+                    remaining_budget_seconds=remaining_budget,
+                    workflow_repo=None,
+                    step_records_out=judge_step_records,
+                    user_id=self._user_id,
+                    goal_id=self._goal_id,
+                    roadmap_id=self._roadmap_id,
                 )
 
-            last_violations = list(gate_result.violations)
-            retry_record = {
-                "attempt": attempt,
-                "violations": [v.to_dict() for v in last_violations],
-            }
-            retry_history.append(retry_record)
+            critic_result: (
+                tuple[list[ConstraintViolationDTO], list[dict[str, Any]], int, int, int, bool]
+                | None
+            ) = None
+            if critics_budget_ok and self._enable_tier3_judge:
+                # Run Dual Critics + Tier 3 Judge concurrently with workflow_repo=None to prevent
+                # concurrent AsyncSession flushes; records are persisted sequentially below.
+                critic_result, judge_outcome = await asyncio.gather(
+                    _run_critics_coro(),
+                    _run_judge_coro(),
+                )
+            elif critics_budget_ok:
+                critic_result = await _run_critics_coro()
+                judge_outcome = await _run_judge_coro()
+            else:
+                judge_outcome = await _run_judge_coro()
+
+            if self._workflow_repo is not None:
+                persisted_runs: set[UUID] = set()
+                for run, step in [*critic_step_records, *judge_step_records]:
+                    if run.id not in persisted_runs:
+                        await self._workflow_repo.add_run(run)
+                        persisted_runs.add(run.id)
+                    await self._workflow_repo.add_step(step)
+
+            if critic_result is not None:
+                (
+                    critic_violations,
+                    quality_reports,
+                    critic_p,
+                    critic_c,
+                    critic_t,
+                    critic_timed_out,
+                ) = critic_result
+                total_prompt_tokens += critic_p
+                total_completion_tokens += critic_c
+                total_thinking_tokens += critic_t
+                if critic_timed_out:
+                    logger.warning(
+                        "proposal_quality_critic_timeout_skipped",
+                        extra={"roadmap_id": str(self._roadmap_id) if self._roadmap_id else None},
+                    )
+                    critic_advisory_warnings.append(
+                        "AI Critic hết ngân sách thời gian — đã bỏ qua bước Critic và giữ kiểm định Tier 1/2."
+                    )
+                else:
+                    if has_operational_quality_review_failure(critic_violations):
+                        logger.warning(
+                            "proposal_quality_critic_degraded",
+                            extra={
+                                "roadmap_id": str(self._roadmap_id) if self._roadmap_id else None
+                            },
+                        )
+                        critic_advisory_warnings.append(
+                            "AI Critic tạm thời quá thời gian chờ — đã tiếp tục kiểm định Tier 1/2."
+                        )
+                        critic_violations = [
+                            v
+                            for v in critic_violations
+                            if v.rule_code
+                            not in {
+                                "QUALITY_CRITIC_UNAVAILABLE",
+                                "QUALITY_ARBITER_UNAVAILABLE",
+                            }
+                        ]
+                    quality_violations.extend(critic_violations)
+
+            if should_run_critics and isinstance(raw_proposal, dict):
+                raw_proposal = {**raw_proposal, "quality_reviews": quality_reports}
+
+            self._last_judge_prompt_tokens = judge_outcome.prompt_tokens
+            self._last_judge_completion_tokens = judge_outcome.completion_tokens
+            self._last_judge_thinking_tokens = judge_outcome.thinking_tokens
+            total_prompt_tokens += judge_outcome.prompt_tokens
+            total_completion_tokens += judge_outcome.completion_tokens
+            total_thinking_tokens += judge_outcome.thinking_tokens
+
+            if quality_violations:
+                last_violations = quality_violations
+                retry_history.append(
+                    {
+                        "attempt": attempt,
+                        "violations": [v.to_dict() for v in quality_violations],
+                    }
+                )
+                remaining_for_retry = pipeline_deadline - asyncio.get_running_loop().time()
+                if attempt < max_attempts and remaining_for_retry >= min_retry_remaining:
+                    if on_retry_callback is not None:
+                        maybe_coro = on_retry_callback(attempt, last_violations)
+                        if asyncio.iscoroutine(maybe_coro):
+                            await maybe_coro
+                    current_prompt = self.build_self_correction_prompt(
+                        user_prompt,
+                        last_violations,
+                        attempt_number=attempt,
+                    )
+                    continue
+                break
 
             remaining_for_retry = pipeline_deadline - asyncio.get_running_loop().time()
-            if attempt < max_attempts and remaining_for_retry >= min_retry_remaining:
+            if (
+                judge_outcome.judge_status == "NEEDS_REVIEW"
+                and attempt < max_attempts
+                and not pedagogical_retry_used
+                and remaining_for_retry >= min_retry_remaining
+            ):
+                pedagogical_retry_used = True
+                judge_violation = ConstraintViolationDTO(
+                    task_index=None,
+                    field="tasks",
+                    rule_code="PEDAGOGICAL_QUALITY_ISSUE",
+                    expected_bound="Pedagogical score >= 60% & overall_status != FAIL",
+                    actual_value=f"score={judge_outcome.pedagogical_score}",
+                    suggested_fix=(
+                        "; ".join(judge_outcome.advisory_warnings)
+                        if judge_outcome.advisory_warnings
+                        else "Cải thiện trình tự sư phạm, độ rõ ràng và tính thực hành của các nhiệm vụ học tập."
+                    ),
+                )
+                last_violations = [judge_violation]
+                retry_history.append(
+                    {
+                        "attempt": attempt,
+                        "violations": [judge_violation.to_dict()],
+                    }
+                )
                 if on_retry_callback is not None:
                     maybe_coro = on_retry_callback(attempt, last_violations)
                     if asyncio.iscoroutine(maybe_coro):
@@ -801,8 +946,21 @@ class ProposalValidationGateOrchestrator:
                     last_violations,
                     attempt_number=attempt,
                 )
-            else:
-                break
+                continue
+
+            return self._build_valid_gate_result(
+                raw_proposal,
+                soft_warnings=soft_warnings,
+                judge_skipped=judge_outcome.judge_skipped,
+                score=judge_outcome.pedagogical_score,
+                advisories=[*critic_advisory_warnings, *judge_outcome.advisory_warnings],
+                judge_status=judge_outcome.judge_status,
+                prompt_tokens=total_prompt_tokens,
+                completion_tokens=total_completion_tokens,
+                thinking_tokens=total_thinking_tokens,
+                attempts_used=attempt,
+                retry_history=tuple(retry_history),
+            )
 
         raise ProposalValidationGateError(
             message=(

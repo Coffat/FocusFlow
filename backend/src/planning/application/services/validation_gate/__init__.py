@@ -17,15 +17,18 @@ from src.planning.application.services.validation_gate.tier2_deterministic impor
     run_tier2_gate,
 )
 from src.planning.application.services.validation_gate.tier3_judge import (
+    DEFAULT_MIN_JUDGE_REMAINING_SECONDS,
     PEDAGOGICAL_JUDGE_RESPONSE_SCHEMA,
     TIER3_JUDGE_TIMEOUT_SECONDS,
     Tier3JudgeOutcome,
+    build_compact_judge_payload,
     execute_tier3_pedagogical_judge,
 )
 
 __all__ = [
     "DECOMPOSER_CALL_TIMEOUT_SECONDS",
     "DEFAULT_MAX_RETRIES",
+    "DEFAULT_MIN_JUDGE_REMAINING_SECONDS",
     "MIN_RETRY_REMAINING_SECONDS",
     "PEDAGOGICAL_JUDGE_RESPONSE_SCHEMA",
     "PIPELINE_DEADLINE_SECONDS",
@@ -34,6 +37,7 @@ __all__ = [
     "Tier3JudgeOutcome",
     "ValidationGateResultDTO",
     "_safe_minutes",
+    "build_compact_judge_payload",
     "execute_tier3_pedagogical_judge",
     "run_tier1_gate",
     "run_tier2_gate",

@@ -179,6 +179,11 @@ class _RecordingSelfCorrectionLLM(LLMProviderPort):
         effective_prompt = user_prompt
         if "[INDEPENDENT_CRITIC:" in effective_prompt:
             return {"status": "PASS", "score": 100, "issues": []}, 25, 10
+        if (
+            "pedagogical-quality-judge" in system_prompt
+            or "pedagogical-quality-judge" in effective_prompt
+        ):
+            return {"score": 90, "overall_status": "PASS", "issues": []}, 40, 15
         self.received_prompts.append(effective_prompt)
         if not self._responses:
             raise RuntimeError(
@@ -903,11 +908,15 @@ async def test_metric2_self_correction_post_retry_recovery_and_single_quota_comm
 
     assert saved_proposal.status == ScheduleProposalStatus.DRAFT
     assert saved_proposal.proposal_data["attempts_used"] == 2
-    # Quota committed exactly ONCE across 2 LLM attempts, 0 releases
+    assert saved_proposal.proposal_data["judge_status"] == "PASSED"
+    assert saved_proposal.proposal_data["judge_skipped"] is False
+    # Quota committed exactly ONCE across 2 LLM attempts, 0 releases:
+    # Attempt 1 fails Tier 1/2 before Critics/Judge (150 prompt, 220 completion);
+    # Attempt 2 runs Decomposer (150, 220) + 2 Critics (25*2, 10*2) + parallel Judge (40, 15).
     assert len(quota_facade.committed) == 1
     assert quota_facade.committed[0][0] == reservation_id
-    assert quota_facade.committed[0][1] == 400  # planner/repair + two critics per attempt
-    assert quota_facade.committed[0][2] == 480
+    assert quota_facade.committed[0][1] == 390
+    assert quota_facade.committed[0][2] == 475
     assert len(quota_facade.released) == 0
 
     # Verify SSE stream emitted `validation_retry` followed by `completed`
