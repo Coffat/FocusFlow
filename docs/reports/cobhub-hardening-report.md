@@ -269,3 +269,219 @@ Dữ liệu trích trực tiếp từ `git log --oneline --since="3 months ago"`
   - Trung bình `SequenceMatcher`: **`0.4854`** | Trung bình `Token Jaccard`: **`0.3948`**
   - Cặp trùng cao nhất: `coverage-prerequisite-critic` ↔ `learner-fit-actionability-critic` (`SequenceMatcher = 0.7845`, `Jaccard = 0.6536`) và `learner-fit-actionability-critic` ↔ `quality-arbiter` (`SequenceMatcher = 0.7132`), chủ yếu do tái sử dụng trực tiếp `UNTRUSTED_DATA_SYSTEM_RULE` và khung chỉ thị Critic bằng biến Python.
 - **Kết luận cho quyết định `.md`:** **Không tách ra file `.md` ở giai đoạn hiện tại**; giữ prompt trong Python cùng `PromptRegistry` + `prompts.lock` CI drift check vì quy mô nhỏ (107 dòng), co-change gần 100% với Pydantic schema/use case/test, chỉ có 1 tác giả kỹ thuật, và cần tái sử dụng an toàn hằng số bảo mật `UNTRUSTED_DATA_SYSTEM_RULE` bằng Python import mà không phát sinh parser/template engine ngoài.
+
+---
+
+## 8. Xác minh bổ sung trước khi merge (Mục 1–9 & A–G)
+
+Phần này bổ sung toàn bộ kết quả kiểm chứng sau mốc `fd5549b` và `8f97544` (hiệu chuẩn Judge A/B, so sánh chất lượng `-low` vs `-medium`, tập Holdout 12 mục tiêu mới, tải đồng thời `--concurrency 5/10`, kiểm tra đa khung giờ ngày `2026-11-16`, chạy toàn bộ cổng kiểm tra trong container **Python 3.12**, rà soát Timeout `< 1.5 × p95`, truy vết `weekly_faithfulness < 1.0`, quét lịch sử git & phân tách 7 PR, và đối soát Prompt `v2.0.0`).
+
+### 8.1. Giải thích định lượng mốc "TRƯỚC" (4 artifact chuẩn hóa & đối chiếu công bằng)
+
+Các báo cáo trước sử dụng 4 mốc baseline ở các thời điểm và phiên bản `eval_runner` khác nhau. Bảng dưới đây đặt 4 mốc cạnh nhau để tránh nhầm lẫn khi so sánh:
+
+| Mốc / Artifact | Commit / Phiên bản | Model & Cấu hình | `pass_at_1` | `latency p50 / p95` | `thinking_tokens` (`% output`) | Judge & Weekly | Nguyên nhân chênh lệch |
+|---|---|---|---:|---:|---:|---|---|
+| [live-real-test-report.md](file:///Users/vuthang/Documents/FocusFlow/docs/reports/live-real-test-report.md) | Pre-Group 0 (`eval_runner` v1) | `gemini-3.8-flash` (mặc định `HIGH`), timeout `35s` | `0.0556` (`1/18`) | `35.02s / 35.02s` | `1,947 / 3,177` (`61.3%`, chỉ `E09`) | Judge `1/1 REVIEW_PENDING`; Weekly `18/18` fallback | `16/18` timeout `35s`, `1/18` `ServerError`. |
+| [exp_06_eval_baseline.json](file:///Users/vuthang/Documents/FocusFlow/docs/experiments/exp_06_eval_baseline.json) | `75d5c94` (Nhóm 0, `eval_runner` v1.0) | `gemini-3.8-flash` (chưa `-low`, chưa Mode 3) | `0.8333` (`15/18`) | `19.50s / 35.02s` | `27,797 / 43,345` (`64.13%`) | Judge `14/15 REVIEW_PENDING` (`93.3%` timeout); Weekly `18/18` fallback nhưng báo ảo `faithfulness=1.0` | `eval_runner` v1 chưa tách `REVIEW_PENDING` và gộp `faithfulness=1.0` của fallback vào tổng. |
+| [baseline_normalized_metrics.json](file:///Users/vuthang/Documents/FocusFlow/docs/experiments/baseline_normalized_metrics.json) | `f123334` (Nhóm 4, `eval_runner` v2) | `gemini-3.8-flash` (mặc định `HIGH`), chưa Nhóm 1/2 | `0.0000` (`0/18`) | `35.02s / 35.02s` | `0` *(timeout mất telemetry)* | Judge `18/18 SKIPPED`; Weekly `18/18` timeout → fallback; `0/0` valid injection (`4 excluded`) | Đụng trần `35s` trên `16 TIMEOUT`, `1 SCHEMA_MISMATCH`, `1 GATEWAY_ERROR` ở Decomposer + `18 TIMEOUT` ở Weekly. |
+| [eval_old_config_new_runner.json](file:///Users/vuthang/Documents/FocusFlow/docs/experiments/eval_old_config_new_runner.json) | Cùng `eval_runner` v2 (`8f97544`) | Cấu hình cũ (`gemini-3.8-flash` base, chưa `-low`) chạy trên harness mới | **`0.4444` (`8/18`)** | `35.02s / 46.16s` | `71,460 / 90,010` (`79.39%`) | Judge `5/8` timeout (`62.5%`); Weekly `18/18` LLM (`faithfulness=1.0`); `3/3` injection valid (`1 excluded`) | Đối chứng công bằng nhất trên cùng `eval_runner` v2: cấu hình cũ vẫn `10/18` Decomposer timeout (`55.6%`) và `79.39%` thinking tokens. |
+
+---
+
+### 8.2. Phân bố điểm Judge trên 54 runs & Hiệu chuẩn trên 16 Proposal xấu
+
+Số liệu từ [exp_09_judge_and_quality_ab.json](file:///Users/vuthang/Documents/FocusFlow/docs/experiments/exp_09_judge_and_quality_ab.json) (`part_2a` và `part_2b`):
+
+1. **Phân bố điểm Judge trên 54 runs hợp lệ (`group7_eval_run_{1,2,3}.json`):**
+   - `54/54 PASSED` (`100.0%`), `0 NEEDS_REVIEW`, `0 REVIEW_PENDING`, `0 SKIPPED`.
+   - Thống kê điểm: `min = 95.0`, `median = 97.5`, `p95 = 100.0`, `max = 100.0`, `mean = 97.5` (chính xác `27` runs đạt `95.0` và `27` runs đạt `100.0`).
+2. **Hiệu chuẩn Judge trên 16 proposal cố tình làm xấu (5 nhóm lỗi):**
+   - **Nhóm lỗi kiểm thử:** `outcome_coverage_gap` (3 ca), `dependency_cycle_or_inverted_order` (3 ca), `duration_exceeds_120m` (3 ca: `150m`, `180m`, `240m`), `unmeasurable_criteria` (3 ca), `off_domain_or_level_mismatch` (4 ca).
+   - **`judge_low` (`gemini-3.8-flash-low`, timeout `8.0s`):**
+     - Bắt được **`13/16` (`81.25%`)** (`NEEDS_REVIEW`), `0/16` vượt `8.0s` (`p50 = 5.21s`, `p95 = 6.34s`, `max = 7.54s`), điểm `min = 0.0 / median = 25.0 / p95 = 75.0 / max = 75.0 / mean = 28.12`.
+     - Bắt **`100%` (`13/13`)** trên 4 nhóm: `outcome_coverage_gap` (`25–35`), `dependency_cycle_or_inverted_order` (`15`), `unmeasurable_criteria` (`35`), `off_domain_or_level_mismatch` (`0`).
+     - Bỏ lọt **`3/3` (`0%`)** ở nhóm `duration_exceeds_120m`: `BAD_07_DURATION_150M` (`75.0`, `PASSED`), `BAD_08_DURATION_180M` (`65.0`, `PASSED`), `BAD_09_DURATION_240M` (`75.0`, `PASSED`) — lý do vì Judge phát hiện vấn đề nhưng chỉ gắn mức `WARNING` thay vì `CRITICAL`/`ERROR` (`score < 60`).
+   - **`judge_medium` (`gemini-3.8-flash-medium`, budget `25.0s` thử nghiệm):**
+     - Bắt được **`15/16` (`93.75%`)**, bắt thêm `BAD_08_DURATION_180M` (`55.0`, `NEEDS_REVIEW`) và `BAD_09_DURATION_240M` (`50.0`, `NEEDS_REVIEW`), chỉ bỏ lọt `BAD_07_DURATION_150M` (`80.0`, `PASSED`).
+     - Tuy nhiên **`15/16` (`93.75%`)** vượt ngưỡng `8.0s` (`p50 = 11.02s`, `p95 = 17.12s`, `max = 23.72s`).
+   - **Ý nghĩa vận hành:** Trong pipeline thật, lỗi `duration > 120m` đã bị Tier 2 Deterministic Validator (`30 <= estimated_minutes <= 120`) chặn cứng trước khi tới Judge; với các lỗi sư phạm thuộc thẩm quyền Judge, `judge_low` bắt **`13/13` (`100%`)** mà không bị timeout ở `concurrency=1`.
+
+---
+
+### 8.3. So sánh chất lượng `-low` vs `-medium` trên 5 mục tiêu / 10 lộ trình tách khỏi timeout
+
+Thực nghiệm `part_3_quality_ab_low_vs_medium` trong [exp_09_judge_and_quality_ab.json](file:///Users/vuthang/Documents/FocusFlow/docs/experiments/exp_09_judge_and_quality_ab.json) cấp `timeout_budget_seconds = 120.0s` cho cả `LOW` (`gemini-3.8-flash-low`) và `MEDIUM` (`gemini-3.8-flash-medium`) trên 5 mục tiêu đa dạng, sau đó chấm chéo tất cả 10 lộ trình bằng cả `judge_low` lẫn `judge_medium`:
+
+- **Tổng hợp theo arm (`5` mục tiêu/arm):**
+  - **Tỷ lệ qua Tier 1+2:** `5/5` (`100%`) ở cả `LOW` và `MEDIUM`.
+  - **Độ trễ & Thinking tokens:** `LOW` Planner `p95 = 40.07s` (`max 41.96s`), Decomposer `p95 = 114.94s` *(gộp toàn bộ 4–6 milestones trong 1 prompt)*, **`0` thinking tokens**; `MEDIUM` Planner `p95 = 58.33s` (`max 65.04s > 55s`), Decomposer `p95 = 87.90s`, tiêu tốn **`18,868` thinking tokens** (`6,033` Planner + `12,835` Decomposer).
+  - **Quy mô cấu trúc:** `LOW` trung bình `5.2` milestones / `19.2` tasks vs `MEDIUM` `5.0` milestones / `23.8` tasks.
+  - **Điểm Judge chấm chéo:** `LOW` đạt `judge_low_mean = 96.8` / `judge_medium_mean = 95.8` vs `MEDIUM` đạt `judge_low_mean = 96.8` / `judge_medium_mean = 96.2`.
+
+| Mục tiêu | Arm | Planner (`ms` / `out` / `think`) | Decomposer (`ms` / `out` / `think`) | Milestones / Tasks | `judge_low` | `judge_medium` | Nhận xét chất lượng |
+|---|---|---:|---:|---:|---:|---:|---|
+| `G1_BEGINNER_PYTHON_FASTAPI` | `low` | `14,972` / `1,386` / `0` | `40,707` / `5,454` / `0` | `5 / 18` | `96.0` (`PASSED`) | `92.0` (`PASSED`) | Chia bước Python→Pydantic→FastAPI→Pytest rõ; đủ `THEORY→PRACTICE→PROJECT`. |
+| `G1_BEGINNER_PYTHON_FASTAPI` | `medium` | `22,394` / `2,136` / `924` | `43,616` / `6,292` / `2,599` | `4 / 12` | `100.0` (`PASSED`) | `100.0` (`PASSED`) | Ít task hơn (`12`), tổng hợp gọn; tốn `3,523` thinking tokens. |
+| `G2_INTERMEDIATE_SYSTEM_DESIGN_CACHE` | `low` | `32,487` / `3,122` / `0` | `29,610` / `3,601` / `0` | `4 / 12` | `100.0` (`PASSED`) | `96.0` (`PASSED`) | Nhanh gấp ~2× ở Decomposer; phủ đủ caching/sharding/consistency. |
+| `G2_INTERMEDIATE_SYSTEM_DESIGN_CACHE` | `medium` | `28,107` / `2,760` / `1,129` | `58,665` / `8,433` / `3,175` | `4 / 16` | `98.0` (`PASSED`) | `95.0` (`PASSED`) | Chi tiết task hơn nhẹ nhưng tốn `4,304` thinking tokens. |
+| `G3_ADVANCED_RUST_ASYNC_TOKIO` | `low` | `41,960` / `4,162` / `0` | `50,766` / `6,692` / `0` | `5 / 23` | `98.0` (`PASSED`) | `100.0` (`PASSED`) | Đạt `100.0` ở `judge_medium`; cấu trúc `tokio`/pinning/backpressure chặt. |
+| `G3_ADVANCED_RUST_ASYNC_TOKIO` | `medium` | `31,423` / `3,141` / `955` | `82,730` / `11,088` / `1,032` | `6 / 33` | `96.0` (`PASSED`) | `98.0` (`PASSED`) | Tách 33 task chi tiết hơn nhưng `decomposer` chậm `82.7s`. |
+| `G4_BEGINNER_IELTS_WRITING` | `low` | `26,482` / `2,345` / `0` | `123,383` / `17,445` / `0` | `6 / 31` | `95.0` (`PASSED`) | `95.0` (`PASSED`) | Cả hai arm đều bị trừ `5` điểm vì thiếu task `REVIEW` riêng hoặc dồn lịch. |
+| `G4_BEGINNER_IELTS_WRITING` | `medium` | `65,036` / `7,189` / `1,908` | `88,239` / `12,649` / `2,619` | `6 / 32` | `95.0` (`PASSED`) | `98.0` (`PASSED`) | Planner `65.0s > 55s` dù không đổi mức `judge_low` (`95.0`). |
+| `G5_INTERMEDIATE_DATA_ENG_AIRFLOW_DBT` | `low` | `25,592` / `2,169` / `0` | `81,154` / `10,961` / `0` | `6 / 12` | `95.0` (`PASSED`) | `96.0` (`PASSED`) | Tiến độ `THEORY→PRACTICE→PROJECT` đều, cảnh báo dồn 3 task/ngày nghỉ. |
+| `G5_INTERMEDIATE_DATA_ENG_AIRFLOW_DBT` | `medium` | `31,487` / `3,253` / `1,117` | `86,528` / `11,377` / `3,410` | `5 / 26` | `95.0` (`PASSED`) | `90.0` (`PASSED`) | Bị `judge_medium` chấm thấp hơn `low` (`90.0` vs `96.0`) do dồn tải & thiếu `REVIEW`. |
+
+- **Kết luận:** Tách khỏi giới hạn timeout, chất lượng sư phạm giữa `-low` và `-medium` **gần như đồng nhất** (`96.8` vs `96.8` trên `judge_low`; `95.8` vs `96.2` trên `judge_medium`), nên giữ tầng `LOW` là tối ưu về chi phí token và độ trễ dưới trần `55s`.
+
+---
+
+### 8.4. Giải trình `thinking_tokens` Run 2 & hạch toán Quota `completion_tokens`
+
+1. **Vì sao `group7_eval_run_2.json` có `thinking_tokens_total = 0`?**
+   - Ở cấu hình `gemini-3.8-flash-low`, model hầu như tắt suy luận nội bộ (`0` thinking tokens trên phần lớn request) và chỉ đôi khi phát sinh lượng nhỏ thoughts ở các case Decomposer phức tạp (`651 / 26,851 = 2.42%` ở Run 1; `0 / 24,714 = 0.00%` ở Run 2; `428 / 25,537 = 1.68%` ở Run 3). Đây là biến thiên ngẫu nhiên thực tế của `0/18` case trên `-low`.
+   - Tại commit `8f97544`, [eval_runner.py](file:///Users/vuthang/Documents/FocusFlow/backend/tests/ai_evals/eval_runner.py#L957-L964) cũng đã sửa thiếu sót trước đó để cộng đủ `weekly_prompt_tokens`, `weekly_output_tokens`, `weekly_thinking_tokens` vào tổng telemetry.
+2. **Xác nhận quota `completion_tokens` luôn bao gồm `thinking_tokens`:**
+   - Trong [litellm_adapter.py](file:///Users/vuthang/Documents/FocusFlow/backend/src/shared_kernel/infrastructure/external_ai/litellm_adapter.py#L629-L639), `_accumulate_usage()` tính `total_completion_tokens += cand_tokens + thought_tokens` và `total_thinking_tokens += thought_tokens`.
+   - Trong [execution_manager.py](file:///Users/vuthang/Documents/FocusFlow/backend/src/shared_kernel/application/harness/execution_manager.py#L313-L330), `_commit_once()` tính `billable_completion_tokens = max(int(c_tokens or 0), int(t_tokens or 0))` và gọi `self._quota.commit_reservation(..., completion_tokens=billable_completion_tokens)`. Nhờ đó quota không bao giờ bỏ sót `thinking_tokens`.
+
+---
+
+### 8.5. Trạng thái `EMBEDDING_API_KEY` trong `embedding_adapter` & `.env`
+
+- Tại commit `8f97544`, [embedding_adapter.py](file:///Users/vuthang/Documents/FocusFlow/backend/src/shared_kernel/infrastructure/external_ai/embedding_adapter.py#L79-L85) chỉ đọc `settings.embedding_api_key` (`EMBEDDING_API_KEY`), **không** fallback sang `GEMINI_API_KEY` hay `LLM_API_KEY`, và fail-closed với `AI_EMBEDDING_PROVIDER_NOT_CONFIGURED: Missing valid EMBEDDING_API_KEY for embeddings.` khi giá trị rỗng hoặc placeholder.
+- **Trạng thái thực tế trên máy hiện tại (kiểm tra tên biến không in secret):** `.env` và `backend/.env` chỉ có `GEMINI_API_KEY` (khác rỗng), **chưa khai báo `EMBEDDING_API_KEY`**. Do đó ở chế độ production không override env, các luồng RAG/Embedding sẽ **fail-closed** cho tới khi người vận hành đặt `EMBEDDING_API_KEY` hợp lệ trong `.env`.
+
+---
+
+### 8.6. Truy vết cơ chế `weekly_faithfulness < 1.0` (`QuantitativeFaithfulnessValidator`)
+
+Kiểm tra trực tiếp [evaluation/domain/services/__init__.py](file:///Users/vuthang/Documents/FocusFlow/backend/src/evaluation/domain/services/__init__.py#L12-L74), [intelligence.py](file:///Users/vuthang/Documents/FocusFlow/backend/src/evaluation/application/use_cases/intelligence.py#L779-L799), và [eval_runner.py](file:///Users/vuthang/Documents/FocusFlow/backend/tests/ai_evals/eval_runner.py#L965-L989):
+
+1. **`compute_raw_faithfulness` đo trên output LLM thô trước khi sanitize:**
+   - Trong `GenerateWeeklyReviewUseCase.execute()` (`intelligence.py:779-784, 899`), `raw_faithfulness` được tính trên bộ 3 chuỗi thô `(s_fb, b_fb, a_rec)` trả về từ LLM so với `allowed_numbers | {0, 1, 2, 3, 7, 100}` (tức `_STRUCTURAL_NUMBERS`), rồi ghi vào `output_payload["quantitative_faithfulness"]`.
+   - Trong `eval_runner.py`, fixture `_EvalWeeklyMetricsPort` cung cấp tập số nền gồm `180, 240, 4, 3, 4, 0, 75.0` và `period_days = 8`. Khi LLM diễn giải tự nhiên có kèm 1–2 con số nội suy (ví dụ `60` phút còn lại từ `240 - 180`, hoặc `45` phút/phiên từ `180 / 4`), `raw_faithfulness` ghi nhận `< 1.0`: ví dụ ở `holdout_eval_run_1.json`, `H02_K8S_TF_INTERMEDIATE_TIGHT_B` đạt `0.8462` (`11/13` số khớp) và `H05_APPSEC_INTERMEDIATE_WIDE_B` đạt `0.9231` (`12/13` số khớp); ở `group7_eval_evening.json`, `E01` đạt `0.9412` (`16/17`) và `E03` đạt `0.9231` (`12/13`).
+2. **`validate_or_sanitize` thay thế nguyên section vi phạm và giữ nguyên các section đạt `100%`:**
+   - Ngay sau bước đo `raw_faithfulness`, `GenerateWeeklyReviewUseCase` gọi `QuantitativeFaithfulnessValidator.validate_or_sanitize` **độc lập cho từng mục** (`strengths_feedback`, `bottlenecks_feedback`, `action_recommendations` tại `intelligence.py:785-798`).
+   - Tại `validate_or_sanitize()` (`__init__.py:64-74`): nếu một mục có `matched < total` (chỉ cần 1 số nằm ngoài `allowed_numbers | {0, 1, 2, 3, 7, 100}`), **toàn bộ mục đó** được thay bằng câu fallback tất định tương ứng (`default_strengths` / `default_bottlenecks` / `default_actions`) để đảm bảo độ trung thực đầu ra `1.0` — **không** cắt xóa lẻ từng chữ số trong câu và **không** loại bỏ các mục còn lại đang đạt `100%`.
+
+---
+
+### 8.7. Kết quả Holdout 12 mục tiêu mới × 3 lần (`holdout_planning_12_goals.jsonl`)
+
+Tập holdout gồm **12 mục tiêu hoàn toàn mới** thuộc 12 lĩnh vực (`rust_systems`, `kubernetes_terraform`, `data_engineering`, `flutter_mobile`, `appsec_owasp`, `uiux_design_systems`, `quantitative_python`, `embedded_rtos`, `typescript_nextjs`, `graphql_postgresql`, `mlops`, `ielts_academic`), kèm 2 ca prompt injection (`H03`, `H10`):
+
+| Metric | Holdout Run 1 ([holdout_eval_run_1.json](file:///Users/vuthang/Documents/FocusFlow/docs/experiments/holdout_eval_run_1.json)) | Holdout Run 2 ([holdout_eval_run_2.json](file:///Users/vuthang/Documents/FocusFlow/docs/experiments/holdout_eval_run_2.json)) | Holdout Run 3 ([holdout_eval_run_3.json](file:///Users/vuthang/Documents/FocusFlow/docs/experiments/holdout_eval_run_3.json)) |
+|---|---:|---:|---:|
+| `pass_at_1` (`passed / total`) | **`1.0000` (`12/12`)** | **`1.0000` (`12/12`)** | **`1.0000` (`12/12`)** |
+| `avg_retries` / `post_repair_schema_mismatch` | `0.0` / `0/60 (0%)` | `0.0` / `0/60 (0%)` | `0.0` / `0/60 (0%)` |
+| `thinking_tokens` (`% output`) | `795 / 22,519` (`3.53%`) | `2,394 / 25,061` (`9.55%`) | `2,302 / 23,958` (`9.61%`) |
+| Pipeline `p50` / `p95` (ms) | `14,723.3` / **`20,412.3`** | `16,125.1` / **`23,111.0`** | `15,369.9` / **`23,966.3`** |
+| Decomposer `p95` / `max` (ms) | `14,846.4` / `14,849.1` | `19,535.4` / `20,809.5` | `19,605.0` / `22,071.1` |
+| Critics+Judge `p95` / `max` (ms) | `6,289.6` / `8,070.0` | `5,851.8` / `5,857.2` | `5,115.6` / `5,183.8` |
+| Judge `PASSED / REVIEW_PENDING` (`avg score`) | **`12 / 0`** (`96.25`) | **`12 / 0`** (`97.92`) | **`11 / 1`** (`GATEWAY_ERROR`; `96.82`) |
+| Weekly LLM (`fallback_rate` / `faithfulness`) | `12/12` (`0%` / `0.9637`) | `12/12` (`0%` / `0.9861`) | `12/12` (`0%` / `0.9702`) |
+| `injection_isolation` | **`2/2` (`100%`)** | **`2/2` (`100%`)** | **`2/2` (`100%`)** |
+
+---
+
+### 8.8. Kết quả `--concurrency 5` & `--concurrency 10` và Đối chiếu đa khung giờ (`2026-11-16`)
+
+1. **Kiểm tra tải đồng thời (`18` goals):**
+
+| Metric | `concurrency=1` tối (Run evening) | `concurrency=5` ([concurrency_5_eval.json](file:///Users/vuthang/Documents/FocusFlow/docs/experiments/concurrency_5_eval.json)) | `concurrency=10` ([concurrency_10_eval.json](file:///Users/vuthang/Documents/FocusFlow/docs/experiments/concurrency_10_eval.json)) |
+|---|---:|---:|---:|
+| `pass_at_1` (`passed / total`) | `1.0000` (`18/18`) | **`1.0000` (`18/18`)** | **`1.0000` (`18/18`)** |
+| `post_repair_schema_mismatch` | `0/90` (`0.0%`) | `0/90` (`0.0%`) | `0/90` (`0.0%`) |
+| `thinking_tokens` (`% output`) | `0 / 31,679` (`0.00%`) | `0 / 30,568` (`0.00%`) | `933 / 33,096` (`2.82%`) |
+| Pipeline `p50` / `p95` (ms) | `14,249.1` / `16,025.4` | `14,203.2` / `20,661.5` | `15,198.7` / `21,106.7` |
+| `stage_latency_stats`: Decomposer `p95` (`max`) | `11,056.9` (`11,777.8`) | `11,835.5` (`14,460.7`) | `14,842.8` (`15,066.4`) |
+| `stage_latency_stats`: Critics+Judge `p95` (`max`) | `5,748.9` (`6,870.3`) | `10,607.8` (`14,839.6`) | `11,929.2` (`11,931.8`) |
+| `stage_latency_stats`: Weekly `p95` (`max`) | `6,234.1` (`7,039.0`) | `6,581.0` (`6,612.2`) | `6,130.3` (`6,273.3`) |
+| Judge `PASSED / REVIEW_PENDING` (`avg score`) | `17 / 1` (`GATEWAY_ERROR`; `97.53`) | `15 / 3` (**`TIMEOUT 16.67%`**; `97.33`) | `17 / 1` (**`TIMEOUT 5.56%`**; `97.35`) |
+| `error_category_rates` (`total` error rate) | Judge `GATEWAY_ERROR 5.56%` (`total 1.85%`) | Judge `TIMEOUT 16.67%` (`total 5.56%`) | Judge `TIMEOUT 5.56%` (`total 1.85%`) |
+| Weekly LLM (`fallback` / `faithfulness`) | `18/18` (`0%` / `0.9671`) | `18/18` (`0%` / `0.9708`) | `18/18` (`0%` / `0.9486`) |
+
+2. **Đối chiếu 3 khung giờ đo (lưu ý trung thực về phạm vi thời gian):**
+   - **Khung 1 (`18:45–18:57 +07:00` ngày `2026-11-16`, `group7_eval_run_1..3.json`):** `18/18` pass@1 (`3/3`), `p95 = 15.49–19.78s`, Judge `18/18 PASSED` (`0%` lỗi).
+   - **Khung 2 (`20:52–21:31 +07:00` ngày `2026-11-16`, `exp_09`, `holdout_1..3`, `concurrency_5/10`):** Holdout `12/12` × 3 (`p95 = 20.41–23.97s`, 1 `GATEWAY_ERROR` ở Judge tại Run 3), Concurrency `18/18` (`p95 = 20.66–21.11s`, `3/18` và `1/18` Judge `TIMEOUT` ở ngưỡng `8.0s`).
+   - **Khung 3 (`21:37 +07:00` ngày `2026-11-16`, [group7_eval_evening.json](file:///Users/vuthang/Documents/FocusFlow/docs/experiments/group7_eval_evening.json)):** `18/18` pass@1, `p95 = 16.03s`, Judge `17/18 PASSED` + `1/18 REVIEW_PENDING` (`GATEWAY_ERROR`), Weekly `18/18` (`faithfulness = 0.9671`).
+   - **Giới hạn đã biết:** Cả 3 khung giờ đo đều nằm trong **cùng một ngày `2026-11-16`** (`18:45–21:37 +07:00`), **chưa** kiểm chứng lặp lại qua 3 ngày khác nhau.
+
+---
+
+### 8.9. Kết quả kiểm tra toàn diện trong Container Python 3.12 (Mục E)
+
+Chạy trực tiếp trên image `focusflow-backend:latest` (`FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim`) mount repo host vào `/app`, cài `dev` extras vào venv tạm `/tmp/venv312` trong container (không sửa đổi `.venv` hay file nào trên host), kết nối PostgreSQL `:5432` & Redis `:6379` qua `host.docker.internal`:
+
+| Kiểm tra trong Container Python 3.12 | Kết quả | Chi tiết quan sát trực tiếp |
+|---|---|---|
+| `python --version` | **PASS** | **`Python 3.12.12`** |
+| `ruff check .` | **PASS** | `All checks passed!` |
+| `ruff format --check .` | **PASS** | `351 files already formatted` |
+| `mypy --strict src` | **PASS** | `Success: no issues found in 271 source files` |
+| `lint-imports` | **PASS** | `Analyzed 263 files, 746 dependencies. Contracts: 5 kept, 0 broken.` |
+| `python scripts/update_prompts_lock.py --check` | **PASS** | `prompts.lock matches live PromptRegistry (12 prompts).` |
+| `pytest -q -m "not live_cobhub and not live_embedding"` | **526 passed, 1 failed, 3 deselected** (`63.30s`) | **1 test fail:** `tests/unit/planning/test_phase_b_c_d_improvements.py::test_phase_c_google_genai_proxy_and_three_tier_routing:127` (`AssertionError: assert 'http://host.docker.internal:8045' == 'http://127.0.0.1:8045'`). **Nguyên nhân:** `_rewrite_docker_localhost()` trong [litellm_adapter.py](file:///Users/vuthang/Documents/FocusFlow/backend/src/shared_kernel/infrastructure/external_ai/litellm_adapter.py#L75-L83) tự chuyển `127.0.0.1` → `host.docker.internal` khi tồn tại `/.dockerenv` trong container, trong khi unit test chưa mock `os.path.exists` hoặc chấp nhận `host.docker.internal`. |
+
+---
+
+### 8.10. Kiểm tra Timeout `< 1.5 × p95` trên mọi Stage & Khung giờ (Mục F)
+
+Tổng hợp `p95` lớn nhất đo được từ toàn bộ artifact (`group2_measurements.json`, `group5`, `group7`, `group7_evening`, `holdout_1..3`, `concurrency_5/10`, `exp_09`) so với ngưỡng cấu hình hiện tại trong [config.py](file:///Users/vuthang/Documents/FocusFlow/backend/src/shared_kernel/config.py#L86-L101):
+
+| Stage / Pipeline | Timeout cấu hình | `p95` lớn nhất đo được (nguồn) | Tỷ lệ `Timeout / p95` | Đạt `>= 1.5×`? | Ghi chú & Đề xuất điều chỉnh |
+|---|---:|---:|---:|:---:|---|
+| `goal-clarifier` | `15.0s` | `10.16s` (`group2.stage_measurements`) | `1.48×` | Gần đạt (`< 1.5×`) | Nâng nhẹ lên `15.5s–16.0s` (`>= 1.52×`). |
+| `goal-clarifier-followup` | `7.5s` | `4.96s` (`group2.stage_measurements`, `max 5.17s`) | **`1.51×`** | **ĐẠT** | Sát biên `1.5×`; cân nhắc `8.0s` (`1.61×`) nếu chạy giờ cao điểm. |
+| `learning-milestone-planner` | `50.0s` *(trần `55.0s`)* | `38.39s` (`group2.part_c`) / **`40.07s`** (`exp_09.part_3`, `max 41.96s`) | **`1.25×`–`1.30×`** | **CHƯA ĐẠT (`< 1.5×`)** | `1.5 × 40.07s = 60.1s > 55s` trần SRS; cần prefetch/giới hạn tool rounds hoặc tách theo phase thay vì chỉ tăng timeout tĩnh. |
+| `learning-task-decomposer` | `25.0s` *(per attempt)* | **`19.61s`** (`holdout_eval_run_3`, `max 22.07s`; riêng `exp_09.part_3` gộp toàn bộ milestones `114.94s`) | **`1.27×`** | **CHƯA ĐẠT (`< 1.5×`)** | Dùng **dynamic runtime budget** = `min(30.0s, remaining_pipeline_budget - reserve)` (`30/19.61 = 1.53×`) và chia batch theo từng milestone nếu roadmap nhiều milestone. |
+| `coverage-prerequisite-critic` | `15.0s` | `10.91s` (`group2.part_c`, `max 11.11s`) | `1.37×` | **CHƯA ĐẠT (`< 1.5×`)** | Cấp ngân sách động `min(16.5s, remaining_budget)` (`16.5/10.91 = 1.51×`) khi Decomposer chạy nhanh. |
+| `learner-fit-actionability-critic` | `15.0s` | `10.06s` (`group2.stage_measurements`) | `1.49×` | Gần đạt (`< 1.5×`) | Dùng chung ngân sách Critic động `min(16.5s, remaining_budget)` (`1.64×`). |
+| `quality-arbiter` | `14.5s` | `9.74s` (`group2.stage_measurements`, `max 10.15s`) | `1.49×` | Gần đạt (`< 1.5×`) | Tăng nhẹ lên `15.0s` (`1.54×`) hoặc giới hạn theo `remaining_budget`. |
+| `pedagogical-quality-judge` | **`8.0s`** | `6.34s` (`exp_09.part_2b`, `concurrency=1`) / **`11.93s`** *(wall khối `critics_judge_parallel` ở `concurrency=10`)* | **`1.26×`** (`c=1`) / **`0.67×`** (`c=10`) | **CHƯA ĐẠT (`< 1.5×`)** | Dưới `concurrency 5/10` phát sinh `3/18` (`16.7%`) và `1/18` (`5.6%`) Judge timeout. Đề xuất nâng lên **`10.0s–12.0s`** hoặc cấp động `min(12.0s, remaining_budget)` trong nhánh `asyncio.gather` cùng Critics. |
+| `weekly-review-advisor` | `10.5s` | `7.20s` (`group2.stage_measurements`, `max 7.62s`; `holdout` `6.96s`) | **`1.46×`** | **CHƯA ĐẠT (`< 1.5×`)** | Nâng lên **`11.5s`** (`1.60×` vs `7.20s`), vẫn rất an toàn cho request riêng của Weekly Review. |
+| `prove-question-generator` | `8.5s` | `5.72s` (`group2.stage_measurements`, `max 5.81s`) | `1.49×` | Gần đạt (`< 1.5×`) | Nâng nhẹ lên **`9.0s`** (`1.57×`). |
+| `prove-mode-grader` | `7.5s` | `5.01s` (`group2.stage_measurements`, `max 5.13s`) | **`1.50×`** | **ĐẠT (biên)** | Cân nhắc **`8.0s`** (`1.60×`) để có biên an toàn hơn khi có jitter. |
+| **Schedule Pipeline Total** | **`55.0s`** | **`23.97s`** (`holdout_eval_run_3`) | **`2.29×`** | **ĐẠT** | Luôn giữ trần cứng `AI_HARD_TIMEOUT_SECONDS = 55.0s` theo SRS v1.3. |
+
+- **Kiến trúc Dynamic Runtime Budget khuyến nghị:** Giữ nguyên trần cứng `55.0s` của SRS (`ai_hard_timeout_seconds=55.0`) làm deadline tổng của request/SSE job (`deadline = monotonic() + 55.0`); thay vì cộng dồn cứng timeout từng stage, mỗi stage nhận `min(stage_cap_s, max(floor_s, remaining_deadline - downstream_reserve_s))` (ví dụ `Decomposer` được mở rộng tới `30.0s` nếu đây là bước đầu của `proposal_generation`, còn `Critics` & `Tier 3 Judge` nhận phần dư song song tối đa `12.0s–16.5s` với sàn tối thiểu `ai_min_critic_remaining_seconds=6.0` và `ai_min_judge_remaining_seconds=3.0`). Riêng `learning-milestone-planner` cần tối ưu giảm số vòng tool nối tiếp để `p95` tụt về `< 33s` thay vì vượt trần `55s`.
+
+---
+
+### 8.11. Live Capability Probe `cobhub` & Logging `actual_model_id` (`#8`)
+
+Kết quả từ `part_1_live_capability_probe` trong [exp_09_judge_and_quality_ab.json](file:///Users/vuthang/Documents/FocusFlow/docs/experiments/exp_09_judge_and_quality_ab.json):
+
+- `probe_cobhub_capabilities()` và `run_startup_ai_probe()` qua `http://127.0.0.1:8045`: `probe_succeeded=true`, `status="ok"`, `schema_enforced_detected=false` (khớp `configured_schema_enforced=false`), `requested_low_model="gemini-3.8-flash-low"`, **`actual_model_id="gemini-3.8-flash-low"`**, `low_model_thinking_tokens=0`, `low_thinking_is_low=true`, `mismatches=[]`.
+- Endpoint `GET /health?probe_ai=true`: trả HTTP **`200 OK`**, `status="healthy"`, trường `ai_gateway` phản hồi đầy đủ metadata probe không chứa secret.
+- Logging runtime: [litellm_adapter.py](file:///Users/vuthang/Documents/FocusFlow/backend/src/shared_kernel/infrastructure/external_ai/litellm_adapter.py#L551-L568,L871-L879) ghi `actual_model_id` (lấy từ `resp.model_version` hoặc model yêu cầu) vào `last_model_used` và sự kiện log `llm_generation_completed`.
+
+---
+
+### 8.12. Quét lịch sử Git (Secret/PII) & Phân tách `cd5989b` thành 7 PR
+
+- **Kiểm tra lịch sử `cd5989b~1..HEAD`:** `0` file `.env` thật được commit (chỉ có `.env.example`); không có API key/secret/PII thật bị lộ (`AIza...` chỉ xuất hiện 1 lần làm chuỗi giả lập trong `test_embedding_adapter.py`, `antigravity-proxy-key` là placeholder test).
+- **Phân tách `150` files trong checkpoint `cd5989b` thành 7 PR độc lập** (chi tiết từng đường dẫn xem [checkpoint_pr_breakdown.md](file:///Users/vuthang/Documents/FocusFlow/docs/experiments/checkpoint_pr_breakdown.md)):
+  - **PR1 (4 files):** Docs, Plans, SRS & Reports (`ai-prompt-hardening-plan.md`, `live-real-test-report.md`, `prompt-md-decision-metrics.md`, `srs-v1.3.md`).
+  - **PR2 (4 files):** DB Migrations `0011–0012` & ORM Models (`user_orm.py`, `planning_orm.py`).
+  - **PR3 (23 files):** Shared Kernel AI Harness, `prompts.lock`, `litellm_adapter`, `embedding_adapter`, Docker/env config.
+  - **PR4 (37 files):** Planning Domain, `validation_gate/` package, Critics, Clarification Gap Analysis, Use Cases & Presentation.
+  - **PR5 (22 files):** Account Calendar/Quota adapters, `WeeklyExecutionMetricsAdapter`, Evaluation Prompts & Intelligence Use Cases.
+  - **PR6 (32 files):** Frontend Angular UI, `schema.d.ts`, `ai-sse.service`, wizard dialogs & spec tests.
+  - **PR7 (28 files):** Backend unit, integration & AI eval dataset/runner tests.
+
+---
+
+### 8.13. Đối soát Prompt hiện tại (`v2.0.0`) vs Checklist Review trước (Read-only Audit)
+
+Audit nguyên trạng 12 prompt trong [roadmap_skills.py](file:///Users/vuthang/Documents/FocusFlow/backend/src/planning/application/services/roadmap_skills.py), [prompts.py](file:///Users/vuthang/Documents/FocusFlow/backend/src/evaluation/application/prompts.py), và [untrusted_context.py](file:///Users/vuthang/Documents/FocusFlow/backend/src/shared_kernel/application/harness/untrusted_context.py) (không chỉnh sửa nội dung prompt, `prompts.lock` giữ nguyên 100%):
+
+| Hạng mục Checklist Review trước | Trạng thái | Bằng chứng dòng code / Chi tiết còn thiếu |
+|---|---|---|
+| **1. Mục Đầu vào (Context, Action-last, chống trùng lặp, tách confidence)** | **ĐÃ LÀM** *(có 1 lưu ý nhỏ)* | - `roadmap_skills.py:322-479` (`build_goal_clarifier_prompt`, `followup`, `milestone_planner`, `task_decomposer`): đưa dữ liệu untrusted/context trước, `"Yêu cầu hành động"` ở cuối, không lặp `known_dimensions`, bỏ yêu cầu tự nhân `beta`.<br>- `roadmap_skills.py:482-669` (`build_pedagogical_judge_prompt`): truyền `learner_level`, `milestones_summary`, rút gọn payload qua `build_compact_judge_payload`.<br>- `prompts.py:111-199`: tách `<milestone_data>`, `<learner_answer>` (**không gửi `confidence`** vào grader), `<learner_reflection>` qua `redact_sensitive_keys`.<br>- *Lưu ý (`CHƯA LÀM`):* `PROPOSAL_SELF_CORRECTION_PROMPT` (`roadmap_skills.py:209-211`) không đính kèm payload cũ nên buộc sinh lại toàn bộ; `build_pedagogical_judge_prompt` dùng `[PROPOSAL_PAYLOAD]` thay vì thẻ XML `<proposal_payload>` (dù nội dung đã qua `sanitize_untrusted_value`). |
+| **2. Quy ước ID task, outcome & resource** | **ĐÃ LÀM** | - `roadmap_skills.py:100, 106` (`MILESTONE_PLANNER_SKILL`): `sequence_order` liên tục từ 1, outcomes gán mã `M{sequence_order}-O{index}`.<br>- `roadmap_skills.py:139-146` (`TASK_DECOMPOSER_SKILL`): `task_id` tuần tự `T1, T2, T3...`, `covered_outcome_ids` phủ 100% `M{seq}-O{i}`, tối đa 3 `resource_ids` trích nguyên văn từ tool.<br>- `prompts.py:52-55` (`PROVE_QUESTION_GENERATOR_PROMPT`): đúng 3 ID `q1, q2, q3`. |
+| **3. Giới hạn độ dài / Bounds / Range** | **ĐÃ LÀM** *(thiếu bound số task/độ dài văn bản)* | - **Đã làm:** Clarifier tối đa `3` câu (`<= gaps`), tối đa `4` phương án + `'Khác'` (`roadmap_skills.py:72-80`); Follow-up đúng `1` câu (`188`); Planner `estimated_effort_minutes >= 15` (khuyến nghị `60..600`, `108`); Decomposer `30 <= estimated_minutes <= 120`, tối đa `3` `resource_ids`, `max_tool_calls=4` (`129, 142-144`); Weekly `1..3` actions (`prompts.py:100`).<br>- **Chưa làm:** Chưa đặt giới hạn số task tối đa hoặc giới hạn số từ/ký tự cho `title`/`description` trong prompt Decomposer/Planner (khi gộp nhiều milestone ở `exp_09 part_3`, Decomposer sinh tới 31–32 tasks trong 1 call). |
+| **4. Rubric Judge / Grader / Critics / Arbiter** | **ĐÃ LÀM 1 PHẦN** | - **Đã làm:** Judge neo 5 mốc `0/40/60/80/100`, nêu `score < 60` hoặc `CRITICAL/ERROR/FAIL` → FAIL, bắt buộc `evidence` + `task_ref` (`roadmap_skills.py:163-173`); Critics/Arbiter yêu cầu `evidence` + `task_ref` xác thực (`227-262`); Prove Grader tách 3 thành phần `0..40`, `0..30`, `0..30`, cấm xuất `status` và không xét `confidence` (`prompts.py:72-80`).<br>- **Chưa làm:** Rubric `PEDAGOGICAL_JUDGE_SKILL` chưa quy định mức `CRITICAL/ERROR` cho task có `estimated_minutes > 120` hoặc `< 30`, khiến `judge_low` chỉ gán `WARNING` (`score 65–75`) và bỏ lọt `3/3` ca `duration_exceeds_120m` trong hiệu chuẩn `exp_09` (`part_2b`). Ngoài ra chưa tinh chỉnh văn phong/rubric sau `exp_09` vì Đợt 2C đóng băng prompt `v2.0.0`. |
+| **5. Định nghĩa `FULL_SCOPE` / `FIT_CAPACITY` / `deferred_scope`** | **ĐÃ LÀM** | - `roadmap_skills.py:110-113, 439-440` (`MILESTONE_PLANNER_SKILL`): định nghĩa tường minh `FULL_SCOPE` (`deferred_scope=[]`, bao phủ toàn bộ mục tiêu gốc) và `FIT_CAPACITY` (thu hẹp về phạm vi khả thi theo quỹ thời gian/deadline, `deferred_scope` liệt kê rõ nội dung bị hoãn và không tuyên bố đạt toàn bộ mục tiêu gốc). |
+| **6. Quy tắc dữ liệu ngoài / Chống hallucination / Chống injection** | **ĐÃ LÀM** *(có gợi ý cải thiện Weekly)* | - **Đã làm:** Nhúng `UNTRUSTED_DATA_SYSTEM_RULE` (`untrusted_context.py:12-19`) vào 12/12 system prompts; chuẩn hóa NFKC, loại ký tự vô hình, che PII/secret, lọc injection, `html.escape`, trung hòa tổng quát mọi `[...]` giả mạo (`_FAKE_SECTION_HEADER_RE`, `untrusted_context.py:46-57, 95-206`); cấm bịa `concept_id` (`roadmap_skills.py:102-104`), cấm bịa `resource_ids`/URL (`144-145`), cấm nội suy số liệu mới trong Weekly (`prompts.py:98-99`).<br>- **Chưa làm (gợi ý v2.1.0):** `WEEKLY_REVIEW_ADVISOR_PROMPT` dù đã cấm nội suy số, LLM `-low` vẫn thỉnh thoảng tự tính hiệu số/trung bình (`raw_faithfulness = 0.85..0.94`, đang được `QuantitativeFaithfulnessValidator` chặn an toàn); nếu nâng version sau này nên thêm 1 ví dụ phủ định ngắn (không tự trừ `planned - completed`). |
