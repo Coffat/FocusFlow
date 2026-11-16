@@ -290,7 +290,13 @@ async def test_load_planning_harness_skips_embedding_when_goal_has_no_sources() 
     embed_calls = 0
 
     class FakeEmbeddingProvider:
-        async def embed(self, texts: list[str]) -> list[list[float]]:
+        async def embed(
+            self,
+            texts: list[str],
+            *,
+            task_type: str | None = None,
+        ) -> list[list[float]]:
+            del task_type
             nonlocal embed_calls
             embed_calls += 1
             await asyncio.sleep(0.01)

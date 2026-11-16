@@ -63,13 +63,23 @@ class Settings(BaseSettings):
     llm_embedding_model: str = "gemini/gemini-embedding-2"
     llm_api_key: str = Field(
         default="",
-        validation_alias=AliasChoices("llm_api_key", "gemini_api_key", "llm_key"),
+        validation_alias=AliasChoices("llm_api_key", "llm_key"),
     )
     llm_base_url: str = "http://127.0.0.1:8045"
     llm_thinking_level: str = "MEDIUM"
     llm_schema_enforced_by_gateway: bool = False
     llm_max_tool_calls: int = 4
     llm_tool_timeout_seconds: float = 5.0
+
+    # Dedicated Google AI Studio Embedding (isolated from cobhub LLM gateway)
+    embedding_provider: str = "google_ai_studio"
+    embedding_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("embedding_api_key", "gemini_api_key"),
+    )
+    embedding_model: str = "gemini/gemini-embedding-2"
+    embedding_base_url: str = ""
+    embedding_dimensions: int = 768
 
     # AI Hard Timeout & Stage Budgets (SRS v1.3 hard cap 55s; measured p95 * 1.3..1.5)
     ai_hard_timeout_seconds: float = 55.0
@@ -111,6 +121,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _validate_ai_timeout_budgets(self) -> Self:
+        if int(self.embedding_dimensions) <= 0:
+            raise ValueError("embedding_dimensions must be > 0")
         hard_cap = float(self.ai_hard_timeout_seconds)
         if hard_cap <= 0:
             raise ValueError("ai_hard_timeout_seconds must be > 0")

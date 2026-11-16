@@ -79,8 +79,11 @@ async def load_planning_harness_context_inputs(
             if embedding_provider is not None:
                 try:
                     vectors = await asyncio.wait_for(
-                        embedding_provider.embed([clean_query[:1000]]),
-                        timeout=3.0,
+                        embedding_provider.embed(
+                            [clean_query[:1000]],
+                            task_type="RETRIEVAL_QUERY",
+                        ),
+                        timeout=5.0,
                     )
                     if vectors and len(vectors[0]) == 768:
                         query_embedding = vectors[0]

@@ -189,36 +189,47 @@ async def test_phase_c_embedding_adapter_never_uses_deprecated_004(
 ) -> None:
     import litellm
 
-    attempted_calls: list[tuple[str, str | None]] = []
+    attempted_calls: list[tuple[str, str | None, int | None]] = []
 
     async def fake_aembedding(**kwargs: Any) -> Any:
         model = str(kwargs.get("model", ""))
         api_base = kwargs.get("api_base")
-        attempted_calls.append((model, api_base))
-        return SimpleNamespace(data=[{"embedding": [0.25] * 1024}])
+        dimensions = kwargs.get("dimensions")
+        attempted_calls.append((model, api_base, dimensions))
+        return SimpleNamespace(data=[{"embedding": [0.25] * 768}])
 
     monkeypatch.setattr(litellm, "aembedding", fake_aembedding)
 
     emb = LiteLLMEmbeddingAdapter()
     emb._settings = Settings(
         llm_provider="gemini",
-        llm_api_key="real-key",
+        llm_api_key="cobhub-proxy-key",
         llm_base_url="http://127.0.0.1:8045",
-        llm_embedding_model="gemini/gemini-embedding-2",
+        embedding_provider="google_ai_studio",
+        embedding_api_key="real-studio-key",
+        embedding_base_url="",
+        embedding_model="gemini/gemini-embedding-2",
+        embedding_dimensions=768,
     )
     vectors = await emb.embed(["Kiến trúc Hexagonal"])
     assert len(vectors) == 1
     assert len(vectors[0]) == 768
-    assert attempted_calls == [("gemini/gemini-embedding-2", "http://127.0.0.1:8045")]
+    assert attempted_calls == [("gemini/gemini-embedding-2", None, 768)]
 
-    # Fail closed when LLM_BASE_URL is missing for cobhub
-    emb._settings = Settings(llm_provider="gemini", llm_api_key="real-key", llm_base_url="")
+    # Fail closed when embedding_provider is invalid/mock
+    emb._settings = Settings(
+        embedding_provider="mock",
+        embedding_api_key="real-studio-key",
+        embedding_base_url="",
+    )
     with pytest.raises(RuntimeError, match="AI_EMBEDDING_PROVIDER_NOT_CONFIGURED"):
         await emb.embed(["Kiến trúc Hexagonal"])
 
-    # Fail closed when API key is missing or mock
+    # Fail closed when embedding API key is missing or mock
     emb._settings = Settings(
-        llm_provider="gemini", llm_api_key="", llm_base_url="http://127.0.0.1:8045"
+        embedding_provider="google_ai_studio",
+        embedding_api_key="",
+        embedding_base_url="",
     )
     with pytest.raises(RuntimeError, match="AI_EMBEDDING_PROVIDER_NOT_CONFIGURED"):
         await emb.embed(["Kiến trúc Hexagonal"])
@@ -232,9 +243,10 @@ async def test_phase_c_embedding_adapter_never_uses_deprecated_004(
 
     monkeypatch.setattr(litellm, "aembedding", failing_aembedding)
     emb._settings = Settings(
-        llm_provider="gemini",
-        llm_api_key="real-key",
-        llm_base_url="http://127.0.0.1:8045",
+        embedding_provider="google_ai_studio",
+        embedding_api_key="real-studio-key",
+        embedding_base_url="",
+        embedding_model="gemini/gemini-embedding-2",
     )
     with pytest.raises(RuntimeError, match="AI_EMBEDDING_FAILED"):
         await emb.embed(["Kiến trúc Hexagonal"])

@@ -1,0 +1,131 @@
+{
+  "timestamp": "2026-11-16T10:34:06.611330+00:00",
+  "provider": "google_ai_studio",
+  "model": "gemini/gemini-embedding-2",
+  "dimensions": 768,
+  "base_url": "google_ai_studio_default",
+  "docs_count": 6,
+  "queries_count": 5,
+  "doc_norms_range": [
+    1.0,
+    1.0
+  ],
+  "query_norms_range": [
+    1.0,
+    1.0
+  ],
+  "with_task_type": {
+    "top1_correct": 5,
+    "total_queries": 5,
+    "accuracy": 1.0,
+    "details": [
+      {
+        "query_id": "q1",
+        "expected_doc_id": "doc_postgres_index",
+        "predicted_top1_doc_id": "doc_postgres_index",
+        "top1_score": 0.754302,
+        "top2_doc_id": "doc_spaced_repetition",
+        "top2_score": 0.50005,
+        "margin": 0.254253,
+        "correct": true
+      },
+      {
+        "query_id": "q2",
+        "expected_doc_id": "doc_hexagonal",
+        "predicted_top1_doc_id": "doc_hexagonal",
+        "top1_score": 0.834423,
+        "top2_doc_id": "doc_postgres_index",
+        "top2_score": 0.585919,
+        "margin": 0.248504,
+        "correct": true
+      },
+      {
+        "query_id": "q3",
+        "expected_doc_id": "doc_angular_signals",
+        "predicted_top1_doc_id": "doc_angular_signals",
+        "top1_score": 0.733167,
+        "top2_doc_id": "doc_hexagonal",
+        "top2_score": 0.553703,
+        "margin": 0.179464,
+        "correct": true
+      },
+      {
+        "query_id": "q4",
+        "expected_doc_id": "doc_spaced_repetition",
+        "predicted_top1_doc_id": "doc_spaced_repetition",
+        "top1_score": 0.726715,
+        "top2_doc_id": "doc_postgres_index",
+        "top2_score": 0.479282,
+        "margin": 0.247433,
+        "correct": true
+      },
+      {
+        "query_id": "q5",
+        "expected_doc_id": "doc_asyncio",
+        "predicted_top1_doc_id": "doc_asyncio",
+        "top1_score": 0.814301,
+        "top2_doc_id": "doc_hexagonal",
+        "top2_score": 0.575038,
+        "margin": 0.239263,
+        "correct": true
+      }
+    ]
+  },
+  "baseline_no_task_type": {
+    "top1_correct": 5,
+    "total_queries": 5,
+    "accuracy": 1.0,
+    "details": [
+      {
+        "query_id": "q1",
+        "expected_doc_id": "doc_postgres_index",
+        "predicted_top1_doc_id": "doc_postgres_index",
+        "top1_score": 0.754302,
+        "top2_doc_id": "doc_spaced_repetition",
+        "top2_score": 0.50005,
+        "margin": 0.254253,
+        "correct": true
+      },
+      {
+        "query_id": "q2",
+        "expected_doc_id": "doc_hexagonal",
+        "predicted_top1_doc_id": "doc_hexagonal",
+        "top1_score": 0.834423,
+        "top2_doc_id": "doc_postgres_index",
+        "top2_score": 0.585919,
+        "margin": 0.248504,
+        "correct": true
+      },
+      {
+        "query_id": "q3",
+        "expected_doc_id": "doc_angular_signals",
+        "predicted_top1_doc_id": "doc_angular_signals",
+        "top1_score": 0.733167,
+        "top2_doc_id": "doc_hexagonal",
+        "top2_score": 0.553703,
+        "margin": 0.179464,
+        "correct": true
+      },
+      {
+        "query_id": "q4",
+        "expected_doc_id": "doc_spaced_repetition",
+        "predicted_top1_doc_id": "doc_spaced_repetition",
+        "top1_score": 0.726715,
+        "top2_doc_id": "doc_postgres_index",
+        "top2_score": 0.479282,
+        "margin": 0.247433,
+        "correct": true
+      },
+      {
+        "query_id": "q5",
+        "expected_doc_id": "doc_asyncio",
+        "predicted_top1_doc_id": "doc_asyncio",
+        "top1_score": 0.814301,
+        "top2_doc_id": "doc_hexagonal",
+        "top2_score": 0.575038,
+        "margin": 0.239263,
+        "correct": true
+      }
+    ]
+  }
+}

@@ -20,6 +20,7 @@ from src.planning.domain.models.knowledge_source import (
 )
 from src.shared_kernel.application.embedding_port import EmbeddingProviderPort
 from src.shared_kernel.application.uow import AsyncUnitOfWork
+from src.shared_kernel.config import get_settings
 
 
 class KnowledgeSourceNotFoundError(LookupError):
@@ -162,7 +163,16 @@ class IngestKnowledgeSourceUseCase:
             semantic_chunks = self._chunker.chunk(sections)
             if not semantic_chunks:
                 raise ValueError("Không trích xuất được nội dung văn bản từ học liệu")
-            embeddings = await self._embeddings.embed([item.content for item in semantic_chunks])
+            embeddings = await self._embeddings.embed(
+                [item.content for item in semantic_chunks],
+                task_type="RETRIEVAL_DOCUMENT",
+            )
+            embedding_model = (
+                getattr(self._embeddings, "model_name", None) or get_settings().embedding_model
+            )
+            embedding_dimensions = int(
+                getattr(self._embeddings, "dimensions", None) or get_settings().embedding_dimensions
+            )
             created_at = datetime.now(UTC)
             chunks = [
                 KnowledgeChunk(
@@ -180,6 +190,9 @@ class IngestKnowledgeSourceUseCase:
                         "source_id": str(source.id),
                         "source_title": source.title,
                         "chunk_index": index,
+                        "embedding_model": embedding_model,
+                        "embedding_dimensions": embedding_dimensions,
+                        "embedding_task_type": "RETRIEVAL_DOCUMENT",
                     },
                     created_at=created_at,
                 )
