@@ -336,8 +336,18 @@ class _SlowTimeoutLLM(LLMProviderPort):
         *,
         user_prompt: str | None = None,
         temperature: float = 0.2,
+        timeout_seconds: float | None = None,
+        tool_call_timeout_seconds: float | None = None,
     ) -> tuple[dict[str, Any], int, int]:
-        _ = (prompt, system_prompt, response_schema, user_prompt, temperature)
+        _ = (
+            prompt,
+            system_prompt,
+            response_schema,
+            user_prompt,
+            temperature,
+            timeout_seconds,
+            tool_call_timeout_seconds,
+        )
         await asyncio.sleep(0.25)
         return {"score": 0.9, "advisory_warnings": []}, 10, 10
 

@@ -271,6 +271,8 @@ async def test_generate_clarification_questions_heals_empty_options() -> None:
             tool_executor: Any = None,
             max_tool_calls: int = 2,
             thinking_level: str | None = None,
+            timeout_seconds: float | None = None,
+            tool_call_timeout_seconds: float | None = None,
         ) -> tuple[dict[str, Any], int, int]:
             _ = (
                 system_prompt,
@@ -280,6 +282,8 @@ async def test_generate_clarification_questions_heals_empty_options() -> None:
                 tool_executor,
                 max_tool_calls,
                 thinking_level,
+                timeout_seconds,
+                tool_call_timeout_seconds,
             )
             # Simulate LLM returning single_choice questions with empty options array
             return (

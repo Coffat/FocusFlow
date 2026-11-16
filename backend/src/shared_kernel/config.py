@@ -1,6 +1,7 @@
 from functools import lru_cache
+from typing import Literal, Self
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -54,10 +55,11 @@ class Settings(BaseSettings):
 
     # Provider-Agnostic LLM (ADR-006: gemini | openai | anthropic | ollama)
     llm_provider: str = "gemini"
-    llm_model: str = "gemini-3.8-flash"
-    llm_model_low: str = "gemini-3.8-flash"
-    llm_model_medium: str = "gemini-3.8-flash"
-    llm_model_high: str = "gemini-3.8-flash"
+    llm_thinking_control: Literal["model_suffix", "param"] = "model_suffix"
+    llm_model: str = "gemini-3.8-flash-medium"
+    llm_model_low: str = "gemini-3.8-flash-low"
+    llm_model_medium: str = "gemini-3.8-flash-medium"
+    llm_model_high: str = "gemini-3.8-flash-high"
     llm_embedding_model: str = "gemini/gemini-embedding-2"
     llm_api_key: str = Field(
         default="",
@@ -68,6 +70,24 @@ class Settings(BaseSettings):
     llm_schema_enforced_by_gateway: bool = False
     llm_max_tool_calls: int = 4
     llm_tool_timeout_seconds: float = 5.0
+
+    # AI Hard Timeout & Stage Budgets (SRS v1.3 hard cap 55s; measured p95 * 1.3..1.5)
+    ai_hard_timeout_seconds: float = 55.0
+    ai_sse_pipeline_timeout_seconds: float = 55.0
+    ai_clarifier_timeout_seconds: float = 15.0
+    ai_clarifier_followup_timeout_seconds: float = 7.5
+    ai_milestone_planner_timeout_seconds: float = 50.0
+    ai_task_decomposer_timeout_seconds: float = 25.0
+    ai_tool_call_timeout_seconds: float = 40.0
+    ai_quality_critic_timeout_seconds: float = 15.0
+    ai_quality_arbiter_timeout_seconds: float = 14.5
+    tier3_judge_timeout_seconds: float = 15.0
+    ai_weekly_review_timeout_seconds: float = 10.5
+    ai_prove_question_timeout_seconds: float = 8.5
+    ai_prove_grader_timeout_seconds: float = 7.5
+    ai_min_critic_remaining_seconds: float = 6.0
+    ai_min_retry_remaining_seconds: float = 12.0
+
     enable_tier3_judge: bool = True
     ai_harness_v2_enabled: bool = False
     clarification_engine_v2_enabled: bool = True
@@ -88,6 +108,55 @@ class Settings(BaseSettings):
     google_client_secret: str = ""
     google_redirect_uri: str = "http://localhost:3000/api/v1/account/calendar/google/callback"
     calendar_webhook_base_url: str = "http://localhost:3000"
+
+    @model_validator(mode="after")
+    def _validate_ai_timeout_budgets(self) -> Self:
+        hard_cap = float(self.ai_hard_timeout_seconds)
+        if hard_cap <= 0:
+            raise ValueError("ai_hard_timeout_seconds must be > 0")
+
+        stage_fields = (
+            "ai_sse_pipeline_timeout_seconds",
+            "ai_clarifier_timeout_seconds",
+            "ai_clarifier_followup_timeout_seconds",
+            "ai_milestone_planner_timeout_seconds",
+            "ai_task_decomposer_timeout_seconds",
+            "ai_tool_call_timeout_seconds",
+            "ai_quality_critic_timeout_seconds",
+            "ai_quality_arbiter_timeout_seconds",
+            "tier3_judge_timeout_seconds",
+            "ai_weekly_review_timeout_seconds",
+            "ai_prove_question_timeout_seconds",
+            "ai_prove_grader_timeout_seconds",
+            "ai_min_critic_remaining_seconds",
+            "ai_min_retry_remaining_seconds",
+        )
+        for field_name in stage_fields:
+            val = float(getattr(self, field_name))
+            if val <= 0:
+                raise ValueError(f"{field_name} must be > 0 (got {val})")
+            if val > hard_cap:
+                raise ValueError(
+                    f"{field_name} ({val}s) cannot exceed ai_hard_timeout_seconds ({hard_cap}s)"
+                )
+
+        if self.ai_tool_call_timeout_seconds > self.ai_milestone_planner_timeout_seconds:
+            raise ValueError(
+                "ai_tool_call_timeout_seconds cannot exceed ai_milestone_planner_timeout_seconds"
+            )
+        if self.ai_tool_call_timeout_seconds > self.ai_sse_pipeline_timeout_seconds:
+            raise ValueError(
+                "ai_tool_call_timeout_seconds cannot exceed ai_sse_pipeline_timeout_seconds"
+            )
+        if self.ai_milestone_planner_timeout_seconds > self.ai_sse_pipeline_timeout_seconds:
+            raise ValueError(
+                "ai_milestone_planner_timeout_seconds cannot exceed ai_sse_pipeline_timeout_seconds"
+            )
+        if self.ai_task_decomposer_timeout_seconds > self.ai_sse_pipeline_timeout_seconds:
+            raise ValueError(
+                "ai_task_decomposer_timeout_seconds cannot exceed ai_sse_pipeline_timeout_seconds"
+            )
+        return self
 
 
 @lru_cache

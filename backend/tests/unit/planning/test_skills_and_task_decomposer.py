@@ -48,9 +48,9 @@ def test_four_versioned_skills_and_prompt_builders_contract() -> None:
     }
     expected_levels = {
         "goal-clarifier": "LOW",
-        "learning-milestone-planner": "MEDIUM",
-        "learning-task-decomposer": "MEDIUM",
-        "pedagogical-quality-judge": "MEDIUM",
+        "learning-milestone-planner": "LOW",
+        "learning-task-decomposer": "LOW",
+        "pedagogical-quality-judge": "LOW",
     }
     for skill in ROADMAP_SKILL_REGISTRY.values():
         assert skill.version == "2.0.0"

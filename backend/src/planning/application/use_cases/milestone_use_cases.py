@@ -66,7 +66,10 @@ from src.shared_kernel.application.harness.untrusted_context import (
 from src.shared_kernel.application.harness.workflow_port import WorkflowRepositoryPort
 from src.shared_kernel.application.llm_port import LLMProviderPort
 from src.shared_kernel.application.uow import AsyncUnitOfWork
+from src.shared_kernel.config import get_settings
 from src.shared_kernel.domain.base import generate_uuid7
+
+logger = logging.getLogger(__name__)
 
 
 def _milestone_generation_error_details(exc: Exception) -> tuple[str, str]:
@@ -228,27 +231,32 @@ class ExecuteMilestoneGenerationUseCase:
                 generation_strategy=strategy.value,
             )
 
+            settings = get_settings()
             dispatcher: KnowledgeToolDispatcher | None = None
             if self._kb is not None:
                 dispatcher = KnowledgeToolDispatcher(
                     self._kb,
                     stage=RoadmapPipelineStage.MILESTONE_PLANNING,
                     max_tool_calls=MILESTONE_PLANNER_SKILL.max_tool_calls,
-                    timeout_seconds=5.0,
+                    timeout_seconds=float(settings.llm_tool_timeout_seconds),
                 )
 
             current_prompt = base_user_prompt
             total_prompt_tokens = 0
             total_completion_tokens = 0
+            total_thinking_tokens = 0
+            last_model_id = str(getattr(self._llm, "model_identifier", "gemini-3.8-flash-medium"))
             max_attempts = max(1, int(max_retries) + 1)
-            pipeline_deadline = asyncio.get_running_loop().time() + 55.0
+            pipeline_deadline = asyncio.get_running_loop().time() + float(
+                settings.ai_sse_pipeline_timeout_seconds
+            )
             validated_items: list[dict[str, Any]] = []
             last_violations = []
 
             for attempt in range(1, max_attempts + 1):
                 remaining_seconds = pipeline_deadline - asyncio.get_running_loop().time()
                 if remaining_seconds <= 0:
-                    raise TimeoutError("Milestone generation exceeded 55 seconds")
+                    raise TimeoutError("Milestone generation exceeded pipeline timeout budget")
 
                 exec_mgr = AIExecutionManager(
                     provider=self._llm,
@@ -256,7 +264,10 @@ class ExecuteMilestoneGenerationUseCase:
                     manage_quota=False,
                     max_retries=0,
                     workflow_repo=self._workflow_repo,
-                    timeout_seconds=min(35.0, remaining_seconds),
+                    timeout_seconds=min(
+                        float(settings.ai_milestone_planner_timeout_seconds), remaining_seconds
+                    ),
+                    tool_call_timeout_seconds=float(settings.ai_tool_call_timeout_seconds),
                 )
                 exec_res = await exec_mgr.execute(
                     user_id=user_id,
@@ -300,8 +311,12 @@ class ExecuteMilestoneGenerationUseCase:
                 raw_result = exec_res.value
                 p_tok = exec_res.prompt_tokens
                 c_tok = exec_res.completion_tokens
+                t_tok = exec_res.thinking_tokens
+                if exec_res.model_id:
+                    last_model_id = exec_res.model_id
                 total_prompt_tokens += int(p_tok or 0)
                 total_completion_tokens += int(c_tok or 0)
+                total_thinking_tokens += int(t_tok or 0)
 
                 if isinstance(raw_result, list):
                     raw_milestones = raw_result
@@ -316,46 +331,105 @@ class ExecuteMilestoneGenerationUseCase:
                     raw_milestones
                 )
                 critic_reports: list[dict[str, Any]] = []
+                critic_warnings: list[str] = []
                 if not violations:
                     remaining_seconds = pipeline_deadline - asyncio.get_running_loop().time()
-                    if remaining_seconds <= 0:
-                        raise TimeoutError("Milestone quality review exceeded 55 seconds")
-                    critic_timeout = min(8.0, remaining_seconds)
-                    (
-                        critic_violations,
-                        critic_reports,
-                        critic_p,
-                        critic_c,
-                    ) = await asyncio.wait_for(
-                        run_dual_quality_critics(
-                            self._llm,
-                            stage="MILESTONE_PLANNING",
-                            payload={"milestones": raw_milestones},
-                            context=context_block,
-                            learner_level=prior_knowledge,
-                            timeout_seconds=critic_timeout,
-                            arbiter_timeout_seconds=critic_timeout,
-                            workflow_repo=self._workflow_repo,
-                            user_id=user_id,
-                            goal_id=roadmap.goal_id,
-                            roadmap_id=roadmap_id,
-                            workflow_type=WorkflowType.PLAN_CREATION,
-                        ),
-                        timeout=remaining_seconds,
-                    )
-                    total_prompt_tokens += critic_p
-                    total_completion_tokens += critic_c
-                    if has_operational_quality_review_failure(critic_violations):
-                        raise TimeoutError(
-                            "Milestone quality review did not complete within its time budget"
+                    if remaining_seconds < float(settings.ai_min_critic_remaining_seconds):
+                        logger.warning(
+                            "milestone_quality_critic_skipped_low_budget",
+                            extra={
+                                "roadmap_id": str(roadmap_id),
+                                "remaining_seconds": round(remaining_seconds, 2),
+                                "min_required_seconds": float(
+                                    settings.ai_min_critic_remaining_seconds
+                                ),
+                            },
                         )
-                    violations.extend(critic_violations)
+                        critic_warnings.append(
+                            "Ngân sách thời gian còn lại không đủ cho AI Critic — đã bỏ qua bước Critic và giữ kết quả hợp lệ Tier 1."
+                        )
+                        critic_reports = [
+                            {
+                                "critic": "QUALITY_CRITIC",
+                                "status": "SKIPPED_LOW_BUDGET",
+                                "issues": [],
+                            }
+                        ]
+                    else:
+                        critic_timeout = min(
+                            float(settings.ai_quality_critic_timeout_seconds), remaining_seconds
+                        )
+                        arbiter_timeout = min(
+                            float(settings.ai_quality_arbiter_timeout_seconds), remaining_seconds
+                        )
+                        critic_tokens: dict[str, int] = {}
+                        try:
+                            (
+                                critic_violations,
+                                critic_reports,
+                                critic_p,
+                                critic_c,
+                            ) = await asyncio.wait_for(
+                                run_dual_quality_critics(
+                                    self._llm,
+                                    stage="MILESTONE_PLANNING",
+                                    payload={"milestones": raw_milestones},
+                                    context=context_block,
+                                    learner_level=prior_knowledge,
+                                    timeout_seconds=critic_timeout,
+                                    arbiter_timeout_seconds=arbiter_timeout,
+                                    workflow_repo=self._workflow_repo,
+                                    user_id=user_id,
+                                    goal_id=roadmap.goal_id,
+                                    roadmap_id=roadmap_id,
+                                    workflow_type=WorkflowType.PLAN_CREATION,
+                                    token_accumulator=critic_tokens,
+                                ),
+                                timeout=remaining_seconds,
+                            )
+                            total_prompt_tokens += critic_p
+                            total_completion_tokens += critic_c
+                            total_thinking_tokens += int(critic_tokens.get("thinking_tokens", 0))
+                            if has_operational_quality_review_failure(critic_violations):
+                                logger.warning(
+                                    "milestone_quality_critic_degraded",
+                                    extra={"roadmap_id": str(roadmap_id)},
+                                )
+                                critic_warnings.append(
+                                    "AI Critic tạm thời quá thời gian chờ — đã tiếp tục với kết quả hợp lệ Tier 1."
+                                )
+                                critic_violations = [
+                                    v
+                                    for v in critic_violations
+                                    if v.rule_code
+                                    not in {
+                                        "QUALITY_CRITIC_UNAVAILABLE",
+                                        "QUALITY_ARBITER_UNAVAILABLE",
+                                    }
+                                ]
+                            violations.extend(critic_violations)
+                        except TimeoutError:
+                            logger.warning(
+                                "milestone_quality_critic_timeout_skipped",
+                                extra={"roadmap_id": str(roadmap_id)},
+                            )
+                            critic_warnings.append(
+                                "AI Critic hết ngân sách thời gian — đã bỏ qua bước Critic và giữ kết quả hợp lệ Tier 1."
+                            )
+                            critic_reports = [
+                                {
+                                    "critic": "QUALITY_CRITIC",
+                                    "status": "SKIPPED_LOW_BUDGET",
+                                    "issues": [],
+                                }
+                            ]
                 if not violations:
                     validated_items = list(raw_milestones)
                     roadmap.planning_metadata = {
                         **roadmap.planning_metadata,
                         "generation_strategy": strategy.value,
                         "quality_reviews": critic_reports,
+                        **({"advisory_warnings": critic_warnings} if critic_warnings else {}),
                         "scope_summary": raw_result.get("scope_summary", "")
                         if isinstance(raw_result, dict)
                         else "",
@@ -367,7 +441,9 @@ class ExecuteMilestoneGenerationUseCase:
 
                 last_violations = violations
                 remaining_for_retry = pipeline_deadline - asyncio.get_running_loop().time()
-                if attempt < max_attempts and remaining_for_retry >= 12.0:
+                if attempt < max_attempts and remaining_for_retry >= float(
+                    settings.ai_min_retry_remaining_seconds
+                ):
                     await self._sse.append_event(
                         job_id=job_id,
                         event="validation_retry",
@@ -453,12 +529,26 @@ class ExecuteMilestoneGenerationUseCase:
             async with self._uow:
                 saved_milestones = await self._milestone_repo.save_many(roadmap_id, new_milestones)
                 await self._roadmap_repo.save(roadmap)
+                billable_completion_tokens = max(total_completion_tokens, total_thinking_tokens)
                 await self._quota_facade.commit_reservation(
                     reservation_id,
                     prompt_tokens=total_prompt_tokens,
-                    completion_tokens=total_completion_tokens,
+                    completion_tokens=billable_completion_tokens,
+                    model_name=last_model_id,
                 )
                 await self._uow.commit()
+            logger.info(
+                "milestone_generation_completed",
+                extra={
+                    "roadmap_id": str(roadmap_id),
+                    "model_id": last_model_id,
+                    "prompt_tokens": total_prompt_tokens,
+                    "output_tokens": billable_completion_tokens,
+                    "completion_tokens": billable_completion_tokens,
+                    "thinking_tokens": total_thinking_tokens,
+                    "milestones_count": len(saved_milestones),
+                },
+            )
 
             milestones_payload = [
                 {

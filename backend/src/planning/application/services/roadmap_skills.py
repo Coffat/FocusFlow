@@ -91,7 +91,7 @@ MILESTONE_PLANNER_SKILL = SkillDefinition(
     title="Kiến trúc sư Lộ trình Cột mốc Học thuật (SRL Forethought)",
     stage=RoadmapPipelineStage.MILESTONE_PLANNING,
     allowed_tools=("search_learning_concepts", "get_concept_prerequisite_graph"),
-    thinking_level="MEDIUM",
+    thinking_level="LOW",
     max_tool_calls=4,
     system_instruction=(
         "[SKILL: learning-milestone-planner@v2.0.0]\n"
@@ -125,7 +125,7 @@ TASK_DECOMPOSER_SKILL = SkillDefinition(
         "get_concept_prerequisite_graph",
         "get_learning_resources_and_guidance",
     ),
-    thinking_level="MEDIUM",
+    thinking_level="LOW",
     max_tool_calls=4,
     system_instruction=(
         "[SKILL: learning-task-decomposer@v2.0.0]\n"
@@ -154,7 +154,7 @@ PEDAGOGICAL_JUDGE_SKILL = SkillDefinition(
     title="Giám khảo Thẩm định Sư phạm Tầng 3 (Tier 3 Pedagogical Judge)",
     stage=RoadmapPipelineStage.PEDAGOGICAL_JUDGE,
     allowed_tools=(),
-    thinking_level="MEDIUM",
+    thinking_level="LOW",
     max_tool_calls=0,
     system_instruction=(
         "[SKILL: pedagogical-quality-judge@v2.0.0]\n"
@@ -200,7 +200,7 @@ PROPOSAL_SELF_CORRECTION_PROMPT = AuxiliaryPromptDefinition(
     version="2.0.0",
     workflow_type=WorkflowType.SCHEDULE_GENERATION.value,
     skill_id=TASK_DECOMPOSER_SKILL.skill_id,
-    thinking_level="MEDIUM",
+    thinking_level="LOW",
     output_model=TaskProposalLLMOutput,
     system_instruction=(
         "[SKILL: proposal-self-correction@v2.0.0]\n"

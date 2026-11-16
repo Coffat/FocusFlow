@@ -64,11 +64,13 @@ services:
       - SECRET_KEY=${SECRET_KEY:-change_this_to_a_super_secret_64_character_hex_key_for_jwt_signing}
       - FERNET_KEY=${FERNET_KEY:-}
       - LLM_PROVIDER=${LLM_PROVIDER:-gemini}
-      - LLM_MODEL=${LLM_MODEL:-gemini-3.8-flash}
-      - LLM_MODEL_LOW=${LLM_MODEL_LOW:-gemini-3.8-flash}
-      - LLM_MODEL_MEDIUM=${LLM_MODEL_MEDIUM:-gemini-3.8-flash}
-      - LLM_MODEL_HIGH=${LLM_MODEL_HIGH:-gemini-3.8-flash}
+      - LLM_THINKING_CONTROL=${LLM_THINKING_CONTROL:-model_suffix}
+      - LLM_MODEL=${LLM_MODEL:-gemini-3.8-flash-medium}
+      - LLM_MODEL_LOW=${LLM_MODEL_LOW:-gemini-3.8-flash-low}
+      - LLM_MODEL_MEDIUM=${LLM_MODEL_MEDIUM:-gemini-3.8-flash-medium}
+      - LLM_MODEL_HIGH=${LLM_MODEL_HIGH:-gemini-3.8-flash-high}
       - LLM_EMBEDDING_MODEL=${LLM_EMBEDDING_MODEL:-gemini/gemini-embedding-2}
+      - AI_HARD_TIMEOUT_SECONDS=${AI_HARD_TIMEOUT_SECONDS:-55}
       - LLM_API_KEY=${LLM_API_KEY:-${GEMINI_API_KEY:-}}
       - LLM_BASE_URL=${LLM_BASE_URL:-http://127.0.0.1:8045}
       - PAYMENT_PROVIDER=${PAYMENT_PROVIDER:-sepay}

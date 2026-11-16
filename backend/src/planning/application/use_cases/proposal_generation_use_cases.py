@@ -91,7 +91,10 @@ from src.shared_kernel.application.harness.untrusted_context import (
 from src.shared_kernel.application.harness.workflow_port import WorkflowRepositoryPort
 from src.shared_kernel.application.llm_port import LLMProviderPort
 from src.shared_kernel.application.uow import AsyncUnitOfWork
+from src.shared_kernel.config import get_settings
 from src.shared_kernel.domain.base import generate_uuid7
+
+logger = logging.getLogger(__name__)
 
 SCHEDULE_PROPOSAL_RESPONSE_SCHEMA: dict[str, Any] = TaskProposalLLMOutput.model_json_schema()
 
@@ -521,7 +524,7 @@ class ExecuteScheduleProposalGenerationUseCase:
                     self._kb,
                     stage=RoadmapPipelineStage.TASK_DECOMPOSITION,
                     max_tool_calls=TASK_DECOMPOSER_SKILL.max_tool_calls,
-                    timeout_seconds=5.0,
+                    timeout_seconds=float(get_settings().llm_tool_timeout_seconds),
                 )
 
             await self._sse.append_event(
@@ -666,10 +669,31 @@ class ExecuteScheduleProposalGenerationUseCase:
             async with self._uow:
                 await self._proposal_repo.discard_existing_drafts(roadmap_id, effective_now)
                 saved_proposal = await self._proposal_repo.save(proposal)
+                billable_completion_tokens = max(
+                    int(gate_result.total_completion_tokens or 0),
+                    int(gate_result.total_thinking_tokens or 0),
+                )
+                resolved_model_name = str(
+                    model_used or getattr(self._llm, "model_identifier", "gemini-3.8-flash-medium")
+                )
                 await self._quota_facade.commit_reservation(
                     reservation_id,
                     prompt_tokens=gate_result.total_prompt_tokens,
-                    completion_tokens=gate_result.total_completion_tokens,
+                    completion_tokens=billable_completion_tokens,
+                    model_name=resolved_model_name,
+                )
+                logger.info(
+                    "task_decomposer_completed",
+                    extra={
+                        "roadmap_id": str(roadmap_id),
+                        "proposal_id": str(saved_proposal.id),
+                        "model_id": resolved_model_name,
+                        "prompt_tokens": gate_result.total_prompt_tokens,
+                        "output_tokens": billable_completion_tokens,
+                        "completion_tokens": billable_completion_tokens,
+                        "thinking_tokens": gate_result.total_thinking_tokens,
+                        "attempts_used": gate_result.attempts_used,
+                    },
                 )
                 if self._workflow_repo is not None:
                     wf_run_id = generate_uuid7()
@@ -709,6 +733,11 @@ class ExecuteScheduleProposalGenerationUseCase:
                                 "proposal_id": str(saved_proposal.id),
                                 "attempts_used": gate_result.attempts_used,
                                 "pedagogical_score": gate_result.pedagogical_score,
+                                "model_id": resolved_model_name,
+                                "prompt_tokens": gate_result.total_prompt_tokens,
+                                "output_tokens": billable_completion_tokens,
+                                "completion_tokens": billable_completion_tokens,
+                                "thinking_tokens": gate_result.total_thinking_tokens,
                             },
                             retry_count=max(0, int(gate_result.attempts_used) - 1),
                             started_at=effective_now,

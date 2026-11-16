@@ -20,10 +20,11 @@ from src.shared_kernel.application.harness.models import WorkflowType
 from src.shared_kernel.application.harness.untrusted_context import sanitize_untrusted_text
 from src.shared_kernel.application.harness.workflow_port import WorkflowRepositoryPort
 from src.shared_kernel.application.llm_port import LLMProviderPort
+from src.shared_kernel.config import get_settings
 
 logger = structlog.get_logger(__name__)
 
-TIER3_JUDGE_TIMEOUT_SECONDS: float = 8.0
+TIER3_JUDGE_TIMEOUT_SECONDS: float = 15.0
 PEDAGOGICAL_JUDGE_RESPONSE_SCHEMA: dict[str, Any] = PedagogicalJudgeLLMOutput.model_json_schema()
 
 
@@ -81,7 +82,8 @@ async def execute_tier3_pedagogical_judge(
     proposal_data: dict[str, Any],
     *,
     enable_tier3_judge: bool = True,
-    tier3_timeout_seconds: float = TIER3_JUDGE_TIMEOUT_SECONDS,
+    tier3_timeout_seconds: float | None = None,
+    thinking_level: str | None = None,
     goal_title: str = "",
     learner_level: str = "",
     milestone_summary: str = "",
@@ -91,7 +93,7 @@ async def execute_tier3_pedagogical_judge(
     goal_id: UUID | None = None,
     roadmap_id: UUID | None = None,
 ) -> Tier3JudgeOutcome:
-    """Execute Tier 3 Pedagogical Judge with strict <= 8.0s single-attempt timeout & honest status."""
+    """Execute Tier 3 Pedagogical Judge with configurable single-attempt timeout & honest status."""
     if not enable_tier3_judge or llm_provider is None:
         return Tier3JudgeOutcome(
             judge_skipped=True,
@@ -100,6 +102,7 @@ async def execute_tier3_pedagogical_judge(
             judge_status="SKIPPED",
         )
 
+    settings = get_settings()
     judge_tpl = build_planning_prompt_registry().latest(PEDAGOGICAL_JUDGE_SKILL.skill_id)
     judge_user_prompt = build_pedagogical_judge_prompt(
         proposal_data,
@@ -111,7 +114,12 @@ async def execute_tier3_pedagogical_judge(
         learner_level=learner_level,
     )
 
-    attempt_timeout = min(tier3_timeout_seconds, TIER3_JUDGE_TIMEOUT_SECONDS)
+    configured_timeout = (
+        float(tier3_timeout_seconds)
+        if tier3_timeout_seconds is not None
+        else float(settings.tier3_judge_timeout_seconds)
+    )
+    attempt_timeout = min(configured_timeout, float(settings.ai_hard_timeout_seconds))
     if remaining_budget_seconds is not None:
         attempt_timeout = min(attempt_timeout, remaining_budget_seconds)
     if attempt_timeout <= 0:
@@ -129,6 +137,7 @@ async def execute_tier3_pedagogical_judge(
     prompt_tokens = 0
     completion_tokens = 0
     thinking_tokens = 0
+    effective_thinking_level = thinking_level or PEDAGOGICAL_JUDGE_SKILL.thinking_level
     try:
         exec_mgr = AIExecutionManager(
             provider=llm_provider,
@@ -143,8 +152,8 @@ async def execute_tier3_pedagogical_judge(
             system_prompt=judge_tpl.system_template,
             user_prompt=judge_user_prompt,
             response_schema=PEDAGOGICAL_JUDGE_RESPONSE_SCHEMA,
-            model_name=getattr(llm_provider, "model_identifier", "gemini-3.8-flash"),
-            thinking_level=PEDAGOGICAL_JUDGE_SKILL.thinking_level,
+            model_name=getattr(llm_provider, "model_identifier", "gemini-3.8-flash-low"),
+            thinking_level=effective_thinking_level,
             workflow_type=WorkflowType.SCHEDULE_GENERATION,
             step_name="PEDAGOGICAL_JUDGE",
             goal_id=goal_id,

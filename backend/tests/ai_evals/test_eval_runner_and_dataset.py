@@ -38,6 +38,8 @@ class _ScriptedErrorLLM(LLMProviderPort):
         tool_executor: Any = None,
         max_tool_calls: int = 2,
         thinking_level: str | None = None,
+        timeout_seconds: float | None = None,
+        tool_call_timeout_seconds: float | None = None,
     ) -> LLMGenerationResult:
         del (
             system_prompt,
@@ -47,6 +49,8 @@ class _ScriptedErrorLLM(LLMProviderPort):
             tool_executor,
             max_tool_calls,
             thinking_level,
+            timeout_seconds,
+            tool_call_timeout_seconds,
         )
         raise self._exc
 
@@ -71,6 +75,8 @@ class _ScriptedPayloadLLM(LLMProviderPort):
         tool_executor: Any = None,
         max_tool_calls: int = 2,
         thinking_level: str | None = None,
+        timeout_seconds: float | None = None,
+        tool_call_timeout_seconds: float | None = None,
     ) -> LLMGenerationResult:
         del (
             system_prompt,
@@ -80,6 +86,8 @@ class _ScriptedPayloadLLM(LLMProviderPort):
             tool_executor,
             max_tool_calls,
             thinking_level,
+            timeout_seconds,
+            tool_call_timeout_seconds,
         )
         return LLMGenerationResult(
             payload=self._payload,
@@ -111,6 +119,8 @@ class _LeakingInjectionStub(StubLLMAdapter):
         tool_executor: Any = None,
         max_tool_calls: int = 2,
         thinking_level: str | None = None,
+        timeout_seconds: float | None = None,
+        tool_call_timeout_seconds: float | None = None,
     ) -> LLMGenerationResult:
         res = await super().generate_structured(
             system_prompt=system_prompt,
@@ -120,6 +130,8 @@ class _LeakingInjectionStub(StubLLMAdapter):
             tool_executor=tool_executor,
             max_tool_calls=max_tool_calls,
             thinking_level=thinking_level,
+            timeout_seconds=timeout_seconds,
+            tool_call_timeout_seconds=tool_call_timeout_seconds,
         )
         payload = dict(res.payload)
         tasks = [dict(t) for t in payload.get("tasks", [])]
@@ -151,6 +163,8 @@ class _ConcurrencyTrackingStub(StubLLMAdapter):
         tool_executor: Any = None,
         max_tool_calls: int = 2,
         thinking_level: str | None = None,
+        timeout_seconds: float | None = None,
+        tool_call_timeout_seconds: float | None = None,
     ) -> LLMGenerationResult:
         self._state["active"] += 1
         self._state["max_seen"] = max(self._state["max_seen"], self._state["active"])
@@ -164,6 +178,8 @@ class _ConcurrencyTrackingStub(StubLLMAdapter):
                 tool_executor=tool_executor,
                 max_tool_calls=max_tool_calls,
                 thinking_level=thinking_level,
+                timeout_seconds=timeout_seconds,
+                tool_call_timeout_seconds=tool_call_timeout_seconds,
             )
         finally:
             self._state["active"] -= 1
@@ -529,3 +545,17 @@ async def test_4_5_concurrency_1_and_4_produce_consistent_grouped_results() -> N
         "error_breakdown",
     ):
         assert seq_report[metric_key] == par_report[metric_key]
+
+
+@pytest.mark.asyncio
+async def test_include_weekly_false_skips_weekly_review_cleanly() -> None:
+    report = await run_planning_eval_suite(
+        trials_per_goal=1,
+        live=False,
+        include_weekly=False,
+    )
+    assert report["weekly_checks"] == 0
+    assert report["weekly_llm_success_count"] == 0
+    assert report["weekly_fallbacks"] == 0
+    assert all(o["weekly_source"] == "skipped" for o in report["per_case_outcomes"])
+    validate_eval_report_totals(report)

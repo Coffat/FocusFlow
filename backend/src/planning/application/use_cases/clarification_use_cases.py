@@ -76,6 +76,7 @@ from src.shared_kernel.application.llm_port import (
     classify_ai_error,
 )
 from src.shared_kernel.application.uow import AsyncUnitOfWork
+from src.shared_kernel.config import get_settings
 from src.shared_kernel.domain.base import generate_uuid7
 
 logger = logging.getLogger(__name__)
@@ -438,12 +439,14 @@ class _ClarificationSessionMixin:
             None,
         )
         if round_number == 1 and follow_up_gap is not None:
+            follow_up_tokens: dict[str, int] = {}
             follow_up = await self._try_generate_follow_up(
                 user_id=user_id,
                 goal_id=goal_id,
                 session_id=session_id,
                 gap=follow_up_gap,
                 prior_answers=accumulated_answers,
+                token_accumulator=follow_up_tokens,
             )
             if follow_up is not None:
                 resumed = run.resume(
@@ -465,7 +468,13 @@ class _ClarificationSessionMixin:
                         step_order=3,
                         status=WorkflowStepStatus.WAITING_USER,
                         input_summary={"dimension": str(follow_up_gap.get("dimension"))},
-                        output_payload={"question_id": follow_up.question_id},
+                        output_payload={
+                            "question_id": follow_up.question_id,
+                            "prompt_tokens": int(follow_up_tokens.get("prompt_tokens", 0)),
+                            "output_tokens": int(follow_up_tokens.get("output_tokens", 0)),
+                            "completion_tokens": int(follow_up_tokens.get("completion_tokens", 0)),
+                            "thinking_tokens": int(follow_up_tokens.get("thinking_tokens", 0)),
+                        },
                         retry_count=0,
                         started_at=effective_now,
                     )
@@ -533,6 +542,7 @@ class _ClarificationSessionMixin:
         session_id: UUID,
         gap: dict[str, Any],
         prior_answers: list[dict[str, Any]],
+        token_accumulator: dict[str, int] | None = None,
     ) -> ClarificationQuestion | None:
         if self._quota is None or self._llm is None:
             return None
@@ -598,6 +608,10 @@ class _ClarificationSessionMixin:
                             "fallback_reason_code": "FOLLOWUP_GENERATION_FAILED",
                             "error_category": error_category.value,
                             "error_type": error_type,
+                            "prompt_tokens": 0,
+                            "output_tokens": 0,
+                            "completion_tokens": 0,
+                            "thinking_tokens": 0,
                         },
                         retry_count=0,
                         started_at=datetime.now(UTC),
@@ -610,9 +624,11 @@ class _ClarificationSessionMixin:
         )
         prompt = build_goal_clarifier_followup_prompt(gap=gap, prior_answers=prior_answers)
         try:
+            settings = get_settings()
             result = await AIExecutionManager(
                 provider=self._llm,
                 quota=self._quota,
+                timeout_seconds=float(settings.ai_clarifier_followup_timeout_seconds),
                 max_retries=2,
                 retry_predicate=_is_retryable_clarification_error,
             ).execute(
@@ -693,11 +709,19 @@ class _ClarificationSessionMixin:
             expected_answer_format=str(getattr(raw, "expected_answer_format", "") or ""),
             diagnostic_dimension=dimension,
         )
+        if token_accumulator is not None:
+            billable_c = max(int(result.completion_tokens or 0), int(result.thinking_tokens or 0))
+            token_accumulator["prompt_tokens"] = int(result.prompt_tokens or 0)
+            token_accumulator["output_tokens"] = billable_c
+            token_accumulator["completion_tokens"] = billable_c
+            token_accumulator["thinking_tokens"] = int(result.thinking_tokens or 0)
         await _commit_once(
             prompt_tokens=result.prompt_tokens,
-            completion_tokens=result.completion_tokens,
+            completion_tokens=max(
+                int(result.completion_tokens or 0), int(result.thinking_tokens or 0)
+            ),
             model_name=result.model_id
-            or getattr(self._llm, "model_identifier", "gemini-3.8-flash"),
+            or getattr(self._llm, "model_identifier", "gemini-3.8-flash-low"),
         )
         return question
 
@@ -994,9 +1018,11 @@ class GenerateClarificationQuestionsUseCase:
             )
 
             try:
+                settings = get_settings()
                 exec_mgr = AIExecutionManager(
                     provider=self._llm,
                     quota=self._quota,
+                    timeout_seconds=float(settings.ai_clarifier_timeout_seconds),
                     max_retries=2,
                     retry_predicate=_is_retryable_clarification_error,
                 )
@@ -1015,7 +1041,15 @@ class GenerateClarificationQuestionsUseCase:
                 )
                 raw_result = exec_res.value
                 p_tok = exec_res.prompt_tokens
-                c_tok = exec_res.completion_tokens
+                c_tok = max(
+                    int(exec_res.completion_tokens or 0), int(exec_res.thinking_tokens or 0)
+                )
+                t_tok = int(exec_res.thinking_tokens or 0)
+                resolved_clarifier_model = (
+                    exec_res.model_id
+                    or getattr(self._llm, "last_model_used", "")
+                    or getattr(self._llm, "model_identifier", "gemini-3.8-flash-low")
+                )
             except Exception as exc:
                 logger.warning(
                     "AI execution failed during clarification questions generation for goal %s: %s",
@@ -1226,7 +1260,7 @@ class GenerateClarificationQuestionsUseCase:
                 reservation_id=reservation_id,
                 prompt_tokens=p_tok,
                 completion_tokens=c_tok,
-                model_name=getattr(self._llm, "model_identifier", "gemini-3.8-flash"),
+                model_name=resolved_clarifier_model,
             )
             if not self._v2_enabled:
                 return ClarificationQuestionsResponse(
@@ -1252,7 +1286,11 @@ class GenerateClarificationQuestionsUseCase:
                 "questions": [q.model_dump(mode="json") for q in reindexed],
                 "information_gaps": [gap.as_dict() for gap in information_gaps],
                 "answers": [],
-                "model_name": getattr(self._llm, "model_identifier", "gemini-3.8-flash"),
+                "model_name": resolved_clarifier_model,
+                "prompt_tokens": p_tok,
+                "output_tokens": c_tok,
+                "completion_tokens": c_tok,
+                "thinking_tokens": t_tok,
             }
             await self._store_waiting_session(
                 session_id=session_id,
@@ -1360,7 +1398,13 @@ class GenerateClarificationQuestionsUseCase:
                 step_order=1,
                 status=WorkflowStepStatus.WAITING_USER,
                 input_summary={"question_count": len(snapshot.get("questions", []))},
-                output_payload={"questions_version": "v2.0"},
+                output_payload={
+                    "questions_version": "v2.0",
+                    "prompt_tokens": int(snapshot.get("prompt_tokens", 0)),
+                    "output_tokens": int(snapshot.get("output_tokens", 0)),
+                    "completion_tokens": int(snapshot.get("completion_tokens", 0)),
+                    "thinking_tokens": int(snapshot.get("thinking_tokens", 0)),
+                },
                 retry_count=0,
                 started_at=now,
             )

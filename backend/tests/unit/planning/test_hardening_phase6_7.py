@@ -484,3 +484,147 @@ def test_t7_3_validation_gate_package_has_no_production_asserts() -> None:
         }
     )
     assert v == []
+
+
+@pytest.mark.asyncio
+async def test_budget_exhaustion_skips_critic_and_judge_returning_review_pending(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When remaining budget is below minimum thresholds, skip Critic/Judge without crashing Tier 1/2 valid proposal."""
+    import asyncio
+
+    import src.planning.application.services.validation_gate.orchestrator as orch_mod
+    import src.planning.application.services.validation_gate.tier3_judge as judge_mod
+    from src.planning.domain.models.milestone import Milestone, MilestoneStatus
+    from src.planning.domain.services.validation_types import AvailabilityConfigurationDTO
+
+    m_id = uuid4()
+    roadmap_id = uuid4()
+    milestone = Milestone(
+        id=m_id,
+        roadmap_id=roadmap_id,
+        title="M1: FastAPI Core",
+        description="Build CRUD APIs",
+        learning_outcomes=["M1-O1: Schema vs Domain"],
+        completion_criteria="Pass CRUD tests",
+        sequence_order=1,
+        estimated_effort_minutes=120,
+        status=MilestoneStatus.PENDING,
+        required_concepts=["fastapi-routing"],
+    )
+
+    llm_calls: list[str] = []
+
+    class _SlowDecomposerOnlyLLM:
+        model_identifier = "gemini-3.8-flash-low"
+
+        async def generate_structured(self, **kwargs: Any) -> LLMGenerationResult:
+            sys_prompt = str(kwargs.get("system_prompt") or "")
+            llm_calls.append(sys_prompt[:40])
+            if "INDEPENDENT_CRITIC" in sys_prompt:
+                raise AssertionError("Critic should be skipped when budget is exhausted!")
+            if "pedagogical" in sys_prompt.lower():
+                await asyncio.sleep(0.5)
+                raise TimeoutError("Judge timed out")
+            await asyncio.sleep(0.08)
+            return LLMGenerationResult(
+                payload={
+                    "tasks": [
+                        {
+                            "task_id": "T1",
+                            "milestone_id": str(m_id),
+                            "title": "Học Pydantic v2",
+                            "task_type": "THEORY",
+                            "estimated_minutes": 45,
+                            "scheduled_date": "2026-11-02",
+                            "learning_objective": "Nắm vững Pydantic v2",
+                            "completion_criteria": "Tạo 2 schema hợp lệ",
+                            "covered_outcome_ids": ["M1-O1"],
+                            "concept_ids": ["fastapi-routing"],
+                        },
+                        {
+                            "task_id": "T2",
+                            "milestone_id": str(m_id),
+                            "title": "Xây dựng Router CRUD",
+                            "task_type": "PRACTICE",
+                            "estimated_minutes": 60,
+                            "scheduled_date": "2026-11-03",
+                            "learning_objective": "Viết router FastAPI",
+                            "completion_criteria": "TestClient trả 200 OK",
+                            "covered_outcome_ids": ["M1-O1"],
+                            "concept_ids": ["fastapi-routing"],
+                        },
+                    ],
+                    "dependencies": [
+                        {"predecessor_id": "T1", "successor_id": "T2", "is_mandatory": True}
+                    ],
+                },
+                prompt_tokens=100,
+                output_tokens=120,
+                thinking_tokens=0,
+                model_id="gemini-3.8-flash-low",
+            )
+
+        async def stream_structured(self, **kwargs: Any) -> AsyncIterator[str]:
+            del kwargs
+            yield "{}"
+
+    fake_settings = SimpleNamespace(
+        ai_hard_timeout_seconds=55.0,
+        ai_sse_pipeline_timeout_seconds=0.15,
+        ai_task_decomposer_timeout_seconds=1.0,
+        ai_tool_call_timeout_seconds=1.0,
+        ai_quality_critic_timeout_seconds=1.0,
+        ai_quality_arbiter_timeout_seconds=1.0,
+        tier3_judge_timeout_seconds=1.0,
+        ai_min_critic_remaining_seconds=0.5,
+        ai_min_retry_remaining_seconds=0.5,
+    )
+    monkeypatch.setattr(orch_mod, "get_settings", lambda: fake_settings)
+    monkeypatch.setattr(judge_mod, "get_settings", lambda: fake_settings)
+
+    orchestrator = ProposalValidationGateOrchestrator(
+        llm_provider=_SlowDecomposerOnlyLLM(),  # type: ignore[arg-type]
+        enable_tier3_judge=True,
+        tier3_timeout_seconds=1.0,
+    )
+    availability = AvailabilityConfigurationDTO(
+        mode="MODE_A",
+        default_daily_quota_minutes=120,
+        timezone="Asia/Ho_Chi_Minh",
+    )
+    result = await orchestrator.generate_and_validate_proposal_with_retry(
+        system_prompt=TASK_DECOMPOSER_SKILL.system_instruction,
+        user_prompt="Sinh kế hoạch học FastAPI",
+        response_schema={"type": "object"},
+        availability=availability,
+        valid_milestone_ids={m_id},
+        start_date=date(2026, 11, 2),
+        current_roadmap_target_date=date(2026, 11, 10),
+        goal_title="Học FastAPI",
+        learner_level="BEGINNER",
+        milestones=[milestone],
+        deterministic_allocation=True,
+    )
+
+    assert result.is_valid is True
+    assert not any("INDEPENDENT_CRITIC" in c for c in llm_calls)
+    assert result.judge_status == "REVIEW_PENDING"
+    assert result.judge_skipped is True
+    assert any("Critic" in w for w in result.advisory_warnings)
+    assert result.validated_proposal_data is not None
+    assert result.validated_proposal_data["quality_reviews"][0]["status"] == "SKIPPED_LOW_BUDGET"
+
+    # Judge with 0 remaining budget skips cleanly without calling LLM and returns REVIEW_PENDING
+    calls_before = len(llm_calls)
+    skipped, score, warnings, status = await orchestrator.run_tier3_pedagogical_judge(
+        result.validated_proposal_data,
+        goal_title="Học FastAPI",
+        learner_level="BEGINNER",
+        remaining_budget_seconds=0.0,
+    )
+    assert len(llm_calls) == calls_before
+    assert skipped is True
+    assert score is None
+    assert status == "REVIEW_PENDING"
+    assert any("REVIEW_PENDING" in w for w in warnings)

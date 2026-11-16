@@ -821,3 +821,125 @@ async def test_execution_manager_limits_http500_stream_interrupted_retry_to_one(
     assert provider.calls == 2  # 1 initial + 1 retry
     assert quota.committed == 0
     assert len(quota.released) == 1
+
+
+@pytest.mark.asyncio
+async def test_execution_manager_passes_remaining_timeouts_and_logs_thinking_tokens(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """AIExecutionManager forwards remaining timeout_seconds, commits thinking_tokens, and logs/persists them."""
+    import logging
+
+    from src.shared_kernel.application.llm_port import LLMGenerationResult, LLMToolDeclarationDTO
+
+    seen_timeouts: list[tuple[float | None, float | None]] = []
+
+    class _RecordingTimeoutProvider:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def generate_structured(
+            self,
+            *,
+            system_prompt: str = "",
+            user_prompt: str = "",
+            response_schema: Any = None,
+            tools: Any = None,
+            tool_executor: Any = None,
+            max_tool_calls: int = 2,
+            thinking_level: str | None = None,
+            timeout_seconds: float | None = None,
+            tool_call_timeout_seconds: float | None = None,
+        ) -> LLMGenerationResult:
+            del system_prompt, user_prompt, response_schema, tools, tool_executor, max_tool_calls
+            del thinking_level
+            seen_timeouts.append((timeout_seconds, tool_call_timeout_seconds))
+            self.calls += 1
+            await asyncio.sleep(0.02)
+            if self.calls == 1:
+                # Simulate SchemaMismatchError to verify repair call gets smaller remaining timeout
+                return LLMGenerationResult(
+                    payload={"wrong": 1},
+                    prompt_tokens=15,
+                    output_tokens=12,
+                    thinking_tokens=4,
+                    model_id="gemini-3.8-flash-medium",
+                )
+            # Even if a broken provider returns output_tokens < thinking_tokens, manager commits >= thinking_tokens
+            return LLMGenerationResult(
+                payload={"answer": "ok"},
+                prompt_tokens=20,
+                output_tokens=10,
+                thinking_tokens=18,
+                model_id="gemini-3.8-flash-medium",
+            )
+
+        async def stream_structured(self, **kwargs: object) -> AsyncIterator[str]:
+            del kwargs
+            yield "{}"
+
+    class _TrackingQuota(_Quota):
+        def __init__(self) -> None:
+            super().__init__()
+            self.committed_kwargs: list[dict[str, Any]] = []
+
+        async def commit_reservation(self, reservation_id: UUID, **kwargs: object) -> None:
+            self.committed_kwargs.append(dict(kwargs))
+            await super().commit_reservation(reservation_id, **kwargs)
+
+    quota = _TrackingQuota()
+    wf_repo = _RecordingWorkflowRepo()
+    provider = _RecordingTimeoutProvider()
+    manager = AIExecutionManager(
+        provider=provider,  # type: ignore[arg-type]
+        quota=quota,
+        timeout_seconds=12.0,
+        tool_call_timeout_seconds=5.0,
+        max_retries=1,
+        workflow_repo=wf_repo,  # type: ignore[arg-type]
+    )
+
+    with caplog.at_level(
+        logging.INFO, logger="src.shared_kernel.application.harness.execution_manager"
+    ):
+        res = await manager.execute(
+            user_id=uuid4(),
+            operation_type="PLAN_CREATION",
+            system_prompt="sys",
+            user_prompt="usr",
+            response_schema=_Output,
+            model_name="gemini-3.8-flash-medium",
+            workflow_type=WorkflowType.PLAN_CREATION,
+            step_name="STEP_TEST",
+        )
+
+    assert len(seen_timeouts) == 2
+    assert seen_timeouts[0][0] is not None and 11.5 <= seen_timeouts[0][0] <= 12.0
+    assert seen_timeouts[1][0] is not None and seen_timeouts[1][0] < seen_timeouts[0][0]
+    assert res.thinking_tokens == 22  # 4 + 18
+    assert res.completion_tokens == 30  # 12 + max(10, 18)
+    assert quota.committed_kwargs[0]["completion_tokens"] == 30
+    step_out = wf_repo.steps[-1].output_payload
+    assert step_out["prompt_tokens"] == 35
+    assert step_out["output_tokens"] == 30
+    assert step_out["completion_tokens"] == 30
+    assert step_out["thinking_tokens"] == 22
+    completed_logs = [rec for rec in caplog.records if rec.msg == "ai_execution_completed"]
+    assert len(completed_logs) == 1
+    assert getattr(completed_logs[0], "thinking_tokens", None) == 22
+
+    # Also verify tool_call_timeout_seconds is passed when tools are present
+    seen_timeouts.clear()
+    tool_decl = LLMToolDeclarationDTO(name="t", description="d", parameters_schema={})
+    await manager.execute(
+        user_id=uuid4(),
+        operation_type="TASK_DECOMPOSITION",
+        system_prompt="sys",
+        user_prompt="usr",
+        response_schema=_Output,
+        tools=[tool_decl],
+        tool_executor=lambda _n, _a: asyncio.sleep(0, result={}),
+        max_tool_calls=1,
+        model_name="gemini-3.8-flash-medium",
+    )
+    assert seen_timeouts[0][1] == 5.0

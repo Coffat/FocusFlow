@@ -56,6 +56,7 @@ from src.shared_kernel.application.harness.prompt_registry import build_prompt_a
 from src.shared_kernel.application.harness.workflow_port import WorkflowRepositoryPort
 from src.shared_kernel.application.llm_port import LLMProviderPort
 from src.shared_kernel.application.uow import AsyncUnitOfWork
+from src.shared_kernel.config import get_settings
 from src.shared_kernel.domain.base import generate_uuid7
 
 logger = structlog.get_logger(__name__)
@@ -227,7 +228,7 @@ class GenerateMilestoneProofUseCase:
                     quota=self._quota_port,
                     manage_quota=self._quota_port is not None,
                     max_retries=1,
-                    timeout_seconds=25.0,
+                    timeout_seconds=float(get_settings().ai_prove_question_timeout_seconds),
                     workflow_repo=self._workflow_repo,
                 )
                 exec_res = await manager.execute(
@@ -301,6 +302,10 @@ class GenerateMilestoneProofUseCase:
                     "question_count": len(questions),
                     "model_used": model_used,
                     "fallback_reason_code": fallback_reason_code,
+                    "prompt_tokens": 0,
+                    "output_tokens": 0,
+                    "completion_tokens": 0,
+                    "thinking_tokens": 0,
                 },
             )
         await self._uow.commit()
@@ -374,7 +379,7 @@ class SubmitMilestoneProofUseCase:
                     quota=self._quota_port,
                     manage_quota=self._quota_port is not None,
                     max_retries=1,
-                    timeout_seconds=25.0,
+                    timeout_seconds=float(get_settings().ai_prove_grader_timeout_seconds),
                     workflow_repo=self._workflow_repo,
                 )
                 exec_res = await manager.execute(
@@ -506,6 +511,10 @@ class SubmitMilestoneProofUseCase:
                     "calibration_error": calibration_error,
                     "model_used": model_used,
                     "fallback_reason_code": fallback_reason_code,
+                    "prompt_tokens": 0,
+                    "output_tokens": 0,
+                    "completion_tokens": 0,
+                    "thinking_tokens": 0,
                 },
                 step_status=(
                     WorkflowStepStatus.COMPLETED if is_verified else WorkflowStepStatus.FAILED
@@ -720,7 +729,7 @@ class GenerateWeeklyReviewUseCase:
                     quota=self._quota_port,
                     manage_quota=self._quota_port is not None,
                     max_retries=1,
-                    timeout_seconds=25.0,
+                    timeout_seconds=float(get_settings().ai_weekly_review_timeout_seconds),
                     workflow_repo=None,
                 )
                 exec_res = await manager.execute(
@@ -875,6 +884,7 @@ class GenerateWeeklyReviewUseCase:
                         "quantitative_faithfulness": raw_faithfulness,
                         "model_used": model_used,
                         "prompt_tokens": prompt_tokens,
+                        "output_tokens": completion_tokens,
                         "completion_tokens": completion_tokens,
                         "thinking_tokens": thinking_tokens,
                         "attempts": llm_attempts,

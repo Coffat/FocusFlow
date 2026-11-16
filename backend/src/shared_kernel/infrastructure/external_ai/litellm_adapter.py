@@ -297,14 +297,22 @@ class LiteLLMAdapter(LLMProviderPort):
             )
         return base_url
 
+    def _resolve_thinking_control(self) -> str:
+        raw = str(getattr(self._settings, "llm_thinking_control", "model_suffix") or "model_suffix")
+        mode = raw.strip().lower()
+        return mode if mode in {"model_suffix", "param"} else "model_suffix"
+
     def _resolve_candidate_models(self, thinking_level: str | None) -> tuple[list[str], set[str]]:
         effective_level = _normalize_thinking_level(
             thinking_level,
             getattr(self._settings, "llm_thinking_level", "MEDIUM"),
         )
-        default_model = (getattr(self._settings, "llm_model", "") or "gemini-3.8-flash").split("/")[
-            -1
-        ].strip() or "gemini-3.8-flash"
+        default_model = (
+            getattr(self._settings, "llm_model", "") or "gemini-3.8-flash-medium"
+        ).split("/")[-1].strip() or "gemini-3.8-flash-medium"
+        if self._resolve_thinking_control() == "param":
+            return [default_model], set()
+
         tier_attr = {
             "LOW": "llm_model_low",
             "MEDIUM": "llm_model_medium",
@@ -312,7 +320,7 @@ class LiteLLMAdapter(LLMProviderPort):
         }.get(effective_level, "llm_model_medium")
         if hasattr(self._settings, tier_attr):
             raw_tier_model = getattr(self._settings, tier_attr, "") or ""
-            tier_model = raw_tier_model.split("/")[-1].strip() or "gemini-3.8-flash"
+            tier_model = raw_tier_model.split("/")[-1].strip() or default_model
         else:
             tier_model = default_model
 
@@ -381,6 +389,8 @@ class LiteLLMAdapter(LLMProviderPort):
         tool_executor: LLMToolExecutor | None,
         max_tool_calls: int,
         thinking_level: str | None,
+        timeout_seconds: float | None = None,
+        tool_call_timeout_seconds: float | None = None,
     ) -> LLMGenerationResult:
         from google.genai import types
 
@@ -394,14 +404,23 @@ class LiteLLMAdapter(LLMProviderPort):
             thinking_level,
             getattr(self._settings, "llm_thinking_level", "MEDIUM"),
         )
+        thinking_control = self._resolve_thinking_control()
         candidate_models, degraded_set = self._resolve_candidate_models(effective_level)
         preferred_model: str | None = None
+
+        total_budget = (
+            float(timeout_seconds)
+            if timeout_seconds is not None and timeout_seconds > 0
+            else float(getattr(self._settings, "ai_hard_timeout_seconds", 55.0))
+        )
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + total_budget
 
         async def _call_model(
             contents: Any,
             config: Any,
             *,
-            call_timeout: float = 35.0,
+            is_tool_turn: bool = False,
             parse_json_fn: Any | None = None,
         ) -> Any:
             nonlocal preferred_model
@@ -414,6 +433,25 @@ class LiteLLMAdapter(LLMProviderPort):
             last_err: Exception | None = None
             for cand in ordered_candidates:
                 while True:
+                    remaining = deadline - loop.time()
+                    if remaining <= 0:
+                        raise TimeoutError(
+                            f"LLM call exceeded remaining timeout budget ({total_budget:.2f}s)"
+                        )
+                    if is_tool_turn:
+                        if tool_call_timeout_seconds is not None and tool_call_timeout_seconds > 0:
+                            call_timeout = min(remaining, float(tool_call_timeout_seconds))
+                        else:
+                            cfg_tool_timeout = float(
+                                getattr(
+                                    self._settings,
+                                    "ai_tool_call_timeout_seconds",
+                                    total_budget,
+                                )
+                            )
+                            call_timeout = min(remaining, cfg_tool_timeout)
+                    else:
+                        call_timeout = remaining
                     try:
                         resp = await asyncio.wait_for(
                             client.aio.models.generate_content(
@@ -439,9 +477,8 @@ class LiteLLMAdapter(LLMProviderPort):
                         self.degraded_model_used = is_degraded
                         self.last_degraded_model_used = is_degraded
                         return resp
-                    except TimeoutError as e:
-                        last_err = e
-                        break
+                    except TimeoutError:
+                        raise
                     except (json.JSONDecodeError, ValueError) as e:
                         if parse_json_fn is not None:
                             last_err = e
@@ -461,7 +498,7 @@ class LiteLLMAdapter(LLMProviderPort):
                             or "INTERNAL" in err_str
                         )
                         if is_http_500:
-                            if http500_retries < 1:
+                            if http500_retries < 1 and (deadline - loop.time()) > 0.1:
                                 http500_retries += 1
                                 await asyncio.sleep(0.05)
                                 continue
@@ -483,7 +520,12 @@ class LiteLLMAdapter(LLMProviderPort):
             raise RuntimeError("No candidate models available for Google GenAI")
 
         schema_dict = _extract_json_schema(response_schema)
-        tool_thinking_level = "LOW" if effective_level in ("LOW", "MEDIUM") else "MEDIUM"
+        tool_thinking_level = (
+            ("LOW" if effective_level in ("LOW", "MEDIUM") else "MEDIUM")
+            if thinking_control == "param"
+            else None
+        )
+        final_thinking_level = effective_level if thinking_control == "param" else None
         used_tool_stage = bool(tools and tool_executor is not None and max_tool_calls > 0)
 
         total_prompt_tokens = 0
@@ -524,7 +566,7 @@ class LiteLLMAdapter(LLMProviderPort):
                 resp = await _call_model(
                     contents=contents,
                     config=tool_cfg,
-                    call_timeout=18.0,
+                    is_tool_turn=True,
                 )
                 _accumulate_usage(resp)
 
@@ -637,7 +679,7 @@ class LiteLLMAdapter(LLMProviderPort):
             response_mime_type="application/json",
             response_json_schema=schema_dict if schema_dict else None,
             max_output_tokens=32768,
-            thinking_level=effective_level,
+            thinking_level=final_thinking_level,
         )
 
         def _parse_json_response(resp_obj: Any) -> Any:
@@ -667,11 +709,10 @@ class LiteLLMAdapter(LLMProviderPort):
                     return json.loads(json_list_match.group(1))
                 raise
 
-        final_call_timeout = {"LOW": 25.0, "MEDIUM": 35.0, "HIGH": 35.0}.get(effective_level, 35.0)
         final_resp, parsed = await _call_model(
             contents=final_user_prompt,
             config=json_cfg,
-            call_timeout=final_call_timeout,
+            is_tool_turn=False,
             parse_json_fn=_parse_json_response,
         )
         _accumulate_usage(final_resp)
@@ -723,7 +764,7 @@ class LiteLLMAdapter(LLMProviderPort):
                 repair_resp, repair_parsed = await _call_model(
                     contents=repair_contents,
                     config=json_cfg,
-                    call_timeout=final_call_timeout,
+                    is_tool_turn=False,
                     parse_json_fn=_parse_json_response,
                 )
             except (json.JSONDecodeError, ValueError) as repair_parse_err:
@@ -772,6 +813,8 @@ class LiteLLMAdapter(LLMProviderPort):
         tool_executor: LLMToolExecutor | None = None,
         max_tool_calls: int = 2,
         thinking_level: str | None = None,
+        timeout_seconds: float | None = None,
+        tool_call_timeout_seconds: float | None = None,
     ) -> LLMGenerationResult:
         if thinking_level is not None:
             _normalize_thinking_level(thinking_level)
@@ -787,10 +830,17 @@ class LiteLLMAdapter(LLMProviderPort):
                 tool_executor=tool_executor,
                 max_tool_calls=max_tool_calls,
                 thinking_level=thinking_level,
+                timeout_seconds=timeout_seconds,
+                tool_call_timeout_seconds=tool_call_timeout_seconds,
             )
 
         from litellm import acompletion
 
+        total_budget = (
+            float(timeout_seconds)
+            if timeout_seconds is not None and timeout_seconds > 0
+            else float(getattr(self._settings, "ai_hard_timeout_seconds", 55.0))
+        )
         schema_dict = _extract_json_schema(response_schema)
         schema_enforced_by_gateway = bool(
             getattr(self._settings, "llm_schema_enforced_by_gateway", False)
@@ -804,15 +854,19 @@ class LiteLLMAdapter(LLMProviderPort):
             f"{system_prompt}\n\n{compact_spec}".strip() if compact_spec else system_prompt
         )
 
-        response = await acompletion(
-            model=self.model_identifier,
-            messages=[
-                {"role": "system", "content": sys_content},
-                {"role": "user", "content": user_prompt},
-            ],
-            api_key=self._settings.llm_api_key,
-            api_base=self._resolve_base_url(),
-            response_format={"type": "json_object"},
+        response = await asyncio.wait_for(
+            acompletion(
+                model=self.model_identifier,
+                messages=[
+                    {"role": "system", "content": sys_content},
+                    {"role": "user", "content": user_prompt},
+                ],
+                api_key=self._settings.llm_api_key,
+                api_base=self._resolve_base_url(),
+                response_format={"type": "json_object"},
+                timeout=total_budget,
+            ),
+            timeout=total_budget,
         )
         content = (response.choices[0].message.content or "{}").strip()
         if content.startswith("```"):
@@ -820,6 +874,9 @@ class LiteLLMAdapter(LLMProviderPort):
         usage = getattr(response, "usage", None)
         prompt_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
         completion_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
+        details = getattr(usage, "completion_tokens_details", None)
+        thinking_tokens = int(getattr(details, "reasoning_tokens", 0) or 0)
+        completion_tokens = max(completion_tokens, thinking_tokens)
         parsed = json.loads(content)
         self.model_used = self.model_identifier.split("/")[-1]
         self.last_model_used = self.model_used
@@ -833,14 +890,14 @@ class LiteLLMAdapter(LLMProviderPort):
                 validation_summary=concise_err,
                 prompt_tokens=prompt_tokens,
                 output_tokens=completion_tokens,
-                thinking_tokens=0,
+                thinking_tokens=thinking_tokens,
                 model_id=self.last_model_used,
             ) from val_err
         return LLMGenerationResult(
             payload=validated_dict,
             prompt_tokens=prompt_tokens,
             output_tokens=completion_tokens,
-            thinking_tokens=0,
+            thinking_tokens=thinking_tokens,
             model_id=self.last_model_used,
         )
 

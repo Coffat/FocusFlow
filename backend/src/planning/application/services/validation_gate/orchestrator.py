@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import date
@@ -28,7 +29,6 @@ from src.planning.application.services.validation_gate.tier2_deterministic impor
     run_tier2_gate,
 )
 from src.planning.application.services.validation_gate.tier3_judge import (
-    TIER3_JUDGE_TIMEOUT_SECONDS,
     execute_tier3_pedagogical_judge,
 )
 from src.planning.domain.exceptions.planning_exceptions import (
@@ -51,8 +51,11 @@ from src.shared_kernel.application.harness.prompt_registry import build_prompt_a
 from src.shared_kernel.application.harness.untrusted_context import sanitize_untrusted_text
 from src.shared_kernel.application.harness.workflow_port import WorkflowRepositoryPort
 from src.shared_kernel.application.llm_port import LLMProviderPort
+from src.shared_kernel.config import get_settings
 
-DECOMPOSER_CALL_TIMEOUT_SECONDS: float = 35.0
+logger = logging.getLogger(__name__)
+
+DECOMPOSER_CALL_TIMEOUT_SECONDS: float = 25.0
 PIPELINE_DEADLINE_SECONDS: float = 55.0
 MIN_RETRY_REMAINING_SECONDS: float = 12.0
 DEFAULT_MAX_RETRIES: int = 2
@@ -107,7 +110,7 @@ class ProposalValidationGateOrchestrator:
         llm_provider: LLMProviderPort | None = None,
         *,
         enable_tier3_judge: bool = True,
-        tier3_timeout_seconds: float = TIER3_JUDGE_TIMEOUT_SECONDS,
+        tier3_timeout_seconds: float | None = None,
         workflow_repo: WorkflowRepositoryPort | None = None,
         user_id: UUID | None = None,
         goal_id: UUID | None = None,
@@ -176,13 +179,15 @@ class ProposalValidationGateOrchestrator:
         milestone_summary: str = "",
         remaining_budget_seconds: float | None = None,
         workflow_repo: WorkflowRepositoryPort | None = None,
+        thinking_level: str | None = None,
     ) -> tuple[bool, float | None, list[str], str]:
-        """Execute Tier 3 Pedagogical LLM-as-a-Judge with strict <= 8.0s timeout & honest status."""
+        """Execute Tier 3 Pedagogical LLM-as-a-Judge with configurable timeout & honest status."""
         outcome = await execute_tier3_pedagogical_judge(
             self._llm,
             proposal_data,
             enable_tier3_judge=self._enable_tier3_judge,
             tier3_timeout_seconds=self._tier3_timeout_seconds,
+            thinking_level=thinking_level,
             goal_title=goal_title,
             learner_level=learner_level,
             milestone_summary=milestone_summary,
@@ -407,8 +412,12 @@ class ProposalValidationGateOrchestrator:
         last_violations: list[ConstraintViolationDTO] = []
         pedagogical_retry_used = False
 
+        settings = get_settings()
+        min_retry_remaining = float(settings.ai_min_retry_remaining_seconds)
         max_attempts = max(1, int(max_retries) + 1)
-        pipeline_deadline = asyncio.get_running_loop().time() + PIPELINE_DEADLINE_SECONDS
+        pipeline_deadline = asyncio.get_running_loop().time() + float(
+            settings.ai_sse_pipeline_timeout_seconds
+        )
         effective_schema: dict[str, Any] | type[Any] = (
             response_schema if response_schema is not None else {"type": "object"}
         )
@@ -416,14 +425,17 @@ class ProposalValidationGateOrchestrator:
         for attempt in range(1, max_attempts + 1):
             remaining_seconds = pipeline_deadline - asyncio.get_running_loop().time()
             if remaining_seconds <= 0:
-                raise TimeoutError("Task decomposition exceeded 55 seconds")
+                raise TimeoutError("Task decomposition exceeded pipeline timeout budget")
 
-            decomposer_timeout = min(DECOMPOSER_CALL_TIMEOUT_SECONDS, remaining_seconds)
+            decomposer_timeout = min(
+                float(settings.ai_task_decomposer_timeout_seconds), remaining_seconds
+            )
             exec_mgr = AIExecutionManager(
                 provider=self._llm,
                 manage_quota=False,
                 max_retries=0,
                 timeout_seconds=decomposer_timeout,
+                tool_call_timeout_seconds=float(settings.ai_tool_call_timeout_seconds),
                 workflow_repo=self._workflow_repo,
             )
             step_snapshot = (
@@ -460,46 +472,111 @@ class ProposalValidationGateOrchestrator:
 
             raw_tasks = raw_proposal.get("tasks") if isinstance(raw_proposal, dict) else None
             quality_violations: list[ConstraintViolationDTO] = []
+            critic_advisory_warnings: list[str] = []
             if isinstance(raw_proposal, dict) and isinstance(raw_tasks, list) and milestones:
                 quality_violations.extend(validate_task_coverage(raw_tasks, milestones))
                 remaining_seconds = pipeline_deadline - asyncio.get_running_loop().time()
-                if remaining_seconds <= 0:
-                    raise TimeoutError("Task quality review exceeded 55 seconds")
-                critic_timeout = min(8.0, remaining_seconds)
-                critic_tokens: dict[str, int] = {}
-                (
-                    critic_violations,
-                    quality_reports,
-                    critic_p,
-                    critic_c,
-                ) = await asyncio.wait_for(
-                    run_dual_quality_critics(
-                        self._llm,
-                        stage="TASK_DECOMPOSITION",
-                        payload=raw_proposal,
-                        context=f"Goal: {sanitize_untrusted_text(goal_title)}",
-                        learner_level=learner_level,
-                        milestone_summary=effective_milestone_summary,
-                        timeout_seconds=critic_timeout,
-                        arbiter_timeout_seconds=critic_timeout,
-                        workflow_repo=self._workflow_repo,
-                        user_id=self._user_id,
-                        goal_id=self._goal_id,
-                        roadmap_id=self._roadmap_id,
-                        workflow_type=WorkflowType.SCHEDULE_GENERATION,
-                        token_accumulator=critic_tokens,
-                    ),
-                    timeout=remaining_seconds,
-                )
-                total_prompt_tokens += critic_p
-                total_completion_tokens += critic_c
-                total_thinking_tokens += int(critic_tokens.get("thinking_tokens", 0))
-                if has_operational_quality_review_failure(critic_violations):
-                    raise TimeoutError(
-                        "Task quality review did not complete within its time budget"
+                if remaining_seconds < float(settings.ai_min_critic_remaining_seconds):
+                    logger.warning(
+                        "proposal_quality_critic_skipped_low_budget",
+                        extra={
+                            "roadmap_id": str(self._roadmap_id) if self._roadmap_id else None,
+                            "remaining_seconds": round(remaining_seconds, 2),
+                            "min_required_seconds": float(settings.ai_min_critic_remaining_seconds),
+                        },
                     )
-                quality_violations.extend(critic_violations)
-                raw_proposal = {**raw_proposal, "quality_reviews": quality_reports}
+                    critic_advisory_warnings.append(
+                        "Ngân sách thời gian còn lại không đủ cho AI Critic — đã bỏ qua bước Critic và giữ kiểm định Tier 1/2."
+                    )
+                    raw_proposal = {
+                        **raw_proposal,
+                        "quality_reviews": [
+                            {
+                                "critic": "QUALITY_CRITIC",
+                                "status": "SKIPPED_LOW_BUDGET",
+                                "issues": [],
+                            }
+                        ],
+                    }
+                else:
+                    critic_timeout = min(
+                        float(settings.ai_quality_critic_timeout_seconds), remaining_seconds
+                    )
+                    arbiter_timeout = min(
+                        float(settings.ai_quality_arbiter_timeout_seconds), remaining_seconds
+                    )
+                    critic_tokens: dict[str, int] = {}
+                    try:
+                        (
+                            critic_violations,
+                            quality_reports,
+                            critic_p,
+                            critic_c,
+                        ) = await asyncio.wait_for(
+                            run_dual_quality_critics(
+                                self._llm,
+                                stage="TASK_DECOMPOSITION",
+                                payload=raw_proposal,
+                                context=f"Goal: {sanitize_untrusted_text(goal_title)}",
+                                learner_level=learner_level,
+                                milestone_summary=effective_milestone_summary,
+                                timeout_seconds=critic_timeout,
+                                arbiter_timeout_seconds=arbiter_timeout,
+                                workflow_repo=self._workflow_repo,
+                                user_id=self._user_id,
+                                goal_id=self._goal_id,
+                                roadmap_id=self._roadmap_id,
+                                workflow_type=WorkflowType.SCHEDULE_GENERATION,
+                                token_accumulator=critic_tokens,
+                            ),
+                            timeout=remaining_seconds,
+                        )
+                        total_prompt_tokens += critic_p
+                        total_completion_tokens += critic_c
+                        total_thinking_tokens += int(critic_tokens.get("thinking_tokens", 0))
+                        if has_operational_quality_review_failure(critic_violations):
+                            logger.warning(
+                                "proposal_quality_critic_degraded",
+                                extra={
+                                    "roadmap_id": str(self._roadmap_id)
+                                    if self._roadmap_id
+                                    else None
+                                },
+                            )
+                            critic_advisory_warnings.append(
+                                "AI Critic tạm thời quá thời gian chờ — đã tiếp tục kiểm định Tier 1/2."
+                            )
+                            critic_violations = [
+                                v
+                                for v in critic_violations
+                                if v.rule_code
+                                not in {
+                                    "QUALITY_CRITIC_UNAVAILABLE",
+                                    "QUALITY_ARBITER_UNAVAILABLE",
+                                }
+                            ]
+                        quality_violations.extend(critic_violations)
+                        raw_proposal = {**raw_proposal, "quality_reviews": quality_reports}
+                    except TimeoutError:
+                        logger.warning(
+                            "proposal_quality_critic_timeout_skipped",
+                            extra={
+                                "roadmap_id": str(self._roadmap_id) if self._roadmap_id else None
+                            },
+                        )
+                        critic_advisory_warnings.append(
+                            "AI Critic hết ngân sách thời gian — đã bỏ qua bước Critic và giữ kiểm định Tier 1/2."
+                        )
+                        raw_proposal = {
+                            **raw_proposal,
+                            "quality_reviews": [
+                                {
+                                    "critic": "QUALITY_CRITIC",
+                                    "status": "SKIPPED_LOW_BUDGET",
+                                    "issues": [],
+                                }
+                            ],
+                        }
 
             if quality_violations:
                 last_violations = quality_violations
@@ -510,7 +587,7 @@ class ProposalValidationGateOrchestrator:
                     }
                 )
                 remaining_for_retry = pipeline_deadline - asyncio.get_running_loop().time()
-                if attempt < max_attempts and remaining_for_retry >= MIN_RETRY_REMAINING_SECONDS:
+                if attempt < max_attempts and remaining_for_retry >= min_retry_remaining:
                     if on_retry_callback is not None:
                         maybe_coro = on_retry_callback(attempt, last_violations)
                         if asyncio.iscoroutine(maybe_coro):
@@ -618,7 +695,7 @@ class ProposalValidationGateOrchestrator:
                     if (
                         attempt == 1
                         and attempt < max_attempts
-                        and remaining_for_retry >= MIN_RETRY_REMAINING_SECONDS
+                        and remaining_for_retry >= min_retry_remaining
                         and avail_mins > 0
                         and req_mins <= int(avail_mins * 1.30)
                     ):
@@ -650,7 +727,7 @@ class ProposalValidationGateOrchestrator:
                     gate_result.judge_status == "NEEDS_REVIEW"
                     and attempt < max_attempts
                     and not pedagogical_retry_used
-                    and remaining_for_retry >= MIN_RETRY_REMAINING_SECONDS
+                    and remaining_for_retry >= min_retry_remaining
                 ):
                     pedagogical_retry_used = True
                     judge_violation = ConstraintViolationDTO(
@@ -683,11 +760,14 @@ class ProposalValidationGateOrchestrator:
                     )
                     continue
 
+                merged_advisory_warnings = tuple(
+                    dict.fromkeys([*critic_advisory_warnings, *gate_result.advisory_warnings])
+                )
                 return ValidationGateResultDTO(
                     is_valid=True,
                     violations=(),
                     soft_overflow_warnings=gate_result.soft_overflow_warnings,
-                    advisory_warnings=gate_result.advisory_warnings,
+                    advisory_warnings=merged_advisory_warnings,
                     judge_skipped=gate_result.judge_skipped,
                     judge_status=gate_result.judge_status,
                     pedagogical_score=gate_result.pedagogical_score,
@@ -711,7 +791,7 @@ class ProposalValidationGateOrchestrator:
             retry_history.append(retry_record)
 
             remaining_for_retry = pipeline_deadline - asyncio.get_running_loop().time()
-            if attempt < max_attempts and remaining_for_retry >= MIN_RETRY_REMAINING_SECONDS:
+            if attempt < max_attempts and remaining_for_retry >= min_retry_remaining:
                 if on_retry_callback is not None:
                     maybe_coro = on_retry_callback(attempt, last_violations)
                     if asyncio.iscoroutine(maybe_coro):

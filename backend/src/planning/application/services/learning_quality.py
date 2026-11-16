@@ -262,8 +262,8 @@ CRITIC_RESPONSE_SCHEMA: dict[str, Any] = CriticQualityLLMOutput.model_json_schem
 
 QUALITY_CRITIC_THINKING_LEVEL = "LOW"
 QUALITY_ARBITER_THINKING_LEVEL = "LOW"
-DEFAULT_QUALITY_CRITIC_TIMEOUT_SECONDS = 8.0
-DEFAULT_QUALITY_ARBITER_TIMEOUT_SECONDS = 8.0
+DEFAULT_QUALITY_CRITIC_TIMEOUT_SECONDS = 15.0
+DEFAULT_QUALITY_ARBITER_TIMEOUT_SECONDS = 14.5
 _OPERATIONAL_QUALITY_REVIEW_CODES = frozenset(
     {"QUALITY_CRITIC_UNAVAILABLE", "QUALITY_ARBITER_UNAVAILABLE"}
 )
@@ -341,12 +341,8 @@ async def run_dual_quality_critics(
         else ""
     )
     effective_user_id = user_id or uuid4()
-    effective_critic_timeout = max(
-        0.01, min(DEFAULT_QUALITY_CRITIC_TIMEOUT_SECONDS, timeout_seconds)
-    )
-    effective_arbiter_timeout = max(
-        0.01, min(DEFAULT_QUALITY_ARBITER_TIMEOUT_SECONDS, arbiter_timeout_seconds)
-    )
+    effective_critic_timeout = max(0.01, float(timeout_seconds))
+    effective_arbiter_timeout = max(0.01, float(arbiter_timeout_seconds))
     roles = (
         (
             "COVERAGE_PREREQUISITE_CRITIC",
@@ -443,7 +439,13 @@ async def run_dual_quality_critics(
                         step_order=1,
                         status=WorkflowStepStatus.FAILED,
                         input_summary={"operation_type": f"QUALITY_CRITIC:{role}", **audit_meta},
-                        output_payload={"error": str(result)},
+                        output_payload={
+                            "error": str(result),
+                            "prompt_tokens": 0,
+                            "output_tokens": 0,
+                            "completion_tokens": 0,
+                            "thinking_tokens": 0,
+                        },
                         retry_count=0,
                         started_at=started_at,
                         completed_at=finished_at,
@@ -497,6 +499,7 @@ async def run_dual_quality_critics(
                     output_payload={
                         "status": str(report.get("status", "")),
                         "prompt_tokens": p_tokens,
+                        "output_tokens": c_tokens,
                         "completion_tokens": c_tokens,
                         "thinking_tokens": t_tokens,
                         "model_id": model_id,

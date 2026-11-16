@@ -290,6 +290,8 @@ class LLMProviderPort(Protocol):
         tool_executor: LLMToolExecutor | None = None,
         max_tool_calls: int = 2,
         thinking_level: str | None = None,
+        timeout_seconds: float | None = None,
+        tool_call_timeout_seconds: float | None = None,
     ) -> tuple[dict[str, Any], int, int] | LLMGenerationResult:
         """Return structured JSON result with prompt, output (candidate + thinking), and model metadata."""
         ...

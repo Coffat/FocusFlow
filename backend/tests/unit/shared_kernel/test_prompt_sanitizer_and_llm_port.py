@@ -242,10 +242,11 @@ async def test_google_genai_adapter_falls_back_on_429_and_reuses_successful_mode
     adapter = LiteLLMAdapter()
     adapter._settings = SimpleNamespace(  # type: ignore[assignment]
         llm_provider="gemini",
+        llm_thinking_control="model_suffix",
         llm_model="gemini-3.8-flash",
-        llm_model_low="gemini-3.8-flash",
+        llm_model_low="gemini-3.8-flash-low",
         llm_model_medium="custom-tier-flash",
-        llm_model_high="gemini-3.8-flash",
+        llm_model_high="gemini-3.8-flash-high",
         llm_api_key="real-test-key",
         llm_base_url="http://127.0.0.1:8045",
         llm_thinking_level="MEDIUM",
@@ -273,13 +274,13 @@ async def test_google_genai_adapter_falls_back_on_429_and_reuses_successful_mode
     assert result["status"] == "ok"
     assert p_tok == 55
     assert c_tok == 48
-    # Tool stage retries 429 on configured tier model -> falls back to configured llm_model (gemini-3.8-flash)
+    # In model_suffix mode, thinking_config is NOT sent (None) and tier model falls back to llm_model.
     # Turn 2 of tool loop + final structured stage reuse pinned gemini-3.8-flash directly!
     assert call_log == [
-        ("custom-tier-flash", "LOW"),
-        ("gemini-3.8-flash", "LOW"),
-        ("gemini-3.8-flash", "LOW"),
-        ("gemini-3.8-flash", "MEDIUM"),
+        ("custom-tier-flash", None),
+        ("gemini-3.8-flash", None),
+        ("gemini-3.8-flash", None),
+        ("gemini-3.8-flash", None),
     ]
 
 
@@ -899,3 +900,264 @@ async def test_live_google_genai_sdk_contract() -> None:
     )
     assert len(res.payload["milestones"]) >= 1
     assert res.model_id
+
+
+def test_settings_ai_timeout_budget_validator_rejects_contradictions() -> None:
+    """Settings validates ai_hard_timeout_seconds and stage budgets without contradictions."""
+    from pydantic import ValidationError as PydanticValidationError
+
+    from src.shared_kernel.config import Settings
+
+    default_cfg = Settings()
+    assert default_cfg.llm_thinking_control == "model_suffix"
+    assert default_cfg.llm_model_low == "gemini-3.8-flash-low"
+    assert default_cfg.llm_model_medium == "gemini-3.8-flash-medium"
+    assert default_cfg.llm_model_high == "gemini-3.8-flash-high"
+    assert default_cfg.ai_hard_timeout_seconds == 55.0
+
+    with pytest.raises(PydanticValidationError, match="ai_hard_timeout_seconds"):
+        Settings(ai_hard_timeout_seconds=15.0, ai_task_decomposer_timeout_seconds=20.0)
+
+    with pytest.raises(PydanticValidationError, match="must be > 0"):
+        Settings(ai_clarifier_timeout_seconds=0.0)
+
+    with pytest.raises(PydanticValidationError, match="ai_tool_call_timeout_seconds"):
+        Settings(ai_tool_call_timeout_seconds=30.0, ai_milestone_planner_timeout_seconds=20.0)
+
+
+@pytest.mark.asyncio
+async def test_google_genai_thinking_control_model_suffix_vs_param_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """model_suffix omits thinking_config and picks tier models; param sends thinking_level and uses llm_model."""
+    from google import genai
+
+    observed: list[tuple[str, str | None]] = []
+
+    class FakeModels:
+        async def generate_content(self, *, model: str, contents: Any, config: Any) -> Any:
+            del contents
+            t_cfg = getattr(config, "thinking_config", None)
+            raw_lvl = getattr(t_cfg, "thinking_level", None)
+            lvl = str(raw_lvl).split(".")[-1] if raw_lvl is not None else None
+            observed.append((model, lvl))
+            return SimpleNamespace(
+                usage_metadata=SimpleNamespace(
+                    prompt_token_count=10,
+                    candidates_token_count=15,
+                    thoughts_token_count=5,
+                ),
+                text='{"status": "ok", "summary": "done", "milestones": [{"sequence_order": 1, "title": "M1", "description": "D1"}]}',
+            )
+
+    monkeypatch.setattr(
+        genai,
+        "Client",
+        lambda **kwargs: SimpleNamespace(aio=SimpleNamespace(models=FakeModels())),
+    )
+
+    # 1. model_suffix mode: no thinking_config sent, selects tier-suffixed model
+    suffix_adapter = LiteLLMAdapter()
+    suffix_adapter._settings = SimpleNamespace(  # type: ignore[assignment]
+        llm_provider="gemini",
+        llm_thinking_control="model_suffix",
+        llm_model="gemini-3.8-flash-medium",
+        llm_model_low="gemini-3.8-flash-low",
+        llm_model_medium="gemini-3.8-flash-medium",
+        llm_model_high="gemini-3.8-flash-high",
+        llm_api_key="real-key",
+        llm_base_url="http://127.0.0.1:8045",
+        llm_thinking_level="MEDIUM",
+        llm_schema_enforced_by_gateway=False,
+        ai_hard_timeout_seconds=55.0,
+    )
+    for tier in ("LOW", "MEDIUM", "HIGH"):
+        await suffix_adapter.generate_structured(
+            system_prompt="Sys",
+            user_prompt="Plan",
+            response_schema=SampleRoadmapOutput,
+            thinking_level=tier,
+            timeout_seconds=20.0,
+        )
+    assert observed == [
+        ("gemini-3.8-flash-low", None),
+        ("gemini-3.8-flash-medium", None),
+        ("gemini-3.8-flash-high", None),
+    ]
+
+    # 2. param mode: sends thinking_level in thinking_config and uses llm_model
+    observed.clear()
+    param_adapter = LiteLLMAdapter()
+    param_adapter._settings = SimpleNamespace(  # type: ignore[assignment]
+        llm_provider="gemini",
+        llm_thinking_control="param",
+        llm_model="gemini-3.8-flash",
+        llm_model_low="gemini-3.8-flash-low",
+        llm_model_medium="gemini-3.8-flash-medium",
+        llm_model_high="gemini-3.8-flash-high",
+        llm_api_key="real-key",
+        llm_base_url="http://127.0.0.1:8045",
+        llm_thinking_level="MEDIUM",
+        llm_schema_enforced_by_gateway=False,
+        ai_hard_timeout_seconds=55.0,
+    )
+    for tier in ("LOW", "MEDIUM", "HIGH"):
+        await param_adapter.generate_structured(
+            system_prompt="Sys",
+            user_prompt="Plan",
+            response_schema=SampleRoadmapOutput,
+            thinking_level=tier,
+            timeout_seconds=20.0,
+        )
+    assert observed == [
+        ("gemini-3.8-flash", "LOW"),
+        ("gemini-3.8-flash", "MEDIUM"),
+        ("gemini-3.8-flash", "HIGH"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_litellm_adapter_uses_passed_stage_timeouts_without_hardcoded_constants(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Adapter must use passed timeout_seconds / tool_call_timeout_seconds with 0 hardcoded 18/25/35 timeouts."""
+    import inspect
+
+    from google import genai
+
+    import src.shared_kernel.infrastructure.external_ai.litellm_adapter as adapter_mod
+
+    source_text = inspect.getsource(adapter_mod)
+    for forbidden_literal in ("18.0", "25.0", "35.0"):
+        assert forbidden_literal not in source_text
+
+    recorded_timeouts: list[float] = []
+    orig_wait_for = asyncio.wait_for
+
+    async def spy_wait_for(coro: Any, timeout: float | None = None) -> Any:
+        if timeout is not None:
+            recorded_timeouts.append(float(timeout))
+        return await orig_wait_for(coro, timeout=timeout)
+
+    monkeypatch.setattr(asyncio, "wait_for", spy_wait_for)
+
+    tool_done = False
+
+    class FakeModels:
+        async def generate_content(self, *, model: str, contents: Any, config: Any) -> Any:
+            nonlocal tool_done
+            del model, contents
+            if getattr(config, "tools", None) and not tool_done:
+                tool_done = True
+                return SimpleNamespace(
+                    usage_metadata=SimpleNamespace(prompt_token_count=5, candidates_token_count=2),
+                    function_calls=[
+                        SimpleNamespace(
+                            id="fc_1", name="search_learning_concepts", args={"query": "sql"}
+                        )
+                    ],
+                )
+            if getattr(config, "tools", None):
+                return SimpleNamespace(
+                    usage_metadata=SimpleNamespace(prompt_token_count=5, candidates_token_count=2),
+                    function_calls=[],
+                )
+            return SimpleNamespace(
+                usage_metadata=SimpleNamespace(prompt_token_count=10, candidates_token_count=12),
+                text='{"status": "ok", "summary": "ok", "milestones": [{"sequence_order": 1, "title": "M1", "description": "D1"}]}',
+            )
+
+    monkeypatch.setattr(
+        genai,
+        "Client",
+        lambda **kwargs: SimpleNamespace(aio=SimpleNamespace(models=FakeModels())),
+    )
+
+    adapter = LiteLLMAdapter()
+    adapter._settings = SimpleNamespace(  # type: ignore[assignment]
+        llm_provider="gemini",
+        llm_thinking_control="model_suffix",
+        llm_model="gemini-3.8-flash-medium",
+        llm_model_low="gemini-3.8-flash-low",
+        llm_model_medium="gemini-3.8-flash-medium",
+        llm_model_high="gemini-3.8-flash-high",
+        llm_api_key="real-key",
+        llm_base_url="http://127.0.0.1:8045",
+        llm_thinking_level="MEDIUM",
+        llm_schema_enforced_by_gateway=False,
+        ai_hard_timeout_seconds=55.0,
+        ai_tool_call_timeout_seconds=11.0,
+    )
+
+    async def fake_tool(name: str, args: dict[str, Any]) -> dict[str, Any]:
+        return {"tool": name, "args": args}
+
+    tool = LLMToolDeclarationDTO(
+        name="search_learning_concepts",
+        description="Search",
+        parameters_schema={"type": "object", "properties": {"query": {"type": "string"}}},
+    )
+    await adapter.generate_structured(
+        system_prompt="Sys",
+        user_prompt="Plan",
+        response_schema=SampleRoadmapOutput,
+        tools=[tool],
+        tool_executor=fake_tool,
+        max_tool_calls=2,
+        thinking_level="MEDIUM",
+        timeout_seconds=31.0,
+        tool_call_timeout_seconds=9.5,
+    )
+    assert len(recorded_timeouts) == 3
+    assert recorded_timeouts[0] <= 9.5 and recorded_timeouts[0] > 8.5
+    assert recorded_timeouts[1] <= 9.5 and recorded_timeouts[1] > 8.5
+    assert recorded_timeouts[2] <= 31.0 and recorded_timeouts[2] > 29.0
+
+
+@pytest.mark.asyncio
+async def test_google_genai_timeout_does_not_fallback_to_other_candidate_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """TimeoutError on the tier model must raise immediately instead of falling back to llm_model."""
+    from google import genai
+
+    called_models: list[str] = []
+
+    class SlowModels:
+        async def generate_content(self, *, model: str, contents: Any, config: Any) -> Any:
+            del contents, config
+            called_models.append(model)
+            await asyncio.sleep(0.2)
+            return SimpleNamespace(text='{"status":"ok"}')
+
+    monkeypatch.setattr(
+        genai,
+        "Client",
+        lambda **kwargs: SimpleNamespace(aio=SimpleNamespace(models=SlowModels())),
+    )
+
+    adapter = LiteLLMAdapter()
+    adapter._settings = SimpleNamespace(  # type: ignore[assignment]
+        llm_provider="gemini",
+        llm_thinking_control="model_suffix",
+        llm_model="gemini-3.8-flash-medium",
+        llm_model_low="gemini-3.8-flash-low",
+        llm_model_medium="gemini-3.8-flash-medium",
+        llm_model_high="gemini-3.8-flash-high",
+        llm_api_key="real-key",
+        llm_base_url="http://127.0.0.1:8045",
+        llm_thinking_level="MEDIUM",
+        llm_schema_enforced_by_gateway=False,
+        ai_hard_timeout_seconds=55.0,
+    )
+
+    with pytest.raises(TimeoutError):
+        await adapter.generate_structured(
+            system_prompt="Sys",
+            user_prompt="Plan",
+            response_schema=SampleRoadmapOutput,
+            thinking_level="LOW",
+            timeout_seconds=0.03,
+        )
+
+    assert called_models == ["gemini-3.8-flash-low"]

@@ -193,15 +193,19 @@ def _extract_raw_gen(
     provider: LLMProviderPort,
 ) -> tuple[Any, int, int, int, str, int]:
     if isinstance(raw_gen, LLMGenerationResult):
+        p_tok = int(raw_gen.prompt_tokens or 0)
+        t_tok = int(raw_gen.thinking_tokens or 0)
+        c_tok = max(int(raw_gen.output_tokens or 0), t_tok)
         return (
             raw_gen.payload,
-            int(raw_gen.prompt_tokens or 0),
-            int(raw_gen.output_tokens or 0),
-            int(raw_gen.thinking_tokens or 0),
+            p_tok,
+            c_tok,
+            t_tok,
             raw_gen.model_id or default_model_name,
             int(raw_gen.repair_attempts or 0),
         )
     payload, p_tok, c_tok = raw_gen
+    t_tok = int(getattr(raw_gen, "thinking_tokens", 0) or 0)
     resolved_model = str(
         getattr(provider, "last_model_used", None)
         or getattr(provider, "model_used", None)
@@ -210,8 +214,8 @@ def _extract_raw_gen(
     return (
         payload,
         int(p_tok or 0),
-        int(c_tok or 0),
-        int(getattr(raw_gen, "thinking_tokens", 0) or 0),
+        max(int(c_tok or 0), t_tok),
+        t_tok,
         resolved_model,
         0,
     )
@@ -226,6 +230,7 @@ class AIExecutionManager:
         provider: LLMProviderPort,
         quota: AIQuotaPort | None = None,
         timeout_seconds: float = 55.0,
+        tool_call_timeout_seconds: float | None = None,
         max_retries: int = 2,
         sleep: SleepFn = asyncio.sleep,
         retry_predicate: RetryPredicate | None = None,
@@ -235,6 +240,7 @@ class AIExecutionManager:
         self._provider = provider
         self._quota: AIQuotaPort = quota if quota is not None else _NoOpQuotaAdapter()
         self._timeout_seconds = timeout_seconds
+        self._tool_call_timeout_seconds = tool_call_timeout_seconds
         self._max_retries = max_retries
         self._sleep = sleep
         self._retry_predicate = retry_predicate or default_ai_retry_predicate
@@ -254,6 +260,7 @@ class AIExecutionManager:
         tool_executor: LLMToolExecutor | None = None,
         max_tool_calls: int = 2,
         thinking_level: str | None = None,
+        tool_call_timeout_seconds: float | None = None,
         existing_reservation_id: UUID | None = None,
         commit_on_success: bool = True,
         release_on_failure: bool = True,
@@ -307,16 +314,18 @@ class AIExecutionManager:
             *,
             p_tokens: int,
             c_tokens: int,
+            t_tokens: int,
             actual_model: str,
         ) -> None:
             nonlocal reservation_finalized
             if reservation_finalized or not effective_commit:
                 return
             reservation_finalized = True
+            billable_completion_tokens = max(int(c_tokens or 0), int(t_tokens or 0))
             await self._quota.commit_reservation(
                 reservation_id,
                 prompt_tokens=p_tokens,
-                completion_tokens=c_tokens,
+                completion_tokens=billable_completion_tokens,
                 model_name=actual_model,
             )
 
@@ -342,6 +351,9 @@ class AIExecutionManager:
             attempts_made: int,
             category: AIErrorCategory,
             repairs_made: int,
+            p_tokens: int,
+            c_tokens: int,
+            t_tokens: int,
         ) -> None:
             err_name = type(err).__name__ if err else "AI_EXECUTION_FAILED"
             logger.warning(
@@ -353,6 +365,10 @@ class AIExecutionManager:
                     "repair_attempts": repairs_made,
                     "attempts": attempts_made,
                     "error_type": err_name,
+                    "prompt_tokens": p_tokens,
+                    "output_tokens": c_tokens,
+                    "completion_tokens": c_tokens,
+                    "thinking_tokens": t_tokens,
                 },
             )
             await _release_once(err_name)
@@ -369,12 +385,17 @@ class AIExecutionManager:
                         input_summary={
                             "operation_type": operation_type,
                             "model_name": model_name,
+                            "prompt_tokens": p_tokens,
                             **prompt_audit,
                         },
                         output_payload={
                             "error": str(err) if err else err_name,
                             "error_category": category.value,
                             "repair_attempts": repairs_made,
+                            "prompt_tokens": p_tokens,
+                            "output_tokens": c_tokens,
+                            "completion_tokens": c_tokens,
+                            "thinking_tokens": t_tokens,
                         },
                         retry_count=max(0, attempts_made - 1),
                         started_at=started_at,
@@ -395,6 +416,11 @@ class AIExecutionManager:
         succeeded = False
         is_tool_stage = bool(tools and tool_executor is not None and max_tool_calls > 0)
 
+        effective_tool_call_timeout = (
+            tool_call_timeout_seconds
+            if tool_call_timeout_seconds is not None
+            else self._tool_call_timeout_seconds
+        )
         loop = asyncio.get_running_loop()
         deadline = loop.time() + self._timeout_seconds
         try:
@@ -409,11 +435,16 @@ class AIExecutionManager:
                         "system_prompt": system_prompt,
                         "user_prompt": user_prompt,
                         "response_schema": response_schema,
+                        "timeout_seconds": remaining_seconds,
                     }
                     if tools is not None:
                         call_kwargs["tools"] = tools
                         call_kwargs["tool_executor"] = tool_executor
                         call_kwargs["max_tool_calls"] = max_tool_calls
+                        if effective_tool_call_timeout is not None:
+                            call_kwargs["tool_call_timeout_seconds"] = min(
+                                float(effective_tool_call_timeout), remaining_seconds
+                            )
                     if thinking_level is not None:
                         call_kwargs["thinking_level"] = thinking_level
 
@@ -441,8 +472,9 @@ class AIExecutionManager:
                         repair_attempts_done = max(repair_attempts_done, 1)
                     if isinstance(exc, SchemaMismatchError):
                         prompt_tokens += exc.prompt_tokens
-                        completion_tokens += exc.output_tokens
-                        thinking_tokens += exc.thinking_tokens
+                        t_tok_err = int(exc.thinking_tokens or 0)
+                        completion_tokens += max(int(exc.output_tokens or 0), t_tok_err)
+                        thinking_tokens += t_tok_err
                         if exc.model_id:
                             resolved_model_id = exc.model_id
 
@@ -465,6 +497,7 @@ class AIExecutionManager:
                             "system_prompt": system_prompt,
                             "user_prompt": repair_user_prompt,
                             "response_schema": response_schema,
+                            "timeout_seconds": remaining_seconds,
                         }
                         if thinking_level is not None:
                             repair_kwargs["thinking_level"] = thinking_level
@@ -489,8 +522,11 @@ class AIExecutionManager:
                         except Exception as repair_exc:
                             if isinstance(repair_exc, SchemaMismatchError):
                                 prompt_tokens += repair_exc.prompt_tokens
-                                completion_tokens += repair_exc.output_tokens
-                                thinking_tokens += repair_exc.thinking_tokens
+                                r_t_tok_err = int(repair_exc.thinking_tokens or 0)
+                                completion_tokens += max(
+                                    int(repair_exc.output_tokens or 0), r_t_tok_err
+                                )
+                                thinking_tokens += r_t_tok_err
                                 if repair_exc.model_id:
                                     resolved_model_id = repair_exc.model_id
                             last_error = repair_exc
@@ -534,6 +570,9 @@ class AIExecutionManager:
                         attempts_done,
                         failure_category,
                         repair_attempts_done,
+                        prompt_tokens,
+                        max(completion_tokens, thinking_tokens),
+                        thinking_tokens,
                     )
                 )
             except Exception as cleanup_exc:
@@ -547,10 +586,27 @@ class AIExecutionManager:
             raise last_error
 
         # Post-LLM persistence effects run strictly outside the LLM retry loop (A1).
+        billable_completion_tokens = max(completion_tokens, thinking_tokens)
         await _commit_once(
             p_tokens=prompt_tokens,
-            c_tokens=completion_tokens,
+            c_tokens=billable_completion_tokens,
+            t_tokens=thinking_tokens,
             actual_model=resolved_model_id,
+        )
+        logger.info(
+            "ai_execution_completed",
+            extra={
+                "operation_type": operation_type,
+                "step_name": step_name or operation_type,
+                "model_id": resolved_model_id,
+                "prompt_tokens": prompt_tokens,
+                "output_tokens": billable_completion_tokens,
+                "completion_tokens": billable_completion_tokens,
+                "thinking_tokens": thinking_tokens,
+                "attempts": attempts_done,
+                "repair_attempts": repair_attempts_done,
+                "reservation_id": str(reservation_id),
+            },
         )
         if run is not None and self._workflow_repo is not None:
             finished_at = datetime.now(UTC)
@@ -569,7 +625,9 @@ class AIExecutionManager:
                         **prompt_audit,
                     },
                     output_payload={
-                        "completion_tokens": completion_tokens,
+                        "prompt_tokens": prompt_tokens,
+                        "output_tokens": billable_completion_tokens,
+                        "completion_tokens": billable_completion_tokens,
                         "thinking_tokens": thinking_tokens,
                         "attempts": attempts_done,
                         "repair_attempts": repair_attempts_done,
@@ -582,7 +640,7 @@ class AIExecutionManager:
         return AIExecutionResult(
             value=validated_value,
             prompt_tokens=prompt_tokens,
-            completion_tokens=completion_tokens,
+            completion_tokens=billable_completion_tokens,
             attempts=attempts_done,
             reservation_id=reservation_id,
             thinking_tokens=thinking_tokens,

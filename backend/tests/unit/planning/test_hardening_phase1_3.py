@@ -203,7 +203,7 @@ async def test_intelligence_use_cases_route_through_execution_manager_and_handle
     proof_dto = await gen_uc.execute(user_id, milestone_id)
     assert len(proof_dto.questions) == 3
     assert quota.committed == 1
-    assert llm.calls == ["MEDIUM"]
+    assert llm.calls == ["LOW"]
 
     # E5: Prove grader fails with non-retryable 403 -> releases quota, does NOT retry, falls back safely
     llm.fail_next = True
@@ -260,7 +260,7 @@ async def test_intelligence_use_cases_route_through_execution_manager_and_handle
     )
     assert "5 phiên học" in weekly.strengths_feedback
     assert quota.committed == 2
-    assert llm.calls == ["MEDIUM", "MEDIUM", "MEDIUM"]
+    assert llm.calls == ["LOW", "LOW", "LOW"]
 
 
 @pytest.mark.asyncio

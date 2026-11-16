@@ -187,6 +187,8 @@ class CircuitBreakingLLMProvider(LLMProviderPort):
         tool_executor: LLMToolExecutor | None = None,
         max_tool_calls: int = 2,
         thinking_level: str | None = None,
+        timeout_seconds: float | None = None,
+        tool_call_timeout_seconds: float | None = None,
     ) -> tuple[dict[str, Any], int, int] | LLMGenerationResult:
         await self._before_call()
         try:
@@ -198,6 +200,8 @@ class CircuitBreakingLLMProvider(LLMProviderPort):
                 tool_executor=tool_executor,
                 max_tool_calls=max_tool_calls,
                 thinking_level=thinking_level,
+                timeout_seconds=timeout_seconds,
+                tool_call_timeout_seconds=tool_call_timeout_seconds,
             )
         except Exception as exc:
             await self._record_failure(exc)

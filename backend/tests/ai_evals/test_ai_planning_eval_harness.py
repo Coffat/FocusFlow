@@ -163,8 +163,19 @@ class _RecordingSelfCorrectionLLM(LLMProviderPort):
         tool_executor: Any = None,
         max_tool_calls: int = 2,
         thinking_level: str | None = None,
+        timeout_seconds: float | None = None,
+        tool_call_timeout_seconds: float | None = None,
     ) -> tuple[dict[str, Any], int, int]:
-        _ = (system_prompt, response_schema, tools, tool_executor, max_tool_calls, thinking_level)
+        _ = (
+            system_prompt,
+            response_schema,
+            tools,
+            tool_executor,
+            max_tool_calls,
+            thinking_level,
+            timeout_seconds,
+            tool_call_timeout_seconds,
+        )
         effective_prompt = user_prompt
         if "[INDEPENDENT_CRITIC:" in effective_prompt:
             return {"status": "PASS", "score": 100, "issues": []}, 25, 10
@@ -218,6 +229,8 @@ class _SlowOrFailingJudgeLLM(LLMProviderPort):
         tool_executor: Any = None,
         max_tool_calls: int = 2,
         thinking_level: str | None = None,
+        timeout_seconds: float | None = None,
+        tool_call_timeout_seconds: float | None = None,
     ) -> tuple[dict[str, Any], int, int]:
         _ = (
             system_prompt,
@@ -227,6 +240,8 @@ class _SlowOrFailingJudgeLLM(LLMProviderPort):
             tool_executor,
             max_tool_calls,
             thinking_level,
+            timeout_seconds,
+            tool_call_timeout_seconds,
         )
         if self._mode == "timeout":
             await asyncio.sleep(self._sleep_seconds)

@@ -501,8 +501,10 @@ class StubLLMAdapter(LLMProviderPort):
         tool_executor: LLMToolExecutor | None = None,
         max_tool_calls: int = 2,
         thinking_level: str | None = None,
+        timeout_seconds: float | None = None,
+        tool_call_timeout_seconds: float | None = None,
     ) -> LLMGenerationResult:
-        del thinking_level
+        del thinking_level, timeout_seconds, tool_call_timeout_seconds
         effective_prompt = f"{system_prompt}\n{user_prompt}"
 
         discovered_concepts: list[dict[str, Any]] = []

@@ -41,7 +41,7 @@ PROVE_QUESTION_GENERATOR_PROMPT = EvaluationPromptSpec(
     version="2.0.0",
     workflow_type=WorkflowType.CONTINUOUS_LEARNING.value,
     skill_id="prove-question-generator",
-    thinking_level="MEDIUM",
+    thinking_level="LOW",
     output_model=ProveQuestionsLLMOutput,
     system_instruction=(
         "[SKILL: prove-question-generator@v2.0.0]\n"
@@ -63,7 +63,7 @@ PROVE_MODE_GRADER_PROMPT = EvaluationPromptSpec(
     version="2.0.0",
     workflow_type=WorkflowType.CONTINUOUS_LEARNING.value,
     skill_id="prove-mode-grader",
-    thinking_level="MEDIUM",
+    thinking_level="LOW",
     output_model=ProveGradingLLMOutput,
     system_instruction=(
         "[SKILL: prove-mode-grader@v2.0.0]\n"
@@ -86,7 +86,7 @@ WEEKLY_REVIEW_ADVISOR_PROMPT = EvaluationPromptSpec(
     version="2.0.0",
     workflow_type=WorkflowType.WEEKLY_REVIEW.value,
     skill_id="weekly-review-advisor",
-    thinking_level="MEDIUM",
+    thinking_level="LOW",
     output_model=WeeklyReviewLLMOutput,
     system_instruction=(
         "[SKILL: weekly-review-advisor@v2.0.0]\n"

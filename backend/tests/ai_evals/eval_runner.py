@@ -48,6 +48,7 @@ from src.shared_kernel.application.harness.models import (
     WorkflowType,
 )
 from src.shared_kernel.application.llm_port import LLMGenerationResult, LLMProviderPort
+from src.shared_kernel.config import get_settings
 from src.shared_kernel.infrastructure.external_ai.litellm_adapter import LiteLLMAdapter
 from src.shared_kernel.infrastructure.external_ai.prompt_sanitizer import PromptSanitizer
 from tests.helpers.llm_stubs import StubLLMAdapter
@@ -266,6 +267,8 @@ class _SlowJudgeStub(LLMProviderPort):
         tool_executor: Any = None,
         max_tool_calls: int = 2,
         thinking_level: str | None = None,
+        timeout_seconds: float | None = None,
+        tool_call_timeout_seconds: float | None = None,
     ) -> LLMGenerationResult:
         del (
             system_prompt,
@@ -275,6 +278,8 @@ class _SlowJudgeStub(LLMProviderPort):
             tool_executor,
             max_tool_calls,
             thinking_level,
+            timeout_seconds,
+            tool_call_timeout_seconds,
         )
         await asyncio.sleep(0.05)
         return LLMGenerationResult(payload={"score": 90, "issues": []})
@@ -421,6 +426,8 @@ class _FailingWeeklyLLM(LLMProviderPort):
         tool_executor: Any = None,
         max_tool_calls: int = 2,
         thinking_level: str | None = None,
+        timeout_seconds: float | None = None,
+        tool_call_timeout_seconds: float | None = None,
     ) -> LLMGenerationResult:
         del (
             system_prompt,
@@ -430,6 +437,8 @@ class _FailingWeeklyLLM(LLMProviderPort):
             tool_executor,
             max_tool_calls,
             thinking_level,
+            timeout_seconds,
+            tool_call_timeout_seconds,
         )
         raise TimeoutError("Simulated weekly review timeout")
 
@@ -452,8 +461,14 @@ class _ScenarioEvalResult:
     prompt_tokens_total: int = 0
     output_tokens_total: int = 0
     thinking_tokens_total: int = 0
+    decomposer_output_tokens: int = 0
+    decomposer_thinking_tokens: int = 0
+    tasks_count: int = 0
+    min_tasks_met: bool = False
+    pedagogical_score: float | None = None
     judge_status: str = "SKIPPED"
     judge_error_category: str | None = None
+    weekly_skipped: bool = False
     weekly_fallback: bool = False
     weekly_faithfulness: float = 0.0
     weekly_error_category: str | None = None
@@ -470,6 +485,10 @@ async def _evaluate_scenario(
     use_live: bool,
     effective_trials: int,
     decomposer_tpl: PromptTemplate,
+    decomposer_thinking_level: str | None = None,
+    judge_thinking_level: str | None = None,
+    judge_timeout_seconds: float | None = None,
+    include_weekly: bool = True,
     decomposer_provider_factory: ProviderFactory | None = None,
     judge_provider_factory: ProviderFactory | None = None,
     weekly_provider_factory: ProviderFactory | None = None,
@@ -552,7 +571,7 @@ async def _evaluate_scenario(
                 start_date=date.fromisoformat(str(scenario["start_date"])),
                 current_roadmap_target_date=date.fromisoformat(str(scenario["target_date"])),
                 goal_title=str(scenario["goal"].get("title", "")),
-                thinking_level=TASK_DECOMPOSER_SKILL.thinking_level,
+                thinking_level=decomposer_thinking_level or TASK_DECOMPOSER_SKILL.thinking_level,
                 deterministic_allocation=True,
                 max_retries=2,
                 prompt_template=decomposer_tpl,
@@ -589,6 +608,8 @@ async def _evaluate_scenario(
         result.prompt_tokens_total += p_tok
         result.output_tokens_total += o_tok
         result.thinking_tokens_total += t_tok
+        result.decomposer_output_tokens += o_tok
+        result.decomposer_thinking_tokens += t_tok
 
         if passed and retries_used == 0:
             result.pass_at_1_count += 1
@@ -629,15 +650,24 @@ async def _evaluate_scenario(
 
     # Tier 3 Pedagogical Judge
     case_judge_status = "SKIPPED_NO_PROPOSAL"
+    case_pedagogical_score: float | None = None
     judge_error_category: str | None = None
+    min_tasks_required = int(scenario["expected_invariants"].get("min_tasks", 1))
+    last_tasks_count = len(last_valid_proposal.get("tasks", []))
+    result.tasks_count = last_tasks_count
+    result.min_tasks_met = last_tasks_count >= min_tasks_required
     if last_valid_proposal.get("tasks"):
         judge_workflow_repo = _EvalWorkflowRepo()
         if judge_provider_factory is not None:
             judge_provider = judge_provider_factory(idx, scenario)
-            judge_timeout = 5.0
+            judge_timeout = judge_timeout_seconds if judge_timeout_seconds is not None else 5.0
         elif use_live:
             judge_provider = LiteLLMAdapter()
-            judge_timeout = 8.0
+            judge_timeout = (
+                judge_timeout_seconds
+                if judge_timeout_seconds is not None
+                else float(get_settings().tier3_judge_timeout_seconds)
+            )
         elif idx % 6 == 0:
             judge_provider = _SlowJudgeStub()
             judge_timeout = 0.01
@@ -654,14 +684,17 @@ async def _evaluate_scenario(
         try:
             (
                 _skipped,
-                _score,
+                judge_score,
                 advisory_warnings,
                 judge_status,
             ) = await judge_orch.run_tier3_pedagogical_judge(
                 last_valid_proposal,
                 goal_title=str(scenario["goal"].get("title", "")),
+                thinking_level=judge_thinking_level,
             )
             case_judge_status = judge_status
+            case_pedagogical_score = judge_score
+            result.pedagogical_score = judge_score
             result.prompt_tokens_total += judge_orch._last_judge_prompt_tokens
             result.output_tokens_total += judge_orch._last_judge_completion_tokens
             result.thinking_tokens_total += judge_orch._last_judge_thinking_tokens
@@ -697,77 +730,84 @@ async def _evaluate_scenario(
     result.judge_error_category = judge_error_category
 
     # Weekly Review evaluation (real LiteLLMAdapter in live mode + quantitative faithfulness)
-    roadmap_uuid = uuid4()
-    weekly_repo = _EvalWeeklyRepo(roadmap_uuid)
-    weekly_workflow_repo = _EvalWorkflowRepo()
-    if weekly_provider_factory is not None:
-        weekly_llm = weekly_provider_factory(idx, scenario)
-    elif use_live:
-        weekly_llm = LiteLLMAdapter()
-    else:
-        weekly_llm = _FailingWeeklyLLM() if idx % 5 == 0 else StubLLMAdapter()
-
-    weekly_uc = GenerateWeeklyReviewUseCase(
-        repository=weekly_repo,  # type: ignore[arg-type]
-        ownership=_EvalOwnership(),  # type: ignore[arg-type]
-        uow=_EvalUoW(),  # type: ignore[arg-type]
-        execution_metrics_port=_EvalWeeklyMetricsPort(),
-        workflow_repo=weekly_workflow_repo,  # type: ignore[arg-type]
-        llm_provider=weekly_llm,
-    )
     case_weekly_fallback = False
     case_weekly_faithfulness = 0.0
     weekly_error_category: str | None = None
-    try:
-        weekly_res = await weekly_uc.execute(
-            user_id=uuid4(),
-            request=GenerateWeeklyReviewRequestDTO(
-                roadmap_id=roadmap_uuid,
-                period_start=date(2026, 11, 2),
-                period_end=date(2026, 11, 9),
-                reflection={"summary": "eval"},
-            ),
-        )
-        case_weekly_fallback = weekly_repo.last_model_used in (
-            "deterministic-fallback",
-            "deterministic-insufficient-data",
-        )
-        raw_logged_faithfulness = (
-            weekly_workflow_repo.steps[-1].output_payload.get("quantitative_faithfulness")
-            if weekly_workflow_repo.steps
-            else None
-        )
-        if isinstance(raw_logged_faithfulness, (int, float)) and not isinstance(
-            raw_logged_faithfulness, bool
-        ):
-            case_weekly_faithfulness = float(raw_logged_faithfulness)
+    if not include_weekly:
+        result.weekly_skipped = True
+    else:
+        roadmap_uuid = uuid4()
+        weekly_repo = _EvalWeeklyRepo(roadmap_uuid)
+        weekly_workflow_repo = _EvalWorkflowRepo()
+        if weekly_provider_factory is not None:
+            weekly_llm = weekly_provider_factory(idx, scenario)
+        elif use_live:
+            weekly_llm = LiteLLMAdapter()
         else:
-            allowed_numbers = [
-                float(val)
-                for val in weekly_res.quantitative_summary.values()
-                if isinstance(val, (int, float)) and not isinstance(val, bool)
-            ]
-            case_weekly_faithfulness = QuantitativeFaithfulnessValidator.compute_raw_faithfulness(
-                (
-                    weekly_res.strengths_feedback,
-                    weekly_res.bottlenecks_feedback,
-                    weekly_res.action_recommendations,
+            weekly_llm = _FailingWeeklyLLM() if idx % 5 == 0 else StubLLMAdapter()
+
+        weekly_uc = GenerateWeeklyReviewUseCase(
+            repository=weekly_repo,  # type: ignore[arg-type]
+            ownership=_EvalOwnership(),  # type: ignore[arg-type]
+            uow=_EvalUoW(),  # type: ignore[arg-type]
+            execution_metrics_port=_EvalWeeklyMetricsPort(),
+            workflow_repo=weekly_workflow_repo,  # type: ignore[arg-type]
+            llm_provider=weekly_llm,
+        )
+        try:
+            weekly_res = await weekly_uc.execute(
+                user_id=uuid4(),
+                request=GenerateWeeklyReviewRequestDTO(
+                    roadmap_id=roadmap_uuid,
+                    period_start=date(2026, 11, 2),
+                    period_end=date(2026, 11, 9),
+                    reflection={"summary": "eval"},
                 ),
-                allowed_numbers,
             )
-        if case_weekly_fallback:
-            fallback_code = None
-            if weekly_workflow_repo.steps:
-                raw_code = weekly_workflow_repo.steps[-1].output_payload.get("fallback_reason_code")
-                if raw_code is not None:
-                    fallback_code = str(raw_code)
-            if fallback_code is None and weekly_workflow_repo.runs:
-                fallback_code = weekly_workflow_repo.runs[-1].error_detail
-            weekly_error_category = classify_eval_error(error_code=fallback_code)
-    except Exception as exc:
-        case_weekly_fallback = True
-        case_weekly_faithfulness = 0.0
-        weekly_error_category = classify_eval_error(exc)
+            case_weekly_fallback = weekly_repo.last_model_used in (
+                "deterministic-fallback",
+                "deterministic-insufficient-data",
+            )
+            raw_logged_faithfulness = (
+                weekly_workflow_repo.steps[-1].output_payload.get("quantitative_faithfulness")
+                if weekly_workflow_repo.steps
+                else None
+            )
+            if isinstance(raw_logged_faithfulness, (int, float)) and not isinstance(
+                raw_logged_faithfulness, bool
+            ):
+                case_weekly_faithfulness = float(raw_logged_faithfulness)
+            else:
+                allowed_numbers = [
+                    float(val)
+                    for val in weekly_res.quantitative_summary.values()
+                    if isinstance(val, (int, float)) and not isinstance(val, bool)
+                ]
+                case_weekly_faithfulness = (
+                    QuantitativeFaithfulnessValidator.compute_raw_faithfulness(
+                        (
+                            weekly_res.strengths_feedback,
+                            weekly_res.bottlenecks_feedback,
+                            weekly_res.action_recommendations,
+                        ),
+                        allowed_numbers,
+                    )
+                )
+            if case_weekly_fallback:
+                fallback_code = None
+                if weekly_workflow_repo.steps:
+                    raw_code = weekly_workflow_repo.steps[-1].output_payload.get(
+                        "fallback_reason_code"
+                    )
+                    if raw_code is not None:
+                        fallback_code = str(raw_code)
+                if fallback_code is None and weekly_workflow_repo.runs:
+                    fallback_code = weekly_workflow_repo.runs[-1].error_detail
+                weekly_error_category = classify_eval_error(error_code=fallback_code)
+        except Exception as exc:
+            case_weekly_fallback = True
+            case_weekly_faithfulness = 0.0
+            weekly_error_category = classify_eval_error(exc)
 
     result.weekly_fallback = case_weekly_fallback
     result.weekly_faithfulness = case_weekly_faithfulness
@@ -804,11 +844,17 @@ async def _evaluate_scenario(
         "prompt_tokens": case_p_tok,
         "output_tokens": case_o_tok,
         "thinking_tokens": case_t_tok,
+        "tasks_count": last_tasks_count,
+        "min_tasks": min_tasks_required,
+        "min_tasks_met": last_tasks_count >= min_tasks_required,
+        "pedagogical_score": case_pedagogical_score,
         "median_latency_ms": _percentile(sorted(result.latencies_ms), 50.0),
         "judge_status": case_judge_status,
         "judge_error_category": judge_error_category,
         "weekly_fallback": case_weekly_fallback,
-        "weekly_source": "fallback" if case_weekly_fallback else "llm",
+        "weekly_source": "skipped"
+        if not include_weekly
+        else ("fallback" if case_weekly_fallback else "llm"),
         "weekly_faithfulness": round(case_weekly_faithfulness, 4),
         "weekly_error_category": weekly_error_category,
         "injection_status": injection_status,
@@ -874,14 +920,14 @@ def validate_eval_report_totals(report: dict[str, Any]) -> None:
     )
 
     assert (
-        report["weekly_llm_success_count"] + report["weekly_fallbacks"]
-        == report["weekly_checks"]
-        == dataset_size
-    ), "weekly_llm_success_count + weekly_fallbacks must equal weekly_checks and dataset_size"
-    assert (
-        sum(1 for o in per_case_outcomes if not o["weekly_fallback"])
-        == (report["weekly_llm_success_count"])
-    )
+        report["weekly_llm_success_count"] + report["weekly_fallbacks"] == report["weekly_checks"]
+    ), "weekly_llm_success_count + weekly_fallbacks must equal weekly_checks"
+    if report["weekly_checks"] > 0:
+        assert report["weekly_checks"] == dataset_size
+        assert (
+            sum(1 for o in per_case_outcomes if not o["weekly_fallback"])
+            == (report["weekly_llm_success_count"])
+        )
     assert sum(1 for o in per_case_outcomes if o["weekly_fallback"]) == report["weekly_fallbacks"]
 
     injection_outcomes = [o for o in per_case_outcomes if o["is_injection_case"]]
@@ -945,6 +991,10 @@ async def run_planning_eval_suite(
     output_path: Path | None = None,
     live: bool | None = None,
     concurrency: int = 1,
+    decomposer_thinking_level: str | None = None,
+    judge_thinking_level: str | None = None,
+    judge_timeout_seconds: float | None = None,
+    include_weekly: bool = True,
     decomposer_provider_factory: ProviderFactory | None = None,
     judge_provider_factory: ProviderFactory | None = None,
     weekly_provider_factory: ProviderFactory | None = None,
@@ -965,6 +1015,10 @@ async def run_planning_eval_suite(
                 use_live=use_live,
                 effective_trials=effective_trials,
                 decomposer_tpl=decomposer_tpl,
+                decomposer_thinking_level=decomposer_thinking_level,
+                judge_thinking_level=judge_thinking_level,
+                judge_timeout_seconds=judge_timeout_seconds,
+                include_weekly=include_weekly,
                 decomposer_provider_factory=decomposer_provider_factory,
                 judge_provider_factory=judge_provider_factory,
                 weekly_provider_factory=weekly_provider_factory,
@@ -982,6 +1036,10 @@ async def run_planning_eval_suite(
                     use_live=use_live,
                     effective_trials=effective_trials,
                     decomposer_tpl=decomposer_tpl,
+                    decomposer_thinking_level=decomposer_thinking_level,
+                    judge_thinking_level=judge_thinking_level,
+                    judge_timeout_seconds=judge_timeout_seconds,
+                    include_weekly=include_weekly,
                     decomposer_provider_factory=decomposer_provider_factory,
                     judge_provider_factory=judge_provider_factory,
                     weekly_provider_factory=weekly_provider_factory,
@@ -1013,7 +1071,7 @@ async def run_planning_eval_suite(
     judge_review_pending_count = 0
     judge_skipped_count = 0
 
-    weekly_checks = len(scenario_results)
+    weekly_checks = len(scenario_results) if include_weekly else 0
     weekly_llm_success_count = 0
     weekly_fallbacks = 0
 
@@ -1052,14 +1110,15 @@ async def run_planning_eval_suite(
         else:
             judge_skipped_count += 1
 
-        if item.weekly_fallback:
-            weekly_fallbacks += 1
-            weekly_fallback_faithfulness_scores.append(item.weekly_faithfulness)
-            w_cat = item.weekly_error_category or "OTHER"
-            weekly_errors[w_cat] += 1
-        else:
-            weekly_llm_success_count += 1
-            weekly_llm_faithfulness_scores.append(item.weekly_faithfulness)
+        if not item.weekly_skipped:
+            if item.weekly_fallback:
+                weekly_fallbacks += 1
+                weekly_fallback_faithfulness_scores.append(item.weekly_faithfulness)
+                w_cat = item.weekly_error_category or "OTHER"
+                weekly_errors[w_cat] += 1
+            else:
+                weekly_llm_success_count += 1
+                weekly_llm_faithfulness_scores.append(item.weekly_faithfulness)
 
         if item.is_injection_case:
             injection_cases += 1
@@ -1078,6 +1137,16 @@ async def run_planning_eval_suite(
         for cat in ERROR_TAXONOMY_CATEGORIES
     }
 
+    pedagogical_scores = [
+        item.pedagogical_score for item in scenario_results if item.pedagogical_score is not None
+    ]
+    tasks_counts = [item.tasks_count for item in scenario_results if item.tasks_count > 0]
+    min_tasks_met_count = sum(1 for item in scenario_results if item.min_tasks_met)
+    decomposer_output_tokens_total = sum(item.decomposer_output_tokens for item in scenario_results)
+    decomposer_thinking_tokens_total = sum(
+        item.decomposer_thinking_tokens for item in scenario_results
+    )
+
     sorted_latencies = sorted(latencies_ms)
     report: dict[str, Any] = {
         "schema_version": "1.0",
@@ -1094,6 +1163,27 @@ async def run_planning_eval_suite(
         "prompt_tokens_total": prompt_tokens_total,
         "output_tokens_total": output_tokens_total,
         "thinking_tokens_total": thinking_tokens_total,
+        "thinking_pct_of_output": (
+            round(thinking_tokens_total / output_tokens_total, 4)
+            if output_tokens_total > 0
+            else 0.0
+        ),
+        "decomposer_output_tokens_total": decomposer_output_tokens_total,
+        "decomposer_thinking_tokens_total": decomposer_thinking_tokens_total,
+        "decomposer_thinking_pct": (
+            round(decomposer_thinking_tokens_total / decomposer_output_tokens_total, 4)
+            if decomposer_output_tokens_total > 0
+            else 0.0
+        ),
+        "avg_tasks_per_goal": (
+            round(sum(tasks_counts) / len(tasks_counts), 2) if tasks_counts else 0.0
+        ),
+        "min_tasks_met_rate": round(min_tasks_met_count / max(1, len(scenario_results)), 4),
+        "pedagogical_score_avg": (
+            round(sum(pedagogical_scores) / len(pedagogical_scores), 2)
+            if pedagogical_scores
+            else None
+        ),
         "latency_p50_ms": _percentile(sorted_latencies, 50.0),
         "latency_p95_ms": _percentile(sorted_latencies, 95.0),
         "judge_checks": judge_checks,
