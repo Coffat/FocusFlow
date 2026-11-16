@@ -211,6 +211,55 @@ class LiteLLMAdapter(LLMProviderPort):
 
         return candidates, set()
 
+    @staticmethod
+    def build_google_genai_client(api_key: str, base_url: str) -> Any:
+        """Build a google-genai Client configured for the cobhub proxy endpoint."""
+        from google import genai
+        from google.genai import types
+
+        http_opts = types.HttpOptions(
+            base_url=base_url,
+            api_version="v1beta",
+            retry_options=types.HttpRetryOptions(attempts=1),
+        )
+        effective_key = (api_key or "").strip() or "antigravity-proxy-key"
+        return genai.Client(
+            api_key=effective_key,
+            http_options=http_opts,
+        )
+
+    @staticmethod
+    def build_generate_content_config(
+        *,
+        system_instruction: str | None = None,
+        response_mime_type: str | None = None,
+        response_json_schema: dict[str, Any] | None = None,
+        max_output_tokens: int | None = None,
+        thinking_level: str | None = None,
+        tools: list[Any] | None = None,
+        include_thoughts: bool = False,
+    ) -> Any:
+        """Build a google.genai.types.GenerateContentConfig preserving adapter defaults."""
+        from google.genai import types
+
+        kwargs: dict[str, Any] = {}
+        if system_instruction:
+            kwargs["system_instruction"] = system_instruction
+        if response_mime_type is not None:
+            kwargs["response_mime_type"] = response_mime_type
+        if response_json_schema is not None:
+            kwargs["response_json_schema"] = response_json_schema
+        if max_output_tokens is not None:
+            kwargs["max_output_tokens"] = max_output_tokens
+        if tools is not None:
+            kwargs["tools"] = tools
+        if thinking_level is not None:
+            kwargs["thinking_config"] = types.ThinkingConfig(
+                include_thoughts=include_thoughts,
+                thinking_level=thinking_level,  # type: ignore[arg-type]
+            )
+        return types.GenerateContentConfig(**kwargs)
+
     async def _generate_with_google_genai(
         self,
         *,
@@ -222,7 +271,6 @@ class LiteLLMAdapter(LLMProviderPort):
         max_tool_calls: int,
         thinking_level: str | None,
     ) -> LLMGenerationResult:
-        from google import genai
         from google.genai import types
 
         base_url = self._resolve_base_url()
@@ -230,16 +278,7 @@ class LiteLLMAdapter(LLMProviderPort):
             raise RuntimeError(
                 "AI_PROVIDER_NOT_CONFIGURED: Missing LLM_BASE_URL for cobhub gateway."
             )
-        http_opts = types.HttpOptions(
-            base_url=base_url,
-            api_version="v1beta",
-            retry_options=types.HttpRetryOptions(attempts=1),
-        )
-        api_key = (self._settings.llm_api_key or "").strip() or "antigravity-proxy-key"
-        client = genai.Client(
-            api_key=api_key,
-            http_options=http_opts,
-        )
+        client = self.build_google_genai_client(self._settings.llm_api_key or "", base_url)
         effective_level = _normalize_thinking_level(
             thinking_level,
             getattr(self._settings, "llm_thinking_level", "MEDIUM"),
@@ -332,13 +371,10 @@ class LiteLLMAdapter(LLMProviderPort):
                 )
                 for t in tools
             ]
-            tool_cfg = types.GenerateContentConfig(
+            tool_cfg = self.build_generate_content_config(
                 system_instruction=system_prompt or None,
                 tools=[types.Tool(function_declarations=fn_decls)],
-                thinking_config=types.ThinkingConfig(
-                    include_thoughts=False,
-                    thinking_level=tool_thinking_level,  # type: ignore[arg-type]
-                ),
+                thinking_level=tool_thinking_level,
             )
             contents: list[Any] = [user_prompt]
             calls_executed = 0
@@ -456,15 +492,12 @@ class LiteLLMAdapter(LLMProviderPort):
                 "Chỉ xuất DUY NHẤT JSON hợp lệ theo schema."
             )
         )
-        json_cfg = types.GenerateContentConfig(
+        json_cfg = self.build_generate_content_config(
             system_instruction=final_system_instruction,
             response_mime_type="application/json",
             response_json_schema=schema_dict if schema_dict else None,
             max_output_tokens=32768,
-            thinking_config=types.ThinkingConfig(
-                include_thoughts=False,
-                thinking_level=effective_level,  # type: ignore[arg-type]
-            ),
+            thinking_level=effective_level,
         )
 
         def _parse_json_response(resp_obj: Any) -> Any:
