@@ -12,19 +12,23 @@ from src.planning.application.dtos.planning_dtos import (
     SseJobTicketDTO,
     parse_clarification_context,
 )
-from src.planning.application.ports.sse_job_port import SseJobNotFoundError
+from src.planning.application.ports.sse_job_port import SseJobNotFoundError, SseJobPort
 from src.planning.domain.exceptions.planning_exceptions import (
     AIExecutionError,
     FreshCalendarConflictDetectedError,
     GoalNotFoundError,
+    IdempotencyInProgressError,
+    InsufficientCapacityError,
     InvalidClarificationSessionError,
     JudgeReviewConfirmationRequiredError,
     PartialScheduleConfirmationRequiredError,
     PlanInfeasibleError,
     PlanningDomainError,
+    ProposalSupersededError,
     ProposalValidationGateError,
     RoadmapNotFoundError,
     ScheduleProposalNotFoundError,
+    ScopeApprovalRequiredError,
     SoftOverflowConfirmationRequiredError,
     UnapprovedMilestonesError,
 )
@@ -33,6 +37,12 @@ from src.planning.domain.models.knowledge_source import KnowledgeSource
 from src.planning.domain.models.milestone import Milestone
 from src.planning.domain.models.roadmap import Roadmap
 from src.planning.domain.models.schedule import OfficialSchedule, ScheduleProposal
+from src.planning.domain.services.validation_types import (
+    ScheduleCompletenessStatus,
+    classify_schedule_completeness,
+    safe_parse_iso_date,
+    safe_parse_iso_datetime,
+)
 from src.planning.presentation.deps import (
     ApplyProposalUseCaseDep,
     ApproveMilestonesUseCaseDep,
@@ -51,6 +61,7 @@ from src.planning.presentation.deps import (
     PauseRoadmapUseCaseDep,
     ReoptimizeScheduleProposalUseCaseDep,
     ResumeRoadmapUseCaseDep,
+    RoadmapRepositoryDep,
     SaveManualPlanUseCaseDep,
     SseJobStoreDep,
     SubmitClarificationAnswersUseCaseDep,
@@ -61,6 +72,7 @@ from src.planning.presentation.deps import (
 from src.planning.presentation.schemas.planning_schemas import (
     ApplyScheduleProposalRequest,
     ApplyScheduleProposalResponse,
+    ApproveMilestonesRequest,
     ClarificationQuestionsResponse,
     ConstraintViolationSchema,
     CreateKnowledgeUrlRequest,
@@ -72,9 +84,11 @@ from src.planning.presentation.schemas.planning_schemas import (
     MilestoneListResponse,
     MilestoneResponse,
     OfficialScheduleResponse,
+    PlanningConflictResponse,
     RoadmapDetailResponse,
     RoadmapResponse,
     ScheduledTaskResponse,
+    ScheduleFeasibilitySchema,
     ScheduleProposalResponse,
     SkipClarificationRequest,
     SoftOverflowWarningSchema,
@@ -91,6 +105,10 @@ from src.planning.presentation.tasks import (
 )
 from src.shared_kernel.config import get_settings
 from src.shared_kernel.domain.exceptions import DomainError
+from src.shared_kernel.infrastructure.sse.job_store import (
+    DEFAULT_SSE_KEEPALIVE_INTERVAL_SECONDS,
+    stream_sse_wire_with_keepalive,
+)
 
 router = APIRouter(prefix="/api/v1/planning", tags=["Planning & Roadmaps"])
 roadmaps_router = APIRouter(prefix="/api/v1/roadmaps", tags=["Roadmaps & AI Planning"])
@@ -110,12 +128,40 @@ def _handle_planning_error(exc: DomainError) -> JSONResponse:
             status_code=status.HTTP_404_NOT_FOUND,
             content={"code": exc.code, "message": exc.message, "detail": exc.message},
         )
+    if isinstance(exc, ScopeApprovalRequiredError):
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                "code": exc.code,
+                "message": exc.message,
+                "detail": exc.message,
+                "scope_proposal_version": exc.scope_proposal_version,
+                "scope_proposal_hash": exc.scope_proposal_hash,
+                "preliminary_feasibility": exc.preliminary_feasibility,
+            },
+        )
+    if isinstance(exc, InsufficientCapacityError):
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                "code": exc.code,
+                "message": exc.message,
+                "detail": exc.message,
+                "hard_packable_capacity_minutes": exc.hard_packable_capacity_minutes,
+                "preliminary_feasibility": exc.preliminary_feasibility,
+            },
+        )
     if isinstance(exc, UnapprovedMilestonesError):
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
             content={"code": exc.code, "message": exc.message, "detail": exc.message},
         )
     if isinstance(exc, InvalidClarificationSessionError):
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"code": exc.code, "message": exc.message, "detail": exc.message},
+        )
+    if isinstance(exc, (IdempotencyInProgressError, ProposalSupersededError)):
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
             content={"code": exc.code, "message": exc.message, "detail": exc.message},
@@ -223,6 +269,14 @@ def _to_knowledge_source_response(source: KnowledgeSource) -> KnowledgeSourceRes
     )
 
 
+def _extract_preliminary_feasibility(roadmap: Roadmap) -> dict[str, object] | None:
+    if isinstance(getattr(roadmap, "planning_metadata", None), dict):
+        raw = roadmap.planning_metadata.get("preliminary_feasibility")
+        if isinstance(raw, dict):
+            return dict(raw)
+    return None
+
+
 def _to_roadmap_response(roadmap: Roadmap, goal: Goal | None = None) -> RoadmapResponse:
     return RoadmapResponse(
         id=roadmap.id,
@@ -236,6 +290,7 @@ def _to_roadmap_response(roadmap: Roadmap, goal: Goal | None = None) -> RoadmapR
         created_at=roadmap.created_at,
         updated_at=roadmap.updated_at,
         goal=_to_goal_response(goal) if goal is not None else None,
+        preliminary_feasibility=_extract_preliminary_feasibility(roadmap),
     )
 
 
@@ -296,11 +351,58 @@ def _to_proposal_response_from_domain(proposal: ScheduleProposal) -> SchedulePro
     warnings = [SoftOverflowWarningSchema.model_validate(w) for w in raw_warnings]
 
     default_scheduled_count = len(
-        [t for t in raw_tasks if isinstance(t, dict) and t.get("scheduled_date") is not None]
+        [
+            t
+            for t in raw_tasks
+            if isinstance(t, dict) and safe_parse_iso_date(t.get("scheduled_date")) is not None
+        ]
     )
     default_unscheduled_count = len(
-        [t for t in raw_tasks if isinstance(t, dict) and t.get("scheduled_date") is None]
+        [
+            t
+            for t in raw_tasks
+            if isinstance(t, dict) and safe_parse_iso_date(t.get("scheduled_date")) is None
+        ]
     )
+    feasibility_raw = proposal.proposal_data.get("feasibility", {})
+    feasibility_dict = feasibility_raw if isinstance(feasibility_raw, dict) else {}
+    raw_completeness = proposal.proposal_data.get("schedule_completeness_status")
+    resolved_verdict = str(
+        proposal.proposal_data.get("feasibility_verdict")
+        or ("EXPLICIT_UNSCHEDULABLE" if default_unscheduled_count > 0 else "VERIFIED_FEASIBLE")
+    )
+    if raw_completeness in ("FULL", "PARTIAL", "UNDETERMINED", "INFEASIBLE"):
+        resolved_completeness: ScheduleCompletenessStatus = raw_completeness
+    elif len(violations) > 0:
+        resolved_completeness = (
+            "INFEASIBLE" if feasibility_dict.get("status") == "INFEASIBLE" else "UNDETERMINED"
+        )
+    else:
+        raw_blocks = proposal.proposal_data.get("schedule_blocks")
+        has_blocks = isinstance(raw_blocks, list) and any(isinstance(b, dict) for b in raw_blocks)
+        all_scheduled_have_times = default_scheduled_count > 0 and all(
+            safe_parse_iso_datetime(t.get("scheduled_start")) is not None
+            and safe_parse_iso_datetime(t.get("scheduled_end")) is not None
+            for t in raw_tasks
+            if isinstance(t, dict) and safe_parse_iso_date(t.get("scheduled_date")) is not None
+        )
+        avail_from_feasibility = int(feasibility_dict.get("available_minutes", 1) or 0)
+        ratio_from_feasibility = float(feasibility_dict.get("schedulable_ratio", 1.0) or 0.0)
+        resolved_completeness = classify_schedule_completeness(
+            total_tasks=len([t for t in raw_tasks if isinstance(t, dict)]),
+            scheduled_tasks_count=default_scheduled_count,
+            unscheduled_tasks_count=default_unscheduled_count,
+            available_minutes=avail_from_feasibility
+            if "available_minutes" in feasibility_dict
+            else 1,
+            schedulable_ratio=ratio_from_feasibility
+            if "schedulable_ratio" in feasibility_dict
+            else 1.0,
+            feasibility_verdict=resolved_verdict,
+            has_schedule_blocks=has_blocks,
+            all_scheduled_have_block_times=all_scheduled_have_times,
+            allow_partial_schedule=True,
+        )
 
     return ScheduleProposalResponse(
         id=proposal.id,
@@ -320,7 +422,9 @@ def _to_proposal_response_from_domain(proposal: ScheduleProposal) -> SchedulePro
             proposal.proposal_data.get("unscheduled_tasks_count", default_unscheduled_count)
         ),
         unscheduled_tasks=raw_unscheduled,
-        feasibility=proposal.proposal_data.get("feasibility", {}),
+        feasibility=ScheduleFeasibilitySchema.model_validate(feasibility_dict),
+        feasibility_verdict=resolved_verdict,
+        schedule_completeness_status=resolved_completeness,
         availability_source_metadata=dict(
             proposal.proposal_data.get("availability_source_metadata", {})
         ),
@@ -445,6 +549,25 @@ async def get_knowledge_source(
 # =============================================================================
 
 
+def build_sse_event_generator(
+    sse_store: SseJobPort,
+    *,
+    job_id: UUID,
+    user_id: UUID,
+    last_event_id: int | None = None,
+    keepalive_interval_seconds: float = DEFAULT_SSE_KEEPALIVE_INTERVAL_SECONDS,
+) -> AsyncGenerator[str, None]:
+    """Build SSE wire generator emitting `: keepalive` comments on idle intervals."""
+    return stream_sse_wire_with_keepalive(
+        sse_store.stream_events(
+            job_id=job_id,
+            user_id=user_id,
+            last_event_id=last_event_id,
+        ),
+        keepalive_interval_seconds=keepalive_interval_seconds,
+    )
+
+
 @roadmaps_router.get(
     "/jobs/{job_id}/stream",
     response_model=None,
@@ -469,16 +592,13 @@ async def stream_ai_generation_job(
         except ValueError:
             effective_last_id = None
 
-    async def _event_generator() -> AsyncGenerator[str, None]:
-        async for ev in sse_store.stream_events(
+    return StreamingResponse(
+        build_sse_event_generator(
+            sse_store,
             job_id=job_id,
             user_id=user_id,
             last_event_id=effective_last_id,
-        ):
-            yield ev.format_sse()
-
-    return StreamingResponse(
-        _event_generator(),
+        ),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -722,6 +842,7 @@ async def get_roadmap_detail(
                 if detail.current_draft_proposal is not None
                 else None
             ),
+            preliminary_feasibility=_extract_preliminary_feasibility(detail.roadmap),
         )
     except DomainError as exc:
         return _handle_planning_error(exc)
@@ -901,6 +1022,7 @@ async def initiate_milestone_generation_job(
 @roadmaps_router.put(
     "/{roadmap_id}/milestones",
     response_model=MilestoneListResponse,
+    responses={409: {"model": PlanningConflictResponse}},
     status_code=status.HTTP_200_OK,
     summary="Add, edit, delete, and reorder Milestones (1..N) for a Roadmap (UC-07)",
 )
@@ -909,6 +1031,7 @@ async def update_milestones(
     request: UpdateMilestonesRequest,
     user_id: CurrentLearnerIdDep,
     use_case: UpdateMilestonesUseCaseDep,
+    roadmap_repo: RoadmapRepositoryDep,
 ) -> MilestoneListResponse | JSONResponse:
     try:
         items = [
@@ -931,9 +1054,13 @@ async def update_milestones(
             roadmap_id=roadmap_id,
             items=items,
         )
+        roadmap = await roadmap_repo.get_by_id_for_user(roadmap_id, user_id)
         return MilestoneListResponse(
             roadmap_id=roadmap_id,
             milestones=[_to_milestone_response(m) for m in saved],
+            preliminary_feasibility=(
+                _extract_preliminary_feasibility(roadmap) if roadmap is not None else None
+            ),
         )
     except DomainError as exc:
         return _handle_planning_error(exc)
@@ -942,6 +1069,7 @@ async def update_milestones(
 @roadmaps_router.post(
     "/{roadmap_id}/milestones/approve",
     response_model=MilestoneListResponse,
+    responses={409: {"model": PlanningConflictResponse}},
     status_code=status.HTTP_200_OK,
     summary="Approve Level-1 Milestones & unlock Level-2 Schedule Proposal generation (UC-07 / FR-PLAN-001)",
 )
@@ -949,12 +1077,25 @@ async def approve_milestones(
     roadmap_id: UUID,
     user_id: CurrentLearnerIdDep,
     use_case: ApproveMilestonesUseCaseDep,
+    roadmap_repo: RoadmapRepositoryDep,
+    request: ApproveMilestonesRequest | None = None,
 ) -> MilestoneListResponse | JSONResponse:
     try:
-        approved = await use_case.execute(user_id=user_id, roadmap_id=roadmap_id)
+        approved = await use_case.execute(
+            user_id=user_id,
+            roadmap_id=roadmap_id,
+            confirmed_scope_proposal_version=(
+                request.confirmed_scope_proposal_version if request is not None else None
+            ),
+            accept_fit_capacity=(request.accept_fit_capacity if request is not None else False),
+        )
+        roadmap = await roadmap_repo.get_by_id_for_user(roadmap_id, user_id)
         return MilestoneListResponse(
             roadmap_id=roadmap_id,
             milestones=[_to_milestone_response(m) for m in approved],
+            preliminary_feasibility=(
+                _extract_preliminary_feasibility(roadmap) if roadmap is not None else None
+            ),
         )
     except DomainError as exc:
         return _handle_planning_error(exc)
@@ -968,6 +1109,7 @@ async def approve_milestones(
 @roadmaps_router.post(
     "/{roadmap_id}/proposals/generate-jobs",
     response_model=SseJobTicketResponse,
+    responses={409: {"model": PlanningConflictResponse}},
     status_code=status.HTTP_202_ACCEPTED,
     summary="Stage 1: Reserve AI Quota & initiate Level-2 ScheduleProposal SSE job (UC-08)",
 )
@@ -1018,6 +1160,7 @@ async def get_current_schedule_proposal(
 @roadmaps_router.put(
     "/{roadmap_id}/proposals/{proposal_id}",
     response_model=ScheduleProposalResponse,
+    responses={409: {"model": PlanningConflictResponse}},
     status_code=status.HTTP_200_OK,
     summary="Edit tasks & dependencies on a DRAFT ScheduleProposal and run UC-12 validation ([15, 240]m)",
 )
@@ -1079,6 +1222,7 @@ async def save_manual_roadmap_plan(
 @roadmaps_router.post(
     "/{roadmap_id}/proposals/{proposal_id}/apply",
     response_model=ApplyScheduleProposalResponse,
+    responses={409: {"model": PlanningConflictResponse}},
     status_code=status.HTTP_200_OK,
     summary="Apply verified ScheduleProposal as OfficialSchedule with OS-03 Merge & Soft Overflow gate (UC-12)",
 )

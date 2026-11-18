@@ -61,7 +61,17 @@ from tests.helpers.llm_stubs import StubLLMAdapter
 async def test_phase_c_google_genai_proxy_and_three_tier_routing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    import os
+
     from google import genai
+
+    orig_exists = os.path.exists
+    monkeypatch.delenv("RUNNING_IN_DOCKER", raising=False)
+    monkeypatch.setattr(
+        os.path,
+        "exists",
+        lambda path: False if path == "/.dockerenv" else orig_exists(path),
+    )
 
     client_init_kwargs: list[dict[str, Any]] = []
     called_models: list[str] = []
@@ -121,10 +131,22 @@ async def test_phase_c_google_genai_proxy_and_three_tier_routing(
         "gemini-3.8-flash",
         "gemini-3.8-flash",
     ]
-    assert len(client_init_kwargs) == 3
+    assert len(client_init_kwargs) == 1
     http_opts = client_init_kwargs[0].get("http_options")
     assert http_opts is not None
     assert getattr(http_opts, "base_url", None) == "http://127.0.0.1:8045"
+
+    # Inside Docker (RUNNING_IN_DOCKER=1 or /.dockerenv present), 127.0.0.1 is rewritten to host.docker.internal
+    monkeypatch.setenv("RUNNING_IN_DOCKER", "1")
+    assert adapter._resolve_base_url() == "http://host.docker.internal:8045"
+
+    monkeypatch.delenv("RUNNING_IN_DOCKER", raising=False)
+    monkeypatch.setattr(
+        os.path,
+        "exists",
+        lambda path: True if path == "/.dockerenv" else orig_exists(path),
+    )
+    assert adapter._resolve_base_url() == "http://host.docker.internal:8045"
 
 
 @pytest.mark.asyncio
@@ -168,8 +190,22 @@ async def test_phase_c_high_tier_does_not_downgrade_to_lite_until_flash_exhauste
         llm_model_low="gemini-3.8-flash",
         llm_model_medium="gemini-3.8-flash",
         llm_model_high="custom-high-tier",
+        llm_fallback_models="",
     )
 
+    # Without explicit llm_fallback_models, failing tier model does NOT silently fall back to llm_model
+    with pytest.raises(RuntimeError, match="503 UNAVAILABLE"):
+        await adapter.generate_structured(
+            system_prompt="sys",
+            user_prompt="usr",
+            response_schema={"type": "object", "properties": {"ok": {"type": "boolean"}}},
+            thinking_level="HIGH",
+        )
+    assert called_models == ["custom-high-tier"]
+
+    # With explicit llm_fallback_models, falls back strictly along configured list
+    called_models.clear()
+    adapter._settings.llm_fallback_models = "gemini-3.8-flash"
     res, _, _ = await adapter.generate_structured(
         system_prompt="sys",
         user_prompt="usr",
@@ -179,7 +215,6 @@ async def test_phase_c_high_tier_does_not_downgrade_to_lite_until_flash_exhauste
     assert res["ok"] is True
     assert adapter.last_model_used == "gemini-3.8-flash"
     assert adapter.last_degraded_model_used is False
-    # Only configured tier model -> configured llm_model (no hardcoded Google lite/flash fallbacks)
     assert called_models == ["custom-high-tier", "gemini-3.8-flash"]
 
 

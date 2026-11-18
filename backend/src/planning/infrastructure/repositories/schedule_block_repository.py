@@ -50,13 +50,22 @@ class SqlAlchemyScheduleBlockRepository(ScheduleBlockRepositoryPort):
         self,
         official_schedule_id: UUID,
         sync_status_in: list[str] | None = None,
+        *,
+        for_update: bool = False,
     ) -> list[ScheduleBlock]:
         stmt = select(ScheduleBlockORM).where(
             ScheduleBlockORM.official_schedule_id == official_schedule_id
         )
         if sync_status_in:
             stmt = stmt.where(ScheduleBlockORM.sync_status.in_(sync_status_in))
-        stmt = stmt.order_by(ScheduleBlockORM.start_time.asc())
+        if for_update:
+            stmt = (
+                stmt.order_by(ScheduleBlockORM.id.asc())
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        else:
+            stmt = stmt.order_by(ScheduleBlockORM.start_time.asc())
         result = await self.session.execute(stmt)
         return [self._to_domain(orm) for orm in result.scalars().all()]
 
@@ -68,14 +77,23 @@ class SqlAlchemyScheduleBlockRepository(ScheduleBlockRepositoryPort):
         orm = result.scalar_one_or_none()
         return self._to_domain(orm) if orm is not None else None
 
-    async def list_by_roadmap_ids(self, roadmap_ids: Sequence[UUID]) -> list[ScheduleBlock]:
+    async def list_by_roadmap_ids(
+        self,
+        roadmap_ids: Sequence[UUID],
+        *,
+        for_update: bool = False,
+    ) -> list[ScheduleBlock]:
         if not roadmap_ids:
             return []
-        stmt = (
-            select(ScheduleBlockORM)
-            .where(ScheduleBlockORM.roadmap_id.in_(list(roadmap_ids)))
-            .order_by(ScheduleBlockORM.start_time.asc())
-        )
+        stmt = select(ScheduleBlockORM).where(ScheduleBlockORM.roadmap_id.in_(list(roadmap_ids)))
+        if for_update:
+            stmt = (
+                stmt.order_by(ScheduleBlockORM.id.asc())
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        else:
+            stmt = stmt.order_by(ScheduleBlockORM.start_time.asc())
         result = await self.session.execute(stmt)
         return [self._to_domain(orm) for orm in result.scalars().all()]
 

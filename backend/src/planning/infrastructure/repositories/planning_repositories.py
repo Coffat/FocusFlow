@@ -170,11 +170,19 @@ class SqlAlchemyRoadmapRepository(RoadmapRepositoryPort):
             return None
         return self._to_domain(row)
 
-    async def get_by_id_for_user(self, roadmap_id: UUID, user_id: UUID) -> Roadmap | None:
+    async def get_by_id_for_user(
+        self,
+        roadmap_id: UUID,
+        user_id: UUID,
+        *,
+        for_update: bool = False,
+    ) -> Roadmap | None:
         stmt = select(RoadmapORM).where(
             RoadmapORM.id == roadmap_id,
             RoadmapORM.user_id == user_id,
         )
+        if for_update:
+            stmt = stmt.with_for_update().execution_options(populate_existing=True)
         row = (await self._session.execute(stmt)).scalar_one_or_none()
         if row is None:
             return None
@@ -185,14 +193,23 @@ class SqlAlchemyRoadmapRepository(RoadmapRepositoryPort):
         user_id: UUID,
         *,
         status: str | None = None,
+        for_update: bool = False,
     ) -> list[Roadmap]:
         stmt = select(RoadmapORM).where(RoadmapORM.user_id == user_id)
         if status is not None:
             stmt = stmt.where(RoadmapORM.status == status.strip().upper())
-        stmt = stmt.order_by(
-            RoadmapORM.target_date.asc().nulls_last(),
-            RoadmapORM.created_at.desc(),
-        )
+        if for_update:
+            # Deterministic ORDER BY id prevents cross-roadmap deadlocks under concurrent Apply/Resume
+            stmt = (
+                stmt.order_by(RoadmapORM.id.asc())
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        else:
+            stmt = stmt.order_by(
+                RoadmapORM.target_date.asc().nulls_last(),
+                RoadmapORM.created_at.desc(),
+            )
         rows = list((await self._session.execute(stmt)).scalars().all())
         return [self._to_domain(r) for r in rows]
 
@@ -401,8 +418,22 @@ class SqlAlchemyScheduleProposalRepository(ScheduleProposalRepositoryPort):
         await self._session.flush()
         return self._to_domain(row)
 
-    async def get_by_id(self, proposal_id: UUID) -> ScheduleProposal | None:
-        row = await self._session.get(ScheduleProposalORM, proposal_id)
+    async def get_by_id(
+        self,
+        proposal_id: UUID,
+        *,
+        for_update: bool = False,
+    ) -> ScheduleProposal | None:
+        if for_update:
+            stmt = (
+                select(ScheduleProposalORM)
+                .where(ScheduleProposalORM.id == proposal_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+            row = (await self._session.execute(stmt)).scalar_one_or_none()
+        else:
+            row = await self._session.get(ScheduleProposalORM, proposal_id)
         if row is None:
             return None
         return self._to_domain(row)
@@ -416,6 +447,19 @@ class SqlAlchemyScheduleProposalRepository(ScheduleProposalRepositoryPort):
         if row is None:
             return None
         return self._to_domain(row)
+
+    async def list_by_roadmap_id(self, roadmap_id: UUID) -> list[ScheduleProposal]:
+        stmt = (
+            select(ScheduleProposalORM)
+            .where(ScheduleProposalORM.roadmap_id == roadmap_id)
+            .order_by(
+                ScheduleProposalORM.applied_at.desc().nulls_last(),
+                ScheduleProposalORM.updated_at.desc(),
+                ScheduleProposalORM.created_at.desc(),
+            )
+        )
+        rows = list((await self._session.execute(stmt)).scalars().all())
+        return [self._to_domain(row) for row in rows]
 
 
 class SqlAlchemyOfficialScheduleRepository(OfficialScheduleRepositoryPort):
@@ -480,8 +524,15 @@ class SqlAlchemyOfficialScheduleRepository(OfficialScheduleRepositoryPort):
         await self._session.flush()
         return self._to_domain(row)
 
-    async def get_by_roadmap_id(self, roadmap_id: UUID) -> OfficialSchedule | None:
+    async def get_by_roadmap_id(
+        self,
+        roadmap_id: UUID,
+        *,
+        for_update: bool = False,
+    ) -> OfficialSchedule | None:
         stmt = select(OfficialScheduleORM).where(OfficialScheduleORM.roadmap_id == roadmap_id)
+        if for_update:
+            stmt = stmt.with_for_update().execution_options(populate_existing=True)
         row = (await self._session.execute(stmt)).scalar_one_or_none()
         if row is None:
             return None

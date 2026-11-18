@@ -1,4 +1,5 @@
 import asyncio
+import os
 from types import SimpleNamespace
 from typing import Any
 from uuid import uuid4
@@ -250,6 +251,7 @@ async def test_google_genai_adapter_falls_back_on_429_and_reuses_successful_mode
         llm_model_low="gemini-3.8-flash-low",
         llm_model_medium="custom-tier-flash",
         llm_model_high="gemini-3.8-flash-high",
+        llm_fallback_models="gemini-3.8-flash",
         llm_api_key="real-test-key",
         llm_base_url="http://127.0.0.1:8045",
         llm_thinking_level="MEDIUM",
@@ -372,6 +374,7 @@ async def test_google_genai_adapter_falls_back_on_malformed_function_call_and_ad
         llm_model_low="gemini-3.8-flash",
         llm_model_medium="gemini-3.8-flash",
         llm_model_high="custom-high-flash",
+        llm_fallback_models="gemini-3.8-flash",
         llm_api_key="antigravity-proxy-key",
         llm_base_url="http://127.0.0.1:8045",
         llm_thinking_level="MEDIUM",
@@ -654,6 +657,13 @@ async def test_render_compact_schema_spec_and_gateway_schema_injection(
                 text='{"status": "ok", "summary": "ok", "milestones": [{"sequence_order": 1, "title": "M1", "description": "D1"}]}',
             )
 
+    monkeypatch.delenv("RUNNING_IN_DOCKER", raising=False)
+    real_exists = os.path.exists
+    monkeypatch.setattr(
+        os.path,
+        "exists",
+        lambda path: False if str(path) == "/.dockerenv" else real_exists(path),
+    )
     monkeypatch.setattr(
         genai,
         "Client",
@@ -836,6 +846,13 @@ async def test_google_genai_adapter_http500_stream_interrupted_retries_at_most_o
                 text='{"status": "ok", "summary": "recovered", "milestones": [{"sequence_order": 1, "title": "M1", "description": "D1"}]}',
             )
 
+    monkeypatch.delenv("RUNNING_IN_DOCKER", raising=False)
+    real_exists = os.path.exists
+    monkeypatch.setattr(
+        os.path,
+        "exists",
+        lambda path: False if str(path) == "/.dockerenv" else real_exists(path),
+    )
     monkeypatch.setattr(
         genai,
         "Client",
@@ -959,6 +976,13 @@ async def test_google_genai_thinking_control_model_suffix_vs_param_mode(
                 text='{"status": "ok", "summary": "done", "milestones": [{"sequence_order": 1, "title": "M1", "description": "D1"}]}',
             )
 
+    monkeypatch.delenv("RUNNING_IN_DOCKER", raising=False)
+    real_exists = os.path.exists
+    monkeypatch.setattr(
+        os.path,
+        "exists",
+        lambda path: False if str(path) == "/.dockerenv" else real_exists(path),
+    )
     monkeypatch.setattr(
         genai,
         "Client",
@@ -1076,6 +1100,13 @@ async def test_litellm_adapter_uses_passed_stage_timeouts_without_hardcoded_cons
                 text='{"status": "ok", "summary": "ok", "milestones": [{"sequence_order": 1, "title": "M1", "description": "D1"}]}',
             )
 
+    monkeypatch.delenv("RUNNING_IN_DOCKER", raising=False)
+    real_exists = os.path.exists
+    monkeypatch.setattr(
+        os.path,
+        "exists",
+        lambda path: False if str(path) == "/.dockerenv" else real_exists(path),
+    )
     monkeypatch.setattr(
         genai,
         "Client",
@@ -1208,7 +1239,7 @@ async def test_google_genai_empty_base_url_fails_closed_without_leaking_secret()
 
 
 def test_resolve_candidate_models_appends_deduped_fallback_models() -> None:
-    """_resolve_candidate_models appends comma-separated llm_fallback_models stripped & deduplicated."""
+    """_resolve_candidate_models returns ONLY [tier_model] (or [llm_model]) unless explicit llm_fallback_models are set."""
     adapter = LiteLLMAdapter()
     adapter._settings = SimpleNamespace(  # type: ignore[assignment]
         llm_provider="gemini",
@@ -1217,14 +1248,22 @@ def test_resolve_candidate_models_appends_deduped_fallback_models() -> None:
         llm_model_low="gemini-3.8-flash-low",
         llm_model_medium="gemini-3.8-flash-medium",
         llm_model_high="gemini-3.8-flash-high",
-        llm_fallback_models=" gemini-3.8-flash-low , fallback-a , , fallback-b , fallback-a ",
+        llm_fallback_models="",
         llm_thinking_level="MEDIUM",
     )
 
+    # Without explicit fallback models, no silent fallback to llm_model
+    cands_no_fb, degraded = adapter._resolve_candidate_models("LOW")
+    assert cands_no_fb == ["gemini-3.8-flash-low"]
+    assert degraded == set()
+
+    # With explicit fallback models, appends stripped & deduplicated fallbacks only
+    adapter._settings.llm_fallback_models = (
+        " gemini-3.8-flash-low , fallback-a , , fallback-b , gemini/fallback-a "
+    )
     cands, degraded = adapter._resolve_candidate_models("LOW")
     assert cands == [
         "gemini-3.8-flash-low",
-        "gemini-3.8-flash-medium",
         "fallback-a",
         "fallback-b",
     ]
@@ -1238,6 +1277,72 @@ def test_resolve_candidate_models_appends_deduped_fallback_models() -> None:
         "fallback-a",
         "fallback-b",
     ]
+
+    adapter._settings.llm_fallback_models = ""
+    cands_param_no_fb, _ = adapter._resolve_candidate_models("HIGH")
+    assert cands_param_no_fb == ["gemini-3.8-flash-medium"]
+
+
+@pytest.mark.asyncio
+async def test_litellm_adapter_enforces_explicit_thinking_level_and_stage_models() -> None:
+    """Reject missing thinking_level and missing/blank stage model configs without silent fallback."""
+    adapter = LiteLLMAdapter()
+    adapter._settings = SimpleNamespace(  # type: ignore[assignment]
+        llm_provider="gemini",
+        llm_thinking_control="model_suffix",
+        llm_model="gemini-3.8-flash-medium",
+        llm_model_low="gemini-3.8-flash-low",
+        llm_model_medium="gemini-3.8-flash-medium",
+        llm_model_high="gemini-3.8-flash-high",
+        llm_fallback_models="",
+        llm_api_key="real-key",
+        llm_base_url="http://127.0.0.1:8045",
+        llm_thinking_level="MEDIUM",
+    )
+
+    # Missing/blank thinking_level raises ValueError in both model_suffix and param modes
+    for mode in ("model_suffix", "param"):
+        adapter._settings.llm_thinking_control = mode
+        for bad_level in (None, "", "   "):
+            with pytest.raises(ValueError, match="Unsupported thinking_level"):
+                adapter._resolve_candidate_models(bad_level)
+            with pytest.raises(ValueError, match="Unsupported thinking_level"):
+                await adapter._generate_with_google_genai(
+                    system_prompt="Sys",
+                    user_prompt="Plan",
+                    response_schema=SampleRoadmapOutput,
+                    tools=None,
+                    tool_executor=None,
+                    max_tool_calls=0,
+                    thinking_level=bad_level,
+                )
+
+    # Blank or missing tier model in model_suffix mode raises AI_PROVIDER_NOT_CONFIGURED
+    adapter._settings.llm_thinking_control = "model_suffix"
+    adapter._settings.llm_model_low = "   "
+    with pytest.raises(RuntimeError, match="AI_PROVIDER_NOT_CONFIGURED.*LLM_MODEL_LOW"):
+        adapter._resolve_candidate_models("LOW")
+
+    delattr(adapter._settings, "llm_model_high")
+    with pytest.raises(RuntimeError, match="AI_PROVIDER_NOT_CONFIGURED.*LLM_MODEL_HIGH"):
+        adapter._resolve_candidate_models("HIGH")
+
+    # Blank llm_model in param mode raises AI_PROVIDER_NOT_CONFIGURED
+    adapter._settings.llm_thinking_control = "param"
+    adapter._settings.llm_model = " "
+    with pytest.raises(RuntimeError, match="AI_PROVIDER_NOT_CONFIGURED.*LLM_MODEL"):
+        adapter._resolve_candidate_models("MEDIUM")
+
+    # Non-Gemini model_identifier requires non-empty llm_model
+    oai = LiteLLMAdapter()
+    oai._settings = SimpleNamespace(  # type: ignore[assignment]
+        llm_provider="openai",
+        llm_model="",
+        llm_api_key="sk-test",
+        llm_base_url="",
+    )
+    with pytest.raises(RuntimeError, match="AI_PROVIDER_NOT_CONFIGURED.*LLM_MODEL"):
+        _ = oai.model_identifier
 
 
 def test_untrusted_context_generic_section_regex_and_unicode_normalization() -> None:
@@ -1320,6 +1425,13 @@ async def test_litellm_adapter_extracts_and_logs_actual_model_id_on_all_branches
                 text='{"status": "ok", "summary": "done", "milestones": [{"sequence_order": 1, "title": "M1", "description": "D1"}]}',
             )
 
+    monkeypatch.delenv("RUNNING_IN_DOCKER", raising=False)
+    real_exists = os.path.exists
+    monkeypatch.setattr(
+        os.path,
+        "exists",
+        lambda path: False if str(path) == "/.dockerenv" else real_exists(path),
+    )
     monkeypatch.setattr(
         genai,
         "Client",
@@ -1438,11 +1550,53 @@ async def test_probe_cobhub_capabilities_detects_mismatch_caches_and_fails_safe(
                 text='{"ok": true}',
             )
 
+    monkeypatch.delenv("RUNNING_IN_DOCKER", raising=False)
+    real_exists = os.path.exists
+    monkeypatch.setattr(
+        os.path,
+        "exists",
+        lambda path: False if str(path) == "/.dockerenv" else real_exists(path),
+    )
     monkeypatch.setattr(
         genai,
         "Client",
         lambda **kwargs: SimpleNamespace(aio=SimpleNamespace(models=FakeModels())),
     )
+
+    import httpx
+
+    class FakeHttpResponse:
+        def __init__(self, payload: dict[str, Any]) -> None:
+            self._payload = payload
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, Any]:
+            return self._payload
+
+    class FakeAsyncClient:
+        def __init__(self, **kwargs: Any) -> None:
+            del kwargs
+
+        async def __aenter__(self) -> "FakeAsyncClient":
+            return self
+
+        async def __aexit__(self, *args: Any) -> None:
+            del args
+
+        async def get(self, url: str, headers: dict[str, str] | None = None) -> FakeHttpResponse:
+            del url, headers
+            return FakeHttpResponse(
+                {
+                    "models": [
+                        {"name": "models/gemini-3.8-flash-low"},
+                        {"name": "models/gemini-3.8-flash-medium"},
+                    ]
+                }
+            )
+
+    monkeypatch.setattr(httpx, "AsyncClient", FakeAsyncClient)
 
     mismatch_settings = SimpleNamespace(
         llm_provider="gemini",
@@ -1533,3 +1687,361 @@ async def test_probe_cobhub_capabilities_detects_mismatch_caches_and_fails_safe(
     assert body["ai_gateway"]["probe_succeeded"] is False
     assert "ConnectionError" in body["ai_gateway"]["error"]
     clear_cobhub_capability_probe_cache()
+
+
+@pytest.mark.asyncio
+async def test_probe_cobhub_capabilities_checks_all_configured_models_against_v1beta_models(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Probe validates all LLM_MODEL* & LLM_FALLBACK_MODELS against GET /v1beta/models."""
+    import httpx
+    import structlog.testing
+    from google import genai
+
+    from src.shared_kernel.infrastructure.external_ai.litellm_adapter import (
+        clear_cobhub_capability_probe_cache,
+        probe_cobhub_capabilities,
+    )
+
+    clear_cobhub_capability_probe_cache()
+    captured_requests: list[tuple[str, dict[str, str]]] = []
+    gateway_model_names = [
+        "models/gemini-3.8-flash-low",
+        "models/gemini-3.8-flash-medium",
+        "models/gemini-3.8-flash-high",
+        "models/gemini-3.8-flash",
+    ]
+
+    class FakeModels:
+        async def generate_content(self, *, model: str, contents: Any, config: Any) -> Any:
+            del contents
+            if getattr(config, "response_json_schema", None) is not None:
+                return SimpleNamespace(
+                    model_version=model,
+                    usage_metadata=SimpleNamespace(
+                        prompt_token_count=10, candidates_token_count=5, thoughts_token_count=0
+                    ),
+                    text='{"probe_status": "OK", "probe_code": 1}',
+                )
+            return SimpleNamespace(
+                model_version=model,
+                usage_metadata=SimpleNamespace(
+                    prompt_token_count=10, candidates_token_count=5, thoughts_token_count=50
+                ),
+                text='{"ok": true}',
+            )
+
+    class FakeHttpResponse:
+        def __init__(self, payload: dict[str, Any]) -> None:
+            self._payload = payload
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, Any]:
+            return self._payload
+
+    class FakeAsyncClient:
+        def __init__(self, **kwargs: Any) -> None:
+            del kwargs
+
+        async def __aenter__(self) -> "FakeAsyncClient":
+            return self
+
+        async def __aexit__(self, *args: Any) -> None:
+            del args
+
+        async def get(self, url: str, headers: dict[str, str] | None = None) -> FakeHttpResponse:
+            captured_requests.append((url, dict(headers or {})))
+            return FakeHttpResponse({"models": [{"name": n} for n in gateway_model_names]})
+
+    monkeypatch.delenv("RUNNING_IN_DOCKER", raising=False)
+    real_exists = os.path.exists
+    monkeypatch.setattr(
+        os.path,
+        "exists",
+        lambda path: False if str(path) == "/.dockerenv" else real_exists(path),
+    )
+    monkeypatch.setattr(
+        genai,
+        "Client",
+        lambda **kwargs: SimpleNamespace(aio=SimpleNamespace(models=FakeModels())),
+    )
+    monkeypatch.setattr(httpx, "AsyncClient", FakeAsyncClient)
+
+    # Case 1: model_suffix mode ignores llm_model (even if absent on gateway) and checks low/medium/high + fallbacks
+    ok_settings = SimpleNamespace(
+        llm_provider="gemini",
+        llm_thinking_control="model_suffix",
+        llm_model="gemini/gemini-3.5-flash",
+        llm_model_low="gemini-3.8-flash-low",
+        llm_model_medium="gemini-3.8-flash-medium",
+        llm_model_high="gemini-3.8-flash-high",
+        llm_fallback_models="gemini/gemini-3.8-flash",
+        llm_api_key="real-test-key",
+        llm_base_url="http://127.0.0.1:8045",
+        llm_schema_enforced_by_gateway=True,
+    )
+    ok_res = await probe_cobhub_capabilities(ok_settings)
+    assert ok_res.probe_succeeded is True
+    assert ok_res.mismatches == ()
+    assert ok_res.missing_gateway_models == ()
+    assert ok_res.gateway_models == (
+        "gemini-3.8-flash-low",
+        "gemini-3.8-flash-medium",
+        "gemini-3.8-flash-high",
+        "gemini-3.8-flash",
+    )
+    assert ok_res.checked_configured_models == {
+        "llm_model_low": "gemini-3.8-flash-low",
+        "llm_model_medium": "gemini-3.8-flash-medium",
+        "llm_model_high": "gemini-3.8-flash-high",
+        "llm_fallback_models[0]": "gemini-3.8-flash",
+    }
+    assert captured_requests[0][0] == "http://127.0.0.1:8045/v1beta/models"
+    assert captured_requests[0][1]["x-goog-api-key"] == "real-test-key"
+
+    # Case 2: Missing model (e.g. gemini-3.5-flash) in active fallback/tier list is flagged in mismatches
+    clear_cobhub_capability_probe_cache()
+    missing_settings = SimpleNamespace(
+        llm_provider="gemini",
+        llm_thinking_control="model_suffix",
+        llm_model="gemini-3.8-flash-medium",
+        llm_model_low="gemini-3.8-flash-low",
+        llm_model_medium="gemini-3.8-flash-medium",
+        llm_model_high="gemini-3.8-flash-high",
+        llm_fallback_models="gemini-3.8-flash, gemini-3.5-flash",
+        llm_api_key="real-test-key",
+        llm_base_url="http://127.0.0.1:8045",
+        llm_schema_enforced_by_gateway=True,
+    )
+    with structlog.testing.capture_logs() as cap_logs:
+        miss_res = await probe_cobhub_capabilities(missing_settings)
+
+    assert miss_res.probe_succeeded is True
+    assert miss_res.missing_gateway_models == ("gemini-3.5-flash",)
+    assert "configured_models_missing_from_gateway" in miss_res.mismatches
+    assert miss_res.to_dict()["status"] == "degraded"
+    assert miss_res.to_dict()["missing_gateway_models"] == ["gemini-3.5-flash"]
+    warnings = [e for e in cap_logs if e.get("event") == "cobhub_capability_mismatch"]
+    assert len(warnings) == 1
+    assert warnings[0]["missing_gateway_models"] == ["gemini-3.5-flash"]
+
+    # Case 3: param mode checks ONLY llm_model + llm_fallback_models and ignores llm_model_{low,medium,high}
+    clear_cobhub_capability_probe_cache()
+    param_settings = SimpleNamespace(
+        llm_provider="gemini",
+        llm_thinking_control="param",
+        llm_model="gemini/gemini-3.8-flash",
+        llm_model_low="gemini-3.5-flash",
+        llm_model_medium="gemini-3.5-flash",
+        llm_model_high="gemini-3.5-flash",
+        llm_fallback_models="gemini/gemini-3.8-flash-low",
+        llm_api_key="real-test-key",
+        llm_base_url="http://127.0.0.1:8045",
+        llm_schema_enforced_by_gateway=True,
+    )
+    param_res = await probe_cobhub_capabilities(param_settings)
+    assert param_res.probe_succeeded is True
+    assert param_res.requested_low_model == "gemini-3.8-flash"
+    assert param_res.mismatches == ()
+    assert param_res.missing_gateway_models == ()
+    assert param_res.checked_configured_models == {
+        "llm_model": "gemini-3.8-flash",
+        "llm_fallback_models[0]": "gemini-3.8-flash-low",
+    }
+
+    # Case 4: Missing required model for the active mode records AI_PROVIDER_NOT_CONFIGURED cleanly
+    clear_cobhub_capability_probe_cache()
+    missing_param_model = await probe_cobhub_capabilities(
+        SimpleNamespace(
+            llm_provider="gemini",
+            llm_thinking_control="param",
+            llm_model="",
+            llm_model_low="gemini-3.8-flash-low",
+            llm_api_key="real-test-key",
+            llm_base_url="http://127.0.0.1:8045",
+        )
+    )
+    assert missing_param_model.probe_succeeded is False
+    assert missing_param_model.error == "AI_PROVIDER_NOT_CONFIGURED"
+
+    missing_suffix_low = await probe_cobhub_capabilities(
+        SimpleNamespace(
+            llm_provider="gemini",
+            llm_thinking_control="model_suffix",
+            llm_model="gemini-3.8-flash",
+            llm_model_low="",
+            llm_api_key="real-test-key",
+            llm_base_url="http://127.0.0.1:8045",
+        )
+    )
+    assert missing_suffix_low.probe_succeeded is False
+    assert missing_suffix_low.error == "AI_PROVIDER_NOT_CONFIGURED"
+    clear_cobhub_capability_probe_cache()
+
+
+@pytest.mark.asyncio
+async def test_litellm_adapter_measures_and_logs_latency_breakdown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify LiteLLMAdapter captures queue_wait_ms, connect_ms, ttft_ms, generation_ms, total_elapsed_ms and logs telemetry."""
+    import structlog.testing
+    from google import genai
+
+    from src.shared_kernel.application.llm_port import LLMGenerationResult
+    from src.shared_kernel.infrastructure.external_ai.litellm_adapter import (
+        clear_google_genai_client_cache,
+    )
+
+    clear_google_genai_client_cache()
+
+    class FakeTimedModels:
+        async def generate_content(self, *, model: str, contents: Any, config: Any) -> Any:
+            del model, contents, config
+            # Simulate a small async delay
+            await asyncio.sleep(0.01)
+            return SimpleNamespace(
+                model_version="gemini-3.8-flash-low-001",
+                usage_metadata=SimpleNamespace(
+                    prompt_token_count=15,
+                    candidates_token_count=25,
+                    thoughts_token_count=10,
+                ),
+                text='{"status": "ok", "summary": "done", "milestones": [{"sequence_order": 1, "title": "M1", "description": "D1"}]}',
+            )
+
+    monkeypatch.delenv("RUNNING_IN_DOCKER", raising=False)
+    monkeypatch.setattr(
+        genai,
+        "Client",
+        lambda **kwargs: SimpleNamespace(aio=SimpleNamespace(models=FakeTimedModels())),
+    )
+
+    adapter = LiteLLMAdapter()
+    adapter._settings = SimpleNamespace(  # type: ignore[assignment]
+        llm_provider="gemini",
+        llm_thinking_control="model_suffix",
+        llm_model="gemini-3.8-flash-medium",
+        llm_model_low="gemini-3.8-flash-low",
+        llm_model_medium="gemini-3.8-flash-medium",
+        llm_model_high="gemini-3.8-flash-high",
+        llm_api_key="real-test-key",
+        llm_base_url="http://127.0.0.1:8045",
+        llm_thinking_level="LOW",
+        llm_schema_enforced_by_gateway=False,
+        ai_hard_timeout_seconds=55.0,
+    )
+
+    with structlog.testing.capture_logs() as cap_logs:
+        res = await adapter.generate_structured(
+            system_prompt="Sys",
+            user_prompt="Plan",
+            response_schema=SampleRoadmapOutput,
+            thinking_level="LOW",
+        )
+
+    # 1. Assert metrics in LLMGenerationResult
+    assert isinstance(res, LLMGenerationResult)
+    assert res.latency_metrics is not None
+    metrics = res.latency_metrics
+    assert "queue_wait_ms" in metrics
+    assert "connect_ms" in metrics
+    assert "provider_ttft_ms" in metrics
+    assert "ttft_ms" in metrics
+    assert "generation_ms" in metrics
+    assert "total_elapsed_ms" in metrics
+    assert "retries" in metrics
+
+    # Properties match
+    assert res.queue_wait_ms >= 0.0
+    assert res.connect_ms >= 0.0
+    assert res.provider_ttft_ms > 0.0
+    assert res.ttft_ms == res.provider_ttft_ms
+    assert res.generation_ms >= 0.0
+    assert res.total_elapsed_ms >= res.provider_ttft_ms
+    assert res.retries == 0
+
+    # 2. Assert structured debug telemetry log
+    telemetry_logs = [e for e in cap_logs if e.get("event") == "llm_latency_telemetry"]
+    assert len(telemetry_logs) == 1
+    t_log = telemetry_logs[0]
+    assert "queue_wait_ms" in t_log
+    assert "connect_ms" in t_log
+    assert "ttft_ms" in t_log
+    assert "generation_ms" in t_log
+    assert "total_elapsed_ms" in t_log
+    assert t_log["model_id"] == "gemini-3.8-flash-low-001"
+    assert t_log["retries"] == 0
+
+
+@pytest.mark.asyncio
+async def test_litellm_adapter_records_retry_count_on_http500_recovery(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verify retry count is incremented and logged when an HTTP 500 error is retried and recovered."""
+    import structlog.testing
+    from google import genai
+
+    from src.shared_kernel.application.llm_port import LLMGenerationResult
+    from src.shared_kernel.infrastructure.external_ai.litellm_adapter import (
+        clear_google_genai_client_cache,
+    )
+
+    clear_google_genai_client_cache()
+    attempt = 0
+
+    class FakeRetryModels:
+        async def generate_content(self, *, model: str, contents: Any, config: Any) -> Any:
+            nonlocal attempt
+            attempt += 1
+            if attempt == 1:
+                err = RuntimeError("HTTP 500 stream interrupted")
+                setattr(err, "status_code", 500)
+                raise err
+            return SimpleNamespace(
+                model_version="gemini-3.8-flash-low-001",
+                usage_metadata=SimpleNamespace(
+                    prompt_token_count=10,
+                    candidates_token_count=15,
+                    thoughts_token_count=0,
+                ),
+                text='{"status": "ok", "summary": "done", "milestones": [{"sequence_order": 1, "title": "M1", "description": "D1"}]}',
+            )
+
+    monkeypatch.delenv("RUNNING_IN_DOCKER", raising=False)
+    monkeypatch.setattr(
+        genai,
+        "Client",
+        lambda **kwargs: SimpleNamespace(aio=SimpleNamespace(models=FakeRetryModels())),
+    )
+
+    adapter = LiteLLMAdapter()
+    adapter._settings = SimpleNamespace(  # type: ignore[assignment]
+        llm_provider="gemini",
+        llm_thinking_control="model_suffix",
+        llm_model="gemini-3.8-flash-medium",
+        llm_model_low="gemini-3.8-flash-low",
+        llm_model_medium="gemini-3.8-flash-medium",
+        llm_model_high="gemini-3.8-flash-high",
+        llm_api_key="real-test-key",
+        llm_base_url="http://127.0.0.1:8045",
+        llm_thinking_level="LOW",
+        llm_schema_enforced_by_gateway=False,
+        ai_hard_timeout_seconds=55.0,
+    )
+
+    with structlog.testing.capture_logs() as cap_logs:
+        res = await adapter.generate_structured(
+            system_prompt="Sys",
+            user_prompt="Plan",
+            response_schema=SampleRoadmapOutput,
+            thinking_level="LOW",
+        )
+
+    assert isinstance(res, LLMGenerationResult)
+    assert res.retries == 1
+    assert res.latency_metrics["retries"] == 1
+    telemetry_logs = [e for e in cap_logs if e.get("event") == "llm_latency_telemetry"]
+    assert len(telemetry_logs) == 1
+    assert telemetry_logs[0]["retries"] == 1

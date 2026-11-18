@@ -162,6 +162,7 @@ async def test_execution_manager_retries_and_commits_exactly_once() -> None:
         user_prompt="user",
         response_schema=_Output,
         model_name="mock",
+        thinking_level="LOW",
     )
     assert result.attempts == 2
     assert quota.committed == 1
@@ -184,6 +185,7 @@ async def test_execution_manager_releases_on_terminal_failure() -> None:
             user_prompt="user",
             response_schema=_Output,
             model_name="mock",
+            thinking_level="LOW",
         )
     assert quota.committed == 0
     assert quota.released == ["TimeoutError"]
@@ -209,6 +211,7 @@ async def test_execution_manager_enforces_one_total_timeout_across_retries() -> 
             user_prompt="user",
             response_schema=_Output,
             model_name="mock",
+            thinking_level="LOW",
         )
 
     assert provider.calls == 1
@@ -279,6 +282,7 @@ async def test_execution_manager_post_llm_db_failure_does_not_retry_llm() -> Non
             user_prompt="usr",
             response_schema=_Output,
             model_name="gemini-3.8-flash",
+            thinking_level="MEDIUM",
             workflow_type=WorkflowType.PLAN_CREATION,
             step_name="STEP_1",
         )
@@ -320,6 +324,7 @@ async def test_execution_manager_cancellation_uses_shield_and_preserves_original
             user_prompt="usr",
             response_schema=_Output,
             model_name="gemini-3.8-flash",
+            thinking_level="LOW",
         )
     )
     await asyncio.sleep(0.01)
@@ -348,6 +353,7 @@ async def test_execution_manager_cancellation_uses_shield_and_preserves_original
             user_prompt="usr",
             response_schema=_Output,
             model_name="gemini-3.8-flash",
+            thinking_level="LOW",
         )
 
 
@@ -382,6 +388,7 @@ async def test_execution_manager_does_not_retry_non_retryable_errors(exc: Except
             user_prompt="usr",
             response_schema=_Output,
             model_name="gemini-3.8-flash",
+            thinking_level="LOW",
         )
 
     assert provider.calls == 1
@@ -418,6 +425,7 @@ async def test_execution_manager_tracks_thinking_tokens_and_idempotent_commit_re
         user_prompt="usr",
         response_schema=_Output,
         model_name="gemini-3.8-flash",
+        thinking_level="LOW",
     )
     assert res.prompt_tokens == 100
     assert res.output_tokens == 70
@@ -679,6 +687,7 @@ async def test_execution_manager_non_tool_one_shot_repair_succeeds_and_accumulat
         user_prompt="original user prompt",
         response_schema=_Output,
         model_name="gemini-3.8-flash",
+        thinking_level="MEDIUM",
         workflow_type=WorkflowType.PLAN_CREATION,
     )
 
@@ -739,6 +748,7 @@ async def test_execution_manager_non_tool_repair_failure_records_taxonomy_and_re
             user_prompt="usr",
             response_schema=_Output,
             model_name="gemini-3.8-flash",
+            thinking_level="MEDIUM",
             workflow_type=WorkflowType.PLAN_CREATION,
         )
 
@@ -779,6 +789,7 @@ async def test_execution_manager_skips_repair_when_already_repaired_in_adapter()
             user_prompt="usr",
             response_schema=_Output,
             model_name="gemini-3.8-flash",
+            thinking_level="LOW",
             workflow_type=WorkflowType.SCHEDULE_GENERATION,
         )
 
@@ -816,6 +827,7 @@ async def test_execution_manager_limits_http500_stream_interrupted_retry_to_one(
             user_prompt="usr",
             response_schema=_Output,
             model_name="gemini-3.8-flash",
+            thinking_level="LOW",
         )
 
     assert provider.calls == 2  # 1 initial + 1 retry
@@ -909,6 +921,7 @@ async def test_execution_manager_passes_remaining_timeouts_and_logs_thinking_tok
             user_prompt="usr",
             response_schema=_Output,
             model_name="gemini-3.8-flash-medium",
+            thinking_level="MEDIUM",
             workflow_type=WorkflowType.PLAN_CREATION,
             step_name="STEP_TEST",
         )
@@ -942,5 +955,70 @@ async def test_execution_manager_passes_remaining_timeouts_and_logs_thinking_tok
         tool_executor=lambda _n, _a: asyncio.sleep(0, result={}),
         max_tool_calls=1,
         model_name="gemini-3.8-flash-medium",
+        thinking_level="MEDIUM",
     )
     assert seen_timeouts[0][1] == 5.0
+
+
+@pytest.mark.asyncio
+async def test_execution_manager_requires_explicit_thinking_level_or_prompt_template() -> None:
+    """AIExecutionManager fails fast without reserving quota if thinking_level is missing everywhere."""
+
+    class _TrackingProvider:
+        def __init__(self) -> None:
+            self.seen_levels: list[str | None] = []
+
+        async def generate_structured(self, **kwargs: Any) -> LLMGenerationResult:
+            self.seen_levels.append(kwargs.get("thinking_level"))
+            return LLMGenerationResult(
+                payload={"answer": "ok"},
+                prompt_tokens=5,
+                output_tokens=5,
+                model_id="gemini-3.8-flash-high",
+            )
+
+        async def stream_structured(self, **kwargs: object) -> AsyncIterator[str]:
+            del kwargs
+            yield "{}"
+
+    class _CheckingQuota(_Quota):
+        def __init__(self) -> None:
+            super().__init__()
+            self.reserved = 0
+
+        async def reserve_quota(self, user_id: UUID, **kwargs: object) -> UUID:
+            self.reserved += 1
+            return await super().reserve_quota(user_id, **kwargs)
+
+    quota = _CheckingQuota()
+    provider = _TrackingProvider()
+    manager = AIExecutionManager(provider=provider, quota=quota, max_retries=0)  # type: ignore[arg-type]
+
+    with pytest.raises(ValueError, match="AI_MODEL_SELECTION_ERROR"):
+        await manager.execute(
+            user_id=uuid4(),
+            operation_type="PLAN_CREATION",
+            system_prompt="sys",
+            user_prompt="usr",
+            response_schema=_Output,
+            thinking_level=None,
+            prompt_template=_prompt("1.0.0"),
+        )
+    assert quota.reserved == 0
+    assert provider.seen_levels == []
+
+    # Resolves from prompt_template.thinking_level when present
+    tpl_with_level = replace(_prompt("1.0.0"), thinking_level="HIGH")
+    res = await manager.execute(
+        user_id=uuid4(),
+        operation_type="PLAN_CREATION",
+        system_prompt="sys",
+        user_prompt="usr",
+        response_schema=_Output,
+        thinking_level="",
+        prompt_template=tpl_with_level,
+    )
+    assert res.value == _Output(answer="ok")
+    assert provider.seen_levels == ["HIGH"]
+    assert quota.reserved == 1
+    assert quota.committed == 1

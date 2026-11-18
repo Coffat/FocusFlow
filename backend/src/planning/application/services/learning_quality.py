@@ -10,14 +10,21 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from src.planning.application.dtos.planning_dtos import CriticQualityLLMOutput
+from src.planning.application.services.learning_resource_discovery import (
+    match_task_fallback_resources,
+)
 from src.planning.application.services.roadmap_skills import (
     COVERAGE_PREREQUISITE_CRITIC_PROMPT,
     LEARNER_FIT_CRITIC_PROMPT,
     QUALITY_ARBITER_PROMPT,
     build_planning_prompt_registry,
 )
+from src.planning.domain.models.knowledge_concept import LearningResource
 from src.planning.domain.models.milestone import Milestone
-from src.planning.domain.services.validation_types import ConstraintViolationDTO
+from src.planning.domain.services.validation_types import (
+    ConstraintViolationDTO,
+    safe_parse_iso_date,
+)
 from src.shared_kernel.application.harness.execution_manager import AIExecutionManager
 from src.shared_kernel.application.harness.models import (
     WorkflowRun,
@@ -87,7 +94,7 @@ def assess_schedule_feasibility(
     scheduled_from_proposal = sum(
         max(0, int(task.get("estimated_minutes", 0) or 0))
         for task in tasks
-        if task.get("scheduled_date") is not None
+        if safe_parse_iso_date(task.get("scheduled_date")) is not None
     )
     scheduled = min(scheduled_from_proposal, max(0, available_minutes))
     ratio = 1.0 if required == 0 else min(1.0, scheduled / required)
@@ -180,7 +187,10 @@ def validate_adaptive_milestones(
 
 
 def validate_task_coverage(
-    tasks: Sequence[dict[str, Any]], milestones: Sequence[Milestone]
+    tasks: Sequence[dict[str, Any]],
+    milestones: Sequence[Milestone],
+    *,
+    completed_tasks: Sequence[dict[str, Any]] = (),
 ) -> list[ConstraintViolationDTO]:
     violations: list[ConstraintViolationDTO] = []
     tasks_by_mid: dict[str, list[tuple[int, dict[str, Any]]]] = defaultdict(list)
@@ -198,6 +208,9 @@ def validate_task_coverage(
                         "Non-empty measurable text",
                     )
                 )
+
+    for c_idx, c_task in enumerate(completed_tasks, start=len(tasks)):
+        tasks_by_mid[str(c_task.get("milestone_id"))].append((c_idx, c_task))
 
     for milestone in milestones:
         grouped = tasks_by_mid.get(str(milestone.id), [])
@@ -333,6 +346,7 @@ async def run_dual_quality_critics(
     roadmap_id: UUID | None = None,
     workflow_type: WorkflowType | None = None,
     token_accumulator: dict[str, int] | None = None,
+    quota: Any = None,
 ) -> tuple[list[ConstraintViolationDTO], list[dict[str, Any]], int, int]:
     if remaining_budget_seconds is not None and remaining_budget_seconds <= 0:
         if token_accumulator is not None:
@@ -394,6 +408,7 @@ async def run_dual_quality_critics(
         # flush the same SQLAlchemy AsyncSession simultaneously; steps are persisted sequentially below.
         manager = AIExecutionManager(
             provider=llm,
+            quota=quota,
             manage_quota=False,
             max_retries=0,
             timeout_seconds=effective_critic_timeout,
@@ -605,6 +620,7 @@ async def run_dual_quality_critics(
         try:
             arbiter_mgr = AIExecutionManager(
                 provider=llm,
+                quota=quota,
                 manage_quota=False,
                 max_retries=0,
                 timeout_seconds=effective_arbiter_timeout,
@@ -708,3 +724,86 @@ def _violation(
         actual_value="Invalid or missing",
         suggested_fix=f"Khắc phục {code}: {expected}.",
     )
+
+
+from src.planning.application.services.preliminary_feasibility_service import (  # noqa: E402
+    resolve_effective_milestones_for_proposal as resolve_effective_milestones_for_proposal,
+)
+
+
+def resolve_task_resources_from_tool_results(
+    proposal_data: dict[str, Any],
+    collected_resources: Sequence[LearningResource | dict[str, Any]],
+    *,
+    strict: bool = True,
+    fallback_on_empty: bool = False,
+) -> dict[str, Any]:
+    """Resolve `resource_ids` on each task against verified tool results; drop hallucinated IDs."""
+    if not isinstance(proposal_data, dict):
+        return proposal_data
+    raw_tasks = proposal_data.get("tasks")
+    if not isinstance(raw_tasks, list):
+        return proposal_data
+
+    resource_lookup: dict[str, dict[str, str]] = {}
+    for item in collected_resources:
+        if isinstance(item, LearningResource):
+            r_dict = item.to_dict()
+            rid = item.resource_id
+        elif isinstance(item, dict):
+            rid = str(item.get("resource_id") or "").strip()
+            r_dict = {
+                "resource_id": rid,
+                "title": str(item.get("title") or "").strip(),
+                "url": str(item.get("url") or "").strip(),
+                "type": str(item.get("type") or item.get("resource_type") or "DOCS").strip(),
+                "resource_type": str(
+                    item.get("resource_type") or item.get("type") or "DOCS"
+                ).strip(),
+                "description": str(item.get("description") or "").strip(),
+                "domain": str(item.get("domain") or "").strip(),
+                "concept_id": str(item.get("concept_id") or "").strip(),
+            }
+        else:
+            continue
+        if rid:
+            resource_lookup[rid] = r_dict
+
+    resolved_tasks: list[Any] = []
+    for task in raw_tasks:
+        if not isinstance(task, dict):
+            resolved_tasks.append(task)
+            continue
+        t_copy = dict(task)
+        has_resource_ids_field = "resource_ids" in t_copy
+        raw_rids = t_copy.get("resource_ids")
+        if isinstance(raw_rids, list):
+            clean_rids: list[str] = []
+            for raw_id in raw_rids:
+                rid_str = str(raw_id or "").strip()
+                if rid_str and rid_str not in clean_rids:
+                    clean_rids.append(rid_str)
+                if len(clean_rids) >= 3:
+                    break
+            t_copy["resource_ids"] = clean_rids
+            if not resource_lookup:
+                t_copy["learning_resources"] = []
+            else:
+                t_copy["learning_resources"] = [
+                    dict(resource_lookup[rid]) for rid in clean_rids if rid in resource_lookup
+                ]
+        elif strict or has_resource_ids_field:
+            t_copy["resource_ids"] = []
+            t_copy["learning_resources"] = []
+
+        if fallback_on_empty and resource_lookup and not t_copy.get("learning_resources"):
+            matched = match_task_fallback_resources(t_copy, list(resource_lookup.values()), limit=3)
+            if matched:
+                t_copy["learning_resources"] = matched
+                t_copy["resource_ids"] = [
+                    str(item["resource_id"]) for item in matched if item.get("resource_id")
+                ]
+
+        resolved_tasks.append(t_copy)
+
+    return {**proposal_data, "tasks": resolved_tasks}

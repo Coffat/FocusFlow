@@ -137,6 +137,18 @@
           </div>
         }
 
+        <!-- FIT_CAPACITY Scope Proposal & PRELIMINARY_UNSCHEDULABLE Panel (DEF-05) -->
+        <app-fit-capacity-scope-panel
+          [preliminaryFeasibility]="roadmapService.preliminaryFeasibility()"
+          [conflict]="roadmapService.scopeApprovalConflict()"
+          [isReadOnly]="roadmapService.isReadOnlyRoadmap()"
+          [isBusy]="roadmapService.saving() || roadmapService.isApprovingMilestones()"
+          [isStreaming]="roadmapService.isGeneratingStream()"
+          [showAvailabilityLink]="false"
+          (approveFitCapacity)="onApproveFitCapacity($event)"
+          (regenerateFitCapacity)="onRegenerateFitCapacity()"
+        />
+
         @if (editableMilestones().length === 0) {
           <!-- EMPTY MILESTONES STATE -->
           <div
@@ -177,6 +189,7 @@
           <!-- INTERACTIVE LEVEL-1 MILESTONES LIST (100% FULL-WIDTH, CLEAN MINIMALIST) -->
           <div class="space-y-3.5">
             @for (ms of editableMilestones(); track idx; let idx = $index) {
+              @let scopeStatus = roadmapService.getMilestoneScopeStatus(ms);
               <div
                 [attr.data-testid]="'editable-milestone-card-' + idx"
                 class="rounded-xl border border-[#EAEAE6] bg-[#FFFFFF] p-5 space-y-4 shadow-2xs hover:border-[#246B4A]/40 transition-all"
@@ -194,6 +207,23 @@
                       placeholder="Tiêu đề cột mốc..."
                       class="flex-1 text-xs sm:text-sm font-semibold text-[#111111] bg-[#FAFAFA] border border-[#EAEAE6] rounded-lg px-3 py-1.5 focus:bg-white focus:border-[#246B4A] focus:outline-none focus:ring-1 focus:ring-[#246B4A]/20"
                     />
+                    @if (scopeStatus === 'KEPT') {
+                      <span
+                        [attr.data-testid]="'dialog-milestone-scope-badge-' + idx"
+                        class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border border-[#246B4A]/30 bg-[#EBF3EE] text-[#246B4A] shrink-0"
+                      >
+                        <span class="material-symbols-outlined text-[13px]" aria-hidden="true">check_circle</span>
+                        <span>Giữ lại</span>
+                      </span>
+                    } @else if (scopeStatus === 'DEFERRED') {
+                      <span
+                        [attr.data-testid]="'dialog-milestone-scope-badge-' + idx"
+                        class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border border-amber-600/35 bg-amber-50 text-amber-800 shrink-0"
+                      >
+                        <span class="material-symbols-outlined text-[13px]" aria-hidden="true">schedule</span>
+                        <span>Hoãn lại (PENDING)</span>
+                      </span>
+                    }
                   </div>
 
                   <!-- Reorder & Delete Controls -->
@@ -291,7 +321,12 @@
       <button
         type="button"
         (click)="onApproveMilestones()"
-        [disabled]="roadmapService.saving() || roadmapService.isGeneratingStream()"
+        [disabled]="
+          roadmapService.saving() ||
+          roadmapService.isApprovingMilestones() ||
+          roadmapService.isGeneratingStream() ||
+          roadmapService.isPreliminaryUnschedulable()
+        "
         data-testid="approve-milestones-btn"
         class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-full bg-[#246B4A] hover:bg-[#1B5338] disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs sm:text-sm font-semibold transition-colors cursor-pointer shadow-xs"
       >

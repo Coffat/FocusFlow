@@ -16,6 +16,14 @@
           <span class="font-mono text-[11px] font-medium text-[#246B4A] bg-[#EBF3EE] px-2 py-0.5 rounded-full border border-[#246B4A]/20 shrink-0">
             {{ displayLevel() }}
           </span>
+          @if (roadmapService.clarificationStatus() === 'WAITING_FOLLOW_UP' || roadmapService.clarificationRound() >= 2) {
+            <span
+              data-testid="grill-me-round-2-badge"
+              class="font-mono text-[11px] font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-300 shrink-0"
+            >
+              Vòng {{ roadmapService.clarificationRound() >= 2 ? roadmapService.clarificationRound() : 2 }}: Làm rõ bổ sung
+            </span>
+          }
         </div>
 
         <span
@@ -180,6 +188,19 @@
       </div>
     } @else {
       <!-- FULL-WIDTH QUESTIONS LIST (TINH GIẢN, VIỀN MỎNG TINH TẾ) -->
+      @if (roadmapService.clarificationStatus() === 'WAITING_FOLLOW_UP' || roadmapService.clarificationRound() >= 2) {
+        <div
+          role="status"
+          aria-live="polite"
+          data-testid="grill-me-round-2-banner"
+          class="p-3.5 rounded-xl border border-amber-300 bg-amber-50/80 text-amber-900 text-xs flex items-start gap-2.5"
+        >
+          <span class="material-symbols-outlined text-[18px] text-amber-700 shrink-0" aria-hidden="true">forum</span>
+          <span>
+            Đã ghi nhận vòng 1. Vui lòng trả lời câu hỏi làm rõ bổ sung (Vòng {{ roadmapService.clarificationRound() >= 2 ? roadmapService.clarificationRound() : 2 }}) bên dưới để hoàn tất chẩn đoán.
+          </span>
+        </div>
+      }
       <div class="space-y-4">
         @for (q of questions(); track getQuestionId(q, idx); let idx = $index) {
           <div
@@ -340,7 +361,13 @@
         data-testid="submit-interview-btn"
         class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-full bg-[#246B4A] hover:bg-[#1B5338] disabled:opacity-50 text-white text-xs sm:text-sm font-semibold transition-colors cursor-pointer shadow-xs"
       >
-        <span>Xác nhận &amp; Sang Bước 3</span>
+        <span>
+          @if (roadmapService.clarificationStatus() === 'WAITING_FOLLOW_UP' || roadmapService.clarificationRound() >= 2) {
+            Xác nhận &amp; Hoàn tất chẩn đoán
+          } @else {
+            Gửi câu trả lời
+          }
+        </span>
         <span class="font-mono text-xs" aria-hidden="true">→</span>
       </button>
     </div>

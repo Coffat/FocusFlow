@@ -8,6 +8,7 @@ from typing import Any
 from uuid import UUID
 
 from src.planning.application.services.learning_quality import validate_adaptive_milestones
+from src.planning.domain.services.spatio_temporal_engine import NonSplittableTaskClassifier
 from src.planning.domain.services.validation_types import (
     AI_BLOCK_MAX_MINUTES,
     AI_BLOCK_MIN_MINUTES,
@@ -177,7 +178,26 @@ def run_tier1_gate(
         if sched_date is None:
             if allow_unscheduled_tasks:
                 continue
-            if isinstance(capacity_overflow, dict) and not emitted_capacity_violation:
+            task_diag = task.get("unscheduled_diagnostic")
+            if (
+                isinstance(task_diag, dict)
+                and task_diag.get("reason_code") == "TASK_EXCEEDS_CONTINUOUS_SLOT"
+            ):
+                violations.append(
+                    ConstraintViolationDTO(
+                        task_index=idx,
+                        field="estimated_minutes",
+                        rule_code="TASK_EXCEEDS_CONTINUOUS_SLOT",
+                        expected_bound=f"<= {task_diag.get('max_contiguous_window_minutes', 0)} phút liên tục",
+                        actual_value=f"{est_mins} phút (nhiệm vụ không thể tách)",
+                        suggested_fix=(
+                            f"Mở rộng khung giờ rảnh liên tục lên >= {est_mins} phút hoặc "
+                            "chuyển sang ngày có khung giờ dài hơn."
+                        ),
+                    )
+                )
+                emitted_capacity_violation = True
+            elif isinstance(capacity_overflow, dict) and not emitted_capacity_violation:
                 avail_m = int(capacity_overflow.get("available_minutes", 0) or 0)
                 req_m = int(capacity_overflow.get("required_minutes", 0) or 0)
                 t_date = str(capacity_overflow.get("target_date", "N/A"))
@@ -261,6 +281,8 @@ def _validate_schedule_blocks(
     block_intervals: list[tuple[int, datetime, datetime]] = []
     block_bounds: dict[str, tuple[datetime, datetime]] = {}
     block_sequences: set[tuple[str, int]] = set()
+    block_dates_by_task: dict[str, set[date]] = {}
+    block_count_by_task: dict[str, int] = {}
 
     for idx, block in enumerate(raw_blocks):
         if not isinstance(block, dict):
@@ -306,6 +328,8 @@ def _validate_schedule_blocks(
             continue
         block_sequences.add((task_id, sequence))
         block_intervals.append((idx, start, end))
+        block_dates_by_task.setdefault(task_id, set()).add(block_date)
+        block_count_by_task[task_id] = block_count_by_task.get(task_id, 0) + 1
         first, last = block_bounds.get(task_id, (start, end))
         block_bounds[task_id] = min(first, start), max(last, end)
         allocated_efforts[task_id] = allocated_efforts.get(task_id, 0) + duration
@@ -351,10 +375,35 @@ def _validate_schedule_blocks(
                 )
             )
 
-    for task in raw_tasks:
+    for idx, task in enumerate(raw_tasks):
         if not isinstance(task, dict):
             continue
         task_id = str(task.get("task_id") or task.get("id"))
+        is_ns, _ = NonSplittableTaskClassifier.classify(task)
+        if is_ns:
+            distinct_dates = block_dates_by_task.get(task_id, set())
+            if len(distinct_dates) > 1:
+                violations.append(
+                    ConstraintViolationDTO(
+                        task_index=idx,
+                        field="schedule_blocks",
+                        rule_code="NON_SPLITTABLE_TASK_SPLIT_ACROSS_DAYS",
+                        expected_bound="1 phiên học liên tục trên 1 ngày cho nhiệm vụ không thể tách",
+                        actual_value=f"Bị tách qua {len(distinct_dates)} ngày ({sorted(d.isoformat() for d in distinct_dates)})",
+                        suggested_fix="Xếp toàn bộ nhiệm vụ thi thử / kiểm thử tải này vào 1 khung giờ liên tục duy nhất.",
+                    )
+                )
+            elif block_count_by_task.get(task_id, 0) > 1:
+                violations.append(
+                    ConstraintViolationDTO(
+                        task_index=idx,
+                        field="schedule_blocks",
+                        rule_code="NON_SPLITTABLE_TASK_SPLIT",
+                        expected_bound="1 phiên học liên tục duy nhất cho nhiệm vụ không thể tách",
+                        actual_value=f"Bị tách thành {block_count_by_task.get(task_id, 0)} phiên",
+                        suggested_fix="Gộp thành 1 khối liên tục duy nhất cho nhiệm vụ không thể tách.",
+                    )
+                )
         bounds = block_bounds.get(task_id)
         if bounds is None:
             continue

@@ -1,3 +1,6 @@
+from src.planning.application.use_cases.availability_outbox_consumer import (
+    HandleAvailabilityUpdatedEventUseCase,
+)
 from src.planning.application.use_cases.clarification_use_cases import (
     GenerateClarificationQuestionsUseCase,
     SubmitClarificationAnswersUseCase,
@@ -44,6 +47,7 @@ __all__ = [
     "GenerateClarificationQuestionsUseCase",
     "GetCurrentScheduleProposalUseCase",
     "GetRoadmapDetailUseCase",
+    "HandleAvailabilityUpdatedEventUseCase",
     "InitiateMilestoneGenerationUseCase",
     "InitiateOverdueRecoveryUseCase",
     "InitiateScheduleProposalGenerationUseCase",

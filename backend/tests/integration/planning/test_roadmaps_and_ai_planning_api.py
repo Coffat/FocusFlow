@@ -338,7 +338,11 @@ async def test_e2e_ai_planning_flow_sse_approval_edit_and_os03_merge(
         assert curr_prop["status"] == "DRAFT"
         # AI-supplied dates are discarded; deterministic allocation avoids its overflow.
         assert curr_prop["has_soft_overflow"] is False
-        assert len(curr_prop["schedule_blocks"]) == 6
+        # Whole-Fit Invariant (SRS v1.3 / ADR-009) & Anti-fragmentation:
+        # Instead of splitting tasks across fragmented mini-chunks, the spatio-temporal engine
+        # allocates sessions as whole blocks coalesced within daily capacity (120m daily slot on Mondays).
+        # Thus, exactly 3 whole schedule blocks are formed across available study days.
+        assert len(curr_prop["schedule_blocks"]) == 3
         assert len({block["block_date"] for block in curr_prop["schedule_blocks"]}) >= 2
         assert all(
             block["scheduled_start"].endswith("+07:00") for block in curr_prop["schedule_blocks"]
@@ -353,7 +357,7 @@ async def test_e2e_ai_planning_flow_sse_approval_edit_and_os03_merge(
         apply_data = apply_ok.json()
         assert apply_data["roadmap_status"] == "ACTIVE"
         assert apply_data["proposal_status"] == "APPLIED"
-        assert apply_data["total_sessions"] == 6
+        assert apply_data["total_sessions"] == 3
         assert apply_data["total_planned_minutes"] == 200
         assert apply_data["trigger_type"] == "INITIAL_APPLY"
         async with async_session_factory() as session:
@@ -366,7 +370,7 @@ async def test_e2e_ai_planning_flow_sse_approval_edit_and_os03_merge(
                 .scalars()
                 .all()
             )
-            assert len(initial_blocks) == 6
+            assert len(initial_blocks) == 3
             assert sum(block.scheduled_duration_minutes for block in initial_blocks) == 200
 
         # A protected session cannot be moved by a later Apply.
@@ -561,7 +565,8 @@ async def test_e2e_ai_planning_flow_sse_approval_edit_and_os03_merge(
         assert replan_data["preserved_completed_tasks_count"] == 1
         assert replan_data["replaced_tasks_count"] == 2
         assert replan_data["inserted_tasks_count"] == 3
-        assert replan_data["total_sessions"] == 5
+        # With Whole-Fit Invariant, t1 has 1 coalesced 60m block (COMPLETED) + 3 replanned 60m blocks = 4 total sessions
+        assert replan_data["total_sessions"] == 4
         assert replan_data["total_planned_minutes"] == 240
         assert replan_data["trigger_type"] == "REPLAN_MERGE"
         async with async_session_factory() as session:
@@ -574,7 +579,7 @@ async def test_e2e_ai_planning_flow_sse_approval_edit_and_os03_merge(
                 .scalars()
                 .all()
             )
-            assert sum(block.status == "COMPLETED" for block in replanned_blocks) == 2
+            assert sum(block.status == "COMPLETED" for block in replanned_blocks) == 1
             assert sum(block.status == "PLANNED" for block in replanned_blocks) == 3
 
         # 9. Get Roadmap Detail & Archive

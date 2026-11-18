@@ -1010,7 +1010,10 @@ class GenerateClarificationQuestionsUseCase:
                 raise
 
         try:
-            context_block = RoadmapContextBuilder.build_clarification_context(goal)
+            context_block = RoadmapContextBuilder.build_clarification_context(
+                goal,
+                include_information_gaps=False,
+            )
             harness_inputs = await load_planning_harness_context_inputs(
                 user_id=user_id,
                 goal_id=goal_id,
@@ -1023,12 +1026,11 @@ class GenerateClarificationQuestionsUseCase:
                 system_instruction=clarifier_tpl.system_template,
                 workflow_stage="GOAL_CLARIFICATION",
                 base_context_text=context_block,
-                learner_diagnostic={
-                    "information_gaps": [gap.as_dict() for gap in information_gaps]
-                },
+                learner_diagnostic=None,
                 memory_items=harness_inputs.memory_items,
                 concept_masteries=harness_inputs.concept_masteries,
                 knowledge_chunks=harness_inputs.knowledge_chunks,
+                include_planning_context=False,
             )
             effective_context = (
                 f"{context_block}\n\n{assembled.text}"

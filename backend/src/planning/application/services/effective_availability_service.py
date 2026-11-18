@@ -45,6 +45,8 @@ def _minutes_to_hhmm(minutes: int) -> str:
 
 
 def _parse_window_minutes(hhmm: str, default_minutes: int) -> int:
+    if str(hhmm or "").strip() == "24:00":
+        return 1440
     parsed = parse_hhmm_or_time(hhmm)
     if parsed is None:
         return default_minutes
@@ -403,6 +405,8 @@ class GetEffectiveAvailabilityUseCase:
 
         win_start_min = _parse_window_minutes(win_start_str, 7 * 60)
         win_end_min = _parse_window_minutes(win_end_str, 23 * 60)
+        if str(win_end_str).strip() in ("00:00", "24:00") and win_start_min > 0:
+            win_end_min = 1440
         if win_end_min <= win_start_min:
             win_start_min, win_end_min = 7 * 60, 23 * 60
 
@@ -482,8 +486,10 @@ class GetEffectiveAvailabilityUseCase:
                 cur_day += timedelta(days=1)
 
         # Also collect existing committed tasks with explicit time windows per weekday
+        # (handling overnight / cross-midnight tasks and 24:00 end times cleanly).
         committed_by_weekday: dict[str, list[tuple[int, int]]] = {}
-        for ext in committed_tasks:
+        committed_covered_weekdays: dict[int, set[str]] = {}
+        for ext_idx, ext in enumerate(committed_tasks):
             status = (
                 str(ext.get("status", "TODO"))
                 if isinstance(ext, dict)
@@ -521,11 +527,28 @@ class GetEffectiveAvailabilityUseCase:
                     if ext_end.tzinfo is not None
                     else ext_end.replace(tzinfo=user_tz)
                 )
-                s_min = loc_s.hour * 60 + loc_s.minute
-                e_min = loc_e.hour * 60 + loc_e.minute
-                if e_min > s_min:
-                    wname = WEEKDAY_NAMES[ext_date.weekday()]
-                    committed_by_weekday.setdefault(wname, []).append((s_min, e_min))
+                if loc_e <= loc_s:
+                    loc_e = loc_e + timedelta(days=1)
+                cur_day = loc_s.date()
+                last_day = loc_e.date()
+                covered_days: set[str] = set()
+                while cur_day <= last_day:
+                    day_start_dt = datetime.combine(cur_day, time(0, 0), tzinfo=user_tz)
+                    day_end_dt = day_start_dt + timedelta(days=1)
+                    seg_start = max(loc_s, day_start_dt)
+                    seg_end = min(loc_e, day_end_dt)
+                    if seg_end > seg_start:
+                        s_min = seg_start.hour * 60 + seg_start.minute
+                        e_min = (
+                            1440 if seg_end == day_end_dt else seg_end.hour * 60 + seg_end.minute
+                        )
+                        if e_min > s_min:
+                            wname = WEEKDAY_NAMES[cur_day.weekday()]
+                            committed_by_weekday.setdefault(wname, []).append((s_min, e_min))
+                            covered_days.add(wname)
+                    cur_day += timedelta(days=1)
+                if covered_days:
+                    committed_covered_weekdays[ext_idx] = covered_days
 
         # Count how many times each weekday occurs in [start_date, end_date]
         span_days = min(366, (end_date - start_date).days + 1)
@@ -537,6 +560,7 @@ class GetEffectiveAvailabilityUseCase:
         derived_slots: list[AvailabilitySlotDTO] = []
         derived_quotas: dict[str | int, int] = {}
         unplaced_date_specific_busy: list[ExistingScheduledTaskDTO] = []
+        carved_weekdays: set[str] = set()
 
         for wname in WEEKDAY_NAMES:
             if wname in disabled_days_set:
@@ -556,38 +580,29 @@ class GetEffectiveAvailabilityUseCase:
                     busy_intervals=day_busy,
                     min_session_minutes=min_session_minutes,
                 )
+                carved_weekdays.add(wname)
             else:
-                # Multiple weeks: keep base allowed window as slot if busy intervals vary by week,
-                # or subtract busy intervals if all occurrences share them, and enforce date-specific
-                # busy intervals + fragment elimination via `unplaced_date_specific_busy`.
-                day_busy = [
-                    *busy_by_weekday.get(wname, []),
-                    *committed_by_weekday.get(wname, []),
-                ]
-                free_ranges = subtract_intervals_and_filter_fragments(
-                    base_intervals=[(win_start_min, win_end_min)],
-                    busy_intervals=day_busy,
-                    min_session_minutes=min_session_minutes,
-                )
-                if not free_ranges:
-                    # Busy only on some weeks; preserve base window and block per-date
-                    free_ranges = [(win_start_min, win_end_min)]
-                    for task_busy in synthetic_busy_tasks:
-                        if (
-                            task_busy.scheduled_date is not None
-                            and WEEKDAY_NAMES[task_busy.scheduled_date.weekday()] == wname
-                        ):
-                            unplaced_date_specific_busy.append(task_busy)
+                # Multi-week range: NEVER subtract date-specific Google busy events or committed
+                # tasks from the recurring weekly AvailabilitySlotDTO; emit them per-date instead.
+                free_ranges = [(win_start_min, win_end_min)]
+                for task_busy in synthetic_busy_tasks:
+                    if (
+                        task_busy.scheduled_date is not None
+                        and WEEKDAY_NAMES[task_busy.scheduled_date.weekday()] == wname
+                    ):
+                        unplaced_date_specific_busy.append(task_busy)
 
             total_day_mins = 0
             for f_start, f_end in free_ranges:
                 total_day_mins += f_end - f_start
+                end_offset = 1 if f_end >= 1440 else 0
+                end_hhmm = _minutes_to_hhmm(f_end % 1440) if end_offset else _minutes_to_hhmm(f_end)
                 derived_slots.append(
                     AvailabilitySlotDTO(
                         day_of_week=wname,
                         start_time=_minutes_to_hhmm(f_start),
-                        end_time=_minutes_to_hhmm(f_end),
-                        end_day_offset=0,
+                        end_time=end_hhmm,
+                        end_day_offset=end_offset,
                         is_active=True,
                     )
                 )
@@ -602,44 +617,11 @@ class GetEffectiveAvailabilityUseCase:
             timezone=timezone,
         )
 
-        # Combine committed tasks with any multi-week date-specific busy tasks not already carved out of slots
-        # For tasks whose intervals were already carved out of `derived_slots`, only keep tasks without
-        # explicit start/end or on multi-week uncarved slots so capacity is never double-subtracted.
-        carved_weekdays = {
-            wname
-            for wname in WEEKDAY_NAMES
-            if not any(
-                b.scheduled_date is not None and WEEKDAY_NAMES[b.scheduled_date.weekday()] == wname
-                for b in unplaced_date_specific_busy
-            )
-        }
+        # Keep ALL committed_tasks unless every day spanned by that task was carved into `derived_slots`.
         filtered_existing: list[Any] = []
-        for ext in committed_tasks:
-            ext_date = (
-                parse_iso_date(ext.get("scheduled_date"))
-                if isinstance(ext, dict)
-                else parse_iso_date(getattr(ext, "scheduled_date", None))
-            )
-            ext_start = (
-                parse_iso_datetime(ext.get("scheduled_start") or ext.get("planned_start_at"))
-                if isinstance(ext, dict)
-                else parse_iso_datetime(
-                    getattr(ext, "scheduled_start", None) or getattr(ext, "planned_start_at", None)
-                )
-            )
-            ext_end = (
-                parse_iso_datetime(ext.get("scheduled_end") or ext.get("planned_end_at"))
-                if isinstance(ext, dict)
-                else parse_iso_datetime(
-                    getattr(ext, "scheduled_end", None) or getattr(ext, "planned_end_at", None)
-                )
-            )
-            if (
-                ext_date is not None
-                and ext_start is not None
-                and ext_end is not None
-                and WEEKDAY_NAMES[ext_date.weekday()] in carved_weekdays
-            ):
+        for ext_idx, ext in enumerate(committed_tasks):
+            covered_task_days = committed_covered_weekdays.get(ext_idx)
+            if covered_task_days and covered_task_days.issubset(carved_weekdays):
                 continue
             filtered_existing.append(ext)
 

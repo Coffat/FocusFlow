@@ -79,6 +79,7 @@ class PromptTemplate:
     output_schema: dict[str, Any]
     checksum: str
     schema_checksum: str = ""
+    thinking_level: str | None = None
 
     def __post_init__(self) -> None:
         frozen_schema = freeze_schema_value(self.output_schema)

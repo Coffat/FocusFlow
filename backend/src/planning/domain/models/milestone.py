@@ -66,6 +66,11 @@ class Milestone(Entity):
             self.status = MilestoneStatus.APPROVED
             self.updated_at = now
 
+    def reset_to_pending(self, now: datetime) -> None:
+        if self.status == MilestoneStatus.APPROVED:
+            self.status = MilestoneStatus.PENDING
+            self.updated_at = now
+
     def mark_in_progress(self, now: datetime) -> None:
         self.status = MilestoneStatus.IN_PROGRESS
         self.updated_at = now

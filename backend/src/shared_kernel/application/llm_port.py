@@ -247,6 +247,9 @@ class LLMGenerationResult:
     raw_tool_results: tuple[LLMToolCallResultDTO, ...] = ()
     repair_attempts: int = 0
     error_category: AIErrorCategory | None = None
+    latency_metrics: dict[str, float] = field(default_factory=dict)
+    retries: int = 0
+    resolved_model: str | None = None
 
     @property
     def value(self) -> dict[str, Any]:
@@ -260,6 +263,32 @@ class LLMGenerationResult:
     def total_tokens(self) -> int:
         return self.prompt_tokens + self.output_tokens
 
+    @property
+    def queue_wait_ms(self) -> float:
+        return float(self.latency_metrics.get("queue_wait_ms", 0.0))
+
+    @property
+    def connect_ms(self) -> float:
+        return float(self.latency_metrics.get("connect_ms", 0.0))
+
+    @property
+    def provider_ttft_ms(self) -> float:
+        return float(
+            self.latency_metrics.get("provider_ttft_ms", self.latency_metrics.get("ttft_ms", 0.0))
+        )
+
+    @property
+    def ttft_ms(self) -> float:
+        return self.provider_ttft_ms
+
+    @property
+    def generation_ms(self) -> float:
+        return float(self.latency_metrics.get("generation_ms", 0.0))
+
+    @property
+    def total_elapsed_ms(self) -> float:
+        return float(self.latency_metrics.get("total_elapsed_ms", 0.0))
+
     def __iter__(self) -> Iterator[Any]:
         yield self.payload
         yield self.prompt_tokens
@@ -270,6 +299,43 @@ class LLMGenerationResult:
 
     def __getitem__(self, index: int) -> Any:
         return (self.payload, self.prompt_tokens, self.output_tokens)[index]
+
+
+def extract_upstream_model_from_response(
+    resp: Any,
+    default_model: str = "gemini-3.8-flash",
+) -> tuple[str | None, str]:
+    """Resolve actual upstream model from CofHub HTTP response headers or metadata.
+
+    Returns tuple of (verified_upstream_model, effective_model).
+    If CofHub exposes headers like x-upstream-model or x-mapped-model, returns
+    (header_value, header_value).
+    If not verified, returns (None, default_model).
+    """
+    if resp is None:
+        return None, default_model
+
+    sdk_http = getattr(resp, "sdk_http_response", None)
+    if sdk_http is not None:
+        headers = getattr(sdk_http, "headers", None)
+        if isinstance(headers, dict):
+            for k in (
+                "x-upstream-model",
+                "x-mapped-model",
+                "X-Upstream-Model",
+                "X-Mapped-Model",
+            ):
+                val = headers.get(k)
+                if val and str(val).strip():
+                    cleaned = str(val).strip()
+                    return cleaned, cleaned
+
+    mv = getattr(resp, "model_version", None)
+    if mv and str(mv).strip():
+        cleaned_mv = str(mv).strip()
+        return cleaned_mv, cleaned_mv
+
+    return None, default_model
 
 
 class LLMProviderPort(Protocol):

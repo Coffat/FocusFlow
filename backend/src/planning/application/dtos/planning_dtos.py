@@ -713,6 +713,12 @@ class MilestoneInputItemDTO:
 
 
 @dataclass(frozen=True, slots=True)
+class ApproveMilestonesRequestDTO:
+    confirmed_scope_proposal_version: int | None = None
+    accept_fit_capacity: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class ProposedTaskInputItemDTO:
     milestone_id: UUID
     title: str

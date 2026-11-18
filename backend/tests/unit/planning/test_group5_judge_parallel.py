@@ -90,11 +90,11 @@ class _ConcurrencySafeWorkflowRepo:
 
 
 def test_group5_default_judge_timeout_and_min_remaining_settings() -> None:
-    """Requirement #3: tier3_judge_timeout_seconds must default to 8.0 and min remaining to 3.0."""
+    """Requirement #3: tier3_judge_timeout_seconds must default to 12.0 and min remaining to 3.0."""
     settings = Settings()
-    assert settings.tier3_judge_timeout_seconds == 8.0
+    assert settings.tier3_judge_timeout_seconds == 12.0
     assert settings.ai_min_judge_remaining_seconds == 3.0
-    assert TIER3_JUDGE_TIMEOUT_SECONDS == 8.0
+    assert TIER3_JUDGE_TIMEOUT_SECONDS == 12.0
 
 
 @pytest.mark.asyncio
@@ -306,15 +306,189 @@ async def test_judge_skips_cleanly_on_exhausted_or_low_remaining_budget() -> Non
     assert llm_calls == 1
     assert seen_timeouts[-1] == pytest.approx(5.2, abs=0.05)
 
-    # 4. Config override > 8.0 (e.g., 12.0) is NOT clamped to 8.0
+    # 4. Config override > 12.0 (e.g., 15.0) is NOT clamped to 12.0
     out_override = await execute_tier3_pedagogical_judge(
         llm,  # type: ignore[arg-type]
         proposal,
-        tier3_timeout_seconds=12.0,
+        tier3_timeout_seconds=15.0,
         remaining_budget_seconds=20.0,
     )
     assert out_override.judge_status == "PASSED"
-    assert seen_timeouts[-1] == pytest.approx(12.0, abs=0.05)
+    assert seen_timeouts[-1] == pytest.approx(15.0, abs=0.05)
+
+
+@pytest.mark.asyncio
+async def test_judge_method_a_dynamic_timeout_in_gather(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Method A: inside asyncio.gather with Dual Critics, Judge timeout = min(tier3_judge_timeout_seconds, remaining_budget)."""
+    import src.planning.application.services.validation_gate.orchestrator as orch_mod
+
+    m_id = uuid4()
+    roadmap_id = uuid4()
+    milestone = Milestone(
+        id=m_id,
+        roadmap_id=roadmap_id,
+        sequence_order=1,
+        title="Cột mốc 1: Python & FastAPI",
+        learning_outcomes=("M1-O1: Tạo REST API CRUD",),
+        completion_criteria="Pass 100% unit test API",
+        estimated_effort_minutes=120,
+        required_concepts=("fastapi-routing",),
+        status=MilestoneStatus.APPROVED,
+    )
+
+    recorded_judge_timeouts: list[float | None] = []
+    recorded_judge_call_args: list[tuple[float | None, float | None]] = []
+    critic_calls = 0
+
+    real_execute_judge = orch_mod.execute_tier3_pedagogical_judge
+
+    async def spy_execute_judge(*args: Any, **kwargs: Any) -> Any:
+        recorded_judge_call_args.append(
+            (kwargs.get("tier3_timeout_seconds"), kwargs.get("remaining_budget_seconds"))
+        )
+        return await real_execute_judge(*args, **kwargs)
+
+    monkeypatch.setattr(orch_mod, "execute_tier3_pedagogical_judge", spy_execute_judge)
+
+    class _DynamicTimeoutLLM:
+        model_identifier = "gemini-3.8-flash-low"
+
+        async def generate_structured(
+            self,
+            *,
+            system_prompt: str,
+            user_prompt: str,
+            timeout_seconds: float | None = None,
+            **kwargs: Any,
+        ) -> LLMGenerationResult:
+            nonlocal critic_calls
+            del kwargs
+            if "[INDEPENDENT_CRITIC:" in user_prompt:
+                critic_calls += 1
+                return LLMGenerationResult(
+                    payload={"status": "PASS", "score": 92, "issues": []},
+                    prompt_tokens=20,
+                    output_tokens=10,
+                    thinking_tokens=0,
+                    model_id="gemini-3.8-flash-low",
+                )
+            if (
+                "pedagogical-quality-judge" in system_prompt
+                or "pedagogical-quality-judge" in user_prompt
+            ):
+                recorded_judge_timeouts.append(timeout_seconds)
+                return LLMGenerationResult(
+                    payload={"score": 90, "overall_status": "PASS", "issues": []},
+                    prompt_tokens=30,
+                    output_tokens=15,
+                    thinking_tokens=0,
+                    model_id="gemini-3.8-flash-low",
+                )
+            return LLMGenerationResult(
+                payload={
+                    "tasks": [
+                        {
+                            "task_id": "T1",
+                            "milestone_id": str(m_id),
+                            "title": "Học Pydantic v2",
+                            "task_type": "THEORY",
+                            "estimated_minutes": 60,
+                            "scheduled_date": "2026-11-18",
+                            "learning_objective": "Hiểu schema Pydantic",
+                            "completion_criteria": "Tạo 2 model hợp lệ",
+                            "covered_outcome_ids": ["M1-O1"],
+                            "concept_ids": ["fastapi-routing"],
+                        },
+                        {
+                            "task_id": "T2",
+                            "milestone_id": str(m_id),
+                            "title": "Xây dựng endpoint CRUD",
+                            "task_type": "PRACTICE",
+                            "estimated_minutes": 60,
+                            "scheduled_date": "2026-11-19",
+                            "learning_objective": "Viết router FastAPI",
+                            "completion_criteria": "TestClient trả 200 OK",
+                            "covered_outcome_ids": ["M1-O1"],
+                            "concept_ids": ["fastapi-routing"],
+                        },
+                    ],
+                    "dependencies": [
+                        {"predecessor_id": "T1", "successor_id": "T2", "is_mandatory": True}
+                    ],
+                },
+                prompt_tokens=50,
+                output_tokens=40,
+                thinking_tokens=0,
+                model_id="gemini-3.8-flash-low",
+            )
+
+        async def stream_structured(self, **kwargs: Any) -> AsyncIterator[str]:
+            del kwargs
+            yield "{}"
+
+    avail = AvailabilityConfigurationDTO(mode="MODE_A", default_daily_quota_minutes=120)
+
+    # Case 1: remaining_budget ~ 9.0s (< 12.0s default cap) -> Judge receives <= 9.0s
+    base_settings = Settings()
+    monkeypatch.setattr(
+        orch_mod,
+        "get_settings",
+        lambda: base_settings.model_copy(update={"ai_sse_pipeline_timeout_seconds": 9.0}),
+    )
+    orch = ProposalValidationGateOrchestrator(
+        llm_provider=_DynamicTimeoutLLM(),  # type: ignore[arg-type]
+        enable_tier3_judge=True,
+        user_id=uuid4(),
+        goal_id=uuid4(),
+        roadmap_id=roadmap_id,
+    )
+    res_9s = await orch.generate_and_validate_proposal_with_retry(
+        system_prompt="Task Decomposer",
+        user_prompt="Sinh tasks",
+        response_schema={"type": "object"},
+        availability=avail,
+        valid_milestone_ids={m_id},
+        goal_title="FastAPI Backend",
+        learner_level="BEGINNER",
+        milestones=[milestone],
+        deterministic_allocation=True,
+    )
+    assert res_9s.judge_status == "PASSED"
+    assert critic_calls == 2
+    assert len(recorded_judge_call_args) == 1
+    cap_9s, rem_9s = recorded_judge_call_args[0]
+    assert cap_9s is not None and rem_9s is not None
+    assert 8.0 < cap_9s <= 9.0
+    assert cap_9s == pytest.approx(rem_9s, abs=1e-6)
+    assert recorded_judge_timeouts[0] is not None
+    assert 8.0 < recorded_judge_timeouts[0] <= 9.0
+
+    # Case 2: remaining_budget ~ 40.0s (> 12.0s default cap) -> Judge receives 12.0s
+    monkeypatch.setattr(
+        orch_mod,
+        "get_settings",
+        lambda: base_settings.model_copy(update={"ai_sse_pipeline_timeout_seconds": 40.0}),
+    )
+    res_40s = await orch.generate_and_validate_proposal_with_retry(
+        system_prompt="Task Decomposer",
+        user_prompt="Sinh tasks",
+        response_schema={"type": "object"},
+        availability=avail,
+        valid_milestone_ids={m_id},
+        goal_title="FastAPI Backend",
+        learner_level="BEGINNER",
+        milestones=[milestone],
+        deterministic_allocation=True,
+    )
+    assert res_40s.judge_status == "PASSED"
+    assert critic_calls == 4
+    assert len(recorded_judge_call_args) == 2
+    cap_40s, rem_40s = recorded_judge_call_args[1]
+    assert cap_40s == pytest.approx(12.0, abs=0.01)
+    assert rem_40s is not None and rem_40s > 35.0
+    assert recorded_judge_timeouts[1] == pytest.approx(12.0, abs=0.01)
 
 
 def test_build_compact_judge_payload_strips_noise_but_preserves_deps_objectives_criteria() -> None:

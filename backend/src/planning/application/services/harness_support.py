@@ -13,7 +13,11 @@ from src.planning.application.knowledge.hybrid_retrieval import reciprocal_rank_
 from src.planning.application.ports.knowledge_source_repository_port import (
     KnowledgeSourceRepositoryPort,
 )
-from src.planning.domain.models.knowledge_source import KnowledgeChunk
+from src.planning.domain.models.knowledge_source import (
+    KnowledgeChunk,
+    KnowledgeIngestionStatus,
+    KnowledgeSource,
+)
 from src.shared_kernel.application.embedding_port import EmbeddingProviderPort
 from src.shared_kernel.application.harness.models import PromptTemplate
 from src.shared_kernel.application.harness.prompt_registry import build_prompt_audit_metadata
@@ -29,6 +33,7 @@ class PlanningHarnessContextInputs:
     memory_items: tuple[LearnerMemoryItemSnapshotDTO, ...] = ()
     concept_masteries: tuple[ConceptMasterySnapshotDTO, ...] = ()
     knowledge_chunks: tuple[KnowledgeChunk, ...] = ()
+    knowledge_sources: tuple[KnowledgeSource, ...] = ()
 
 
 async def load_planning_harness_context_inputs(
@@ -48,6 +53,7 @@ async def load_planning_harness_context_inputs(
     memories: tuple[LearnerMemoryItemSnapshotDTO, ...] = ()
     masteries: tuple[ConceptMasterySnapshotDTO, ...] = ()
     chunks: tuple[KnowledgeChunk, ...] = ()
+    indexed_sources: tuple[KnowledgeSource, ...] = ()
 
     if settings.learner_memory_enabled and learner_memory_port is not None:
         loaded_memories = await learner_memory_port.list_active_memory_items(
@@ -59,7 +65,7 @@ async def load_planning_harness_context_inputs(
         masteries = tuple(loaded_masteries[:mastery_limit])
 
     clean_query = query_text.strip()
-    if settings.knowledge_rag_enabled and knowledge_source_repo is not None and clean_query:
+    if settings.knowledge_rag_enabled and knowledge_source_repo is not None:
         has_sources = True
         list_sources_fn = getattr(knowledge_source_repo, "list_sources_for_goal", None)
         if callable(list_sources_fn):
@@ -67,6 +73,11 @@ async def load_planning_harness_context_inputs(
                 goal_sources = await list_sources_fn(goal_id, user_id)
                 if isinstance(goal_sources, (list, tuple)):
                     has_sources = len(goal_sources) > 0
+                    indexed_sources = tuple(
+                        s
+                        for s in goal_sources
+                        if getattr(s, "ingestion_status", None) == KnowledgeIngestionStatus.INDEXED
+                    )
             except (ValueError, RuntimeError, OSError) as exc:
                 logger.warning(
                     "harness_list_sources_failed",
@@ -74,7 +85,7 @@ async def load_planning_harness_context_inputs(
                 )
                 has_sources = True
 
-        if has_sources:
+        if has_sources and clean_query:
             query_embedding: list[float] = [0.0] * 768
             if embedding_provider is not None:
                 try:
@@ -100,20 +111,24 @@ async def load_planning_harness_context_inputs(
             )
             if len(raw_chunks) > 1:
                 # Fuse semantic & lexical ordering deterministically using shared RRF utility
-                semantic_order = list(raw_chunks)
-                lexical_order = sorted(
-                    raw_chunks,
-                    key=lambda c: sum(
-                        1 for token in clean_query.lower().split() if token in c.content.lower()
-                    ),
-                    reverse=True,
-                )
-                fused_chunks = reciprocal_rank_fusion(
-                    lexical_order,
-                    semantic_order,
+                by_id = {c.id: c for c in raw_chunks}
+                semantic_ids = [c.id for c in raw_chunks]
+                lexical_ids = [
+                    c.id
+                    for c in sorted(
+                        raw_chunks,
+                        key=lambda c: sum(
+                            1 for token in clean_query.lower().split() if token in c.content.lower()
+                        ),
+                        reverse=True,
+                    )
+                ]
+                fused_ids = reciprocal_rank_fusion(
+                    lexical_ids,
+                    semantic_ids,
                     limit=rag_limit,
                 )
-                chunks = tuple(fused_chunks)
+                chunks = tuple(by_id[cid] for cid in fused_ids if cid in by_id)
             else:
                 chunks = tuple(raw_chunks[:rag_limit])
 
@@ -121,6 +136,7 @@ async def load_planning_harness_context_inputs(
         memory_items=memories,
         concept_masteries=masteries,
         knowledge_chunks=chunks,
+        knowledge_sources=indexed_sources,
     )
 
 

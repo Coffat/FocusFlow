@@ -12,6 +12,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from src.planning.application.services.learning_quality import (
+    assess_schedule_feasibility,
     has_operational_quality_review_failure,
     run_dual_quality_critics,
     validate_task_coverage,
@@ -34,6 +35,7 @@ from src.planning.application.services.validation_gate.tier3_judge import (
     execute_tier3_pedagogical_judge,
 )
 from src.planning.domain.exceptions.planning_exceptions import (
+    PlanInfeasibleError,
     ProposalValidationGateError,
     SoftOverflowConfirmationRequiredError,
 )
@@ -44,8 +46,12 @@ from src.planning.domain.services.spatio_temporal_engine import (
 from src.planning.domain.services.validation_types import (
     AvailabilityConfigurationDTO,
     ConstraintViolationDTO,
+    ScheduleCompletenessStatus,
     SoftOverflowWarningDTO,
+    classify_schedule_completeness,
     parse_iso_date,
+    safe_parse_iso_date,
+    safe_parse_iso_datetime,
 )
 from src.shared_kernel.application.harness.execution_manager import AIExecutionManager
 from src.shared_kernel.application.harness.models import (
@@ -62,7 +68,7 @@ from src.shared_kernel.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-DECOMPOSER_CALL_TIMEOUT_SECONDS: float = 25.0
+DECOMPOSER_CALL_TIMEOUT_SECONDS: float = 36.0
 PIPELINE_DEADLINE_SECONDS: float = 55.0
 MIN_RETRY_REMAINING_SECONDS: float = 12.0
 DEFAULT_MAX_RETRIES: int = 2
@@ -89,6 +95,9 @@ class ValidationGateResultDTO:
     total_prompt_tokens: int = 0
     total_completion_tokens: int = 0
     total_thinking_tokens: int = 0
+    feasibility_verdict: str = "VERIFIED_FEASIBLE"
+    schedule_completeness_status: ScheduleCompletenessStatus = "FULL"
+    unscheduled_diagnostics: tuple[dict[str, Any], ...] = ()
 
     @property
     def has_soft_overflow(self) -> bool:
@@ -126,6 +135,8 @@ class ProposalValidationGateOrchestrator:
         user_id: UUID | None = None,
         goal_id: UUID | None = None,
         roadmap_id: UUID | None = None,
+        quota: Any = None,
+        reservation_id: UUID | None = None,
     ) -> None:
         self._llm = llm_provider
         self._enable_tier3_judge = enable_tier3_judge
@@ -134,6 +145,8 @@ class ProposalValidationGateOrchestrator:
         self._user_id = user_id
         self._goal_id = goal_id
         self._roadmap_id = roadmap_id
+        self._quota = quota
+        self._reservation_id = reservation_id
         self._last_judge_prompt_tokens = 0
         self._last_judge_completion_tokens = 0
         self._last_judge_thinking_tokens = 0
@@ -218,6 +231,7 @@ class ProposalValidationGateOrchestrator:
             user_id=self._user_id,
             goal_id=self._goal_id,
             roadmap_id=self._roadmap_id,
+            quota=self._quota,
         )
         self._last_judge_prompt_tokens = outcome.prompt_tokens
         self._last_judge_completion_tokens = outcome.completion_tokens
@@ -243,15 +257,26 @@ class ProposalValidationGateOrchestrator:
         thinking_tokens: int,
         attempts_used: int = 1,
         retry_history: tuple[dict[str, Any], ...] = (),
+        available_minutes: int | None = None,
+        schedule_completeness_status: ScheduleCompletenessStatus | None = None,
+        allow_partial_schedule: bool = True,
     ) -> ValidationGateResultDTO:
         raw_tasks_obj = proposal_data.get("tasks")
         raw_tasks = raw_tasks_obj if isinstance(raw_tasks_obj, list) else []
         capacity_overflow = proposal_data.get("_capacity_overflow")
-        avail_mins = (
-            int(capacity_overflow.get("available_minutes", 0) or 0)
-            if isinstance(capacity_overflow, dict)
-            else 1
-        )
+        if available_minutes is not None:
+            avail_mins = available_minutes
+        elif isinstance(capacity_overflow, dict):
+            avail_mins = int(capacity_overflow.get("available_minutes", 0) or 0)
+        else:
+            avail_mins = max(
+                1,
+                sum(
+                    max(0, _safe_minutes(t.get("estimated_minutes")))
+                    for t in raw_tasks
+                    if isinstance(t, dict)
+                ),
+            )
         default_unscheduled_reason = (
             "NO_AVAILABILITY_CONFIGURED: Chưa có khung giờ rảnh khả dụng"
             if avail_mins <= 0
@@ -265,7 +290,7 @@ class ProposalValidationGateOrchestrator:
             if not isinstance(task, dict):
                 continue
             t_copy = dict(task)
-            if parse_iso_date(t_copy.get("scheduled_date")) is not None:
+            if safe_parse_iso_date(t_copy.get("scheduled_date")) is not None:
                 scheduled_tasks_count += 1
             else:
                 if not t_copy.get("unscheduled_reason"):
@@ -292,6 +317,46 @@ class ProposalValidationGateOrchestrator:
         enriched_data["scheduled_tasks_count"] = scheduled_tasks_count
         enriched_data["unscheduled_tasks_count"] = len(unscheduled_list)
         enriched_data["unscheduled_tasks"] = unscheduled_list
+        feasibility_verdict = str(
+            enriched_data.get("feasibility_verdict")
+            or ("EXPLICIT_UNSCHEDULABLE" if is_partial else "VERIFIED_FEASIBLE")
+        )
+        raw_diags = enriched_data.get("unscheduled_diagnostics")
+        unscheduled_diags: list[dict[str, Any]] = (
+            [dict(d) for d in raw_diags if isinstance(d, dict)]
+            if isinstance(raw_diags, list)
+            else []
+        )
+        resolved_completeness = schedule_completeness_status
+        if resolved_completeness is None:
+            feasibility_assessment = assess_schedule_feasibility(
+                updated_tasks,
+                available_minutes=avail_mins,
+            )
+            raw_blocks = enriched_data.get("schedule_blocks")
+            has_blocks = isinstance(raw_blocks, list) and any(
+                isinstance(b, dict) for b in raw_blocks
+            )
+            all_scheduled_have_times = scheduled_tasks_count > 0 and all(
+                safe_parse_iso_datetime(t.get("scheduled_start")) is not None
+                and safe_parse_iso_datetime(t.get("scheduled_end")) is not None
+                for t in updated_tasks
+                if safe_parse_iso_date(t.get("scheduled_date")) is not None
+            )
+            resolved_completeness = classify_schedule_completeness(
+                total_tasks=len(updated_tasks),
+                scheduled_tasks_count=scheduled_tasks_count,
+                unscheduled_tasks_count=len(unscheduled_list),
+                available_minutes=avail_mins,
+                schedulable_ratio=feasibility_assessment.schedulable_ratio,
+                feasibility_verdict=feasibility_verdict,
+                has_schedule_blocks=has_blocks,
+                all_scheduled_have_block_times=all_scheduled_have_times,
+                allow_partial_schedule=allow_partial_schedule,
+            )
+        enriched_data["feasibility_verdict"] = feasibility_verdict
+        enriched_data["schedule_completeness_status"] = resolved_completeness
+        enriched_data["unscheduled_diagnostics"] = unscheduled_diags
         if merged_advisories:
             enriched_data["advisory_warnings"] = merged_advisories
         if judge_skipped:
@@ -315,6 +380,9 @@ class ProposalValidationGateOrchestrator:
             total_prompt_tokens=prompt_tokens,
             total_completion_tokens=completion_tokens,
             total_thinking_tokens=thinking_tokens,
+            feasibility_verdict=feasibility_verdict,
+            schedule_completeness_status=resolved_completeness,
+            unscheduled_diagnostics=tuple(unscheduled_diags),
         )
 
     async def validate_proposal(
@@ -361,7 +429,73 @@ class ProposalValidationGateOrchestrator:
                 violations=tuple(all_violations),
                 soft_overflow_warnings=tuple(soft_warnings),
                 validated_proposal_data=proposal_data,
+                schedule_completeness_status="UNDETERMINED",
             )
+
+        raw_tasks_obj = proposal_data.get("tasks")
+        dict_tasks = (
+            [t for t in raw_tasks_obj if isinstance(t, dict)]
+            if isinstance(raw_tasks_obj, list)
+            else []
+        )
+        scheduled_dates = [
+            d for t in dict_tasks if (d := safe_parse_iso_date(t.get("scheduled_date"))) is not None
+        ]
+        if allow_unscheduled_tasks and not scheduled_dates:
+            return ValidationGateResultDTO(
+                is_valid=False,
+                violations=(
+                    ConstraintViolationDTO(
+                        task_index=None,
+                        field="tasks",
+                        rule_code="NO_SCHEDULED_TASKS",
+                        expected_bound="At least 1 scheduled task",
+                        actual_value="0 scheduled tasks",
+                        suggested_fix="Cần ít nhất một nhiệm vụ được xếp lịch trước khi lưu đề xuất.",
+                    ),
+                ),
+                soft_overflow_warnings=tuple(soft_warnings),
+                validated_proposal_data=proposal_data,
+                schedule_completeness_status="INFEASIBLE",
+            )
+
+        avail_mins_for_result: int | None = None
+        if allow_unscheduled_tasks:
+            effective_start = (
+                min(scheduled_dates)
+                if scheduled_dates
+                else (current_roadmap_target_date or date.today())
+            )
+            avail_mins_for_result = SpatioTemporalRuleEngine.calculate_available_capacity_minutes(
+                availability,
+                start_date=effective_start,
+                target_date=current_roadmap_target_date,
+                existing_tasks=existing_tasks,
+            )
+            feasibility_assessment = assess_schedule_feasibility(
+                dict_tasks,
+                available_minutes=avail_mins_for_result,
+            )
+            if avail_mins_for_result <= 0 or feasibility_assessment.schedulable_ratio < 0.25:
+                return ValidationGateResultDTO(
+                    is_valid=False,
+                    violations=(
+                        ConstraintViolationDTO(
+                            task_index=None,
+                            field="tasks",
+                            rule_code="PLAN_INFEASIBLE",
+                            expected_bound="available_minutes > 0 and schedulable_ratio >= 0.25",
+                            actual_value=(
+                                f"avail={avail_mins_for_result}, "
+                                f"ratio={feasibility_assessment.schedulable_ratio}"
+                            ),
+                            suggested_fix="Gia hạn ngày mục tiêu hoặc tăng thời gian rảnh.",
+                        ),
+                    ),
+                    soft_overflow_warnings=tuple(soft_warnings),
+                    validated_proposal_data=proposal_data,
+                    schedule_completeness_status="INFEASIBLE",
+                )
 
         if require_soft_overflow_confirmation and soft_warnings and not confirm_soft_overflow:
             total_overflow = sum(w.overflow_minutes for w in soft_warnings)
@@ -395,6 +529,9 @@ class ProposalValidationGateOrchestrator:
             prompt_tokens=self._last_judge_prompt_tokens,
             completion_tokens=self._last_judge_completion_tokens,
             thinking_tokens=self._last_judge_thinking_tokens,
+            available_minutes=avail_mins_for_result,
+            allow_partial_schedule=allow_unscheduled_tasks
+            or len(scheduled_dates) == len(dict_tasks),
         )
 
     @staticmethod
@@ -476,6 +613,7 @@ class ProposalValidationGateOrchestrator:
         total_thinking_tokens = 0
         retry_history: list[dict[str, Any]] = []
         last_violations: list[ConstraintViolationDTO] = []
+        last_infeasible_ratio: float | None = None
         pedagogical_retry_used = False
 
         settings = get_settings()
@@ -498,6 +636,7 @@ class ProposalValidationGateOrchestrator:
             )
             exec_mgr = AIExecutionManager(
                 provider=self._llm,
+                quota=self._quota,
                 manage_quota=False,
                 max_retries=0,
                 timeout_seconds=decomposer_timeout,
@@ -509,6 +648,9 @@ class ProposalValidationGateOrchestrator:
                 if attempt > 1
                 else {}
             )
+            effective_thinking_level = (
+                thinking_level or ""
+            ).strip() or TASK_DECOMPOSER_SKILL.thinking_level
             exec_res = await exec_mgr.execute(
                 user_id=self._user_id or uuid4(),
                 operation_type="TASK_DECOMPOSITION",
@@ -519,7 +661,7 @@ class ProposalValidationGateOrchestrator:
                 tools=tools if attempt == 1 else None,
                 tool_executor=tool_executor if attempt == 1 else None,
                 max_tool_calls=max_tool_calls if (tools is not None and attempt == 1) else 0,
-                thinking_level=thinking_level,
+                thinking_level=effective_thinking_level,
                 workflow_type=WorkflowType.SCHEDULE_GENERATION,
                 step_name="TASK_DECOMPOSER",
                 step_order=attempt,
@@ -527,6 +669,9 @@ class ProposalValidationGateOrchestrator:
                 roadmap_id=self._roadmap_id,
                 context_snapshot=step_snapshot,
                 prompt_template=effective_tpl,
+                existing_reservation_id=self._reservation_id,
+                commit_on_success=False,
+                release_on_failure=False,
             )
             raw_proposal = exec_res.value if isinstance(exec_res.value, dict) else {}
             total_prompt_tokens += int(exec_res.prompt_tokens or 0)
@@ -561,6 +706,18 @@ class ProposalValidationGateOrchestrator:
                         continue
                     break
 
+            hard_solver_v2_enabled = bool(
+                getattr(settings, "spatio_temporal_v2_hard_solver_enabled", True)
+            )
+            soft_pacing_v2_enabled = bool(
+                getattr(settings, "spatio_temporal_v2_soft_pacing_enabled", True)
+            )
+            soft_end_buffer_ratio = float(
+                getattr(settings, "spatio_temporal_soft_end_buffer_ratio", 0.12)
+            )
+            soft_max_consecutive_days = int(
+                getattr(settings, "spatio_temporal_soft_max_consecutive_days", 5)
+            )
             if deterministic_allocation and isinstance(raw_tasks, list):
                 unscheduled_tasks = [
                     {
@@ -584,25 +741,58 @@ class ProposalValidationGateOrchestrator:
                     if isinstance(raw_proposal.get("dependencies"), list)
                     else []
                 )
-                allocated_tasks, schedule_blocks = SpatioTemporalRuleEngine.allocate_task_sessions(
-                    unscheduled_tasks,
-                    availability,
-                    start_date=start_date or date.today(),
-                    target_date=current_roadmap_target_date,
-                    dependencies=raw_deps,
-                    existing_tasks=existing_tasks,
-                    milestone_order_map=milestone_order_map,
-                    preferred_session_minutes=preferred_session_minutes,
-                    estimation_bias_beta=estimation_bias_beta,
-                    peak_productivity_slots=peak_productivity_slots,
-                    daily_workload_cap_minutes=daily_workload_cap_minutes,
-                    buffer_minutes_per_week=buffer_minutes_per_week,
-                )
-                raw_proposal = {
-                    **raw_proposal,
-                    "tasks": allocated_tasks,
-                    "schedule_blocks": schedule_blocks,
-                }
+                if hard_solver_v2_enabled:
+                    alloc_res = SpatioTemporalRuleEngine.allocate_task_sessions_with_diagnostics(
+                        unscheduled_tasks,
+                        availability,
+                        start_date=start_date or date.today(),
+                        target_date=current_roadmap_target_date,
+                        dependencies=raw_deps,
+                        existing_tasks=existing_tasks,
+                        milestone_order_map=milestone_order_map,
+                        preferred_session_minutes=preferred_session_minutes,
+                        estimation_bias_beta=estimation_bias_beta,
+                        peak_productivity_slots=peak_productivity_slots,
+                        daily_workload_cap_minutes=daily_workload_cap_minutes,
+                        buffer_minutes_per_week=buffer_minutes_per_week,
+                        soft_pacing_v2_enabled=soft_pacing_v2_enabled,
+                        end_buffer_ratio=soft_end_buffer_ratio,
+                        max_consecutive_study_days=soft_max_consecutive_days,
+                    )
+                    allocated_tasks = alloc_res.tasks
+                    schedule_blocks = alloc_res.schedule_blocks
+                    raw_proposal = {
+                        **raw_proposal,
+                        "tasks": allocated_tasks,
+                        "schedule_blocks": schedule_blocks,
+                        "feasibility_verdict": alloc_res.feasibility_verdict,
+                        "unscheduled_diagnostics": [
+                            d.to_dict() for d in alloc_res.unscheduled_diagnostics
+                        ],
+                    }
+                else:
+                    allocated_tasks, schedule_blocks = (
+                        SpatioTemporalRuleEngine.allocate_task_sessions(
+                            unscheduled_tasks,
+                            availability,
+                            start_date=start_date or date.today(),
+                            target_date=current_roadmap_target_date,
+                            dependencies=raw_deps,
+                            existing_tasks=existing_tasks,
+                            milestone_order_map=milestone_order_map,
+                            preferred_session_minutes=preferred_session_minutes,
+                            estimation_bias_beta=estimation_bias_beta,
+                            peak_productivity_slots=peak_productivity_slots,
+                            daily_workload_cap_minutes=daily_workload_cap_minutes,
+                            buffer_minutes_per_week=buffer_minutes_per_week,
+                            hard_solver_v2_enabled=False,
+                        )
+                    )
+                    raw_proposal = {
+                        **raw_proposal,
+                        "tasks": allocated_tasks,
+                        "schedule_blocks": schedule_blocks,
+                    }
             elif isinstance(raw_tasks, list) and any(
                 isinstance(t, dict) and parse_iso_date(t.get("scheduled_date")) is None
                 for t in raw_tasks
@@ -616,16 +806,20 @@ class ProposalValidationGateOrchestrator:
                     dependencies=raw_deps if isinstance(raw_deps, list) else [],
                     existing_tasks=existing_tasks,
                     milestone_order_map=milestone_order_map,
+                    daily_workload_cap_minutes=daily_workload_cap_minutes,
+                    hard_solver_v2_enabled=hard_solver_v2_enabled,
                 )
                 raw_proposal = {**raw_proposal, "tasks": allocated_tasks}
             else:
                 allocated_tasks = raw_tasks if isinstance(raw_tasks, list) else []
 
             has_unscheduled = any(
-                isinstance(t, dict) and parse_iso_date(t.get("scheduled_date")) is None
+                isinstance(t, dict) and safe_parse_iso_date(t.get("scheduled_date")) is None
                 for t in allocated_tasks
             )
             allow_unscheduled_in_attempt = False
+            attempt_avail_mins: int | None = None
+            attempt_completeness: ScheduleCompletenessStatus | None = None
             if has_unscheduled and isinstance(raw_proposal, dict):
                 avail_mins = SpatioTemporalRuleEngine.calculate_available_capacity_minutes(
                     availability,
@@ -634,6 +828,7 @@ class ProposalValidationGateOrchestrator:
                     existing_tasks=existing_tasks,
                     daily_workload_cap_minutes=daily_workload_cap_minutes,
                 )
+                attempt_avail_mins = avail_mins
                 req_mins = sum(
                     _safe_minutes(t.get("estimated_minutes"))
                     for t in allocated_tasks
@@ -651,18 +846,106 @@ class ProposalValidationGateOrchestrator:
                         ),
                     },
                 }
-                if allow_partial_schedule:
-                    remaining_for_retry = pipeline_deadline - asyncio.get_running_loop().time()
-                    if (
-                        attempt == 1
-                        and attempt < max_attempts
-                        and remaining_for_retry >= min_retry_remaining
-                        and avail_mins > 0
-                        and req_mins <= int(avail_mins * 1.30)
-                    ):
+                dict_tasks = [t for t in allocated_tasks if isinstance(t, dict)]
+                scheduled_count = sum(
+                    1
+                    for t in dict_tasks
+                    if safe_parse_iso_date(t.get("scheduled_date")) is not None
+                )
+                unscheduled_count = len(dict_tasks) - scheduled_count
+                feasibility_assessment = assess_schedule_feasibility(
+                    dict_tasks,
+                    available_minutes=avail_mins,
+                )
+                raw_diags = raw_proposal.get("unscheduled_diagnostics")
+                unscheduled_reason_codes = {
+                    str(d.get("reason_code"))
+                    for d in (raw_diags if isinstance(raw_diags, list) else [])
+                    if isinstance(d, dict) and d.get("reason_code")
+                }
+                raw_verdict = raw_proposal.get("feasibility_verdict")
+                raw_blocks = raw_proposal.get("schedule_blocks")
+                has_blocks = isinstance(raw_blocks, list) and any(
+                    isinstance(b, dict) for b in raw_blocks
+                )
+                all_scheduled_have_times = scheduled_count > 0 and all(
+                    safe_parse_iso_datetime(t.get("scheduled_start")) is not None
+                    and safe_parse_iso_datetime(t.get("scheduled_end")) is not None
+                    for t in dict_tasks
+                    if safe_parse_iso_date(t.get("scheduled_date")) is not None
+                )
+                attempt_completeness = classify_schedule_completeness(
+                    total_tasks=len(dict_tasks),
+                    scheduled_tasks_count=scheduled_count,
+                    unscheduled_tasks_count=unscheduled_count,
+                    available_minutes=avail_mins,
+                    schedulable_ratio=feasibility_assessment.schedulable_ratio,
+                    feasibility_verdict=str(raw_verdict) if raw_verdict is not None else None,
+                    has_schedule_blocks=has_blocks,
+                    all_scheduled_have_block_times=all_scheduled_have_times,
+                    allow_partial_schedule=allow_partial_schedule,
+                )
+
+                hard_impossibility_codes = {
+                    "TASK_EXCEEDS_CONTINUOUS_SLOT",
+                    "CRITICAL_PATH_EXCEEDED_WINDOW",
+                    "CALENDAR_CONFLICT_SATURATION",
+                }
+                has_hard_impossibility_code = bool(
+                    unscheduled_reason_codes & hard_impossibility_codes
+                )
+                is_hard_deterministic_impossibility = avail_mins <= 0 or (
+                    raw_verdict == "EXPLICIT_UNSCHEDULABLE"
+                    and (has_hard_impossibility_code or scheduled_count == 0)
+                )
+
+                remaining_for_retry = pipeline_deadline - asyncio.get_running_loop().time()
+                can_condense_retry = (
+                    not is_hard_deterministic_impossibility
+                    and attempt == 1
+                    and attempt < max_attempts
+                    and remaining_for_retry >= min_retry_remaining
+                    and avail_mins > 0
+                    and req_mins <= int(avail_mins * 1.30)
+                )
+
+                if attempt_completeness == "INFEASIBLE":
+                    allow_unscheduled_in_attempt = False
+                    last_infeasible_ratio = feasibility_assessment.schedulable_ratio
+                    if not can_condense_retry:
+                        if allow_partial_schedule:
+                            raise PlanInfeasibleError(feasibility_assessment.schedulable_ratio)
+                        raise ProposalValidationGateError(
+                            message=(
+                                "Đề xuất lịch học không khả thi với quỹ thời gian rảnh hiện tại "
+                                f"(tỉ lệ xếp lịch {feasibility_assessment.schedulable_ratio:.0%})."
+                            ),
+                            code="AI_SCHEMA_VALIDATION_ERROR",
+                            violations=[
+                                {
+                                    "task_index": None,
+                                    "field": "tasks",
+                                    "rule_code": "PLAN_INFEASIBLE",
+                                    "expected_bound": "schedulable_ratio >= 0.25 and available_minutes > 0",
+                                    "actual_value": (
+                                        f"ratio={feasibility_assessment.schedulable_ratio}, "
+                                        f"avail={avail_mins}"
+                                    ),
+                                    "suggested_fix": "Gia hạn ngày mục tiêu hoặc tăng thời gian rảnh.",
+                                }
+                            ],
+                        )
+                elif attempt_completeness == "UNDETERMINED":
+                    allow_unscheduled_in_attempt = False
+                    last_infeasible_ratio = None
+                elif attempt_completeness == "PARTIAL":
+                    last_infeasible_ratio = None
+                    if can_condense_retry:
                         allow_unscheduled_in_attempt = False
                     else:
                         allow_unscheduled_in_attempt = True
+            else:
+                last_infeasible_ratio = None
 
             # Tier 1 & Tier 2 deterministic gates run BEFORE parallel Critic + Tier 3 Judge.
             tier1_violations = self.run_tier1_gate(
@@ -765,6 +1048,7 @@ class ProposalValidationGateOrchestrator:
                             roadmap_id=self._roadmap_id,
                             workflow_type=WorkflowType.SCHEDULE_GENERATION,
                             token_accumulator=critic_tokens,
+                            quota=self._quota,
                         ),
                         timeout=remaining_budget,
                     )
@@ -793,11 +1077,19 @@ class ProposalValidationGateOrchestrator:
                     )
 
             async def _run_judge_coro() -> Tier3JudgeOutcome:
+                dynamic_judge_cap = min(
+                    float(
+                        self._tier3_timeout_seconds
+                        if self._tier3_timeout_seconds is not None
+                        else getattr(settings, "tier3_judge_timeout_seconds", 12.0)
+                    ),
+                    remaining_budget,
+                )
                 return await execute_tier3_pedagogical_judge(
                     self._llm,
                     raw_proposal,
                     enable_tier3_judge=self._enable_tier3_judge,
-                    tier3_timeout_seconds=self._tier3_timeout_seconds,
+                    tier3_timeout_seconds=dynamic_judge_cap,
                     min_judge_remaining_seconds=min_judge_remaining,
                     goal_title=goal_title,
                     learner_level=learner_level,
@@ -809,6 +1101,7 @@ class ProposalValidationGateOrchestrator:
                     user_id=self._user_id,
                     goal_id=self._goal_id,
                     roadmap_id=self._roadmap_id,
+                    quota=self._quota,
                 )
 
             critic_result: (
@@ -960,7 +1253,13 @@ class ProposalValidationGateOrchestrator:
                 thinking_tokens=total_thinking_tokens,
                 attempts_used=attempt,
                 retry_history=tuple(retry_history),
+                available_minutes=attempt_avail_mins,
+                schedule_completeness_status=attempt_completeness,
+                allow_partial_schedule=allow_partial_schedule,
             )
+
+        if last_infeasible_ratio is not None and allow_partial_schedule:
+            raise PlanInfeasibleError(last_infeasible_ratio)
 
         raise ProposalValidationGateError(
             message=(

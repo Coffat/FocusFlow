@@ -1,11 +1,16 @@
 import asyncio
+import hashlib
 import json
 import os
 import re
+import threading
+import time
 from collections.abc import AsyncIterator, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Any, Literal
+from weakref import WeakKeyDictionary, ref
 
+import httpx
 import structlog
 from pydantic import BaseModel, ValidationError
 
@@ -16,9 +21,12 @@ from src.shared_kernel.application.llm_port import (
     LLMToolDeclarationDTO,
     LLMToolExecutor,
     SchemaMismatchError,
+    extract_upstream_model_from_response,
     format_concise_schema_errors,
 )
 from src.shared_kernel.config import get_settings
+
+_REAL_HTTPX_ASYNC_CLIENT_CLS = httpx.AsyncClient
 
 logger = structlog.get_logger(__name__)
 
@@ -43,6 +51,9 @@ class CobhubCapabilityProbeResult:
     low_thinking_is_low: bool
     configured_schema_enforced: bool = False
     mismatches: tuple[str, ...] = ()
+    gateway_models: tuple[str, ...] = ()
+    checked_configured_models: dict[str, str] = field(default_factory=dict)
+    missing_gateway_models: tuple[str, ...] = ()
     probe_succeeded: bool = True
     error: str | None = None
     cached: bool = False
@@ -59,12 +70,83 @@ class CobhubCapabilityProbeResult:
             "low_model_thinking_tokens": self.low_model_thinking_tokens,
             "low_thinking_is_low": self.low_thinking_is_low,
             "mismatches": list(self.mismatches),
+            "gateway_models": list(self.gateway_models),
+            "checked_configured_models": dict(self.checked_configured_models),
+            "missing_gateway_models": list(self.missing_gateway_models),
             "error": self.error,
             "cached": self.cached,
         }
 
 
-_COBHUB_PROBE_CACHE: dict[tuple[str, str], CobhubCapabilityProbeResult] = {}
+_COBHUB_PROBE_CACHE: dict[
+    tuple[str, str, tuple[tuple[str, str], ...]], CobhubCapabilityProbeResult
+] = {}
+_GENAI_CLIENT_CACHE_LOCK = threading.Lock()
+_GENAI_CLIENT_CACHE: dict[tuple[str, str, str], tuple[Any, Any]] = {}
+_GENAI_CLIENT_LOOPS: dict[tuple[str, str, str], ref[asyncio.AbstractEventLoop] | None] = {}
+_GENAI_HTTPX_CLIENTS: dict[tuple[str, str, str], httpx.AsyncClient] = {}
+_OUTBOUND_SEMAPHORES_LOCK = threading.Lock()
+_OUTBOUND_SEMAPHORES: WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore] = (
+    WeakKeyDictionary()
+)
+_OUTBOUND_SEMAPHORE_LIMITS: WeakKeyDictionary[asyncio.AbstractEventLoop, int] = WeakKeyDictionary()
+
+
+def _extract_httpx_async_client(client: Any) -> httpx.AsyncClient | None:
+    api_client = getattr(client, "_api_client", None)
+    http_opts = getattr(api_client, "_http_options", None)
+    hc = getattr(http_opts, "httpx_async_client", None)
+    if isinstance(hc, _REAL_HTTPX_ASYNC_CLIENT_CLS):
+        return hc
+    fake_kwargs = getattr(client, "kwargs", None)
+    if isinstance(fake_kwargs, dict):
+        hc_fake = getattr(fake_kwargs.get("http_options"), "httpx_async_client", None)
+        if isinstance(hc_fake, _REAL_HTTPX_ASYNC_CLIENT_CLS):
+            return hc_fake
+    return None
+
+
+def clear_google_genai_client_cache() -> None:
+    """Clear cached google-genai Client instances and close bound httpx pools when safe."""
+    try:
+        running_loop: asyncio.AbstractEventLoop | None = asyncio.get_running_loop()
+    except RuntimeError:
+        running_loop = None
+
+    with _GENAI_CLIENT_CACHE_LOCK:
+        _GENAI_CLIENT_CACHE.clear()
+        loops_snapshot = dict(_GENAI_CLIENT_LOOPS)
+        clients_snapshot = dict(_GENAI_HTTPX_CLIENTS)
+        _GENAI_CLIENT_LOOPS.clear()
+        _GENAI_HTTPX_CLIENTS.clear()
+
+    for key, hc in clients_snapshot.items():
+        if hc.is_closed:
+            continue
+        loop_ref = loops_snapshot.get(key)
+        bound_loop = loop_ref() if loop_ref is not None else None
+        if (
+            running_loop is not None
+            and not running_loop.is_closed()
+            and (bound_loop is None or bound_loop is running_loop)
+        ):
+            running_loop.create_task(hc.aclose())
+
+
+async def aclose_google_genai_clients() -> None:
+    """Async cleanup helper closing all cached httpx.AsyncClient pools."""
+    with _GENAI_CLIENT_CACHE_LOCK:
+        _GENAI_CLIENT_CACHE.clear()
+        _GENAI_CLIENT_LOOPS.clear()
+        clients = list(_GENAI_HTTPX_CLIENTS.values())
+        _GENAI_HTTPX_CLIENTS.clear()
+
+    for hc in clients:
+        if not hc.is_closed:
+            try:
+                await hc.aclose()
+            except Exception:
+                pass
 
 
 def clear_cobhub_capability_probe_cache() -> None:
@@ -319,8 +401,8 @@ def _tool_parameters_schema(tool: LLMToolDeclarationDTO | dict[str, Any]) -> dic
     return dict(tool.parameters_schema)
 
 
-def _normalize_thinking_level(raw_level: str | None, default_level: str = "MEDIUM") -> str:
-    level = (raw_level or default_level or "MEDIUM").strip().upper()
+def _normalize_thinking_level(raw_level: str | None) -> str:
+    level = (raw_level or "").strip().upper()
     if level not in {"LOW", "MEDIUM", "HIGH"}:
         raise ValueError(
             f"Unsupported thinking_level {raw_level!r}; allowed values are LOW, MEDIUM, HIGH."
@@ -364,8 +446,25 @@ class LiteLLMAdapter(LLMProviderPort):
 
     @property
     def model_identifier(self) -> str:
-        provider = self._settings.llm_provider.lower()
-        model = self._settings.llm_model
+        provider = (self._settings.llm_provider or "").strip().lower()
+        model = (getattr(self._settings, "llm_model", "") or "").strip()
+        if not model:
+            if (
+                not self._should_use_google_genai_sdk()
+                or self._resolve_thinking_control() == "param"
+            ):
+                raise RuntimeError(
+                    "AI_PROVIDER_NOT_CONFIGURED: Missing LLM_MODEL for configured provider."
+                )
+            for tier_attr in ("llm_model_medium", "llm_model_low", "llm_model_high"):
+                candidate = (getattr(self._settings, tier_attr, "") or "").strip()
+                if candidate:
+                    model = candidate
+                    break
+            if not model:
+                raise RuntimeError(
+                    "AI_PROVIDER_NOT_CONFIGURED: Missing LLM_MODEL for configured provider."
+                )
         if "/" in model:
             return model
         return f"{provider}/{model}"
@@ -377,43 +476,52 @@ class LiteLLMAdapter(LLMProviderPort):
         return _rewrite_docker_localhost(getattr(self._settings, "llm_base_url", ""))
 
     def _resolve_thinking_control(self) -> str:
-        raw = str(getattr(self._settings, "llm_thinking_control", "model_suffix") or "model_suffix")
-        mode = raw.strip().lower()
-        return mode if mode in {"model_suffix", "param"} else "model_suffix"
+        return _normalize_thinking_control(self._settings)
 
     def _resolve_candidate_models(self, thinking_level: str | None) -> tuple[list[str], set[str]]:
-        effective_level = _normalize_thinking_level(
-            thinking_level,
-            getattr(self._settings, "llm_thinking_level", "MEDIUM"),
-        )
-        default_model = (
-            getattr(self._settings, "llm_model", "") or "gemini-3.8-flash-medium"
-        ).split("/")[-1].strip() or "gemini-3.8-flash-medium"
+        effective_level = _normalize_thinking_level(thinking_level)
         if self._resolve_thinking_control() == "param":
+            default_model = (
+                str(getattr(self._settings, "llm_model", "") or "").split("/")[-1].strip()
+            )
+            if not default_model:
+                raise RuntimeError(
+                    "AI_PROVIDER_NOT_CONFIGURED: Missing LLM_MODEL for thinking_control='param'."
+                )
             candidates = [default_model]
         else:
             tier_attr = {
                 "LOW": "llm_model_low",
                 "MEDIUM": "llm_model_medium",
                 "HIGH": "llm_model_high",
-            }.get(effective_level, "llm_model_medium")
-            if hasattr(self._settings, tier_attr):
-                raw_tier_model = getattr(self._settings, tier_attr, "") or ""
-                tier_model = raw_tier_model.split("/")[-1].strip() or default_model
-            else:
-                tier_model = default_model
-
+            }[effective_level]
+            env_var_name = tier_attr.upper()
+            if not hasattr(self._settings, tier_attr):
+                raise RuntimeError(
+                    f"AI_PROVIDER_NOT_CONFIGURED: Missing {env_var_name} for thinking_level={effective_level}."
+                )
+            raw_tier_model = getattr(self._settings, tier_attr, "") or ""
+            tier_model = str(raw_tier_model).split("/")[-1].strip()
+            if not tier_model:
+                raise RuntimeError(
+                    f"AI_PROVIDER_NOT_CONFIGURED: Blank {env_var_name} for thinking_level={effective_level}."
+                )
             candidates = [tier_model]
-            if default_model and default_model not in candidates:
-                candidates.append(default_model)
 
         raw_fallbacks = str(getattr(self._settings, "llm_fallback_models", "") or "")
         for raw_item in raw_fallbacks.split(","):
-            fallback_model = raw_item.strip()
+            fallback_model = raw_item.strip().split("/")[-1].strip()
             if fallback_model and fallback_model not in candidates:
                 candidates.append(fallback_model)
 
         return candidates, set()
+
+    def resolve_model_for_thinking_level(self, thinking_level: str | None) -> str:
+        """Resolve the primary configured model for the given thinking level."""
+        if not self._should_use_google_genai_sdk():
+            return self.model_identifier
+        candidates, _ = self._resolve_candidate_models(thinking_level)
+        return candidates[0] if candidates else self.model_identifier
 
     @staticmethod
     def build_google_genai_client(api_key: str, base_url: str) -> Any:
@@ -421,16 +529,93 @@ class LiteLLMAdapter(LLMProviderPort):
         from google import genai
         from google.genai import types
 
+        httpx_async_client = _REAL_HTTPX_ASYNC_CLIENT_CLS(
+            limits=httpx.Limits(
+                max_connections=12,
+                max_keepalive_connections=6,
+                keepalive_expiry=30.0,
+            ),
+            http2=False,
+        )
         http_opts = types.HttpOptions(
             base_url=base_url,
             api_version="v1beta",
             retry_options=types.HttpRetryOptions(attempts=1),
+            httpx_async_client=httpx_async_client,
         )
         effective_key = (api_key or "").strip() or "antigravity-proxy-key"
         return genai.Client(
             api_key=effective_key,
             http_options=http_opts,
         )
+
+    @classmethod
+    def get_shared_google_genai_client(cls, api_key: str, base_url: str) -> Any:
+        """Return a cached google-genai Client keyed by (base_url, sha256(api_key), loop_tag)."""
+        from google import genai
+
+        normalized_url = (base_url or "").strip()
+        effective_key = (api_key or "").strip() or "antigravity-proxy-key"
+        key_digest = hashlib.sha256(effective_key.encode("utf-8")).hexdigest()
+        try:
+            running_loop: asyncio.AbstractEventLoop | None = asyncio.get_running_loop()
+            loop_tag = f"loop:{id(running_loop)}"
+        except RuntimeError:
+            running_loop = None
+            loop_tag = "loop:none"
+        cache_key = (normalized_url, key_digest, loop_tag)
+        current_client_cls = genai.Client
+
+        with _GENAI_CLIENT_CACHE_LOCK:
+            # Prune entries bound to closed or garbage-collected event loops
+            stale_keys = [
+                k
+                for k, loop_ref in _GENAI_CLIENT_LOOPS.items()
+                if loop_ref is not None and (loop_ref() is None or loop_ref().is_closed())  # type: ignore[union-attr]
+            ]
+            for sk in stale_keys:
+                _GENAI_CLIENT_CACHE.pop(sk, None)
+                _GENAI_CLIENT_LOOPS.pop(sk, None)
+                _GENAI_HTTPX_CLIENTS.pop(sk, None)
+
+            cached_entry = _GENAI_CLIENT_CACHE.get(cache_key)
+            cached_loop_ref = _GENAI_CLIENT_LOOPS.get(cache_key)
+            cached_httpx = _GENAI_HTTPX_CLIENTS.get(cache_key)
+            loop_matches = running_loop is None or (
+                cached_loop_ref is not None
+                and cached_loop_ref() is running_loop
+                and not running_loop.is_closed()
+            )
+            httpx_alive = cached_httpx is None or not cached_httpx.is_closed
+            if (
+                cached_entry is not None
+                and cached_entry[0] is current_client_cls
+                and loop_matches
+                and httpx_alive
+            ):
+                return cached_entry[1]
+
+            client = cls.build_google_genai_client(api_key, normalized_url)
+            _GENAI_CLIENT_CACHE[cache_key] = (current_client_cls, client)
+            _GENAI_CLIENT_LOOPS[cache_key] = ref(running_loop) if running_loop is not None else None
+            hc = _extract_httpx_async_client(client)
+            if hc is not None:
+                _GENAI_HTTPX_CLIENTS[cache_key] = hc
+            return client
+
+    def _get_outbound_semaphore(self, loop: asyncio.AbstractEventLoop) -> asyncio.Semaphore:
+        """Return per-loop bounded outbound semaphore sized by ai_max_concurrent_llm_requests."""
+        raw_limit = getattr(self._settings, "ai_max_concurrent_llm_requests", 4)
+        limit = max(1, int(raw_limit if raw_limit is not None else 4))
+        with _OUTBOUND_SEMAPHORES_LOCK:
+            existing = _OUTBOUND_SEMAPHORES.get(loop)
+            existing_limit = _OUTBOUND_SEMAPHORE_LIMITS.get(loop)
+            if existing is not None and existing_limit == limit:
+                return existing
+            sem = asyncio.Semaphore(limit)
+            _OUTBOUND_SEMAPHORES[loop] = sem
+            _OUTBOUND_SEMAPHORE_LIMITS[loop] = limit
+            return sem
 
     @staticmethod
     def build_generate_content_config(
@@ -446,7 +631,9 @@ class LiteLLMAdapter(LLMProviderPort):
         """Build a google.genai.types.GenerateContentConfig preserving adapter defaults."""
         from google.genai import types
 
-        kwargs: dict[str, Any] = {}
+        kwargs: dict[str, Any] = {
+            "automatic_function_calling": types.AutomaticFunctionCallingConfig(disable=True),
+        }
         if system_instruction:
             kwargs["system_instruction"] = system_instruction
         if response_mime_type is not None:
@@ -485,15 +672,19 @@ class LiteLLMAdapter(LLMProviderPort):
                 "AI_PROVIDER_NOT_CONFIGURED: Thiếu LLM_BASE_URL cho gateway cobhub. "
                 "Hãy đặt LLM_BASE_URL trong .env (xem .env.example)."
             )
-        client = self.build_google_genai_client(self._settings.llm_api_key or "", base_url)
-        effective_level = _normalize_thinking_level(
-            thinking_level,
-            getattr(self._settings, "llm_thinking_level", "MEDIUM"),
-        )
+        client = self.get_shared_google_genai_client(self._settings.llm_api_key or "", base_url)
+        effective_level = _normalize_thinking_level(thinking_level)
         thinking_control = self._resolve_thinking_control()
         candidate_models, degraded_set = self._resolve_candidate_models(effective_level)
         preferred_model: str | None = None
         last_requested_model: str = candidate_models[0]
+
+        t_start_total = time.perf_counter()
+        total_queue_wait_ms: float = 0.0
+        total_connect_ms: float = 0.0
+        total_ttft_ms: float = 0.0
+        total_generation_ms: float = 0.0
+        total_retries: int = 0
 
         total_budget = (
             float(timeout_seconds)
@@ -502,6 +693,7 @@ class LiteLLMAdapter(LLMProviderPort):
         )
         loop = asyncio.get_running_loop()
         deadline = loop.time() + total_budget
+        outbound_semaphore = self._get_outbound_semaphore(loop)
 
         async def _call_model(
             contents: Any,
@@ -510,7 +702,14 @@ class LiteLLMAdapter(LLMProviderPort):
             is_tool_turn: bool = False,
             parse_json_fn: Any | None = None,
         ) -> Any:
-            nonlocal preferred_model, last_requested_model
+            nonlocal \
+                preferred_model, \
+                last_requested_model, \
+                total_queue_wait_ms, \
+                total_connect_ms, \
+                total_ttft_ms, \
+                total_generation_ms, \
+                total_retries
             ordered_candidates = list(candidate_models)
             if preferred_model and preferred_model in ordered_candidates:
                 ordered_candidates.remove(preferred_model)
@@ -520,26 +719,53 @@ class LiteLLMAdapter(LLMProviderPort):
             last_err: Exception | None = None
             for cand in ordered_candidates:
                 while True:
-                    remaining = deadline - loop.time()
-                    if remaining <= 0:
+                    remaining_wait = deadline - loop.time()
+                    if remaining_wait <= 0:
                         raise TimeoutError(
                             f"LLM call exceeded remaining timeout budget ({total_budget:.2f}s)"
                         )
-                    if is_tool_turn:
-                        if tool_call_timeout_seconds is not None and tool_call_timeout_seconds > 0:
-                            call_timeout = min(remaining, float(tool_call_timeout_seconds))
-                        else:
-                            cfg_tool_timeout = float(
-                                getattr(
-                                    self._settings,
-                                    "ai_tool_call_timeout_seconds",
-                                    total_budget,
-                                )
-                            )
-                            call_timeout = min(remaining, cfg_tool_timeout)
-                    else:
-                        call_timeout = remaining
+                    t_sem_start = time.perf_counter()
                     try:
+                        async with asyncio.timeout(remaining_wait):
+                            await outbound_semaphore.acquire()
+                    except TimeoutError as sem_exc:
+                        raise TimeoutError(
+                            f"LLM call exceeded remaining timeout budget ({total_budget:.2f}s)"
+                        ) from sem_exc
+                    sem_wait = (time.perf_counter() - t_sem_start) * 1000.0
+                    total_queue_wait_ms += sem_wait
+
+                    t_conn_start = time.perf_counter()
+                    _ = getattr(client, "aio", None)
+                    t_conn_end = time.perf_counter()
+                    conn_wait = (t_conn_end - t_conn_start) * 1000.0
+                    total_connect_ms += conn_wait
+
+                    try:
+                        remaining = deadline - loop.time()
+                        if remaining <= 0:
+                            raise TimeoutError(
+                                f"LLM call exceeded remaining timeout budget ({total_budget:.2f}s)"
+                            )
+                        if is_tool_turn:
+                            if (
+                                tool_call_timeout_seconds is not None
+                                and tool_call_timeout_seconds > 0
+                            ):
+                                call_timeout = min(remaining, float(tool_call_timeout_seconds))
+                            else:
+                                cfg_tool_timeout = float(
+                                    getattr(
+                                        self._settings,
+                                        "ai_tool_call_timeout_seconds",
+                                        total_budget,
+                                    )
+                                )
+                                call_timeout = min(remaining, cfg_tool_timeout)
+                        else:
+                            call_timeout = remaining
+
+                        t_req_start = time.perf_counter()
                         resp = await asyncio.wait_for(
                             client.aio.models.generate_content(
                                 model=cand,
@@ -548,32 +774,34 @@ class LiteLLMAdapter(LLMProviderPort):
                             ),
                             timeout=call_timeout,
                         )
-                        actual_model_id = (
-                            str(getattr(resp, "model_version", None) or cand).strip() or cand
+                        t_req_end = time.perf_counter()
+                        req_elapsed_ms = (t_req_end - t_req_start) * 1000.0
+
+                        raw_ttft = getattr(resp, "provider_ttft_ms", getattr(resp, "ttft_ms", None))
+                        raw_gen = getattr(resp, "generation_ms", None)
+                        raw_conn = getattr(resp, "connect_ms", None)
+                        raw_queue = getattr(resp, "queue_wait_ms", None)
+                        if raw_queue is not None:
+                            total_queue_wait_ms += float(raw_queue) - sem_wait
+                        if raw_conn is not None:
+                            total_connect_ms += float(raw_conn) - conn_wait
+
+                        ttft_val = float(raw_ttft) if raw_ttft is not None else req_elapsed_ms
+                        gen_val = (
+                            float(raw_gen)
+                            if raw_gen is not None
+                            else (
+                                max(0.0, req_elapsed_ms - ttft_val) if raw_ttft is not None else 0.0
+                            )
                         )
-                        if parse_json_fn is not None:
-                            parsed = parse_json_fn(resp)
-                            preferred_model = cand
-                            last_requested_model = cand
-                            self.model_used = actual_model_id
-                            self.last_model_used = actual_model_id
-                            is_degraded = cand in degraded_set
-                            self.degraded_model_used = is_degraded
-                            self.last_degraded_model_used = is_degraded
-                            return resp, parsed
-                        preferred_model = cand
-                        last_requested_model = cand
-                        self.model_used = actual_model_id
-                        self.last_model_used = actual_model_id
-                        is_degraded = cand in degraded_set
-                        self.degraded_model_used = is_degraded
-                        self.last_degraded_model_used = is_degraded
-                        return resp
+                        total_ttft_ms += ttft_val
+                        total_generation_ms += gen_val
                     except TimeoutError:
                         raise
                     except (json.JSONDecodeError, ValueError) as e:
                         if parse_json_fn is not None:
                             last_err = e
+                            total_retries += 1
                             break
                         raise
                     except Exception as e:
@@ -592,8 +820,10 @@ class LiteLLMAdapter(LLMProviderPort):
                         if is_http_500:
                             if http500_retries < 1 and (deadline - loop.time()) > 0.1:
                                 http500_retries += 1
+                                total_retries += 1
                                 await asyncio.sleep(0.05)
                                 continue
+                            total_retries += 1
                             break
                         if (
                             "503" in err_str
@@ -605,8 +835,43 @@ class LiteLLMAdapter(LLMProviderPort):
                             or "404" in err_str
                             or "NOT_FOUND" in err_str
                         ):
+                            total_retries += 1
                             break
                         raise
+                    finally:
+                        outbound_semaphore.release()
+
+                    verified_m, fallback_m = extract_upstream_model_from_response(
+                        resp, default_model=cand
+                    )
+                    actual_model_id = verified_m or fallback_m
+                    if parse_json_fn is not None:
+                        t_parse_start = time.perf_counter()
+                        try:
+                            parsed = parse_json_fn(resp)
+                        except (json.JSONDecodeError, ValueError) as e:
+                            last_err = e
+                            total_retries += 1
+                            break
+                        t_parse_end = time.perf_counter()
+                        if raw_gen is None and raw_ttft is None:
+                            total_generation_ms += (t_parse_end - t_parse_start) * 1000.0
+                        preferred_model = cand
+                        last_requested_model = cand
+                        self.model_used = actual_model_id
+                        self.last_model_used = actual_model_id
+                        is_degraded = cand in degraded_set
+                        self.degraded_model_used = is_degraded
+                        self.last_degraded_model_used = is_degraded
+                        return resp, parsed
+                    preferred_model = cand
+                    last_requested_model = cand
+                    self.model_used = actual_model_id
+                    self.last_model_used = actual_model_id
+                    is_degraded = cand in degraded_set
+                    self.degraded_model_used = is_degraded
+                    self.last_degraded_model_used = is_degraded
+                    return resp
             if last_err is not None:
                 raise last_err
             raise RuntimeError("No candidate models available for Google GenAI")
@@ -631,10 +896,18 @@ class LiteLLMAdapter(LLMProviderPort):
             usage = getattr(resp_obj, "usage_metadata", None)
             if usage is None:
                 return
-            total_prompt_tokens += int(getattr(usage, "prompt_token_count", 0) or 0)
-            cand_tokens = int(getattr(usage, "candidates_token_count", 0) or 0)
+            p_tok = int(getattr(usage, "prompt_token_count", 0) or 0)
+            total_prompt_tokens += p_tok
+            tot_tok = getattr(usage, "total_token_count", None)
             thought_tokens = int(getattr(usage, "thoughts_token_count", 0) or 0)
-            total_completion_tokens += cand_tokens + thought_tokens
+            if tot_tok is not None and int(tot_tok) > 0:
+                # Provider semantic: total_token_count = prompt_tokens + billable_output_tokens
+                # When candidates_token_count and thoughts_token_count are both reported,
+                # max(0, tot_tok - p_tok) guarantees thinking tokens are included exactly once
+                total_completion_tokens += max(0, int(tot_tok) - p_tok)
+            else:
+                cand_tokens = int(getattr(usage, "candidates_token_count", 0) or 0)
+                total_completion_tokens += cand_tokens + thought_tokens
             total_thinking_tokens += thought_tokens
 
         if used_tool_stage and tool_executor is not None and tools is not None:
@@ -868,6 +1141,27 @@ class LiteLLMAdapter(LLMProviderPort):
                     model_id=self.last_model_used,
                 ) from repair_val_err
 
+        total_elapsed_ms = (time.perf_counter() - t_start_total) * 1000.0
+        latency_breakdown = {
+            "queue_wait_ms": round(total_queue_wait_ms, 2),
+            "connect_ms": round(total_connect_ms, 2),
+            "provider_ttft_ms": round(total_ttft_ms, 2),
+            "ttft_ms": round(total_ttft_ms, 2),
+            "generation_ms": round(total_generation_ms, 2),
+            "total_elapsed_ms": round(total_elapsed_ms, 2),
+            "retries": total_retries,
+        }
+
+        logger.debug(
+            "llm_latency_telemetry",
+            queue_wait_ms=round(total_queue_wait_ms, 2),
+            connect_ms=round(total_connect_ms, 2),
+            ttft_ms=round(total_ttft_ms, 2),
+            generation_ms=round(total_generation_ms, 2),
+            total_elapsed_ms=round(total_elapsed_ms, 2),
+            model_id=self.last_model_used,
+            retries=total_retries,
+        )
         logger.info(
             "llm_generation_completed",
             requested_model=last_requested_model,
@@ -885,6 +1179,9 @@ class LiteLLMAdapter(LLMProviderPort):
             model_id=self.last_model_used,
             raw_tool_results=tuple(tool_call_records),
             repair_attempts=repair_attempts,
+            latency_metrics=latency_breakdown,
+            retries=total_retries,
+            resolved_model=self.last_model_used,
         )
 
     async def generate_structured(
@@ -1038,6 +1335,73 @@ class LiteLLMAdapter(LLMProviderPort):
                 yield delta
 
 
+def _normalize_thinking_control(effective_settings: Any) -> str:
+    raw = str(getattr(effective_settings, "llm_thinking_control", "model_suffix") or "model_suffix")
+    mode = raw.strip().lower()
+    return mode if mode in {"model_suffix", "param"} else "model_suffix"
+
+
+def _collect_configured_models(effective_settings: Any) -> dict[str, str]:
+    configured: dict[str, str] = {}
+    provider = str(getattr(effective_settings, "llm_provider", "") or "").strip().lower()
+    thinking_control = _normalize_thinking_control(effective_settings)
+    if provider == "gemini" and thinking_control == "model_suffix":
+        target_fields: tuple[str, ...] = ("llm_model_low", "llm_model_medium", "llm_model_high")
+    else:
+        target_fields = ("llm_model",)
+
+    for field_name in target_fields:
+        raw_val = str(getattr(effective_settings, field_name, "") or "").strip()
+        model_id = raw_val.split("/")[-1].strip() if raw_val else ""
+        if model_id:
+            configured[field_name] = model_id
+    raw_fallbacks = str(getattr(effective_settings, "llm_fallback_models", "") or "")
+    fallback_idx = 0
+    for raw_item in raw_fallbacks.split(","):
+        fb_id = raw_item.strip().split("/")[-1].strip()
+        if fb_id:
+            configured[f"llm_fallback_models[{fallback_idx}]"] = fb_id
+            fallback_idx += 1
+    return configured
+
+
+async def _fetch_gateway_v1beta_models(
+    base_url: str,
+    api_key: str,
+    timeout_seconds: float,
+) -> tuple[str, ...]:
+    cleaned_base = base_url.rstrip("/")
+    models_url = (
+        f"{cleaned_base}/models"
+        if cleaned_base.endswith("/v1beta")
+        else f"{cleaned_base}/v1beta/models"
+    )
+    headers: dict[str, str] = {}
+    cleaned_key = (api_key or "").strip()
+    if cleaned_key:
+        headers["x-goog-api-key"] = cleaned_key
+        headers["Authorization"] = f"Bearer {cleaned_key}"
+    async with httpx.AsyncClient(timeout=max(0.1, float(timeout_seconds))) as http_client:
+        response = await http_client.get(models_url, headers=headers)
+        response.raise_for_status()
+        payload = response.json()
+    raw_models = payload.get("models") if isinstance(payload, dict) else None
+    if not isinstance(raw_models, list):
+        return ()
+    parsed_models: list[str] = []
+    for item in raw_models:
+        if isinstance(item, dict):
+            raw_name = str(item.get("name") or "").strip()
+        elif isinstance(item, str):
+            raw_name = item.strip()
+        else:
+            continue
+        normalized = raw_name.removeprefix("models/").strip()
+        if normalized and normalized not in parsed_models:
+            parsed_models.append(normalized)
+    return tuple(parsed_models)
+
+
 async def probe_cobhub_capabilities(
     settings: Any | None = None,
     *,
@@ -1048,23 +1412,17 @@ async def probe_cobhub_capabilities(
     effective_settings = settings if settings is not None else get_settings()
     provider = str(getattr(effective_settings, "llm_provider", "") or "").strip().lower()
     resolved_base_url = _rewrite_docker_localhost(getattr(effective_settings, "llm_base_url", ""))
-    default_model = (
-        str(getattr(effective_settings, "llm_model", "") or "gemini-3.8-flash-medium")
-        .split("/")[-1]
-        .strip()
-        or "gemini-3.8-flash-medium"
-    )
-    low_model = (
-        str(getattr(effective_settings, "llm_model_low", "") or default_model)
-        .split("/")[-1]
-        .strip()
-        or default_model
-    )
+    thinking_control = _normalize_thinking_control(effective_settings)
+    checked_configured_models = _collect_configured_models(effective_settings)
+    if thinking_control == "param":
+        low_model = checked_configured_models.get("llm_model") or ""
+    else:
+        low_model = checked_configured_models.get("llm_model_low") or ""
     configured_schema_enforced = bool(
         getattr(effective_settings, "llm_schema_enforced_by_gateway", False)
     )
 
-    if provider != "gemini" or not resolved_base_url:
+    if provider != "gemini" or not resolved_base_url or not low_model:
         return CobhubCapabilityProbeResult(
             base_url=resolved_base_url or "",
             requested_low_model=low_model,
@@ -1073,22 +1431,57 @@ async def probe_cobhub_capabilities(
             low_model_thinking_tokens=0,
             low_thinking_is_low=True,
             configured_schema_enforced=configured_schema_enforced,
+            checked_configured_models=checked_configured_models,
             probe_succeeded=False,
             error="AI_PROVIDER_NOT_CONFIGURED",
             cached=False,
         )
 
-    cache_key = (resolved_base_url, low_model)
+    cache_key = (
+        resolved_base_url,
+        low_model,
+        tuple(sorted(checked_configured_models.items())),
+    )
     if not force and cache_key in _COBHUB_PROBE_CACHE:
         return replace(_COBHUB_PROBE_CACHE[cache_key], cached=True)
 
     try:
-        client = LiteLLMAdapter.build_google_genai_client(
-            str(getattr(effective_settings, "llm_api_key", "") or ""),
+        api_key = str(getattr(effective_settings, "llm_api_key", "") or "")
+        client = LiteLLMAdapter.get_shared_google_genai_client(
+            api_key,
             resolved_base_url,
         )
         loop = asyncio.get_running_loop()
         deadline = loop.time() + max(0.5, float(timeout_seconds))
+
+        gateway_models: tuple[str, ...] = ()
+        missing_gateway_models: tuple[str, ...] = ()
+        models_list_fetched = False
+        rem_models = max(0.1, deadline - loop.time())
+        try:
+            gateway_models = await asyncio.wait_for(
+                _fetch_gateway_v1beta_models(
+                    resolved_base_url,
+                    api_key,
+                    rem_models,
+                ),
+                timeout=rem_models,
+            )
+            models_list_fetched = True
+        except Exception as models_exc:
+            logger.warning(
+                "cobhub_models_list_probe_failed",
+                base_url=resolved_base_url,
+                error=f"{type(models_exc).__name__}: {str(models_exc)[:200]}",
+            )
+
+        if models_list_fetched:
+            gateway_set = set(gateway_models)
+            missing_list: list[str] = []
+            for model_id in checked_configured_models.values():
+                if model_id not in gateway_set and model_id not in missing_list:
+                    missing_list.append(model_id)
+            missing_gateway_models = tuple(missing_list)
 
         # Probe 1: send minimal JSON request with response_json_schema only (no system schema injection).
         probe1_cfg = LiteLLMAdapter.build_generate_content_config(
@@ -1117,15 +1510,7 @@ async def probe_cobhub_capabilities(
             except (json.JSONDecodeError, ValidationError, ValueError):
                 schema_enforced_detected = False
 
-        # Probe 2: call configured llm_model_low and inspect actual_model_id + thoughts_token_count.
-        thinking_control = (
-            str(
-                getattr(effective_settings, "llm_thinking_control", "model_suffix")
-                or "model_suffix"
-            )
-            .strip()
-            .lower()
-        )
+        # Probe 2: call configured low-thinking target model and inspect actual_model_id + thoughts_token_count.
         probe2_thinking_level = "LOW" if thinking_control == "param" else None
         probe2_cfg = LiteLLMAdapter.build_generate_content_config(
             system_instruction="Return minimal JSON.",
@@ -1158,6 +1543,8 @@ async def probe_cobhub_capabilities(
             mismatches.append("low_thinking_tokens_exceeded")
         if low_model not in actual_model_id and actual_model_id != low_model:
             mismatches.append("low_model_id_mismatch")
+        if missing_gateway_models:
+            mismatches.append("configured_models_missing_from_gateway")
 
         result = CobhubCapabilityProbeResult(
             base_url=resolved_base_url,
@@ -1168,6 +1555,9 @@ async def probe_cobhub_capabilities(
             low_thinking_is_low=low_thinking_is_low,
             configured_schema_enforced=configured_schema_enforced,
             mismatches=tuple(mismatches),
+            gateway_models=gateway_models,
+            checked_configured_models=checked_configured_models,
+            missing_gateway_models=missing_gateway_models,
             probe_succeeded=True,
             error=None,
             cached=False,
@@ -1184,6 +1574,8 @@ async def probe_cobhub_capabilities(
                 low_model_thinking_tokens=low_thinking_tokens,
                 low_thinking_is_low=low_thinking_is_low,
                 mismatches=mismatches,
+                checked_configured_models=checked_configured_models,
+                missing_gateway_models=list(missing_gateway_models),
             )
         else:
             logger.info(
@@ -1194,6 +1586,7 @@ async def probe_cobhub_capabilities(
                 schema_enforced_detected=schema_enforced_detected,
                 low_model_thinking_tokens=low_thinking_tokens,
                 low_thinking_is_low=low_thinking_is_low,
+                gateway_models_count=len(gateway_models),
             )
         return result
     except Exception as exc:
@@ -1213,6 +1606,7 @@ async def probe_cobhub_capabilities(
             low_thinking_is_low=True,
             configured_schema_enforced=configured_schema_enforced,
             mismatches=(),
+            checked_configured_models=checked_configured_models,
             probe_succeeded=False,
             error=safe_err,
             cached=False,

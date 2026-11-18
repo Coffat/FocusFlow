@@ -249,6 +249,27 @@ export class RoadmapWizardHostComponent {
     });
   }
 
+  onApproveFitCapacity(confirmedVersion: number): void {
+    const roadmapId = this.roadmapService.selectedRoadmapDetail()?.id;
+    if (!roadmapId) {
+      this.roadmapService.errorMessage.set(
+        'Chưa tìm thấy lộ trình học tập (Roadmap ID) trên máy chủ. Vui lòng hoàn tất Bước 1 trước.'
+      );
+      return;
+    }
+    this.roadmapService.approveMilestones(
+      roadmapId,
+      () => {
+        this.currentStep.set(4);
+        this.onGenerateProposal();
+      },
+      {
+        confirmedScopeProposalVersion: confirmedVersion,
+        acceptFitCapacity: true,
+      }
+    );
+  }
+
   // =========================================================================
   // Step 4: Official Schedule Proposal (Generate / Update / Apply / Manual)
   // =========================================================================

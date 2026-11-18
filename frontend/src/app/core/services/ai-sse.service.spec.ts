@@ -1,7 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AiSseService, AiStreamChunkEvent } from './ai-sse.service';
+import { AiSseService, AiStreamChunkEvent, SseStreamError } from './ai-sse.service';
 
 class FakeEventSource {
   static readonly CONNECTING = 0;
@@ -52,6 +52,7 @@ describe('AiSseService', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -80,6 +81,22 @@ describe('AiSseService', () => {
     expect(transportError).toBeUndefined();
   });
 
+  it('không để chuỗi error rỗng nuốt mất message khi chuẩn hóa sự kiện failed', () => {
+    const received: AiStreamChunkEvent[] = [];
+    service.observeJobStream('/api/v1/roadmaps/jobs/job-empty/stream').subscribe({
+      next: event => received.push(event),
+    });
+
+    fakeEventSource.emit('failed', {
+      stage: 'FAILED',
+      progress: 100,
+      error: '',
+      message: 'Thông báo lỗi từ message.',
+    });
+
+    expect(received[0].error).toBe('Thông báo lỗi từ message.');
+  });
+
   it('giữ kết nối để EventSource tự nối lại khi lỗi mạng chỉ là tạm thời', () => {
     let transportError: unknown;
     service
@@ -91,5 +108,48 @@ describe('AiSseService', () => {
 
     expect(fakeEventSource.closed).toBe(false);
     expect(transportError).toBeUndefined();
+  });
+
+  it('đóng EventSource và phát lỗi có kiểm soát khi vòng lặp onerror vượt quá ngưỡng thử lại', () => {
+    let transportError: unknown;
+    service
+      .observeJobStream('/api/v1/roadmaps/jobs/job-loop/stream', { maxReconnectAttempts: 2 })
+      .subscribe({ error: error => (transportError = error) });
+
+    fakeEventSource.readyState = FakeEventSource.CONNECTING;
+    fakeEventSource.onerror?.(new Event('error'));
+    fakeEventSource.onerror?.(new Event('error'));
+    expect(fakeEventSource.closed).toBe(false);
+    expect(transportError).toBeUndefined();
+
+    // 3rd consecutive error exceeds maxReconnectAttempts (2)
+    fakeEventSource.onerror?.(new Event('error'));
+    expect(fakeEventSource.closed).toBe(true);
+    expect(transportError).toBeInstanceOf(SseStreamError);
+    expect((transportError as SseStreamError).code).toBe('SSE_RECONNECT_EXHAUSTED');
+  });
+
+  it('đóng EventSource và phát lỗi SSE_TIMEOUT khi luồng im lặng quá thời gian chờ watchdog', () => {
+    vi.useFakeTimers();
+    let transportError: unknown;
+    service
+      .observeJobStream('/api/v1/roadmaps/jobs/job-silent/stream', { inactivityTimeoutMs: 5000 })
+      .subscribe({ error: error => (transportError = error) });
+
+    // Receive an event at 3s -> resets watchdog
+    vi.advanceTimersByTime(3000);
+    fakeEventSource.emit('stage', { stage: 'STREAMING', progress: 40 });
+    expect(fakeEventSource.closed).toBe(false);
+
+    // 4s after event (total 7s) -> still alive
+    vi.advanceTimersByTime(4000);
+    expect(fakeEventSource.closed).toBe(false);
+    expect(transportError).toBeUndefined();
+
+    // Another 1.1s without events -> watchdog trips
+    vi.advanceTimersByTime(1100);
+    expect(fakeEventSource.closed).toBe(true);
+    expect(transportError).toBeInstanceOf(SseStreamError);
+    expect((transportError as SseStreamError).code).toBe('SSE_TIMEOUT');
   });
 });

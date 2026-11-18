@@ -172,4 +172,24 @@ describe('AiGrillMeDialogComponent', () => {
     const previewBtn = compiled.querySelector('[data-testid="preview-standard-questions-btn"]') as HTMLButtonElement;
     expect(previewBtn).toBeTruthy();
   });
+
+  it('hiển thị badge/banner Vòng 2 và nhãn nút động khi WAITING_FOLLOW_UP (BUG-12)', () => {
+    roadmapService.clarificationRound.set(1);
+    roadmapService.clarificationStatus.set('WAITING_ANSWER');
+    roadmapService.clarificationQuestions.set(STANDARD_PEDAGOGICAL_QUESTIONS);
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    const submitBtn = compiled.querySelector('[data-testid="submit-interview-btn"]');
+    expect(submitBtn?.textContent).toContain('Gửi câu trả lời');
+    expect(compiled.querySelector('[data-testid="grill-me-round-2-banner"]')).toBeNull();
+
+    roadmapService.clarificationRound.set(2);
+    roadmapService.clarificationStatus.set('WAITING_FOLLOW_UP');
+    fixture.detectChanges();
+
+    expect(compiled.querySelector('[data-testid="grill-me-round-2-badge"]')?.textContent).toContain('Vòng 2');
+    expect(compiled.querySelector('[data-testid="grill-me-round-2-banner"]')?.textContent).toContain('Vòng 2');
+    expect(submitBtn?.textContent).toContain('Xác nhận & Hoàn tất chẩn đoán');
+  });
 });

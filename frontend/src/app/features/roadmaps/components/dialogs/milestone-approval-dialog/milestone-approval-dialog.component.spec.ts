@@ -132,4 +132,112 @@ describe('MilestoneApprovalDialogComponent', () => {
 
     expect(genSpy).toHaveBeenCalledWith('Tập trung các bài tập thực hành FastAPI');
   });
+
+  it('đọc estimated_effort_minutes từ milestone thay vì fallback cứng 24h', () => {
+    roadmapService.editableMilestones.set([
+      {
+        id: 'ms-1',
+        milestone_id: 'ms-1',
+        sequence_order: 1,
+        title: 'Chặng 1',
+        description: 'Mô tả',
+        estimated_effort_minutes: 180,
+      },
+      {
+        id: 'ms-2',
+        milestone_id: 'ms-2',
+        sequence_order: 2,
+        title: 'Chặng 2',
+        description: 'Mô tả',
+        estimated_effort_minutes: 300,
+      },
+    ]);
+    fixture.detectChanges();
+
+    expect(component.getMilestoneHours(0)).toBe(3);
+    expect(component.getMilestoneHours(1)).toBe(5);
+    expect(component.totalEstimatedHours()).toBe(8);
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.querySelector('[data-testid="total-estimated-hours-badge"]')?.textContent).toContain('8h');
+  });
+
+  it('hiển thị FIT_CAPACITY scope panel và phát approveFitCapacity & regenerateFitCapacity trong dialog', () => {
+    roadmapService.editableMilestones.set([
+      {
+        id: 'ms-1',
+        milestone_id: 'ms-1',
+        sequence_order: 1,
+        title: 'Chặng 1: Giữ lại',
+        description: 'Core',
+        estimated_effort_minutes: 180,
+      },
+      {
+        id: 'ms-2',
+        milestone_id: 'ms-2',
+        sequence_order: 2,
+        title: 'Chặng 2: Hoãn lại',
+        description: 'Deferred',
+        estimated_effort_minutes: 240,
+      },
+    ]);
+    roadmapService.preliminaryFeasibility.set({
+      status: 'FIT_CAPACITY_REQUIRES_APPROVAL',
+      scope_proposal_version: 2,
+      requires_learner_approval: true,
+      scope_approval_status: 'PENDING_LEARNER_APPROVAL',
+      hard_packable_capacity_minutes: 240,
+      estimated_total_minutes: 420,
+      normalized_planned_total_minutes: 180,
+      kept_scope: [
+        { sequence_order: 1, milestone_id: 'ms-1', title: 'Chặng 1: Giữ lại', estimated_effort_minutes: 180 },
+      ],
+      deferred_scope: [
+        { sequence_order: 2, milestone_id: 'ms-2', title: 'Chặng 2: Hoãn lại', estimated_effort_minutes: 240 },
+      ],
+      feasibility_reasons: [],
+    });
+    fixture.detectChanges();
+
+    const approveFitSpy = vi.fn();
+    const regenFitSpy = vi.fn();
+    component.approveFitCapacity.subscribe(approveFitSpy);
+    component.regenerateFitCapacity.subscribe(regenFitSpy);
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.querySelector('[data-testid="fit-capacity-scope-panel"]')).toBeTruthy();
+    expect(compiled.querySelector('[data-testid="scope-proposal-version-badge"]')?.textContent).toContain('v2');
+    expect(compiled.querySelector('[data-testid="dialog-milestone-scope-badge-0"]')?.textContent).toContain('Giữ lại');
+    expect(compiled.querySelector('[data-testid="dialog-milestone-scope-badge-1"]')?.textContent).toContain('Hoãn lại (PENDING)');
+
+    const checkbox = compiled.querySelector('[data-testid="confirm-fit-capacity-checkbox"]') as HTMLInputElement;
+    checkbox.click();
+    fixture.detectChanges();
+
+    (compiled.querySelector('[data-testid="confirm-fit-capacity-approve-btn"]') as HTMLButtonElement).click();
+    expect(approveFitSpy).toHaveBeenCalledWith(2);
+
+    (compiled.querySelector('[data-testid="regenerate-fit-capacity-btn"]') as HTMLButtonElement).click();
+    expect(regenFitSpy).toHaveBeenCalledOnce();
+  });
+
+  it('hiển thị cảnh báo PRELIMINARY_UNSCHEDULABLE và khóa nút phê duyệt trong dialog', () => {
+    roadmapService.preliminaryFeasibility.set({
+      status: 'PRELIMINARY_UNSCHEDULABLE',
+      scope_proposal_version: 0,
+      requires_learner_approval: false,
+      scope_approval_status: 'NOT_REQUIRED',
+      hard_packable_capacity_minutes: 30,
+      kept_scope: [],
+      deferred_scope: [],
+      feasibility_reasons: [
+        { code: 'PRELIMINARY_UNSCHEDULABLE', message: 'Không đủ quỹ giờ cho cột mốc 1.' },
+      ],
+    });
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.querySelector('[data-testid="preliminary-unschedulable-alert"]')).toBeTruthy();
+    expect((compiled.querySelector('[data-testid="approve-milestones-btn"]') as HTMLButtonElement).disabled).toBe(true);
+  });
 });

@@ -309,4 +309,122 @@ describe('RoadmapWizardHostComponent', () => {
     expect(stage2).toBeTruthy();
     expect(stage2?.className).toContain('text-[#246B4A]');
   });
+
+  it('giữ nguyên Bước 3 khi 409 SCOPE_APPROVAL_REQUIRED và chuyển Bước 4 sau khi xác nhận FIT_CAPACITY', () => {
+    const msList = [
+      {
+        id: 'ms-1',
+        roadmap_id: 'rm-100',
+        sequence_order: 1,
+        title: 'Chặng 1',
+        description: 'Core',
+        estimated_effort_minutes: 180,
+        status: 'PENDING',
+        created_at: '2026-11-12T00:00:00Z',
+        updated_at: '2026-11-12T00:00:00Z',
+      },
+      {
+        id: 'ms-2',
+        roadmap_id: 'rm-100',
+        sequence_order: 2,
+        title: 'Chặng 2',
+        description: 'Deferred',
+        estimated_effort_minutes: 240,
+        status: 'PENDING',
+        created_at: '2026-11-12T00:00:00Z',
+        updated_at: '2026-11-12T00:00:00Z',
+      },
+    ];
+    roadmapService.selectedRoadmapDetail.set({
+      id: 'rm-100',
+      user_id: 'usr-1',
+      goal_id: 'goal-100',
+      title: 'Học Rust',
+      description: 'Systems programming',
+      status: 'INITIALIZED',
+      start_date: '2026-11-12',
+      target_date: '2027-02-01',
+      milestones: msList,
+      created_at: '2026-11-12T00:00:00Z',
+      updated_at: '2026-11-12T00:00:00Z',
+    });
+    roadmapService.milestones.set(msList);
+    roadmapService.editableMilestones.set(
+      msList.map(m => ({
+        id: m.id,
+        milestone_id: m.id,
+        sequence_order: m.sequence_order,
+        title: m.title,
+        description: m.description,
+        estimated_effort_minutes: m.estimated_effort_minutes,
+      }))
+    );
+    component.currentStep.set(3);
+    fixture.detectChanges();
+
+    component.onApproveMilestones();
+    const conflictReq = httpTesting.expectOne(API_ENDPOINTS.ROADMAPS.MILESTONES_APPROVE('rm-100'));
+    conflictReq.flush(
+      {
+        code: 'SCOPE_APPROVAL_REQUIRED',
+        message: 'Cần xác nhận phạm vi FIT_CAPACITY v1.',
+        detail: 'Cần xác nhận phạm vi FIT_CAPACITY v1.',
+        scope_proposal_version: 1,
+        preliminary_feasibility: {
+          status: 'FIT_CAPACITY_REQUIRES_APPROVAL',
+          scope_proposal_version: 1,
+          requires_learner_approval: true,
+          scope_approval_status: 'PENDING_LEARNER_APPROVAL',
+          kept_scope: [{ sequence_order: 1, milestone_id: 'ms-1', title: 'Chặng 1', estimated_effort_minutes: 180 }],
+          deferred_scope: [{ sequence_order: 2, milestone_id: 'ms-2', title: 'Chặng 2', estimated_effort_minutes: 240 }],
+          feasibility_reasons: [],
+        },
+      },
+      { status: 409, statusText: 'Conflict' }
+    );
+    fixture.detectChanges();
+
+    expect(component.currentStep()).toBe(3);
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    const checkbox = compiled.querySelector('[data-testid="confirm-fit-capacity-checkbox"]') as HTMLInputElement;
+    expect(checkbox).toBeTruthy();
+    checkbox.click();
+    fixture.detectChanges();
+
+    const genProposalSpy = vi.spyOn(component, 'onGenerateProposal');
+    (compiled.querySelector('[data-testid="confirm-fit-capacity-approve-btn"]') as HTMLButtonElement).click();
+
+    const approveReq = httpTesting.expectOne(API_ENDPOINTS.ROADMAPS.MILESTONES_APPROVE('rm-100'));
+    expect(approveReq.request.body).toEqual({
+      confirmed_scope_proposal_version: 1,
+      accept_fit_capacity: true,
+    });
+    approveReq.flush({
+      roadmap_id: 'rm-100',
+      milestones: [
+        { ...msList[0], status: 'APPROVED' },
+        { ...msList[1], status: 'PENDING' },
+      ],
+      preliminary_feasibility: {
+        status: 'FIT_CAPACITY_REQUIRES_APPROVAL',
+        scope_proposal_version: 1,
+        requires_learner_approval: true,
+        scope_approval_status: 'APPROVED_BY_LEARNER',
+        approved_scope_version: 1,
+        kept_scope: [{ sequence_order: 1, milestone_id: 'ms-1', title: 'Chặng 1', estimated_effort_minutes: 180 }],
+        deferred_scope: [{ sequence_order: 2, milestone_id: 'ms-2', title: 'Chặng 2', estimated_effort_minutes: 240 }],
+        feasibility_reasons: [],
+      },
+    });
+    fixture.detectChanges();
+
+    expect(component.currentStep()).toBe(4);
+    expect(genProposalSpy).toHaveBeenCalledTimes(1);
+
+    httpTesting.expectOne(API_ENDPOINTS.ROADMAPS.PROPOSALS_GENERATE_JOBS('rm-100')).flush({
+      job_id: 'job-prop-101',
+      status: 'RESERVED',
+    });
+  });
 });

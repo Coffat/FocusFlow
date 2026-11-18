@@ -36,7 +36,7 @@ from src.shared_kernel.config import get_settings
 
 logger = structlog.get_logger(__name__)
 
-TIER3_JUDGE_TIMEOUT_SECONDS: float = 8.0
+TIER3_JUDGE_TIMEOUT_SECONDS: float = 12.0
 DEFAULT_MIN_JUDGE_REMAINING_SECONDS: float = 3.0
 PEDAGOGICAL_JUDGE_RESPONSE_SCHEMA: dict[str, Any] = PedagogicalJudgeLLMOutput.model_json_schema()
 
@@ -108,6 +108,7 @@ async def execute_tier3_pedagogical_judge(
     user_id: UUID | None = None,
     goal_id: UUID | None = None,
     roadmap_id: UUID | None = None,
+    quota: Any = None,
 ) -> Tier3JudgeOutcome:
     """Execute Tier 3 Pedagogical Judge with configurable single-attempt timeout & honest status."""
     if not enable_tier3_judge or llm_provider is None:
@@ -193,6 +194,7 @@ async def execute_tier3_pedagogical_judge(
     try:
         exec_mgr = AIExecutionManager(
             provider=llm_provider,
+            quota=quota,
             manage_quota=False,
             max_retries=0,
             timeout_seconds=attempt_timeout,

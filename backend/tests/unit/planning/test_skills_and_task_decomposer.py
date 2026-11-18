@@ -150,6 +150,121 @@ def test_roadmap_context_builder_separates_four_blocks_and_sanitizes_injection()
     assert "<script>" not in ctx
     assert "IGNORE ALL PREVIOUS INSTRUCTIONS" not in ctx
     assert "py-syntax-variables" in ctx
+    assert "precomputed_schedule_budget:" in ctx
+
+
+def test_roadmap_context_builder_precomputed_schedule_budget_and_edge_cases() -> None:
+    import json
+    from types import SimpleNamespace
+
+    now = datetime(2026, 11, 2, 10, 0, tzinfo=UTC)
+    user_id = uuid7()
+    goal = Goal(
+        id=uuid7(),
+        user_id=user_id,
+        title="Học FastAPI",
+        raw_description="Xây REST API",
+        target_date=date(2026, 11, 5),
+        prior_knowledge_level="INTERMEDIATE",
+        status=GoalStatus.ACTIVE,
+        created_at=now,
+        updated_at=now,
+    )
+    roadmap = Roadmap(
+        id=uuid7(),
+        user_id=user_id,
+        goal_id=goal.id,
+        title="FastAPI 4 ngày",
+        start_date=date(2026, 11, 2),
+        target_date=date(2026, 11, 5),
+        status=RoadmapStatus.INITIALIZED,
+        created_at=now,
+        updated_at=now,
+    )
+    milestones = [
+        Milestone(
+            id=uuid7(),
+            roadmap_id=roadmap.id,
+            sequence_order=1,
+            title="Cột mốc 1",
+            estimated_effort_minutes=150,
+            status=MilestoneStatus.APPROVED,
+            created_at=now,
+            updated_at=now,
+        ),
+        Milestone(
+            id=uuid7(),
+            roadmap_id=roadmap.id,
+            sequence_order=2,
+            title="Cột mốc 2",
+            estimated_effort_minutes=150,
+            status=MilestoneStatus.APPROVED,
+            created_at=now,
+            updated_at=now,
+        ),
+    ]
+    # 4 days (Nov 2..5) * 90m = 360m raw, minus 60m existing -> 300m available.
+    # With daily_workload_cap_minutes=60: 4 * 60 = 240m raw, minus 60m on Nov 2 -> 180m available.
+    avail = AvailabilityConfigurationDTO(mode="MODE_A", default_daily_quota_minutes=90)
+    existing = [
+        SimpleNamespace(scheduled_date=date(2026, 11, 2), estimated_minutes=60, status="TODO")
+    ]
+    profile = SimpleNamespace(opt_session_minutes=60)
+
+    ctx = RoadmapContextBuilder.build_task_decomposition_context(
+        goal=goal,
+        roadmap=roadmap,
+        milestones=milestones,
+        availability=avail,
+        learner_profile=profile,
+        existing_tasks=existing,
+        daily_workload_cap_minutes=60,
+    )
+    system_section = ctx.split("[SYSTEM_DERIVED_FACTS]", 1)[1].split(
+        "[KNOWLEDGE_BASE_EVIDENCE]", 1
+    )[0]
+    budget_line = next(
+        line
+        for line in system_section.splitlines()
+        if line.startswith("precomputed_schedule_budget:")
+    )
+    budget = json.loads(budget_line.split("precomputed_schedule_budget:", 1)[1].strip())
+    assert budget == {
+        "max_available_minutes_until_target_date": 180,
+        "total_milestone_effort_minutes": 300,
+        "recommended_minutes_per_task": 60,
+        "recommended_task_count_range": {"min_tasks": 3, "max_tasks": 3},
+        "capacity_fit_ratio": 0.6,
+        "fits_milestone_effort": False,
+    }
+    assert (
+        budget["recommended_task_count_range"]["max_tasks"] * budget["recommended_minutes_per_task"]
+        <= budget["max_available_minutes_until_target_date"]
+    )
+
+    # Backward-compatibility toggle omits precomputed_schedule_budget
+    ctx_no_budget = RoadmapContextBuilder.build_task_decomposition_context(
+        goal=goal,
+        roadmap=roadmap,
+        milestones=milestones,
+        availability=avail,
+        learner_profile=profile,
+        include_precomputed_budget=False,
+    )
+    assert "precomputed_schedule_budget:" not in ctx_no_budget
+
+    # Tight infeasible window caps min_tasks <= max_tasks and clamps opt_session_minutes to [30, 120]
+    tight_budget = RoadmapContextBuilder.compute_schedule_budget(
+        availability=AvailabilityConfigurationDTO(mode="MODE_A", default_daily_quota_minutes=45),
+        milestones=milestones,
+        start_date=date(2026, 11, 2),
+        target_date=date(2026, 11, 2),
+        learner_profile=SimpleNamespace(opt_session_minutes=15),
+    )
+    assert tight_budget["recommended_minutes_per_task"] == 30
+    assert tight_budget["max_available_minutes_until_target_date"] == 45
+    assert tight_budget["recommended_task_count_range"] == {"min_tasks": 1, "max_tasks": 1}
+    assert tight_budget["fits_milestone_effort"] is False
 
 
 def test_deterministic_slot_allocator_mode_a_and_mode_b_with_dag_and_disabled_days() -> None:

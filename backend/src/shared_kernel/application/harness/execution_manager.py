@@ -4,7 +4,7 @@ import random
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Protocol, TypeVar
+from typing import Any, Literal, Protocol, TypeVar
 from uuid import UUID
 
 from src.shared_kernel.application.llm_port import (
@@ -59,6 +59,29 @@ class AIQuotaPort(Protocol):
         reason: str = "RELEASED",
     ) -> None: ...
 
+    async def record_attempt_usage(
+        self,
+        *,
+        user_id: UUID,
+        action_type: str,
+        requested_model: str = "gemini-3.8-flash",
+        resolved_model: str | None = None,
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
+        thinking_tokens: int = 0,
+        latency_ms: int = 0,
+        status: Literal["SUCCESS", "FAILED", "RATE_LIMITED", "TIMEOUT"] = "SUCCESS",
+        usage_completeness: Literal["COMPLETE", "PARTIAL", "UNKNOWN"] = "COMPLETE",
+        usage_source: Literal[
+            "GATEWAY_TELEMETRY", "CACHE", "ESTIMATED", "UNKNOWN"
+        ] = "GATEWAY_TELEMETRY",
+        error_code: str | None = None,
+        error_message: str | None = None,
+        attempt_no: int = 1,
+        idempotency_key: str | None = None,
+        reservation_id: UUID | None = None,
+    ) -> Any: ...
+
 
 class _NoOpQuotaAdapter:
     """Internal no-op quota adapter when `manage_quota=False` for sub-steps."""
@@ -88,6 +111,33 @@ class _NoOpQuotaAdapter:
         reason: str = "RELEASED",
     ) -> None:
         del reservation_id, reason
+
+    async def record_attempt_usage(
+        self,
+        *,
+        user_id: UUID,
+        action_type: str,
+        requested_model: str = "gemini-3.8-flash",
+        resolved_model: str | None = None,
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
+        thinking_tokens: int = 0,
+        latency_ms: int = 0,
+        status: Literal["SUCCESS", "FAILED", "RATE_LIMITED", "TIMEOUT"] = "SUCCESS",
+        usage_completeness: Literal["COMPLETE", "PARTIAL", "UNKNOWN"] = "COMPLETE",
+        usage_source: Literal[
+            "GATEWAY_TELEMETRY", "CACHE", "ESTIMATED", "UNKNOWN"
+        ] = "GATEWAY_TELEMETRY",
+        error_code: str | None = None,
+        error_message: str | None = None,
+        attempt_no: int = 1,
+        idempotency_key: str | None = None,
+        reservation_id: UUID | None = None,
+    ) -> Any:
+        del user_id, action_type, requested_model, resolved_model, prompt_tokens, completion_tokens
+        del thinking_tokens, latency_ms, status, usage_completeness, usage_source
+        del error_code, error_message, attempt_no, idempotency_key, reservation_id
+        return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -247,6 +297,56 @@ class AIExecutionManager:
         self._workflow_repo = workflow_repo
         self._manage_quota = manage_quota and (quota is not None)
 
+    async def _safe_record_usage(
+        self,
+        *,
+        user_id: UUID,
+        action_type: str,
+        requested_model: str,
+        resolved_model: str | None = None,
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
+        thinking_tokens: int = 0,
+        latency_ms: int = 0,
+        status: Literal["SUCCESS", "FAILED", "RATE_LIMITED", "TIMEOUT"] = "SUCCESS",
+        usage_completeness: Literal["COMPLETE", "PARTIAL", "UNKNOWN"] = "COMPLETE",
+        usage_source: Literal[
+            "GATEWAY_TELEMETRY", "CACHE", "ESTIMATED", "UNKNOWN"
+        ] = "GATEWAY_TELEMETRY",
+        error_code: str | None = None,
+        error_message: str | None = None,
+        attempt_no: int = 1,
+        idempotency_key: str | None = None,
+        reservation_id: UUID | None = None,
+    ) -> None:
+        recorder = getattr(self._quota, "record_attempt_usage", None)
+        if recorder is not None and callable(recorder):
+            try:
+                await recorder(
+                    user_id=user_id,
+                    action_type=action_type,
+                    requested_model=requested_model,
+                    resolved_model=resolved_model,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
+                    thinking_tokens=thinking_tokens,
+                    latency_ms=latency_ms,
+                    status=status,
+                    usage_completeness=usage_completeness,
+                    usage_source=usage_source,
+                    error_code=error_code,
+                    error_message=error_message,
+                    attempt_no=attempt_no,
+                    idempotency_key=idempotency_key,
+                    reservation_id=reservation_id,
+                )
+            except Exception as rec_exc:
+                logger.warning(
+                    "ai_execution_record_usage_failed: %s",
+                    rec_exc,
+                    extra={"idempotency_key": idempotency_key},
+                )
+
     async def execute(
         self,
         *,
@@ -272,7 +372,16 @@ class AIExecutionManager:
         roadmap_id: UUID | None = None,
         context_snapshot: dict[str, Any] | None = None,
         prompt_template: PromptTemplate | None = None,
+        idempotency_key: str | None = None,
     ) -> AIExecutionResult:
+        resolved_thinking_level = (thinking_level or "").strip()
+        if not resolved_thinking_level and prompt_template is not None:
+            resolved_thinking_level = (prompt_template.thinking_level or "").strip()
+        if not resolved_thinking_level:
+            raise ValueError(
+                "AI_MODEL_SELECTION_ERROR: thinking_level must be explicitly specified per stage"
+            )
+
         effective_manage_quota = self._manage_quota if manage_quota is None else manage_quota
         effective_commit = commit_on_success and effective_manage_quota
         effective_release = release_on_failure and effective_manage_quota
@@ -367,6 +476,43 @@ class AIExecutionManager:
             t_tokens: int,
         ) -> None:
             err_name = type(err).__name__ if err else "AI_EXECUTION_FAILED"
+            key_prefix = idempotency_key or f"{reservation_id}:{step_name or operation_type}"
+            fail_attempt = max(step_order, attempts_made)
+            fail_key = f"{key_prefix}:{fail_attempt}"
+            is_to = category is AIErrorCategory.TIMEOUT or isinstance(err, TimeoutError)
+            status_val: Literal["SUCCESS", "FAILED", "RATE_LIMITED", "TIMEOUT"] = (
+                "TIMEOUT"
+                if is_to
+                else (
+                    "RATE_LIMITED"
+                    if (
+                        category is AIErrorCategory.QUOTA
+                        or "429" in str(err)
+                        or "quota" in str(err).lower()
+                    )
+                    else "FAILED"
+                )
+            )
+            comp_val: Literal["COMPLETE", "PARTIAL", "UNKNOWN"] = (
+                "PARTIAL" if (p_tokens > 0 or c_tokens > 0) else "UNKNOWN"
+            )
+            await self._safe_record_usage(
+                user_id=user_id,
+                action_type=operation_type,
+                requested_model=model_name,
+                resolved_model=resolved_model_id,
+                prompt_tokens=p_tokens,
+                completion_tokens=c_tokens,
+                thinking_tokens=t_tokens,
+                status=status_val,
+                usage_completeness=comp_val,
+                usage_source="GATEWAY_TELEMETRY" if comp_val == "PARTIAL" else "UNKNOWN",
+                error_code=err_name,
+                error_message=str(err) if err else err_name,
+                attempt_no=attempts_made,
+                idempotency_key=fail_key,
+                reservation_id=reservation_id,
+            )
             logger.warning(
                 "ai_execution_failed",
                 extra={
@@ -446,6 +592,7 @@ class AIExecutionManager:
                         "system_prompt": system_prompt,
                         "user_prompt": user_prompt,
                         "response_schema": response_schema,
+                        "thinking_level": resolved_thinking_level,
                         "timeout_seconds": remaining_seconds,
                     }
                     if tools is not None:
@@ -456,8 +603,6 @@ class AIExecutionManager:
                             call_kwargs["tool_call_timeout_seconds"] = min(
                                 float(effective_tool_call_timeout), remaining_seconds
                             )
-                    if thinking_level is not None:
-                        call_kwargs["thinking_level"] = thinking_level
 
                     raw_gen = await asyncio.wait_for(
                         self._provider.generate_structured(**call_kwargs),
@@ -476,16 +621,41 @@ class AIExecutionManager:
                     succeeded = True
                     last_error = None
                     last_error_category = None
+                    effective_attempt = max(step_order, attempt)
+                    key_base = idempotency_key or f"{reservation_id}:{step_name or operation_type}"
+                    attempt_key = f"{key_base}:{effective_attempt}"
+                    await self._safe_record_usage(
+                        user_id=user_id,
+                        action_type=operation_type,
+                        requested_model=model_name,
+                        resolved_model=resolved_model_id,
+                        prompt_tokens=p_tok,
+                        completion_tokens=c_tok,
+                        thinking_tokens=t_tok,
+                        status="SUCCESS",
+                        usage_completeness="COMPLETE",
+                        usage_source="GATEWAY_TELEMETRY",
+                        attempt_no=effective_attempt,
+                        idempotency_key=attempt_key,
+                        reservation_id=reservation_id,
+                    )
                     break
                 except Exception as exc:
                     exc_category = classify_ai_error(exc)
+                    att_p_tok = 0
+                    att_c_tok = 0
+                    att_t_tok = 0
+                    effective_attempt = max(step_order, attempt)
+                    key_base = idempotency_key or f"{reservation_id}:{step_name or operation_type}"
                     if getattr(exc, "already_repaired", False):
                         repair_attempts_done = max(repair_attempts_done, 1)
                     if isinstance(exc, SchemaMismatchError):
-                        prompt_tokens += exc.prompt_tokens
-                        t_tok_err = int(exc.thinking_tokens or 0)
-                        completion_tokens += max(int(exc.output_tokens or 0), t_tok_err)
-                        thinking_tokens += t_tok_err
+                        att_p_tok = int(exc.prompt_tokens or 0)
+                        att_t_tok = int(exc.thinking_tokens or 0)
+                        att_c_tok = max(int(exc.output_tokens or 0), att_t_tok)
+                        prompt_tokens += att_p_tok
+                        completion_tokens += att_c_tok
+                        thinking_tokens += att_t_tok
                         if exc.model_id:
                             resolved_model_id = exc.model_id
 
@@ -499,6 +669,28 @@ class AIExecutionManager:
                         and not already_repaired
                         and remaining_seconds > 2.0
                     ):
+                        initial_att_key = f"{key_base}:{effective_attempt}"
+                        await self._safe_record_usage(
+                            user_id=user_id,
+                            action_type=operation_type,
+                            requested_model=model_name,
+                            resolved_model=resolved_model_id,
+                            prompt_tokens=att_p_tok,
+                            completion_tokens=att_c_tok,
+                            thinking_tokens=att_t_tok,
+                            status="FAILED",
+                            usage_completeness="PARTIAL"
+                            if (att_p_tok > 0 or att_c_tok > 0)
+                            else "UNKNOWN",
+                            usage_source="GATEWAY_TELEMETRY"
+                            if (att_p_tok > 0 or att_c_tok > 0)
+                            else "UNKNOWN",
+                            error_code=type(exc).__name__,
+                            error_message=str(exc),
+                            attempt_no=effective_attempt,
+                            idempotency_key=initial_att_key,
+                            reservation_id=reservation_id,
+                        )
                         concise_errors = format_concise_schema_errors(exc)
                         repair_user_prompt = (
                             f"{user_prompt}\n\n[SCHEMA_REPAIR_ERRORS]\n{concise_errors}\n"
@@ -508,11 +700,13 @@ class AIExecutionManager:
                             "system_prompt": system_prompt,
                             "user_prompt": repair_user_prompt,
                             "response_schema": response_schema,
+                            "thinking_level": resolved_thinking_level,
                             "timeout_seconds": remaining_seconds,
                         }
-                        if thinking_level is not None:
-                            repair_kwargs["thinking_level"] = thinking_level
                         repair_attempts_done = 1
+                        r_p_tok = 0
+                        r_c_tok = 0
+                        r_t_tok = 0
                         try:
                             repair_raw = await asyncio.wait_for(
                                 self._provider.generate_structured(**repair_kwargs),
@@ -529,23 +723,105 @@ class AIExecutionManager:
                             succeeded = True
                             last_error = None
                             last_error_category = None
+                            repair_key = f"{key_base}:{effective_attempt}:repair"
+                            await self._safe_record_usage(
+                                user_id=user_id,
+                                action_type=operation_type,
+                                requested_model=model_name,
+                                resolved_model=resolved_model_id,
+                                prompt_tokens=r_p_tok,
+                                completion_tokens=r_c_tok,
+                                thinking_tokens=r_t_tok,
+                                status="SUCCESS",
+                                usage_completeness="COMPLETE",
+                                usage_source="GATEWAY_TELEMETRY",
+                                attempt_no=effective_attempt,
+                                idempotency_key=repair_key,
+                                reservation_id=reservation_id,
+                            )
                             break
                         except Exception as repair_exc:
                             if isinstance(repair_exc, SchemaMismatchError):
-                                prompt_tokens += repair_exc.prompt_tokens
-                                r_t_tok_err = int(repair_exc.thinking_tokens or 0)
-                                completion_tokens += max(
-                                    int(repair_exc.output_tokens or 0), r_t_tok_err
-                                )
-                                thinking_tokens += r_t_tok_err
+                                r_p_tok = int(repair_exc.prompt_tokens or 0)
+                                r_t_tok = int(repair_exc.thinking_tokens or 0)
+                                r_c_tok = max(int(repair_exc.output_tokens or 0), r_t_tok)
+                                prompt_tokens += r_p_tok
+                                completion_tokens += r_c_tok
+                                thinking_tokens += r_t_tok
                                 if repair_exc.model_id:
                                     resolved_model_id = repair_exc.model_id
                             last_error = repair_exc
                             last_error_category = classify_ai_error(repair_exc)
+                            repair_fail_key = f"{key_base}:{effective_attempt}:repair"
+                            r_is_to = last_error_category is AIErrorCategory.TIMEOUT or isinstance(
+                                repair_exc, TimeoutError
+                            )
+                            r_status: Literal["SUCCESS", "FAILED", "RATE_LIMITED", "TIMEOUT"] = (
+                                "TIMEOUT" if r_is_to else "FAILED"
+                            )
+                            r_comp: Literal["COMPLETE", "PARTIAL", "UNKNOWN"] = (
+                                "PARTIAL" if (r_p_tok > 0 or r_c_tok > 0) else "UNKNOWN"
+                            )
+                            await self._safe_record_usage(
+                                user_id=user_id,
+                                action_type=operation_type,
+                                requested_model=model_name,
+                                resolved_model=resolved_model_id,
+                                prompt_tokens=r_p_tok,
+                                completion_tokens=r_c_tok,
+                                thinking_tokens=r_t_tok,
+                                status=r_status,
+                                usage_completeness=r_comp,
+                                usage_source="GATEWAY_TELEMETRY"
+                                if r_comp == "PARTIAL"
+                                else "UNKNOWN",
+                                error_code=type(repair_exc).__name__,
+                                error_message=str(repair_exc),
+                                attempt_no=effective_attempt,
+                                idempotency_key=repair_fail_key,
+                                reservation_id=reservation_id,
+                            )
                             break
 
                     last_error = exc
                     last_error_category = exc_category
+                    attempt_fail_key = f"{key_base}:{effective_attempt}"
+                    is_to_att = exc_category is AIErrorCategory.TIMEOUT or isinstance(
+                        exc, TimeoutError
+                    )
+                    status_att: Literal["SUCCESS", "FAILED", "RATE_LIMITED", "TIMEOUT"] = (
+                        "TIMEOUT"
+                        if is_to_att
+                        else (
+                            "RATE_LIMITED"
+                            if (
+                                exc_category is AIErrorCategory.QUOTA
+                                or "429" in str(exc)
+                                or "quota" in str(exc).lower()
+                            )
+                            else "FAILED"
+                        )
+                    )
+                    comp_att: Literal["COMPLETE", "PARTIAL", "UNKNOWN"] = (
+                        "PARTIAL" if (att_p_tok > 0 or att_c_tok > 0) else "UNKNOWN"
+                    )
+                    await self._safe_record_usage(
+                        user_id=user_id,
+                        action_type=operation_type,
+                        requested_model=model_name,
+                        resolved_model=resolved_model_id,
+                        prompt_tokens=att_p_tok,
+                        completion_tokens=att_c_tok,
+                        thinking_tokens=att_t_tok,
+                        status=status_att,
+                        usage_completeness=comp_att,
+                        usage_source="GATEWAY_TELEMETRY" if comp_att == "PARTIAL" else "UNKNOWN",
+                        error_code=type(exc).__name__,
+                        error_message=str(exc),
+                        attempt_no=effective_attempt,
+                        idempotency_key=attempt_fail_key,
+                        reservation_id=reservation_id,
+                    )
                     if attempt > self._max_retries or not self._retry_predicate(exc):
                         break
                     if _is_http_500_stream_error(exc):
@@ -560,6 +836,29 @@ class AIExecutionManager:
                         break
                     await self._sleep(min(random.uniform(0.0, backoff_cap), remaining_seconds))
         except asyncio.CancelledError:
+            key_prefix = idempotency_key or f"{reservation_id}:{step_name or operation_type}"
+            cancel_key = f"{key_prefix}:cancelled"
+            await self._safe_record_usage(
+                user_id=user_id,
+                action_type=operation_type,
+                requested_model=model_name,
+                resolved_model=resolved_model_id,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                thinking_tokens=thinking_tokens,
+                status="FAILED",
+                usage_completeness="PARTIAL"
+                if (prompt_tokens > 0 or completion_tokens > 0)
+                else "UNKNOWN",
+                usage_source="GATEWAY_TELEMETRY"
+                if (prompt_tokens > 0 or completion_tokens > 0)
+                else "UNKNOWN",
+                error_code="CANCELLED",
+                error_message="Execution cancelled",
+                attempt_no=attempts_done or 1,
+                idempotency_key=cancel_key,
+                reservation_id=reservation_id,
+            )
             try:
                 await asyncio.shield(_cleanup_on_cancel())
             except Exception as cleanup_exc:

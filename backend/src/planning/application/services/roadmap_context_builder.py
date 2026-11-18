@@ -1,12 +1,14 @@
 import json
+import math
 from collections.abc import Sequence
-from datetime import time
+from datetime import UTC, date, datetime, time
 from typing import Any
 
 from src.planning.application.dtos.planning_dtos import (
     ClarificationContextPayload,
     parse_clarification_context,
 )
+from src.planning.application.ports.knowledge_base_port import KnowledgeBasePort
 from src.planning.application.services.clarification_gap_analysis import (
     GapStatus,
     GoalFactProvenance,
@@ -19,6 +21,13 @@ from src.planning.domain.models.knowledge_concept import (
 )
 from src.planning.domain.models.milestone import Milestone
 from src.planning.domain.models.roadmap import Roadmap
+from src.planning.domain.services.spatio_temporal_engine import SpatioTemporalRuleEngine
+from src.planning.domain.services.validation_types import (
+    AI_BLOCK_MAX_MINUTES,
+    AI_BLOCK_MIN_MINUTES,
+    AvailabilityConfigurationDTO,
+    AvailabilitySlotDTO,
+)
 from src.shared_kernel.application.harness.context_engine import (
     AssembledContext,
     ContextEngine,
@@ -31,6 +40,68 @@ from src.shared_kernel.application.harness.untrusted_context import (
     sanitize_untrusted_value,
     wrap_untrusted_knowledge_context,
 )
+
+
+def _coerce_availability_dto(availability: Any) -> AvailabilityConfigurationDTO:
+    if isinstance(availability, AvailabilityConfigurationDTO):
+        return availability
+    if availability is None:
+        return AvailabilityConfigurationDTO()
+
+    if isinstance(availability, dict):
+        mode = str(availability.get("mode", "MODE_A"))
+        raw_default_quota = availability.get("default_daily_quota_minutes")
+        if raw_default_quota is None:
+            raw_default_quota = availability.get("daily_cap_minutes", 120)
+        raw_daily_quotas = dict(availability.get("daily_quota_minutes", {}) or {})
+        raw_disabled = availability.get("disabled_weekdays", ()) or ()
+        raw_slots = availability.get("availability_slots", ()) or ()
+        timezone = str(availability.get("timezone", "UTC") or "UTC")
+    else:
+        mode = str(getattr(availability, "mode", "MODE_A"))
+        raw_default_quota = getattr(availability, "default_daily_quota_minutes", None)
+        if raw_default_quota is None:
+            raw_default_quota = getattr(availability, "daily_cap_minutes", 120)
+        raw_daily_quotas = dict(getattr(availability, "daily_quota_minutes", {}) or {})
+        raw_disabled = getattr(availability, "disabled_weekdays", ()) or ()
+        raw_slots = getattr(availability, "availability_slots", ()) or ()
+        timezone = str(getattr(availability, "timezone", "UTC") or "UTC")
+
+    slots: list[AvailabilitySlotDTO] = []
+    for slot in raw_slots:
+        if isinstance(slot, AvailabilitySlotDTO):
+            slots.append(slot)
+        elif isinstance(slot, dict):
+            slots.append(
+                AvailabilitySlotDTO(
+                    day_of_week=slot.get("day_of_week", "monday"),
+                    start_time=slot.get("start_time", "19:00"),
+                    end_time=slot.get("end_time", "21:00"),
+                    end_day_offset=int(slot.get("end_day_offset", 0) or 0),
+                    is_active=bool(slot.get("is_active", True)),
+                )
+            )
+        else:
+            slots.append(
+                AvailabilitySlotDTO(
+                    day_of_week=getattr(slot, "day_of_week", "monday"),
+                    start_time=getattr(slot, "start_time", "19:00"),
+                    end_time=getattr(slot, "end_time", "21:00"),
+                    end_day_offset=int(getattr(slot, "end_day_offset", 0) or 0),
+                    is_active=bool(getattr(slot, "is_active", True)),
+                )
+            )
+
+    return AvailabilityConfigurationDTO(
+        mode=mode,
+        daily_quota_minutes={str(k).lower(): int(v) for k, v in raw_daily_quotas.items()},
+        default_daily_quota_minutes=int(
+            raw_default_quota if raw_default_quota is not None else 120
+        ),
+        availability_slots=tuple(slots),
+        disabled_weekdays=frozenset(str(d).lower() for d in raw_disabled),
+        timezone=timezone,
+    )
 
 
 def _serialize_availability_slot(slot: Any) -> dict[str, Any]:
@@ -85,7 +156,11 @@ class RoadmapContextBuilder:
 
     @classmethod
     def _format_clarification_payload(
-        cls, raw_clarification: str | None, prior_level: str
+        cls,
+        raw_clarification: str | None,
+        prior_level: str,
+        *,
+        include_information_gaps: bool = True,
     ) -> tuple[list[str], list[str]]:
         """Return (user_facts_lines, assumptions_lines) from goal.clarification_context."""
         user_lines: list[str] = []
@@ -120,7 +195,7 @@ class RoadmapContextBuilder:
                 safe_fact = sanitize_untrusted_value(fact)
                 user_lines.append("  - " + json.dumps(safe_fact, ensure_ascii=False, default=str))
 
-        if parsed.information_gaps:
+        if include_information_gaps and parsed.information_gaps:
             assumption_lines.append("information_gaps:")
             for gap in parsed.information_gaps:
                 if str(gap.get("status", "")) != "KNOWN":
@@ -202,6 +277,8 @@ class RoadmapContextBuilder:
         cls,
         goal: Goal,
         learner_profile: Any | None = None,
+        *,
+        include_information_gaps: bool = True,
     ) -> str:
         safe_title = format_untrusted_block(UntrustedBlockKind.GOAL_TITLE, goal.title)
         safe_desc = format_untrusted_block(
@@ -211,7 +288,9 @@ class RoadmapContextBuilder:
         known_dims = cls.extract_known_diagnostic_dimensions(goal)
         parsed = parse_clarification_context(goal.clarification_context)
         user_clar_lines, assumption_lines = cls._format_clarification_payload(
-            goal.clarification_context, goal.prior_knowledge_level
+            goal.clarification_context,
+            goal.prior_knowledge_level,
+            include_information_gaps=include_information_gaps,
         )
 
         system_lines = [
@@ -300,6 +379,125 @@ class RoadmapContextBuilder:
         ]
         return "\n".join(sections)
 
+    @staticmethod
+    async def prefetch_milestone_kb_evidence(
+        knowledge_base: KnowledgeBasePort | None,
+        *,
+        query_text: str,
+        learner_level: str | None = None,
+        domain: str | None = None,
+        limit: int = 10,
+        max_depth: int = 3,
+    ) -> tuple[list[LearningConcept], list[ConceptPrerequisiteGraph]]:
+        """Prefetch verified KB concepts and prerequisite DAG on the server before LLM call."""
+        if knowledge_base is None:
+            return [], []
+        normalized_query = " ".join(query_text.split())[:200]
+        if not normalized_query:
+            return [], []
+        concepts = await knowledge_base.search_concepts(
+            query=normalized_query,
+            domain=domain,
+            learner_level=learner_level,
+            limit=limit,
+        )
+        if not concepts and domain:
+            concepts = await knowledge_base.search_concepts(
+                query=normalized_query,
+                domain=None,
+                learner_level=learner_level,
+                limit=limit,
+            )
+        graphs: list[ConceptPrerequisiteGraph] = []
+        if concepts:
+            graph = await knowledge_base.get_prerequisite_graph(
+                concept_ids=[c.concept_id for c in concepts],
+                max_depth=max_depth,
+            )
+            graphs.append(graph)
+        return concepts, graphs
+
+    @staticmethod
+    def compute_schedule_budget(
+        *,
+        availability: Any,
+        milestones: Sequence[Any],
+        start_date: date,
+        target_date: date | None,
+        learner_profile: Any | None = None,
+        existing_tasks: Sequence[Any] = (),
+        daily_workload_cap_minutes: int | None = None,
+        default_milestone_effort_minutes: int = 60,
+    ) -> dict[str, Any]:
+        """Compute deterministic schedule budget metrics for Task Decomposer context."""
+        avail_dto = _coerce_availability_dto(availability)
+        max_available_minutes_until_target_date = int(
+            SpatioTemporalRuleEngine.calculate_available_capacity_minutes(
+                avail_dto,
+                start_date=start_date,
+                target_date=target_date,
+                existing_tasks=existing_tasks,
+                daily_workload_cap_minutes=daily_workload_cap_minutes,
+            )
+        )
+
+        total_milestone_effort_minutes = 0
+        for milestone in milestones:
+            raw_effort = (
+                milestone.get("estimated_effort_minutes")
+                if isinstance(milestone, dict)
+                else getattr(milestone, "estimated_effort_minutes", None)
+            )
+            effort = int(raw_effort) if raw_effort is not None else default_milestone_effort_minutes
+            total_milestone_effort_minutes += max(0, effort)
+
+        raw_opt = (
+            learner_profile.get("opt_session_minutes")
+            if isinstance(learner_profile, dict)
+            else getattr(learner_profile, "opt_session_minutes", None)
+        )
+        opt_session_minutes = int(raw_opt) if raw_opt is not None else 45
+        recommended_minutes_per_task = min(
+            AI_BLOCK_MAX_MINUTES,
+            max(AI_BLOCK_MIN_MINUTES, opt_session_minutes),
+        )
+
+        max_tasks = max(
+            0,
+            max_available_minutes_until_target_date // recommended_minutes_per_task,
+        )
+        effort_floor = (
+            math.ceil(total_milestone_effort_minutes / AI_BLOCK_MAX_MINUTES)
+            if total_milestone_effort_minutes > 0
+            else 0
+        )
+        raw_min_tasks = max(len(milestones), effort_floor)
+        min_tasks = min(raw_min_tasks, max_tasks)
+
+        fits_milestone_effort = (
+            total_milestone_effort_minutes <= max_available_minutes_until_target_date
+        )
+        capacity_fit_ratio = (
+            1.0
+            if total_milestone_effort_minutes <= 0
+            else round(
+                max_available_minutes_until_target_date / total_milestone_effort_minutes,
+                4,
+            )
+        )
+
+        return {
+            "max_available_minutes_until_target_date": max_available_minutes_until_target_date,
+            "total_milestone_effort_minutes": total_milestone_effort_minutes,
+            "recommended_minutes_per_task": recommended_minutes_per_task,
+            "recommended_task_count_range": {
+                "min_tasks": min_tasks,
+                "max_tasks": max_tasks,
+            },
+            "capacity_fit_ratio": capacity_fit_ratio,
+            "fits_milestone_effort": fits_milestone_effort,
+        }
+
     @classmethod
     def build_task_decomposition_context(
         cls,
@@ -311,6 +509,9 @@ class RoadmapContextBuilder:
         existing_tasks: Sequence[Any] = (),
         kb_concepts: Sequence[LearningConcept] = (),
         kb_graphs: Sequence[ConceptPrerequisiteGraph] = (),
+        daily_workload_cap_minutes: int | None = None,
+        include_precomputed_budget: bool = True,
+        reference_date: date | None = None,
     ) -> str:
         safe_title = format_untrusted_block(UntrustedBlockKind.GOAL_TITLE, goal.title)
         safe_desc = format_untrusted_block(
@@ -340,6 +541,9 @@ class RoadmapContextBuilder:
                 ],
                 "unverified_concepts": [
                     sanitize_untrusted_text(c) for c in getattr(m, "unverified_concepts", ())
+                ],
+                "prerequisite_milestone_ids": [
+                    str(pid) for pid in (getattr(m, "prerequisite_milestone_ids", ()) or ())
                 ],
             }
             for m in sorted(milestones, key=lambda item: item.sequence_order)
@@ -399,6 +603,55 @@ class RoadmapContextBuilder:
 
         kb_lines = cls._format_kb_evidence(kb_concepts=kb_concepts, kb_graphs=kb_graphs)
 
+        budget_lines: list[str] = []
+        if include_precomputed_budget:
+            effective_start_date = roadmap.start_date or reference_date or datetime.now(UTC).date()
+            effective_target_date = (
+                roadmap.target_date if roadmap.target_date is not None else goal.target_date
+            )
+            budget_summary = cls.compute_schedule_budget(
+                availability=availability,
+                milestones=milestones,
+                start_date=effective_start_date,
+                target_date=effective_target_date,
+                learner_profile=learner_profile,
+                existing_tasks=existing_tasks,
+                daily_workload_cap_minutes=daily_workload_cap_minutes,
+            )
+            budget_lines.append(
+                f"precomputed_schedule_budget: {json.dumps(budget_summary, ensure_ascii=False)}"
+            )
+
+        raw_prelim = (
+            roadmap.planning_metadata.get("preliminary_feasibility")
+            if isinstance(getattr(roadmap, "planning_metadata", None), dict)
+            else None
+        )
+        if isinstance(raw_prelim, dict):
+            prelim_summary = {
+                "status": raw_prelim.get("status"),
+                "scope_proposal_version": raw_prelim.get("scope_proposal_version"),
+                "scope_approval_status": raw_prelim.get("scope_approval_status"),
+                "hard_packable_capacity_minutes": raw_prelim.get("hard_packable_capacity_minutes"),
+                "soft_target_capacity_minutes": raw_prelim.get("soft_target_capacity_minutes"),
+                "normalized_planned_total_minutes": raw_prelim.get(
+                    "normalized_planned_total_minutes"
+                ),
+                "kept_sequence_orders": [
+                    int(item["sequence_order"])
+                    for item in (raw_prelim.get("kept_scope") or [])
+                    if isinstance(item, dict) and "sequence_order" in item
+                ],
+                "deferred_sequence_orders": [
+                    int(item["sequence_order"])
+                    for item in (raw_prelim.get("deferred_scope") or [])
+                    if isinstance(item, dict) and "sequence_order" in item
+                ],
+            }
+            budget_lines.append(
+                f"preliminary_feasibility_summary: {json.dumps(prelim_summary, ensure_ascii=False)}"
+            )
+
         sections = [
             "[USER_PROVIDED_FACTS]",
             safe_title,
@@ -415,6 +668,7 @@ class RoadmapContextBuilder:
             f"availability_constraints: {json.dumps(avail_summary, ensure_ascii=False, default=str)}",
             f"learner_profile: {json.dumps(profile_summary, ensure_ascii=False, default=str)}",
             f"existing_committed_tasks: {json.dumps(existing_summary, ensure_ascii=False, default=str)}",
+            *budget_lines,
             "",
             "[KNOWLEDGE_BASE_EVIDENCE]",
             *kb_lines,
@@ -515,6 +769,7 @@ class RoadmapContextBuilder:
         knowledge_chunks: Sequence[Any] = (),
         runtime_feedback: str = "",
         total_token_budget: int = 8000,
+        include_planning_context: bool = True,
     ) -> AssembledContext:
         """Assemble non-redundant HarnessContext layers through shared `ContextEngine`.
 
@@ -530,10 +785,13 @@ class RoadmapContextBuilder:
         }
         user_payload.update(cls.format_learner_memory_layer(memory_items, concept_masteries))
 
-        learning_payload: dict[str, Any] = {
-            "planning_context": base_context_text,
-            "rag_chunks": cls.format_rag_learning_layer(knowledge_chunks),
-        }
+        rag_chunks = cls.format_rag_learning_layer(knowledge_chunks)
+        learning_payload: dict[str, Any] = {}
+        if include_planning_context:
+            learning_payload["planning_context"] = base_context_text
+            learning_payload["rag_chunks"] = rag_chunks
+        elif rag_chunks:
+            learning_payload["rag_chunks"] = rag_chunks
         workflow_payload: dict[str, Any] = {
             "stage": workflow_stage,
             **{

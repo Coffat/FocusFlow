@@ -161,6 +161,12 @@ class CircuitBreakingLLMProvider(LLMProviderPort):
     def model_identifier(self) -> str:
         return str(getattr(self._provider, "model_identifier", "gemini-3.8-flash"))
 
+    def resolve_model_for_thinking_level(self, thinking_level: str | None) -> str:
+        fn = getattr(self._provider, "resolve_model_for_thinking_level", None)
+        if callable(fn):
+            return str(fn(thinking_level))
+        return self.model_identifier
+
     @property
     def model_used(self) -> str:
         return str(getattr(self._provider, "model_used", "gemini-3.8-flash"))

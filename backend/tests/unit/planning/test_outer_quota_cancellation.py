@@ -200,6 +200,7 @@ async def test_ai_execution_manager_ignores_not_found_on_release() -> None:
             system_prompt="sys",
             user_prompt="usr",
             response_schema={"type": "object"},
+            thinking_level="LOW",
         )
     assert len(quota.released) == 1
 

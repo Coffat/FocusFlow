@@ -43,8 +43,10 @@ def run_tier2_gate(
     is_mode_b = mode_upper in ("MODE_B", "FIXED_SLOTS", "SLOTS")
 
     raw_blocks = proposal_data.get("schedule_blocks")
-    scheduling_items = raw_tasks
-    if isinstance(raw_blocks, list):
+    non_empty_blocks = (
+        [b for b in raw_blocks if isinstance(b, dict)] if isinstance(raw_blocks, list) else []
+    )
+    if non_empty_blocks:
         scheduling_items = [
             {
                 "task_id": block.get("task_id"),
@@ -53,8 +55,7 @@ def run_tier2_gate(
                 "scheduled_start": block.get("scheduled_start"),
                 "scheduled_end": block.get("scheduled_end"),
             }
-            for block in raw_blocks
-            if isinstance(block, dict)
+            for block in non_empty_blocks
         ]
     elif allow_unscheduled_tasks:
         scheduling_items = [
@@ -62,6 +63,8 @@ def run_tier2_gate(
             for task in raw_tasks
             if isinstance(task, dict) and parse_iso_date(task.get("scheduled_date")) is not None
         ]
+    else:
+        scheduling_items = raw_tasks
 
     if is_mode_b:
         b_violations, b_warnings = SpatioTemporalRuleEngine.validate_mode_b_slots(

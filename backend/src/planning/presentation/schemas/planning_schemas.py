@@ -9,6 +9,7 @@ from src.planning.application.dtos.planning_dtos import (
     ClarificationQuestion,
     ClarificationQuestionsResponse,
 )
+from src.planning.domain.services.validation_types import ScheduleCompletenessStatus
 
 __all__ = [
     "ClarificationAnswerItem",
@@ -113,6 +114,12 @@ class MilestoneResponse(BaseModel):
 class MilestoneListResponse(BaseModel):
     roadmap_id: UUID
     milestones: list[MilestoneResponse]
+    preliminary_feasibility: dict[str, Any] | None = None
+
+
+class ApproveMilestonesRequest(BaseModel):
+    confirmed_scope_proposal_version: int | None = None
+    accept_fit_capacity: bool = False
 
 
 class UpdateMilestonesRequest(BaseModel):
@@ -172,6 +179,7 @@ class RoadmapResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     goal: GoalResponse | None = None
+    preliminary_feasibility: dict[str, Any] | None = None
 
 
 class SseJobTicketResponse(BaseModel):
@@ -242,6 +250,22 @@ class SoftOverflowWarningSchema(BaseModel):
     message: str
 
 
+class PlanningConflictResponse(BaseModel):
+    code: str
+    message: str
+    detail: str
+    scope_proposal_version: int | None = None
+    scope_proposal_hash: str | None = None
+    preliminary_feasibility: dict[str, Any] | None = None
+    hard_packable_capacity_minutes: int | None = None
+    conflicts: list[dict[str, Any]] = Field(default_factory=list)
+    overflow_minutes: int | None = None
+    soft_overflow_warnings: list[SoftOverflowWarningSchema] = Field(default_factory=list)
+    judge_status: str | None = None
+    advisory_warnings: list[str] = Field(default_factory=list)
+    schedulable_ratio: float | None = None
+
+
 class ProposedScheduleBlockSchema(BaseModel):
     task_id: UUID | str
     sequence_in_task: int = Field(..., ge=1)
@@ -275,6 +299,8 @@ class ScheduleProposalResponse(BaseModel):
     unscheduled_tasks_count: int = 0
     unscheduled_tasks: list[dict[str, Any]] = Field(default_factory=list)
     feasibility: ScheduleFeasibilitySchema = Field(default_factory=ScheduleFeasibilitySchema)
+    feasibility_verdict: str = "VERIFIED_FEASIBLE"
+    schedule_completeness_status: ScheduleCompletenessStatus = "FULL"
     availability_source_metadata: dict[str, Any] = Field(default_factory=dict)
     tasks: list[dict[str, Any]] = Field(default_factory=list)
     schedule_blocks: list[ProposedScheduleBlockSchema] = Field(default_factory=list)
@@ -371,3 +397,4 @@ class RoadmapDetailResponse(BaseModel):
     official_schedule: OfficialScheduleResponse | None = None
     scheduled_tasks: list[ScheduledTaskResponse] = Field(default_factory=list)
     current_draft_proposal: ScheduleProposalResponse | None = None
+    preliminary_feasibility: dict[str, Any] | None = None
