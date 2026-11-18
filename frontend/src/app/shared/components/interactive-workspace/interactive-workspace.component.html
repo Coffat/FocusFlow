@@ -1,440 +1,721 @@
-<!-- INTERACTIVE WORKSPACE CANVAS (Attio-Style Precision Board) -->
-<div class="hairline-card rounded-xl shadow-[0_16px_40px_-8px_rgba(17,17,17,0.06)] overflow-hidden border border-outline-variant/60 text-left">
-  <!-- Canvas OS Window Header -->
-  <div class="bg-surface-container-low/70 border-b border-outline-variant/40 px-5 py-3 flex flex-wrap items-center justify-between gap-4">
-    <!-- Window Dots & Path -->
-    <div class="flex items-center gap-3">
-      <div class="flex items-center gap-1.5" aria-hidden="true">
-        <span class="w-2.5 h-2.5 rounded-full bg-outline-variant/70 inline-block"></span>
-        <span class="w-2.5 h-2.5 rounded-full bg-outline-variant/50 inline-block"></span>
-        <span class="w-2.5 h-2.5 rounded-full bg-outline-variant/50 inline-block"></span>
+<!-- FOCUSFLOW REAL UI SHELL PREVIEW (Matches main-layout + app-navbar + app-footer) -->
+<div
+  class="ff-shell rounded-2xl border border-neutral-200/80 bg-[#FBFBF9] text-neutral-900 text-left shadow-[0_20px_50px_-12px_rgba(0,0,0,0.08)] overflow-hidden flex flex-col"
+  (mouseenter)="onShellMouseEnter()"
+  (mouseleave)="onShellMouseLeave()"
+>
+  <!-- Top Floating Pill Navbar (Replica of app-navbar.component.html) -->
+  <div class="px-3 sm:px-5 pt-3 sm:pt-4 pb-1.5">
+    <header
+      class="bg-white/95 border border-neutral-200/80 rounded-2xl sm:rounded-3xl shadow-[0_4px_20px_-4px_rgba(0,0,0,0.06)] px-3 sm:px-5 py-2 flex flex-wrap items-center justify-between gap-2.5"
+    >
+      <!-- Left: Brand Logo & Title -->
+      <div class="flex items-center gap-2 sm:gap-2.5 min-w-0 shrink-0">
+        <div class="bg-neutral-50/80 border border-neutral-200/60 rounded-xl p-1 flex items-center justify-center shrink-0">
+          <img src="assets/logo.svg" alt="FocusFlow" width="24" height="24" class="w-5 h-5 sm:w-6 sm:h-6 shrink-0" />
+        </div>
+        <div class="min-w-0">
+          <div class="flex items-center text-sm sm:text-base font-bold tracking-tight leading-none">
+            <span class="text-neutral-900">Focus</span><span class="text-[#205C43]">Flow</span>
+          </div>
+          <span class="hidden sm:block text-[9px] text-neutral-400 font-medium tracking-widest uppercase leading-tight mt-0.5">
+            Plan Smarter • Do Better
+          </span>
+        </div>
       </div>
-      <div class="h-3.5 w-px bg-outline-variant/40 mx-1 hidden sm:block"></div>
-      <div class="flex items-center gap-1.5 text-xs font-mono text-on-surface-variant">
-        <span class="material-symbols-outlined text-[14px]">terminal</span>
-        <span>focusflow.app</span>
-        <span class="text-outline-variant">/</span>
-        <span>lộ-trình</span>
-        <span class="text-outline-variant">/</span>
-        <span class="text-on-surface font-medium">kien-truc-he-thong-fullstack</span>
-      </div>
-    </div>
 
-    <!-- View Switcher Tabs -->
-    <div class="inline-flex p-1 rounded-xl bg-surface-container/90 border border-outline-variant/50 text-xs font-sans shadow-inner">
-      <button
-        type="button"
-        (click)="setTab('dag')"
-        [class]="activeTab() === 'dag'
-          ? 'px-3.5 py-1.5 rounded-lg bg-white shadow-[0_2px_8px_rgba(0,0,0,0.08)] text-primary font-semibold flex items-center gap-1.5 transition-all duration-200 border border-outline-variant/30 scale-[1.02]'
-          : 'px-3.5 py-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-white/50 flex items-center gap-1.5 transition-all duration-200 border border-transparent'"
+      <!-- Center: Interactive App Navigation Pills (3 Real Screens) -->
+      <nav
+        role="tablist"
+        aria-label="Điều hướng xem thử ứng dụng FocusFlow"
+        class="flex flex-wrap items-center gap-1 sm:gap-1.5 text-xs font-medium order-3 sm:order-2 w-full sm:w-auto justify-center"
       >
-        <span class="material-symbols-outlined text-[14px]">account_tree</span>
-        <span>Cây Lộ trình</span>
-      </button>
-      <button
-        type="button"
-        (click)="setTab('schedule')"
-        [class]="activeTab() === 'schedule'
-          ? 'px-3.5 py-1.5 rounded-lg bg-white shadow-[0_2px_8px_rgba(0,0,0,0.08)] text-primary font-semibold flex items-center gap-1.5 transition-all duration-200 border border-outline-variant/30 scale-[1.02]'
-          : 'px-3.5 py-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-white/50 flex items-center gap-1.5 transition-all duration-200 border border-transparent'"
-      >
-        <span class="material-symbols-outlined text-[14px]">calendar_today</span>
-        <span>Lịch Thích ứng</span>
-      </button>
-      <button
-        type="button"
-        (click)="setTab('pomodoro')"
-        [class]="activeTab() === 'pomodoro'
-          ? 'px-3.5 py-1.5 rounded-lg bg-white shadow-[0_2px_8px_rgba(0,0,0,0.08)] text-primary font-semibold flex items-center gap-1.5 transition-all duration-200 border border-outline-variant/30 scale-[1.02]'
-          : 'px-3.5 py-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-white/50 flex items-center gap-1.5 transition-all duration-200 border border-transparent'"
-      >
-        <span class="material-symbols-outlined text-[14px]">hourglass_top</span>
-        <span>Chế độ Focus</span>
-      </button>
+        <button
+          type="button"
+          role="tab"
+          id="ff-tab-dag"
+          [attr.aria-selected]="activeTab() === 'dag'"
+          aria-controls="ff-workspace-panel"
+          (click)="setTab('dag')"
+          [class]="activeTab() === 'dag'
+            ? 'text-[#246B4A] font-semibold bg-[#246B4A]/10 shadow-2xs px-3 py-1.5 rounded-full transition-colors cursor-pointer inline-flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#246B4A]'
+            : 'text-neutral-600 hover:text-[#246B4A] hover:bg-neutral-100/70 px-3 py-1.5 rounded-full transition-colors cursor-pointer inline-flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#246B4A]'"
+        >
+          <lucide-icon name="git-branch" [size]="13" class="shrink-0"></lucide-icon>
+          <span>Roadmap Hub</span>
+        </button>
+
+        <button
+          type="button"
+          role="tab"
+          id="ff-tab-schedule"
+          [attr.aria-selected]="activeTab() === 'schedule'"
+          aria-controls="ff-workspace-panel"
+          (click)="setTab('schedule')"
+          [class]="activeTab() === 'schedule'
+            ? 'text-[#246B4A] font-semibold bg-[#246B4A]/10 shadow-2xs px-3 py-1.5 rounded-full transition-colors cursor-pointer inline-flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#246B4A]'
+            : 'text-neutral-600 hover:text-[#246B4A] hover:bg-neutral-100/70 px-3 py-1.5 rounded-full transition-colors cursor-pointer inline-flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#246B4A]'"
+        >
+          <lucide-icon name="calendar-clock" [size]="13" class="shrink-0"></lucide-icon>
+          <span>Thời khóa biểu</span>
+        </button>
+
+        <button
+          type="button"
+          role="tab"
+          id="ff-tab-pomodoro"
+          [attr.aria-selected]="activeTab() === 'pomodoro'"
+          aria-controls="ff-workspace-panel"
+          (click)="setTab('pomodoro')"
+          [class]="activeTab() === 'pomodoro'
+            ? 'inline-flex items-center gap-1.5 bg-[#246B4A] text-white px-3.5 py-1.5 rounded-full text-xs font-semibold shadow-xs ring-2 ring-[#246B4A]/30 ring-offset-1 transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#246B4A]'
+            : 'inline-flex items-center gap-1.5 bg-[#246B4A]/90 hover:bg-[#1B5338] text-white px-3.5 py-1.5 rounded-full text-xs font-semibold shadow-xs transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#246B4A]'"
+        >
+          <lucide-icon name="play" [size]="12" class="shrink-0 fill-current"></lucide-icon>
+          <span>Vào học</span>
+        </button>
+      </nav>
+
+      <!-- Right: Status Badges, Auto-play Toggle & Profile Pill -->
+      <div class="flex items-center gap-1.5 sm:gap-2 order-2 sm:order-3 shrink-0">
+        <span class="hidden lg:inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-mono bg-neutral-100/80 border border-neutral-200/70 text-neutral-600">
+          <lucide-icon name="sparkles" [size]="11" class="text-[#246B4A] shrink-0"></lucide-icon>
+          <span>AI Quota: 24/30 lượt</span>
+        </span>
+
+        <span class="hidden xl:inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-mono bg-emerald-50 border border-emerald-200 text-[#246B4A] font-medium">
+          <lucide-icon name="shield-check" [size]="11" class="shrink-0"></lucide-icon>
+          <span>3-Tier Gate: Passed</span>
+        </span>
+
+        <button
+          type="button"
+          (click)="toggleAutoPlay()"
+          [attr.aria-pressed]="isAutoPlayPaused()"
+          [attr.aria-label]="isAutoPlayPaused() ? 'Tiếp tục tự động chuyển màn hình' : 'Tạm dừng tự động chuyển màn hình'"
+          class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium border border-neutral-200/80 bg-neutral-50/80 text-neutral-600 hover:text-[#246B4A] hover:border-[#246B4A]/40 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#246B4A]"
+        >
+          @if (isEffectiveAutoPlayPaused()) {
+            <lucide-icon name="play" [size]="11" class="text-[#246B4A] shrink-0"></lucide-icon>
+            <span>{{ isAutoPlayPaused() ? 'Tạm dừng' : 'Đang xem' }}</span>
+          } @else {
+            <lucide-icon name="pause" [size]="11" class="text-[#246B4A] shrink-0"></lucide-icon>
+            <span>Tự động 6s</span>
+          }
+        </button>
+
+        <div
+          aria-hidden="true"
+          class="hidden md:flex items-center gap-1.5 pl-1 pr-2 py-0.5 rounded-full border border-neutral-200/80 bg-neutral-50/70"
+        >
+          <div class="w-6 h-6 rounded-full bg-[#246B4A]/10 text-[#246B4A] border border-[#246B4A]/20 flex items-center justify-center font-bold text-[10px]">
+            NH
+          </div>
+          <span class="text-[11px] font-semibold text-neutral-700">Minh An</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Fixed-height 2px Auto-play Progress Track (Zero layout shift) -->
+    <div class="mt-2 h-[2px] w-full rounded-full bg-neutral-200/60 overflow-hidden" aria-hidden="true">
+      @if (!isEffectiveAutoPlayPaused()) {
+        @switch (activeTab()) {
+          @case ('dag') {
+            <div class="h-full bg-[#246B4A] ff-autoplay-progress"></div>
+          }
+          @case ('schedule') {
+            <div class="h-full bg-[#246B4A] ff-autoplay-progress"></div>
+          }
+          @case ('pomodoro') {
+            <div class="h-full bg-[#246B4A] ff-autoplay-progress"></div>
+          }
+        }
+      } @else {
+        <div class="h-full w-full bg-neutral-300/60"></div>
+      }
     </div>
   </div>
 
-  <!-- Canvas Body (Split 5/12 and 7/12 Attio Layout) -->
-  @switch (activeTab()) {
-    @case ('dag') {
-      <div class="grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-outline-variant/40 bg-white animate-tab-crossfade">
-        <!-- Left Column: DAG Knowledge Tree (5 Cols) -->
-        <div class="lg:col-span-5 p-5 md:p-6 flex flex-col justify-between">
-          <div>
-            <div class="flex items-center justify-between mb-3">
-              <span class="text-[11px] font-sans uppercase tracking-wider text-on-surface-variant font-semibold">Cấu trúc Học phần</span>
-              <span class="text-xs font-mono text-primary font-semibold">65% Hoàn tất</span>
-            </div>
-            <h2 class="text-base font-semibold text-on-surface mb-2 font-sans">Giai đoạn 1: Nền tảng Backend &amp; Clean Architecture</h2>
-            <div class="w-full bg-surface-container h-1 rounded-full overflow-hidden mb-6">
-              <div class="bg-primary-container h-full w-[65%] rounded-full"></div>
-            </div>
-
-            <!-- Task List (DAG Node Cards) -->
-            <div class="space-y-3">
-              <!-- Task 1 (Mastered) -->
-              <div class="p-3.5 rounded-lg border border-outline-variant/40 bg-surface-container-low/40 flex items-start justify-between gap-3">
-                <div class="flex items-start gap-2.5">
-                  <span class="material-symbols-outlined text-primary text-[18px] mt-0.5" style="font-variation-settings: 'FILL' 1;">check_circle</span>
-                  <div>
-                    <p class="text-xs text-on-surface font-semibold leading-snug">PostgreSQL Indexing &amp; Optimization</p>
-                    <p class="text-[11px] font-mono text-on-surface-variant mt-0.5">3 phiên • 4.5 giờ học sâu</p>
-                  </div>
-                </div>
-                <span class="text-[10px] px-2 py-0.5 rounded border border-primary/20 bg-primary/10 text-primary font-medium whitespace-nowrap">Đã thuần thục ✓</span>
+  <!-- Active Screen Viewport (Uniform Fixed Height on Desktop to prevent resizing) -->
+  <div
+    id="ff-workspace-panel"
+    role="tabpanel"
+    [attr.aria-labelledby]="'ff-tab-' + activeTab()"
+    class="px-3 sm:px-5 py-2.5 flex-1 min-w-0"
+  >
+    @switch (activeTab()) {
+      <!-- SCREEN 1: ROADMAP HUB & DAG -->
+      @case ('dag') {
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-3.5 lg:h-[468px] animate-tab-crossfade">
+          <!-- Left Card: Phase Progress & 3 Interactive DAG Nodes -->
+          <div class="lg:col-span-5 bg-white rounded-2xl border border-neutral-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.02)] p-4 sm:p-5 flex flex-col justify-between gap-3 h-full min-w-0">
+            <div>
+              <div class="flex items-center justify-between gap-2 mb-1.5">
+                <span class="text-[11px] font-sans uppercase tracking-wider text-neutral-500 font-semibold">
+                  Cây Lộ trình DAG
+                </span>
+                <span class="text-xs font-mono text-[#246B4A] font-semibold">65% Hoàn tất</span>
+              </div>
+              <h2 class="text-sm sm:text-base font-bold text-neutral-900 mb-2 font-serif leading-snug">
+                Giai đoạn 1: Nền tảng Modular Monolith &amp; Domain
+              </h2>
+              <div
+                class="w-full bg-neutral-100 h-1.5 rounded-full overflow-hidden mb-3.5"
+                role="progressbar"
+                aria-valuenow="65"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                aria-label="Tiến độ giai đoạn 1"
+              >
+                <div class="bg-[#246B4A] h-full w-[65%] rounded-full"></div>
               </div>
 
-              <!-- Task 2 (Active execution) -->
-              <div class="p-3.5 rounded-lg border border-primary/40 bg-secondary-container/20 flex items-start justify-between gap-3 shadow-sm">
-                <div class="flex items-start gap-2.5">
-                  <span class="w-3.5 h-3.5 rounded-full bg-primary-container breathing-dot mt-1 inline-block"></span>
-                  <div>
-                    <p class="text-xs text-on-surface font-semibold leading-snug">Hexagonal Ports &amp; Adapters Pattern</p>
-                    <p class="text-[11px] font-mono text-on-surface-variant mt-0.5">Pomodoro 25m • Trạng thái: Tích cực</p>
-                  </div>
-                </div>
-                <span class="text-[10px] px-2 py-0.5 rounded bg-primary-container text-white font-medium whitespace-nowrap">Đang thực thi</span>
-              </div>
+              <!-- 3 Interactive DAG Task Node Buttons -->
+              <div class="space-y-2" role="group" aria-label="Các nút nhiệm vụ DAG">
+                @for (node of dagNodes; track node.id) {
+                  <button
+                    type="button"
+                    (click)="selectDagNode(node.id)"
+                    [attr.aria-pressed]="selectedDagNodeId() === node.id"
+                    [class]="selectedDagNodeId() === node.id
+                      ? 'w-full text-left p-2.5 rounded-xl border-2 border-[#246B4A] bg-emerald-50/40 shadow-2xs transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#246B4A]'
+                      : 'w-full text-left p-2.5 rounded-xl border border-neutral-200/80 bg-[#FBFBF9] hover:border-[#246B4A]/40 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#246B4A]'"
+                  >
+                    <div class="flex items-start justify-between gap-2">
+                      <div class="flex items-start gap-2 min-w-0">
+                        @switch (node.status) {
+                          @case ('COMPLETED') {
+                            <lucide-icon name="circle-check" [size]="16" class="text-[#246B4A] shrink-0 mt-0.5"></lucide-icon>
+                          }
+                          @case ('IN_PROGRESS') {
+                            <lucide-icon name="circle-dot" [size]="16" class="text-[#246B4A] shrink-0 mt-0.5 breathing-dot"></lucide-icon>
+                          }
+                          @case ('PENDING') {
+                            <lucide-icon name="lock" [size]="16" class="text-neutral-400 shrink-0 mt-0.5"></lucide-icon>
+                          }
+                        }
+                        <div class="min-w-0">
+                          <p class="text-xs text-neutral-900 font-semibold leading-snug truncate">
+                            {{ node.title }}
+                          </p>
+                          <p class="text-[11px] font-mono text-neutral-500 mt-0.5 truncate">
+                            {{ node.effortLabel }} • {{ node.sessionSummary }}
+                          </p>
+                        </div>
+                      </div>
 
-              <!-- Task 3 (Locked DAG Dependency) -->
-              <div class="p-3.5 rounded-lg border border-outline-variant/30 bg-surface-container-low/20 opacity-70 flex items-start justify-between gap-3">
-                <div class="flex items-start gap-2.5">
-                  <span class="material-symbols-outlined text-on-surface-variant text-[18px] mt-0.5">lock</span>
-                  <div>
-                    <p class="text-xs text-on-surface font-normal leading-snug">Event-Driven Architecture với Kafka</p>
-                    <p class="text-[11px] font-mono text-on-surface-variant mt-0.5">Mở khóa sau khi hoàn tất Hexagonal</p>
-                  </div>
-                </div>
-                <span class="text-[10px] px-2 py-0.5 rounded border border-outline-variant/50 bg-surface-container text-on-surface-variant whitespace-nowrap">Khóa</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- DAG Micro-indicator -->
-          <div class="mt-6 pt-4 border-t border-outline-variant/30 flex items-center justify-between text-xs font-mono text-on-surface-variant">
-            <span class="flex items-center gap-1.5">
-              <span class="material-symbols-outlined text-[15px] text-primary">schema</span>
-              18 Điểm nút tri thức liên kết
-            </span>
-            <span class="hover:text-primary cursor-pointer transition-colors" (click)="scrollTo('capabilities', $event)">Xem toàn bộ sơ đồ →</span>
-          </div>
-        </div>
-
-        <!-- Right Column: Adaptive Time Dispatcher (7 Cols) -->
-        <div class="lg:col-span-7 p-5 md:p-6 flex flex-col justify-between relative bg-white">
-          <div>
-            <div class="flex items-center justify-between mb-4">
-              <div class="flex items-center gap-2">
-                <span class="material-symbols-outlined text-[18px] text-primary">chevron_forward</span>
-                <h3 class="text-sm font-semibold text-on-surface font-sans">Lịch học thứ Sáu (Đồng bộ Google Calendar)</h3>
-              </div>
-              <span class="text-xs font-mono px-2 py-0.5 rounded bg-surface-container text-on-surface-variant border border-outline-variant/40">Hôm nay</span>
-            </div>
-
-            <!-- Time Slots Grid -->
-            <div class="space-y-2.5">
-              <!-- Slot 1: Done -->
-              <div class="flex items-center justify-between p-3 rounded-lg border border-outline-variant/30 bg-surface-container-low/30 text-xs">
-                <div class="flex items-center gap-3">
-                  <span class="font-mono text-on-surface-variant w-12 font-medium">19:30</span>
-                  <span class="w-1.5 h-1.5 rounded-full bg-outline-variant"></span>
-                  <span class="text-on-surface-variant line-through">SRS &amp; Thiết kế Database Schema</span>
-                </div>
-                <span class="font-mono text-on-surface-variant">Hoàn thành (25m)</span>
-              </div>
-
-              <!-- Slot 2: In Progress -->
-              <div class="flex items-center justify-between p-3 rounded-lg border border-primary/30 bg-secondary-container/20 text-xs">
-                <div class="flex items-center gap-3">
-                  <span class="font-mono text-primary font-semibold w-12">20:15</span>
-                  <span class="w-1.5 h-1.5 rounded-full bg-primary-container"></span>
-                  <span class="text-on-surface font-semibold">Viết Unit Tests cho Domain Layer</span>
-                </div>
-                <div class="flex items-center gap-1.5 font-mono text-primary font-medium">
-                  <span class="material-symbols-outlined text-[14px]">timer</span>
-                  <span>18m còn lại</span>
-                </div>
-              </div>
-
-              <!-- Slot 3: Shifted automatically -->
-              <div class="flex items-center justify-between p-3 rounded-lg border border-outline-variant/30 bg-surface-container-low/20 text-xs">
-                <div class="flex items-center gap-3">
-                  <span class="font-mono text-on-surface-variant w-12">21:15</span>
-                  <span class="w-1.5 h-1.5 rounded-full bg-tertiary-fixed-dim"></span>
-                  <span class="text-on-surface-variant">Review Microservices Communication</span>
-                </div>
-                <span class="font-mono text-tertiary font-medium">Tự động bù lịch</span>
-              </div>
-            </div>
-
-            <!-- Domino Shift Notification Card -->
-            <div class="mt-4 p-3.5 rounded-lg border border-primary/20 bg-primary/5 flex items-start gap-3">
-              <span class="material-symbols-outlined text-primary text-[18px] mt-0.5">auto_awesome</span>
-              <div class="text-xs font-sans leading-relaxed">
-                <span class="font-semibold text-primary">Domino Shift Kích Hoạt:</span>
-                <span class="text-on-surface-variant"> Đã tự động dời 1 buổi học sang tối Thứ Bảy (20:00 - 21:00) do lịch họp nhóm đột xuất lúc 21:00. Bạn có thể nghỉ ngơi trọn vẹn mà không lo trễ mục tiêu tuần.</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- AI Cursor Simulation Badge -->
-          <div class="mt-6 flex items-center justify-between pt-4 border-t border-outline-variant/30">
-            <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary-container text-white text-[11px] font-sans shadow-sm">
-              <span class="material-symbols-outlined text-[13px]">smart_toy</span>
-              <span>Trợ lý AI FocusFlow đã tối ưu hóa lịch trình</span>
-            </div>
-            <a class="text-xs font-mono text-primary font-medium hover:underline flex items-center gap-1" href="#capabilities" (click)="scrollTo('capabilities', $event)">
-              <span>Tùy chỉnh lịch học thích ứng</span>
-              <span class="material-symbols-outlined text-[13px]">chevron_right</span>
-            </a>
-          </div>
-        </div>
-      </div>
-    }
-    @case ('schedule') {
-      <div class="grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-outline-variant/40 bg-white animate-tab-crossfade">
-        <!-- Left: Weekly Schedule Breakdown -->
-        <div class="lg:col-span-5 p-5 md:p-6 flex flex-col justify-between">
-          <div>
-            <div class="flex items-center justify-between mb-3">
-              <span class="text-[11px] font-sans uppercase tracking-wider text-on-surface-variant font-semibold">Lịch Trình Thích Ứng (Mode B)</span>
-              <span class="text-xs font-mono text-primary font-semibold">Độ trễ: 0 ngày</span>
-            </div>
-            <h2 class="text-base font-semibold text-on-surface mb-2 font-sans">Nhịp Độ Học Tập Tuần Này (24.5 Giờ)</h2>
-            <div class="w-full bg-surface-container h-1 rounded-full overflow-hidden mb-6">
-              <div class="bg-primary-container h-full w-[78%] rounded-full"></div>
-            </div>
-
-            <div class="space-y-3">
-              <div class="p-3 rounded-lg border border-outline-variant/30 bg-surface-container-low/30 flex items-center justify-between text-xs">
-                <span class="font-medium text-on-surface">Thứ Hai — Thứ Năm</span>
-                <span class="font-mono text-primary font-semibold">16.5 giờ ✓ Đã xong</span>
-              </div>
-              <div class="p-3 rounded-lg border border-primary/40 bg-secondary-container/20 flex items-center justify-between text-xs">
-                <span class="font-semibold text-primary">Thứ Sáu (Hôm nay)</span>
-                <span class="font-mono text-primary font-semibold">3.5 giờ • Đang diễn ra</span>
-              </div>
-              <div class="p-3 rounded-lg border border-outline-variant/30 bg-surface-container-low/30 flex items-center justify-between text-xs">
-                <span class="font-medium text-on-surface">Thứ Bảy (Bù Domino Shift)</span>
-                <span class="font-mono text-on-surface-variant">4.5 giờ • Đã xếp lịch</span>
-              </div>
-              <div class="p-3 rounded-lg border border-outline-variant/30 bg-surface-container-low/20 flex items-center justify-between text-xs text-on-surface-variant opacity-75">
-                <span>Chủ Nhật (Nghỉ ngơi nhận thức)</span>
-                <span class="font-mono">Tự suy ngẫm SRL</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="mt-6 pt-4 border-t border-outline-variant/30 flex items-center justify-between text-xs font-mono text-on-surface-variant">
-            <span class="flex items-center gap-1.5">
-              <span class="material-symbols-outlined text-[15px] text-primary">sync</span>
-              Đồng bộ 2 chiều Google Calendar
-            </span>
-            <span class="text-primary font-medium">Chuẩn RFC 5545</span>
-          </div>
-        </div>
-
-        <!-- Right: Real-time Schedule Calendar View -->
-        <div class="lg:col-span-7 p-5 md:p-6 flex flex-col justify-between relative bg-white">
-          <div>
-            <div class="flex items-center justify-between mb-4">
-              <div class="flex items-center gap-2">
-                <span class="material-symbols-outlined text-[18px] text-primary">calendar_month</span>
-                <h3 class="text-sm font-semibold text-on-surface font-sans">Bảng Điều Phối Lịch Học Tự Động Hóa</h3>
-              </div>
-              <span class="text-xs font-mono px-2 py-0.5 rounded bg-primary/10 text-primary font-semibold border border-primary/20">Auto-Calibrated</span>
-            </div>
-
-            <div class="space-y-2.5">
-              <div class="p-3 rounded-lg border border-outline-variant/30 bg-surface-container-low/20 flex items-center justify-between text-xs">
-                <div class="flex items-center gap-3">
-                  <span class="font-mono text-on-surface-variant w-24">08:30 - 17:30</span>
-                  <span class="text-on-surface-variant">Giờ làm việc &amp; Cuộc họp chuyên môn</span>
-                </div>
-                <span class="px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-mono text-[10px]">Lịch bận</span>
-              </div>
-              <div class="p-3 rounded-lg border border-primary/30 bg-secondary-container/20 flex items-center justify-between text-xs">
-                <div class="flex items-center gap-3">
-                  <span class="font-mono text-primary font-semibold w-24">19:30 - 21:00</span>
-                  <span class="text-on-surface font-semibold">Khối Học Sâu: Domain Service &amp; Integration</span>
-                </div>
-                <span class="px-2 py-0.5 rounded bg-primary-container text-white font-mono text-[10px]">Tối ưu hóa</span>
-              </div>
-              <div class="p-3 rounded-lg border border-outline-variant/30 bg-surface-container-low/20 flex items-center justify-between text-xs">
-                <div class="flex items-center gap-3">
-                  <span class="font-mono text-on-surface-variant w-24">21:15 - 22:00</span>
-                  <span class="text-on-surface-variant">Active Recall: Flashcard ôn tập chu kỳ 3</span>
-                </div>
-                <span class="px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-mono text-[10px]">Spaced Rep</span>
-              </div>
-            </div>
-
-            <div class="mt-4 p-3.5 rounded-lg border border-primary/20 bg-primary/5 flex items-start gap-3">
-              <span class="material-symbols-outlined text-primary text-[18px] mt-0.5">verified</span>
-              <div class="text-xs font-sans leading-relaxed">
-                <span class="font-semibold text-primary">Nguyên lý Zero Cognition Debt:</span>
-                <span class="text-on-surface-variant"> Hệ thống xếp lịch dựa trên năng lượng não bộ thực tế, không dồn ứ các bài học quá hạn sang ngày hôm sau để tránh gây kiệt sức.</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="mt-6 flex items-center justify-between pt-4 border-t border-outline-variant/30">
-            <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary-container text-white text-[11px] font-sans shadow-sm">
-              <span class="material-symbols-outlined text-[13px]">tune</span>
-              <span>Lịch rảnh cá nhân hóa Mode B</span>
-            </div>
-            <a class="text-xs font-mono text-primary font-medium hover:underline flex items-center gap-1" href="#methodology" (click)="scrollTo('methodology', $event)">
-              <span>Tìm hiểu thuật toán xếp lịch</span>
-              <span class="material-symbols-outlined text-[13px]">chevron_right</span>
-            </a>
-          </div>
-        </div>
-      </div>
-    }
-    @case ('pomodoro') {
-      <div class="grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-outline-variant/40 bg-white animate-tab-crossfade">
-        <!-- Left: Active Task & Cognitive Scratchpad -->
-        <div class="lg:col-span-5 p-5 md:p-6 flex flex-col justify-between">
-          <div>
-            <div class="flex items-center justify-between mb-3">
-              <span class="text-[11px] font-sans uppercase tracking-wider text-on-surface-variant font-semibold">Tác Vụ Trọng Tâm</span>
-              <span class="text-xs font-mono text-primary font-semibold">Chu kỳ 2/4 Pomodoro</span>
-            </div>
-            <h2 class="text-base font-semibold text-on-surface mb-2 font-sans">Hexagonal Ports &amp; Adapters Pattern</h2>
-            <div class="w-full bg-surface-container h-1 rounded-full overflow-hidden mb-6">
-              <div class="bg-primary-container h-full w-[70%] rounded-full"></div>
-            </div>
-
-            <div class="space-y-3">
-              <div class="p-3 rounded-lg border border-outline-variant/30 bg-surface-container-low/30 flex items-center gap-2.5 text-xs">
-                <span class="material-symbols-outlined text-primary text-[16px]">check_box</span>
-                <span class="text-on-surface-variant line-through">Phân tích InputPort &amp; OutputPort contracts</span>
-              </div>
-              <div class="p-3 rounded-lg border border-primary/40 bg-secondary-container/20 flex items-center gap-2.5 text-xs">
-                <span class="w-3.5 h-3.5 rounded-full bg-primary-container breathing-dot inline-block"></span>
-                <span class="text-on-surface font-semibold">Triển khai Mocking Adapter cho Unit Test</span>
-              </div>
-              <div class="p-3 rounded-lg border border-outline-variant/30 bg-surface-container-low/20 flex items-center gap-2.5 text-xs text-on-surface-variant">
-                <span class="material-symbols-outlined text-[16px] text-outline-variant">check_box_outline_blank</span>
-                <span>Kiểm tra import-linter contracts 0 vi phạm</span>
-              </div>
-            </div>
-
-            <div class="mt-4 p-3.5 rounded-lg border border-outline-variant/40 bg-surface-container-low/50">
-              <div class="flex items-center justify-between mb-2">
-                <label for="scratchpad-input" class="text-[11px] font-mono uppercase tracking-wider text-on-surface-variant font-semibold flex items-center gap-1.5">
-                  <span class="material-symbols-outlined text-[14px] text-primary">edit_note</span>
-                  <span>Cognitive Scratchpad (Gõ thử nghiệm)</span>
-                </label>
-                <span class="text-[10px] font-mono text-outline">Tự lưu tức thì</span>
-              </div>
-              <textarea
-                id="scratchpad-input"
-                rows="2"
-                [value]="scratchpadNote()"
-                (input)="onScratchpadInput($event)"
-                placeholder="Ghi nhanh suy nghĩ xao nhãng để giữ nguyên dòng chảy tập trung..."
-                class="w-full text-xs text-on-surface bg-white rounded border border-outline-variant/60 p-2 font-sans focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all resize-none italic"
-              ></textarea>
-            </div>
-          </div>
-
-          <div class="mt-6 pt-4 border-t border-outline-variant/30 flex items-center justify-between text-xs font-mono text-on-surface-variant">
-            <span class="flex items-center gap-1.5">
-              <span class="material-symbols-outlined text-[15px] text-primary">headphones</span>
-              Soundscape: Brown Noise
-            </span>
-            <span class="text-primary font-medium">Bảo toàn dòng chảy</span>
-          </div>
-        </div>
-
-        <!-- Right: Zen Pomodoro Display -->
-        <div class="lg:col-span-7 p-5 md:p-6 flex flex-col justify-between relative bg-white">
-          <div>
-            <div class="flex items-center justify-between mb-4">
-              <div class="flex items-center gap-2">
-                <span class="material-symbols-outlined text-[18px] text-primary">timer</span>
-                <h3 class="text-sm font-semibold text-on-surface font-sans">Không Gian Học Sâu Pomodoro Zen</h3>
-              </div>
-              <span class="text-xs font-mono px-2 py-0.5 rounded bg-primary/10 text-primary font-semibold border border-primary/20">Flow State: 98%</span>
-            </div>
-
-            <div class="p-6 rounded-xl bg-surface-container-low/30 border border-outline-variant/40 text-center my-2 transition-all">
-              <span class="font-serif-headline text-5xl md:text-6xl text-on-surface font-normal tracking-tight block mb-2 tabular-nums">
-                {{ formattedTime() }}
-              </span>
-              <p class="text-xs font-mono text-primary font-semibold flex items-center justify-center gap-1.5">
-                @if (isTimerRunning()) {
-                  <span class="w-2 h-2 rounded-full bg-primary-container breathing-dot inline-block"></span>
-                  <span>ĐANG TẬP TRUNG CAO ĐỘ • KHÔNG GIAN PHẲNG</span>
-                } @else {
-                  <span class="w-2 h-2 rounded-full bg-outline-variant inline-block"></span>
-                  <span>TẠM DỪNG • SẴN SÀNG TIẾP TỤC</span>
+                      <span
+                        [class]="node.status === 'IN_PROGRESS'
+                          ? 'text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#246B4A] text-white font-medium shrink-0'
+                          : node.status === 'COMPLETED'
+                            ? 'text-[10px] font-mono px-2 py-0.5 rounded-full border border-emerald-200 bg-emerald-50 text-[#246B4A] font-medium shrink-0'
+                            : 'text-[10px] font-mono px-2 py-0.5 rounded-full border border-neutral-200 bg-neutral-100 text-neutral-600 font-medium shrink-0'"
+                      >
+                        {{ node.statusLabel }}
+                      </span>
+                    </div>
+                  </button>
                 }
-              </p>
-              <div class="mt-5 flex items-center justify-center gap-3">
-                <button
-                  type="button"
-                  (click)="toggleTimer()"
-                  class="px-5 py-2 rounded-full bg-on-surface text-white text-xs font-medium inline-flex items-center gap-1.5 shadow-sm hover:bg-primary transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-                >
-                  @if (isTimerRunning()) {
-                    <span class="material-symbols-outlined text-[16px]">pause</span>
-                    <span>Tạm dừng</span>
-                  } @else {
-                    <span class="material-symbols-outlined text-[16px]">play_arrow</span>
-                    <span>Bắt đầu</span>
-                  }
-                </button>
-                <button
-                  type="button"
-                  (click)="resetTimer()"
-                  class="px-4 py-2 rounded-full bg-white border border-outline-variant/60 text-on-surface text-xs font-medium inline-flex items-center gap-1.5 hover:bg-surface-container-low transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-                >
-                  <span class="material-symbols-outlined text-[16px]">restart_alt</span>
-                  <span>Đặt lại</span>
-                </button>
               </div>
             </div>
 
-            <div class="mt-4 p-3.5 rounded-lg border border-primary/20 bg-primary/5 flex items-start gap-3">
-              <span class="material-symbols-outlined text-primary text-[18px] mt-0.5">shield</span>
-              <div class="text-xs font-sans leading-relaxed">
-                <span class="font-semibold text-primary">Lá Chắn Xao Nhãng (Distraction Shield):</span>
-                <span class="text-on-surface-variant"> Loại bỏ mọi thông báo ngoại lai. Bộ đếm Pomodoro hoạt động theo mốc thời gian chuẩn tuyệt đối, bảo toàn trạng thái chú ý sâu.</span>
-              </div>
+            <div class="pt-2.5 border-t border-neutral-100 flex items-center justify-between gap-2 text-[11px] font-mono text-neutral-500">
+              <span>Bấm node để kiểm tra RAG &amp; Gate</span>
+              <a
+                href="#capabilities"
+                (click)="scrollTo('capabilities', $event)"
+                class="text-[#246B4A] font-semibold hover:underline inline-flex items-center gap-1"
+              >
+                <span>Chi tiết kiến trúc</span>
+                <lucide-icon name="chevron-right" [size]="13"></lucide-icon>
+              </a>
             </div>
           </div>
 
-          <div class="mt-6 flex items-center justify-between pt-4 border-t border-outline-variant/30">
-            <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary-container text-white text-[11px] font-sans shadow-sm">
-              <span class="material-symbols-outlined text-[13px]">self_improvement</span>
-              <span>Chế độ Học Sâu Chống Kiệt Sức</span>
+          <!-- Right Card: Selected DAG Node Inspection -->
+          @let node = selectedDagNode();
+          <div class="lg:col-span-7 bg-white rounded-2xl border border-neutral-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.02)] p-4 sm:p-5 flex flex-col justify-between gap-3 h-full min-w-0">
+            <div class="space-y-3">
+              <!-- Selected Node Header -->
+              <div class="flex flex-wrap items-start justify-between gap-2 pb-2.5 border-b border-neutral-100">
+                <div class="min-w-0">
+                  <div class="flex flex-wrap items-center gap-1.5 mb-1">
+                    <span class="text-[10px] font-mono px-2 py-0.5 rounded-md bg-neutral-100 text-neutral-700 border border-neutral-200/70">
+                      estimated_effort: {{ node.effortLabel }}
+                    </span>
+                    <span class="text-[10px] font-mono px-2 py-0.5 rounded-md bg-emerald-50 text-[#246B4A] border border-emerald-200 font-medium">
+                      {{ node.statusLabel }}
+                    </span>
+                  </div>
+                  <h3 class="text-sm sm:text-base font-bold text-neutral-900 font-serif truncate">
+                    {{ node.title }}
+                  </h3>
+                </div>
+              </div>
+
+              <!-- Prerequisite Check (DagCycleValidator) -->
+              <div class="p-2.5 rounded-xl border border-neutral-200/80 bg-[#FBFBF9] space-y-0.5">
+                <div class="flex items-center gap-1.5 text-xs font-semibold text-neutral-900">
+                  <lucide-icon name="git-branch" [size]="13" class="text-[#246B4A] shrink-0"></lucide-icon>
+                  <span>Kiểm tra Tiên quyết (DagCycleValidator)</span>
+                </div>
+                <p class="text-[11px] font-mono text-[#246B4A] font-medium">{{ node.dagValidatorStatus }}</p>
+                <p class="text-[11px] text-neutral-600 truncate">{{ node.prerequisiteLabel }}</p>
+              </div>
+
+              <!-- Grounded RAG Source Snippet -->
+              <div class="p-3 rounded-xl border border-emerald-200/80 bg-emerald-50/40 space-y-1.5">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <div class="flex items-center gap-1.5 text-xs font-semibold text-neutral-900 min-w-0">
+                    <lucide-icon name="book-open" [size]="13" class="text-[#246B4A] shrink-0"></lucide-icon>
+                    <span class="truncate">Grounded RAG Source: {{ node.ragSourceTitle }}</span>
+                  </div>
+                  <div class="flex items-center gap-1.5 shrink-0">
+                    <span class="inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded bg-white border border-neutral-200 text-[#246B4A] font-semibold">
+                      <lucide-icon name="database" [size]="10"></lucide-icon>
+                      <span>pgvector</span>
+                    </span>
+                    <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-[#246B4A] text-white">
+                      {{ node.ragChunkId }}
+                    </span>
+                  </div>
+                </div>
+                <p class="text-[11px] text-neutral-700 leading-relaxed line-clamp-2">
+                  “{{ node.ragExcerpt }}”
+                </p>
+              </div>
+
+              <!-- 3-Tier Validation Gate Checkmarks -->
+              <div class="space-y-1.5">
+                <p class="text-[10px] font-mono uppercase tracking-wider text-neutral-500 font-semibold">
+                  3-Tier Validation Gate
+                </p>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  @for (gate of node.gateChecks; track gate.tier) {
+                    <div class="p-2 rounded-xl border border-neutral-200/80 bg-[#FBFBF9] flex items-start gap-1.5">
+                      <lucide-icon name="check" [size]="13" class="text-[#246B4A] shrink-0 mt-0.5"></lucide-icon>
+                      <div class="min-w-0">
+                        <p class="text-[11px] font-semibold text-neutral-900 leading-tight">
+                          {{ gate.tier }}: {{ gate.label }}
+                        </p>
+                        <p class="text-[10px] text-neutral-600 mt-0.5 leading-snug">
+                          {{ gate.detail }}
+                        </p>
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
             </div>
-            <a class="text-xs font-mono text-primary font-medium hover:underline flex items-center gap-1" href="#capabilities" (click)="scrollTo('capabilities', $event)">
-              <span>Khám phá chế độ Focus</span>
-              <span class="material-symbols-outlined text-[13px]">chevron_right</span>
-            </a>
+
+            <div class="pt-2.5 border-t border-neutral-100 flex items-center justify-between text-[11px] font-mono text-neutral-500">
+              <span>Roadmap Entity • Immutable Knowledge Graph</span>
+              <span class="text-[#246B4A] font-semibold">Feasibility: Hợp lệ</span>
+            </div>
           </div>
         </div>
-      </div>
-    }
-  }
+      }
 
-  <!-- Canvas Footer Status Strip -->
-  <div class="bg-surface-container-low px-5 py-2.5 border-t border-outline-variant/40 flex flex-wrap items-center justify-between gap-3 text-xs font-sans text-on-surface-variant">
-    <div class="flex items-center gap-4">
-      <span class="flex items-center gap-1.5">
-        <span class="w-2 h-2 rounded-full bg-primary-container"></span>
-        <strong class="font-semibold text-on-surface">Chỉ số tập trung:</strong> 94/100 (Xuất sắc)
-      </span>
-      <span class="hidden sm:inline text-outline-variant">•</span>
-      <span class="hidden sm:inline">Chu kỳ phục hồi nhận thức: Ổn định</span>
-    </div>
-    <div class="flex items-center gap-2 font-mono text-[11px]">
-      <span class="material-symbols-outlined text-[14px] text-primary">verified</span>
-      <span>Attio Cell Sync Engine: v2.4-active</span>
-    </div>
+      <!-- SCREEN 2: SCHEDULE PROPOSAL & HUMAN-IN-THE-LOOP APPLY -->
+      @case ('schedule') {
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-3.5 lg:h-[468px] animate-tab-crossfade">
+          <!-- Left Card: Mode B Availability & Weekly Effort Summary -->
+          <div class="lg:col-span-5 bg-white rounded-2xl border border-neutral-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.02)] p-4 sm:p-5 flex flex-col justify-between gap-3 h-full min-w-0">
+            <div class="space-y-3">
+              <div>
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+                  <span class="text-[11px] font-sans uppercase tracking-wider text-neutral-500 font-semibold">
+                    ScheduleProposal vs OfficialSchedule
+                  </span>
+                  <span class="text-[11px] font-mono text-[#246B4A] font-semibold">BUSR-02</span>
+                </div>
+                <h2 class="text-sm sm:text-base font-bold text-neutral-900 font-serif">
+                  Đề xuất Lịch học (Mode B)
+                </h2>
+                <p class="text-[11px] font-mono text-[#246B4A] mt-1.5 bg-emerald-50/70 border border-emerald-200/80 rounded-lg px-2.5 py-1.5">
+                  T2–T6: 19:30–21:30 • T7: 09:00–11:30
+                </p>
+              </div>
+
+              <!-- Weekly Effort Summary -->
+              <div class="p-3 rounded-xl border border-neutral-200/80 bg-[#FBFBF9] space-y-2">
+                <div class="flex items-center justify-between text-xs">
+                  <span class="text-neutral-600 font-medium">Tổng nỗ lực tuần đề xuất</span>
+                  <span class="font-mono font-semibold text-neutral-900">240 phút (4.0 giờ)</span>
+                </div>
+                <div class="w-full h-1.5 rounded-full bg-neutral-200/80 overflow-hidden">
+                  <div class="h-full w-[80%] bg-[#246B4A] rounded-full"></div>
+                </div>
+                <div class="grid grid-cols-2 gap-2 pt-1 text-[11px] font-mono">
+                  <div class="p-2 rounded-lg bg-white border border-neutral-200/70">
+                    <span class="text-neutral-500 block">Khung rảnh Mode B</span>
+                    <strong class="text-neutral-900">12.5 giờ / tuần</strong>
+                  </div>
+                  <div class="p-2 rounded-lg bg-white border border-neutral-200/70">
+                    <span class="text-neutral-500 block">Độ trễ / Overdue</span>
+                    <strong class="text-[#246B4A]">0 ngày (An toàn)</strong>
+                  </div>
+                </div>
+              </div>
+
+              <p class="text-xs text-neutral-600 leading-relaxed">
+                Thay đổi lịch rảnh chỉ chạy lại <strong class="text-neutral-900">Schedule Optimization</strong> mà không tạo lại cây Roadmap. Bản nháp AI chỉ ghi vào lịch chính thức khi bạn bấm <strong class="text-[#246B4A]">Apply</strong>.
+              </p>
+            </div>
+
+            <div class="pt-2.5 border-t border-neutral-100 flex items-center justify-between text-[11px] font-mono text-neutral-500">
+              <span>Deterministic Scheduling Engine</span>
+              <a
+                href="#methodology"
+                (click)="scrollTo('methodology', $event)"
+                class="text-[#246B4A] font-semibold hover:underline inline-flex items-center gap-1"
+              >
+                <span>Thuật toán Mode A/B</span>
+                <lucide-icon name="chevron-right" [size]="13"></lucide-icon>
+              </a>
+            </div>
+          </div>
+
+          <!-- Right Card: Diff View + Soft Overflow + Apply Action -->
+          <div class="lg:col-span-7 bg-white rounded-2xl border border-neutral-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.02)] p-4 sm:p-5 flex flex-col justify-between gap-2.5 h-full min-w-0">
+            <div class="space-y-2.5">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <div class="flex items-center gap-2">
+                  <lucide-icon name="calendar-range" [size]="15" class="text-[#246B4A] shrink-0"></lucide-icon>
+                  <h3 class="text-sm font-bold text-neutral-900 font-serif">
+                    So sánh OfficialSchedule &amp; Bản nháp AI
+                  </h3>
+                </div>
+
+                @if (proposalApplied()) {
+                  <span class="text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-[#246B4A] text-white font-semibold inline-flex items-center gap-1">
+                    <lucide-icon name="check-check" [size]="12"></lucide-icon>
+                    <span>OfficialSchedule (Đã áp dụng)</span>
+                  </span>
+                } @else {
+                  <span class="text-[11px] font-mono px-2.5 py-0.5 rounded-full border border-neutral-200 bg-neutral-100 text-neutral-700 font-semibold">
+                    ScheduleProposal (DRAFT)
+                  </span>
+                }
+              </div>
+
+              <!-- Diff Rows -->
+              <div class="space-y-1.5">
+                @for (block of scheduleDiffBlocks; track block.id) {
+                  <div
+                    [class]="block.isSoftOverflow && !proposalApplied()
+                      ? 'p-2.5 rounded-xl border border-amber-300 bg-amber-50/70 space-y-0.5'
+                      : 'p-2.5 rounded-xl border border-neutral-200/80 bg-[#FBFBF9] space-y-0.5'"
+                  >
+                    <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <div class="flex items-center gap-2 min-w-0">
+                        <span class="font-mono font-semibold text-[#246B4A]">{{ block.daySlot }}</span>
+                        <span class="font-semibold text-neutral-900 truncate">{{ block.title }}</span>
+                      </div>
+                      <span
+                        [class]="proposalApplied()
+                          ? 'text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-50 text-[#246B4A] border border-emerald-200 font-medium'
+                          : block.isSoftOverflow
+                            ? 'text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 font-medium'
+                            : 'text-[10px] font-mono px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-600 border border-neutral-200'"
+                      >
+                        {{ proposalApplied() ? 'OfficialSchedule' : block.badgeLabel }}
+                      </span>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-1.5 text-[11px] font-mono text-neutral-500">
+                      <span class="line-through opacity-75">{{ block.beforeLabel }}</span>
+                      <lucide-icon name="arrow-right" [size]="11" class="text-[#246B4A] shrink-0"></lucide-icon>
+                      <span class="text-neutral-900 font-medium">{{ block.afterLabel }}</span>
+                    </div>
+                  </div>
+                }
+              </div>
+
+              <!-- Soft Overflow Warning (BUSR-04) -->
+              <div
+                role="note"
+                class="p-2.5 rounded-xl border border-amber-300 bg-amber-50/70 flex items-start gap-2 text-[11px]"
+              >
+                <lucide-icon name="alert-triangle" [size]="15" class="text-amber-700 shrink-0 mt-0.5"></lucide-icon>
+                <p class="text-amber-950 leading-snug">
+                  <strong class="font-semibold">Soft Overflow: +15 phút ở block cuối ngày</strong> — trong ngưỡng cho phép ≤ 30 phút (BUSR-04). Cần bạn xác nhận trước khi cập nhật lịch chính thức.
+                </p>
+              </div>
+            </div>
+
+            <!-- Human-in-the-Loop Apply Footer -->
+            <div class="pt-2.5 border-t border-neutral-100 flex flex-wrap items-center justify-between gap-2">
+              @if (proposalApplied()) {
+                <div class="flex items-center gap-1.5 text-xs text-[#246B4A] font-medium" role="status" aria-live="polite">
+                  <lucide-icon name="circle-check" [size]="15" class="shrink-0"></lucide-icon>
+                  <span>Đã cập nhật <strong>OfficialSchedule (Đã áp dụng)</strong> vào lịch học.</span>
+                </div>
+                <button
+                  type="button"
+                  (click)="resetProposal()"
+                  class="px-3 py-1.5 rounded-full border border-neutral-200 bg-white text-neutral-700 text-xs font-medium hover:bg-neutral-50 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#246B4A]"
+                >
+                  Xem lại bản nháp
+                </button>
+              } @else {
+                <span class="text-[11px] font-mono text-neutral-500">
+                  Không tự động ghi đè (No Auto-Apply)
+                </span>
+                <button
+                  type="button"
+                  (click)="applyProposal()"
+                  class="px-4 py-1.5 rounded-full bg-[#246B4A] hover:bg-[#1B5338] text-white text-xs font-semibold inline-flex items-center gap-1.5 shadow-xs transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#246B4A]"
+                >
+                  <lucide-icon name="check-check" [size]="14"></lucide-icon>
+                  <span>Xác nhận &amp; Áp dụng lịch (Apply)</span>
+                </button>
+              }
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- SCREEN 3: POMODORO / MVS & TAKEAWAYGUARD (OS-01) -->
+      @case ('pomodoro') {
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-3.5 lg:h-[468px] animate-tab-crossfade">
+          <!-- Left Card: Active Task, Pomodoro/MVS Toggle, Key Takeaways -->
+          <div class="lg:col-span-5 bg-white rounded-2xl border border-neutral-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.02)] p-4 sm:p-5 flex flex-col justify-between gap-3 h-full min-w-0">
+            <div class="space-y-3">
+              <div>
+                <div class="flex items-center justify-between gap-2 mb-1">
+                  <span class="text-[11px] font-sans uppercase tracking-wider text-neutral-500 font-semibold">
+                    Tác vụ đang thực thi
+                  </span>
+                  <span class="text-xs font-mono text-[#246B4A] font-semibold">
+                    {{ isMvsMode() ? 'MVS 15:00' : 'Pomodoro 25:00' }}
+                  </span>
+                </div>
+                <h2 class="text-sm sm:text-base font-bold text-neutral-900 font-serif">
+                  Hexagonal Ports &amp; Adapters
+                </h2>
+              </div>
+
+              <!-- Pomodoro / MVS Mode Toggle -->
+              <div class="p-1 rounded-xl bg-neutral-100 border border-neutral-200/70 grid grid-cols-2 gap-1" role="group" aria-label="Chế độ phiên học">
+                <button
+                  type="button"
+                  (click)="setMvsMode(false)"
+                  [attr.aria-pressed]="!isMvsMode()"
+                  [class]="!isMvsMode()
+                    ? 'px-2.5 py-1.5 rounded-lg bg-white text-[#246B4A] font-semibold text-xs shadow-2xs border border-neutral-200/70 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#246B4A]'
+                    : 'px-2.5 py-1.5 rounded-lg text-neutral-600 hover:text-neutral-900 text-xs font-medium cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#246B4A]'"
+                >
+                  Pomodoro (25:00)
+                </button>
+                <button
+                  type="button"
+                  (click)="setMvsMode(true)"
+                  [attr.aria-pressed]="isMvsMode()"
+                  [class]="isMvsMode()
+                    ? 'px-2.5 py-1.5 rounded-lg bg-white text-[#246B4A] font-semibold text-xs shadow-2xs border border-neutral-200/70 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#246B4A]'
+                    : 'px-2.5 py-1.5 rounded-lg text-neutral-600 hover:text-neutral-900 text-xs font-medium cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#246B4A]'"
+                >
+                  MVS (15:00)
+                </button>
+              </div>
+
+              <!-- Key Takeaways (TakeawayGuard OS-01) -->
+              <div class="p-3 rounded-xl border border-neutral-200/80 bg-[#FBFBF9] space-y-2">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <label
+                    for="scratchpad-input"
+                    class="text-[11px] font-mono uppercase tracking-wider text-neutral-900 font-semibold flex items-center gap-1.5"
+                  >
+                    <lucide-icon name="pen-line" [size]="12" class="text-[#246B4A] shrink-0"></lucide-icon>
+                    <span>Key Takeaways (TakeawayGuard OS-01)</span>
+                  </label>
+                  <span
+                    [class]="canCompleteSession()
+                      ? 'text-[11px] font-mono font-semibold text-[#246B4A]'
+                      : 'text-[11px] font-mono font-semibold text-rose-700'"
+                  >
+                    {{ takeawayLength() }}/{{ minTakeawayChars }} ký tự
+                  </span>
+                </div>
+
+                <textarea
+                  id="scratchpad-input"
+                  rows="3"
+                  [value]="scratchpadNote()"
+                  (input)="onScratchpadInput($event)"
+                  placeholder="Ghi lại bài học cốt lõi vừa rút ra (tối thiểu 20 ký tự)..."
+                  class="w-full text-xs text-neutral-900 bg-white rounded-lg border border-neutral-200 p-2.5 font-sans focus:outline-none focus:border-[#246B4A] focus:ring-2 focus:ring-[#246B4A]/15 transition-all resize-none"
+                ></textarea>
+
+                <p
+                  [class]="canCompleteSession()
+                    ? 'text-[11px] text-[#246B4A] font-medium flex items-center gap-1'
+                    : 'text-[11px] text-rose-700 font-medium flex items-center gap-1'"
+                >
+                  @if (canCompleteSession()) {
+                    <lucide-icon name="circle-check" [size]="13" class="shrink-0"></lucide-icon>
+                    <span>Đạt ngưỡng TakeawayGuard — Tối thiểu 20 ký tự để hoàn thành phiên (OS-01)</span>
+                  } @else {
+                    <lucide-icon name="alert-triangle" [size]="13" class="shrink-0"></lucide-icon>
+                    <span>Tối thiểu 20 ký tự để hoàn thành phiên (OS-01) • còn thiếu {{ minTakeawayChars - takeawayLength() }} ký tự</span>
+                  }
+                </p>
+              </div>
+            </div>
+
+            <div class="pt-2.5 border-t border-neutral-100 flex items-center justify-between text-[11px] font-mono text-neutral-500">
+              <span class="inline-flex items-center gap-1">
+                <lucide-icon name="flame" [size]="13" class="text-[#246B4A]"></lucide-icon>
+                <span>Minimum Viable Session (MVS) sẵn sàng</span>
+              </span>
+            </div>
+          </div>
+
+          <!-- Right Card: Timestamp-based Pomodoro Countdown & Fixed Status Slot -->
+          <div class="lg:col-span-7 bg-white rounded-2xl border border-neutral-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.02)] p-4 sm:p-5 flex flex-col justify-between gap-3 h-full min-w-0">
+            <div class="space-y-3">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <div class="flex items-center gap-2">
+                  <lucide-icon name="timer" [size]="15" class="text-[#246B4A] shrink-0"></lucide-icon>
+                  <h3 class="text-sm font-bold text-neutral-900 font-serif">
+                    Phiên học Focus &amp; TakeawayGuard
+                  </h3>
+                </div>
+                <span class="text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-emerald-50 text-[#246B4A] font-semibold border border-emerald-200">
+                  Timestamp Clock (Date.now)
+                </span>
+              </div>
+
+              <!-- Timer Box -->
+              <div class="p-4 sm:p-5 rounded-xl bg-[#FBFBF9] border border-neutral-200/80 text-center space-y-2.5">
+                <span
+                  aria-live="off"
+                  class="font-serif text-5xl sm:text-6xl text-neutral-900 font-normal tracking-tight block tabular-nums"
+                >
+                  {{ formattedTime() }}
+                </span>
+
+                <p class="text-[11px] font-mono text-[#246B4A] font-semibold flex items-center justify-center gap-1.5">
+                  @if (isTimerRunning()) {
+                    <span class="w-2 h-2 rounded-full bg-[#246B4A] breathing-dot inline-block"></span>
+                    <span>ĐANG TẬP TRUNG • ĐỒNG BỘ MỐC THỜI GIAN THỰC</span>
+                  } @else {
+                    <span class="w-2 h-2 rounded-full bg-neutral-400 inline-block"></span>
+                    <span>{{ isMvsMode() ? 'CHẾ ĐỘ MVS 15 PHÚT' : 'CHẾ ĐỘ POMODORO 25 PHÚT' }} • SẴN SÀNG</span>
+                  }
+                </p>
+
+                <div class="pt-1.5 flex flex-wrap items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    (click)="toggleTimer()"
+                    class="px-4 py-1.5 rounded-full bg-neutral-900 text-white text-xs font-semibold inline-flex items-center gap-1.5 hover:bg-[#246B4A] transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#246B4A]"
+                  >
+                    @if (isTimerRunning()) {
+                      <lucide-icon name="pause" [size]="13"></lucide-icon>
+                      <span>Tạm dừng</span>
+                    } @else {
+                      <lucide-icon name="play" [size]="13"></lucide-icon>
+                      <span>Bắt đầu</span>
+                    }
+                  </button>
+
+                  <button
+                    type="button"
+                    (click)="resetTimer()"
+                    class="px-3.5 py-1.5 rounded-full bg-white border border-neutral-200 text-neutral-700 text-xs font-medium inline-flex items-center gap-1.5 hover:bg-neutral-50 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#246B4A]"
+                  >
+                    <lucide-icon name="rotate-ccw" [size]="13"></lucide-icon>
+                    <span>Đặt lại</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    (click)="completeSession()"
+                    [disabled]="!canCompleteSession()"
+                    class="px-4 py-1.5 rounded-full bg-[#246B4A] text-white text-xs font-semibold inline-flex items-center gap-1.5 hover:bg-[#1B5338] disabled:opacity-45 disabled:cursor-not-allowed transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#246B4A]"
+                  >
+                    <lucide-icon name="award" [size]="13"></lucide-icon>
+                    <span>Hoàn thành phiên học</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Fixed-height Status Slot (Zero vertical jump when completing session) -->
+              <div class="min-h-[68px] flex items-stretch">
+                @if (sessionCompleted()) {
+                  <div
+                    role="status"
+                    aria-live="polite"
+                    class="w-full p-3 rounded-xl border border-emerald-200 bg-emerald-50/70 flex items-start gap-2 text-xs"
+                  >
+                    <lucide-icon name="circle-check" [size]="16" class="text-[#246B4A] shrink-0 mt-0.5"></lucide-icon>
+                    <div>
+                      <p class="font-semibold text-[#246B4A]">
+                        Phiên học đã hoàn thành &amp; lưu Key Takeaways!
+                      </p>
+                      <p class="text-neutral-700 mt-0.5 text-[11px]">
+                        TakeawayGuard OS-01 đã xác thực ({{ takeawayLength() }} ký tự) và đồng bộ vào Learner Model cho pha Self-Reflection.
+                      </p>
+                    </div>
+                  </div>
+                } @else {
+                  <div class="w-full p-3 rounded-xl border border-neutral-200/70 bg-[#FBFBF9] flex items-start gap-2 text-xs">
+                    <lucide-icon name="shield-check" [size]="16" class="text-[#246B4A] shrink-0 mt-0.5"></lucide-icon>
+                    <div>
+                      <p class="font-semibold text-neutral-900">
+                        Heartbeat mỗi 60s &amp; Chống mất dữ liệu phiên học
+                      </p>
+                      <p class="text-neutral-600 mt-0.5 text-[11px]">
+                        Ghi tối thiểu 20 ký tự Key Takeaways để mở khóa nút Hoàn thành phiên và cập nhật năng lực.
+                      </p>
+                    </div>
+                  </div>
+                }
+              </div>
+            </div>
+
+            <div class="pt-2.5 border-t border-neutral-100 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-neutral-500">
+              <span>Đếm theo mốc Date.now() — không lệch khi ẩn tab</span>
+              <a
+                href="#capabilities"
+                (click)="scrollTo('capabilities', $event)"
+                class="text-[#246B4A] font-semibold hover:underline inline-flex items-center gap-1"
+              >
+                <span>Khám phá chế độ Focus</span>
+                <lucide-icon name="chevron-right" [size]="13"></lucide-icon>
+              </a>
+            </div>
+          </div>
+        </div>
+      }
+    }
   </div>
+
+  <!-- Bottom App Footer (Replica of app-footer.component.html) -->
+  <footer class="w-full min-h-8 py-2 bg-white/95 border-t border-neutral-200/70 px-4 sm:px-5 text-[11px] text-neutral-500 flex flex-wrap items-center justify-between gap-2 select-none">
+    <div class="flex items-center gap-2 font-medium text-neutral-700">
+      <span class="w-1.5 h-1.5 rounded-full bg-emerald-600 shrink-0" aria-hidden="true"></span>
+      <span>FocusFlow AI Harness • 2-Stage SSE</span>
+    </div>
+
+    <div class="hidden md:flex items-center gap-3 font-mono text-[10px] text-neutral-400 shrink-0">
+      <div class="flex items-center gap-2 text-neutral-500">
+        <span class="flex items-center gap-1">
+          <kbd class="px-1 py-0.2 bg-neutral-100 rounded border border-neutral-200 font-bold text-neutral-700">⌘K</kbd>
+          <span>Tìm kiếm</span>
+        </span>
+        <span class="flex items-center gap-1">
+          <kbd class="px-1 py-0.2 bg-neutral-100 rounded border border-neutral-200 font-bold text-neutral-700">C</kbd>
+          <span>Tạo lộ trình</span>
+        </span>
+        <span class="flex items-center gap-1">
+          <kbd class="px-1.5 py-0.2 bg-neutral-100 rounded border border-neutral-200 font-bold text-neutral-700">Space</kbd>
+          <span>Vào học</span>
+        </span>
+      </div>
+      <span class="text-neutral-300" aria-hidden="true">•</span>
+      <span class="text-neutral-500 font-sans font-medium">WCAG 2.2 AA</span>
+    </div>
+  </footer>
 </div>

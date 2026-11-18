@@ -2,10 +2,33 @@
   display: block;
 }
 
+.ff-shell {
+  background-color: var(--surface-container-lowest);
+  border-color: var(--outline-variant);
+}
+
+.font-serif-headline {
+  font-family: var(--font-serif);
+  font-feature-settings: 'cv01' on, 'cv02' on;
+}
+
+@keyframes autoplayProgress {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+.ff-autoplay-progress {
+  animation: autoplayProgress 6s linear forwards;
+}
+
 @keyframes tabCrossfade {
   from {
     opacity: 0;
-    transform: translate3d(0, 10px, 0);
+    transform: translate3d(0, 8px, 0);
   }
   to {
     opacity: 1;
@@ -14,7 +37,7 @@
 }
 
 .animate-tab-crossfade {
-  animation: tabCrossfade 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: tabCrossfade 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
   will-change: transform, opacity;
 }
 
@@ -34,13 +57,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-tab-crossfade {
-    animation: none !important;
-    opacity: 1 !important;
-    transform: none !important;
-  }
-
-  .breathing-dot {
+  .animate-tab-crossfade,
+  .breathing-dot,
+  .ff-autoplay-progress {
     animation: none !important;
     opacity: 1 !important;
     transform: none !important;
