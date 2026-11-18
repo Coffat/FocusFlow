@@ -11,11 +11,12 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RoadmapService } from '../../../services/roadmap.service';
 import { MilestoneUpsertItemSchema } from '../../../models/roadmap.model';
+import { FitCapacityScopePanelComponent } from '../../shared/fit-capacity-scope-panel/fit-capacity-scope-panel.component';
 
 @Component({
   selector: 'app-milestone-approval-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, FitCapacityScopePanelComponent],
   templateUrl: './milestone-approval-dialog.component.html',
   styleUrl: './milestone-approval-dialog.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -29,8 +30,11 @@ export class MilestoneApprovalDialogComponent {
   readonly generateMilestones = output<string | undefined>();
   readonly saveMilestones = output<MilestoneUpsertItemSchema[]>();
   readonly approveMilestones = output<void>();
+  readonly approveFitCapacity = output<number>();
+  readonly regenerateFitCapacity = output<void>();
 
   readonly additionalContext = signal<string>('');
+  readonly isContextExpanded = signal<boolean>(false);
   readonly milestoneEstimatedHoursMap = signal<Record<number, number>>({});
 
   readonly editableMilestones = computed<MilestoneUpsertItemSchema[]>(() =>
@@ -39,14 +43,33 @@ export class MilestoneApprovalDialogComponent {
 
   readonly sseProgress = computed(() => this.roadmapService.sseProgress());
 
+  readonly currentStageBadgeText = computed<string>(() => {
+    const sse = this.sseProgress();
+    if (sse.progress >= 50 || sse.stage === 'VALIDATING_TIER_1_2_3') {
+      return 'Giai đoạn 2/2: Cân đối thời lượng';
+    }
+    return 'Giai đoạn 1/2: Thiết kế cột mốc';
+  });
+
+  toggleAdditionalContext(): void {
+    this.isContextExpanded.update(v => !v);
+  }
+
   readonly totalEstimatedHours = computed<number>(() => {
     const list = this.editableMilestones();
-    const hoursMap = this.milestoneEstimatedHoursMap();
-    return list.reduce((sum, _, idx) => sum + (hoursMap[idx] ?? 24), 0);
+    return list.reduce((sum, _, idx) => sum + this.getMilestoneHours(idx), 0);
   });
 
   getMilestoneHours(index: number): number {
-    return this.milestoneEstimatedHoursMap()[index] ?? 24;
+    const override = this.milestoneEstimatedHoursMap()[index];
+    if (override !== undefined) {
+      return override;
+    }
+    const ms = this.editableMilestones()[index];
+    if (ms && typeof ms.estimated_effort_minutes === 'number' && ms.estimated_effort_minutes > 0) {
+      return Math.max(1, Math.round((ms.estimated_effort_minutes / 60) * 10) / 10);
+    }
+    return 24;
   }
 
   onMilestoneHoursChange(index: number, value: number | string): void {
@@ -94,6 +117,14 @@ export class MilestoneApprovalDialogComponent {
 
   onApproveMilestones(): void {
     this.approveMilestones.emit();
+  }
+
+  onApproveFitCapacity(confirmedVersion: number): void {
+    this.approveFitCapacity.emit(confirmedVersion);
+  }
+
+  onRegenerateFitCapacity(): void {
+    this.regenerateFitCapacity.emit();
   }
 
   onBack(): void {

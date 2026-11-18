@@ -1,0 +1,281 @@
+@if (showUnschedulableAlert()) {
+  <section
+    role="alert"
+    aria-live="polite"
+    data-testid="preliminary-unschedulable-alert"
+    class="rounded-xl border border-[var(--destructive)] bg-[var(--card)] text-[var(--card-foreground)] p-4 sm:p-5 space-y-4 shadow-xs"
+  >
+    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+      <div class="flex items-start gap-2.5">
+        <span
+          class="material-symbols-outlined text-[20px] text-[var(--destructive)] shrink-0 mt-0.5"
+          aria-hidden="true"
+        >
+          event_busy
+        </span>
+        <div class="space-y-1">
+          <h3 class="text-sm sm:text-base font-semibold text-[var(--destructive)]">
+            Không đủ quỹ thời gian khả dụng cho cột mốc nền tảng (PRELIMINARY_UNSCHEDULABLE)
+          </h3>
+          <p class="text-xs sm:text-sm text-[var(--foreground)] leading-relaxed">
+            {{
+              conflict()?.message ||
+                'Quỹ thời gian rảnh hiện tại đến ngày đích không đủ để xếp dù chỉ cột mốc nền tảng đầu tiên.'
+            }}
+          </p>
+        </div>
+      </div>
+
+      @if (preliminaryFeasibility()?.hard_packable_capacity_minutes !== null && preliminaryFeasibility()?.hard_packable_capacity_minutes !== undefined) {
+        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-mono font-semibold border border-[var(--destructive)]/40 bg-[var(--destructive)]/10 text-[var(--destructive)] shrink-0">
+          <span class="material-symbols-outlined text-[14px]" aria-hidden="true">schedule</span>
+          <span>Khả dụng: {{ formatMinutes(preliminaryFeasibility()?.hard_packable_capacity_minutes) }}</span>
+        </span>
+      }
+    </div>
+
+    @if (reasons().length > 0) {
+      <div class="rounded-lg border border-[var(--border)] bg-[var(--muted)]/50 p-3 space-y-1.5">
+        <p class="text-xs font-semibold text-[var(--foreground)]">Chi tiết đánh giá năng lực:</p>
+        <ul class="list-disc pl-5 space-y-1 text-xs text-[var(--muted-foreground)]">
+          @for (reason of reasons(); track reason.code + '-' + $index) {
+            <li>{{ reason.message }}</li>
+          }
+        </ul>
+      </div>
+    }
+
+    @if (earliestDateRange() || recommendedAdditionalWeeklyMinutes() > 0) {
+      <div class="rounded-lg border border-[var(--border)] bg-[var(--secondary)]/50 p-3 space-y-2 text-xs">
+        <p class="font-semibold text-[var(--foreground)] flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-[16px] text-[var(--primary)]" aria-hidden="true">tune</span>
+          <span>Gợi ý điều chỉnh để đủ khả năng xếp lịch:</span>
+        </p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[var(--foreground)]">
+          @if (earliestDateRange(); as range) {
+            <div class="p-2.5 rounded-md border border-[var(--border)] bg-[var(--card)]">
+              <span class="block text-[11px] text-[var(--muted-foreground)]">Ngày đích khả thi ước tính</span>
+              <span class="font-mono font-semibold">{{ range.min_date }} → {{ range.max_date }}</span>
+            </div>
+          }
+          @if (recommendedAdditionalWeeklyMinutes() > 0) {
+            <div class="p-2.5 rounded-md border border-[var(--border)] bg-[var(--card)]">
+              <span class="block text-[11px] text-[var(--muted-foreground)]">Thời lượng cần bổ sung mỗi tuần</span>
+              <span class="font-mono font-semibold">+{{ formatMinutes(recommendedAdditionalWeeklyMinutes()) }}/tuần</span>
+            </div>
+          }
+        </div>
+      </div>
+    }
+
+    @if (showAvailabilityLink()) {
+      <div class="flex flex-wrap items-center gap-2 pt-1">
+        <a
+          routerLink="/availability"
+          class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-semibold border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--accent)] text-[var(--foreground)] no-underline transition-colors"
+        >
+          <span class="material-symbols-outlined text-[15px]" aria-hidden="true">calendar_month</span>
+          <span>Mở cấu hình giờ rảnh (Availability)</span>
+        </a>
+      </div>
+    }
+  </section>
+}
+
+@if (showFitCapacityPanel()) {
+  <section
+    data-testid="fit-capacity-scope-panel"
+    aria-labelledby="fit-capacity-panel-title"
+    class="rounded-xl border border-[var(--primary)]/35 bg-[var(--card)] text-[var(--card-foreground)] p-4 sm:p-5 space-y-4 shadow-xs"
+  >
+    <!-- Header & Version Badge -->
+    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+      <div class="space-y-1">
+        <div class="flex flex-wrap items-center gap-2">
+          <span
+            data-testid="scope-proposal-version-badge"
+            class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-mono font-semibold border border-[var(--primary)]/30 bg-[var(--primary)]/10 text-[var(--primary)]"
+          >
+            <span class="material-symbols-outlined text-[14px]" aria-hidden="true">verified_user</span>
+            <span>Đề xuất thu gọn phạm vi (FIT_CAPACITY) &bull; v{{ effectiveVersion() }}</span>
+          </span>
+
+          @if (isScopeApproved()) {
+            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border border-[var(--primary)]/30 bg-[var(--primary)]/10 text-[var(--primary)]">
+              <span class="material-symbols-outlined text-[14px]" aria-hidden="true">check_circle</span>
+              <span>Đã xác nhận phạm vi (APPROVED_BY_LEARNER)</span>
+            </span>
+          } @else {
+            <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border border-amber-600/35 bg-amber-500/10 text-amber-800 dark:text-amber-300">
+              <span class="material-symbols-outlined text-[14px]" aria-hidden="true">pending_actions</span>
+              <span>Chờ người học xác nhận</span>
+            </span>
+          }
+        </div>
+
+        <h3 id="fit-capacity-panel-title" class="text-sm sm:text-base font-semibold text-[var(--foreground)]">
+          Cân đối phạm vi cột mốc theo quỹ thời gian thực tế
+        </h3>
+        @if (conflict()?.message) {
+          <p class="text-xs sm:text-sm text-[var(--foreground)] leading-relaxed">
+            {{ conflict()?.message }}
+          </p>
+        }
+      </div>
+    </div>
+
+    <!-- Capacity Summary Metrics -->
+    @if (preliminaryFeasibility(); as pf) {
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+        <div class="rounded-lg border border-[var(--border)] bg-[var(--muted)]/40 p-3">
+          <span class="block text-[11px] text-[var(--muted-foreground)]">Quỹ giờ đóng gói cứng</span>
+          <span class="font-mono font-semibold text-sm text-[var(--foreground)]">
+            {{ formatMinutes(pf.hard_packable_capacity_minutes) }}
+          </span>
+        </div>
+        <div class="rounded-lg border border-[var(--border)] bg-[var(--muted)]/40 p-3">
+          <span class="block text-[11px] text-[var(--muted-foreground)]">Ước tính phạm vi đầy đủ</span>
+          <span class="font-mono font-semibold text-sm text-[var(--foreground)]">
+            {{ formatMinutes(pf.estimated_total_minutes ?? pf.llm_estimated_total_minutes) }}
+          </span>
+        </div>
+        <div class="rounded-lg border border-[var(--border)] bg-[var(--muted)]/40 p-3">
+          <span class="block text-[11px] text-[var(--muted-foreground)]">Phạm vi giữ lại (FIT_CAPACITY)</span>
+          <span class="font-mono font-semibold text-sm text-[var(--primary)]">
+            {{ formatMinutes(pf.normalized_planned_total_minutes) }}
+          </span>
+        </div>
+      </div>
+    }
+
+    <!-- Kept vs Deferred Scope Lists -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+      <!-- Kept Scope -->
+      <div class="rounded-lg border border-[var(--primary)]/25 bg-[var(--muted)]/30 p-3.5 space-y-2">
+        <div class="flex items-center justify-between gap-2">
+          <h4 class="text-xs font-semibold text-[var(--primary)] flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[16px]" aria-hidden="true">check_circle</span>
+            <span>Nội dung giữ lại trong lịch ({{ keptScope().length }})</span>
+          </h4>
+        </div>
+        @if (keptScope().length === 0) {
+          <p class="text-xs text-[var(--muted-foreground)]">Chưa có danh sách giữ lại chi tiết.</p>
+        } @else {
+          <ul data-testid="kept-scope-list" class="space-y-2">
+            @for (item of keptScope(); track item.milestone_id ?? item.sequence_order) {
+              <li class="rounded-md border border-[var(--border)] bg-[var(--card)] p-2.5 text-xs space-y-1">
+                <div class="flex items-start justify-between gap-2">
+                  <span class="font-semibold text-[var(--foreground)]">
+                    Chặng #{{ item.sequence_order }}: {{ item.title }}
+                  </span>
+                  <span class="font-mono text-[11px] text-[var(--primary)] shrink-0">
+                    {{ formatMinutes(item.normalized_planned_effort_minutes ?? item.estimated_effort_minutes) }}
+                  </span>
+                </div>
+                @if (item.expected_outcomes && item.expected_outcomes.length > 0) {
+                  <p class="text-[11px] text-[var(--muted-foreground)]">
+                    Đầu ra: {{ item.expected_outcomes.join(' • ') }}
+                  </p>
+                }
+              </li>
+            }
+          </ul>
+        }
+      </div>
+
+      <!-- Deferred Scope -->
+      <div class="rounded-lg border border-[var(--border)] bg-[var(--muted)]/30 p-3.5 space-y-2">
+        <div class="flex items-center justify-between gap-2">
+          <h4 class="text-xs font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-[16px]" aria-hidden="true">schedule</span>
+            <span>Nội dung hoãn lại (PENDING) ({{ deferredScope().length }})</span>
+          </h4>
+        </div>
+        @if (deferredScope().length === 0) {
+          <p class="text-xs text-[var(--muted-foreground)]">Không có cột mốc nào bị hoãn lại.</p>
+        } @else {
+          <ul data-testid="deferred-scope-list" class="space-y-2">
+            @for (item of deferredScope(); track item.milestone_id ?? item.sequence_order) {
+              <li class="rounded-md border border-[var(--border)] bg-[var(--card)] p-2.5 text-xs space-y-1 opacity-90">
+                <div class="flex items-start justify-between gap-2">
+                  <span class="font-semibold text-[var(--foreground)]">
+                    Chặng #{{ item.sequence_order }}: {{ item.title }}
+                  </span>
+                  <span class="font-mono text-[11px] text-[var(--muted-foreground)] shrink-0">
+                    {{ formatMinutes(item.estimated_effort_minutes) }}
+                  </span>
+                </div>
+                @if (item.learning_outcomes && item.learning_outcomes.length > 0) {
+                  <p class="text-[11px] text-[var(--muted-foreground)]">
+                    Hoãn lại: {{ item.learning_outcomes.join(' • ') }}
+                  </p>
+                }
+              </li>
+            }
+          </ul>
+        }
+      </div>
+    </div>
+
+    <!-- Confirmation Checkbox & Actions -->
+    @if (requiresLearnerConfirmation()) {
+      <div class="rounded-lg border border-[var(--border)] bg-[var(--muted)]/40 p-3.5 space-y-3">
+        <label class="flex items-start gap-2.5 text-xs sm:text-sm text-[var(--foreground)] cursor-pointer select-none">
+          <input
+            type="checkbox"
+            data-testid="confirm-fit-capacity-checkbox"
+            [checked]="isConfirmedForCurrentVersion()"
+            [disabled]="isReadOnly() || isBusy() || isStreaming()"
+            (change)="onToggleConfirmation($event)"
+            class="mt-0.5 h-4 w-4 rounded accent-[var(--primary)] cursor-pointer"
+          />
+          <span>
+            Tôi hiểu và xác nhận thu gọn phạm vi theo phiên bản
+            <strong class="font-mono">v{{ effectiveVersion() }}</strong>
+            (các cột mốc hoãn lại giữ trạng thái <strong class="font-mono">PENDING</strong>).
+          </span>
+        </label>
+
+        <div class="flex flex-wrap items-center gap-2.5">
+          <button
+            type="button"
+            data-testid="confirm-fit-capacity-approve-btn"
+            [disabled]="!isConfirmedForCurrentVersion() || isReadOnly() || isBusy() || isStreaming()"
+            (click)="onApproveFitCapacity()"
+            class="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-full bg-[#246B4A] hover:bg-[#1B5338] disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold transition-colors cursor-pointer"
+          >
+            <span class="material-symbols-outlined text-[16px]" aria-hidden="true">verified</span>
+            <span>Xác nhận FIT_CAPACITY (v{{ effectiveVersion() }}) &amp; Phê duyệt</span>
+          </button>
+
+          <button
+            type="button"
+            data-testid="regenerate-fit-capacity-btn"
+            [disabled]="isReadOnly() || isBusy() || isStreaming()"
+            (click)="onRegenerateFitCapacity()"
+            class="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-full border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--accent)] disabled:opacity-50 disabled:cursor-not-allowed text-[var(--foreground)] text-xs font-semibold transition-colors cursor-pointer"
+          >
+            <span class="material-symbols-outlined text-[16px]" aria-hidden="true">auto_awesome</span>
+            <span>Sinh lại cột mốc theo FIT_CAPACITY</span>
+          </button>
+        </div>
+      </div>
+    } @else {
+      <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
+        <span class="text-xs text-[var(--muted-foreground)]">
+          Phạm vi FIT_CAPACITY phiên bản v{{ effectiveVersion() }} đã được phê duyệt.
+        </span>
+        <button
+          type="button"
+          data-testid="regenerate-fit-capacity-btn"
+          [disabled]="isReadOnly() || isBusy() || isStreaming()"
+          (click)="onRegenerateFitCapacity()"
+          class="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-full border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--accent)] disabled:opacity-50 disabled:cursor-not-allowed text-[var(--foreground)] text-xs font-medium transition-colors cursor-pointer"
+        >
+          <span class="material-symbols-outlined text-[15px]" aria-hidden="true">refresh</span>
+          <span>Sinh lại theo FIT_CAPACITY</span>
+        </button>
+      </div>
+    }
+  </section>
+}

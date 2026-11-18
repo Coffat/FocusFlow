@@ -606,7 +606,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Generate 2-3 diagnostic clarification questions for a goal (FR-GOAL-002) */
+        /** Generate 0-3 gap-aware clarification questions for a goal (FR-GOAL-002) */
         post: operations["generate_clarification_questions_api_v1_roadmaps_goals__goal_id__clarify_questions_post"];
         delete?: never;
         options?: never;
@@ -642,6 +642,23 @@ export interface paths {
         put?: never;
         /** Explicitly skip goal clarification survey and record unresolved assumptions (FR-GOAL-002) */
         post: operations["skip_clarification_questions_api_v1_roadmaps_goals__goal_id__clarify_skip_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/roadmaps/goals/{goal_id}/clarification-state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Resume clarification session without creating a new AI call */
+        get: operations["get_clarification_state_api_v1_roadmaps_goals__goal_id__clarification_state_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -907,6 +924,263 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List learner tasks with derived OVERDUE/BLOCKED/STALLED flags */
+        get: operations["list_tasks_api_v1_tasks_get"];
+        put?: never;
+        /** Create a manual task (15..240 min) with optional UC-12 slot validation */
+        post: operations["create_manual_task_api_v1_tasks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/backlog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Backlog Recovery Queue ranked by BacklogPriorityRanker */
+        get: operations["list_backlog_tasks_api_v1_tasks_backlog_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/schedule/week": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Weekly schedule view combining Planning schedule_blocks and Execution tasks */
+        get: operations["get_weekly_schedule_api_v1_tasks_schedule_week_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/{task_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Cancel a task (CANCELLED) and free its schedule blocks */
+        delete: operations["delete_task_api_v1_tasks__task_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update task title, description, or estimated_minutes */
+        patch: operations["update_task_api_v1_tasks__task_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/tasks/{task_id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark a task COMPLETED (verifies mandatory predecessors & optional TakeawayGuard) */
+        post: operations["complete_task_api_v1_tasks__task_id__complete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/{task_id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reopen a COMPLETED task back to TODO */
+        post: operations["reopen_task_api_v1_tasks__task_id__reopen_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/{task_id}/reschedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reschedule task to new date/time or move to backlog (UC-12 + DAG + STALLED checks) */
+        post: operations["reschedule_task_api_v1_tasks__task_id__reschedule_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/{task_id}/dependencies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add a DAG-validated prerequisite dependency to a task */
+        post: operations["add_task_dependency_api_v1_tasks__task_id__dependencies_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tasks/{task_id}/dependencies/{predecessor_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a prerequisite dependency from a task */
+        delete: operations["delete_task_dependency_api_v1_tasks__task_id__dependencies__predecessor_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/today-focus": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Today Focus View: active session, pending takeaway, focus task & today queue */
+        get: operations["get_today_focus_api_v1_sessions_today_focus_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/active": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get active IN_PROGRESS study session for learner */
+        get: operations["get_active_session_api_v1_sessions_active_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start a STANDARD or MVS study session */
+        post: operations["start_study_session_api_v1_sessions_start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{session_id}/heartbeat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record 60s study session heartbeat and optional scratchpad note */
+        post: operations["heartbeat_study_session_api_v1_sessions__session_id__heartbeat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{session_id}/finalize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Finalize a study session with TakeawayGuard, OS-01, DailyCheckin & Outbox event */
+        post: operations["finalize_study_session_api_v1_sessions__session_id__finalize_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{session_id}/resolve-takeaway": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve pending_takeaway debt for an auto-closed session */
+        post: operations["resolve_pending_takeaway_api_v1_sessions__session_id__resolve_takeaway_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/evaluation/status": {
         parameters: {
             query?: never;
@@ -1015,6 +1289,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/analytics/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get quantitative analytics summary including WRLS, Adherence & Completion Rate (UC-19) */
+        get: operations["get_analytics_summary_api_v1_analytics_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/analytics/weekly": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get 7-day breakdown, WRLS, and adherence stats (UC-19) */
+        get: operations["get_weekly_analytics_api_v1_analytics_weekly_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -1053,6 +1361,19 @@ export interface components {
             /** Cycle End */
             cycle_end: string;
         };
+        /** AddTaskDependencyRequest */
+        AddTaskDependencyRequest: {
+            /**
+             * Predecessor Id
+             * Format: uuid
+             */
+            predecessor_id: string;
+            /**
+             * Is Mandatory
+             * @default true
+             */
+            is_mandatory: boolean;
+        };
         /** AllowedWindowDTO */
         AllowedWindowDTO: {
             /**
@@ -1066,6 +1387,79 @@ export interface components {
              */
             end: string;
         };
+        /** AnalyticsDailyMetricResponse */
+        AnalyticsDailyMetricResponse: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Day Label */
+            day_label: string;
+            /** Minutes Studied */
+            minutes_studied: number;
+            /** Pomodoros Completed */
+            pomodoros_completed: number;
+            /** Sessions Count */
+            sessions_count: number;
+            /**
+             * Is Today
+             * @default false
+             */
+            is_today: boolean;
+        };
+        /** AnalyticsSummaryResponse */
+        AnalyticsSummaryResponse: {
+            /** Total Focused Hours */
+            total_focused_hours: number;
+            /** Weekly Study Hours */
+            weekly_study_hours: number;
+            /** Task Completion Rate */
+            task_completion_rate: number;
+            /** Plan Adherence Rate */
+            plan_adherence_rate: number;
+            /** Weekly Recovered Learning Sessions */
+            weekly_recovered_learning_sessions: number;
+            /** Completed Tasks Count */
+            completed_tasks_count: number;
+            /** Total Tasks Count */
+            total_tasks_count: number;
+            /** Active Streak Days */
+            active_streak_days: number;
+            /** Average Focus Score */
+            average_focus_score: number;
+            /** Daily Metrics */
+            daily_metrics?: components["schemas"]["AnalyticsDailyMetricResponse"][];
+        };
+        /** AnalyticsWeeklyResponse */
+        AnalyticsWeeklyResponse: {
+            /**
+             * Week Start
+             * Format: date
+             */
+            week_start: string;
+            /**
+             * Week End
+             * Format: date
+             */
+            week_end: string;
+            /** Total Focused Hours */
+            total_focused_hours: number;
+            /** Completed Sessions Count */
+            completed_sessions_count: number;
+            /** Completed Tasks Count */
+            completed_tasks_count: number;
+            /** Total Scheduled Tasks Count */
+            total_scheduled_tasks_count: number;
+            /** Task Completion Rate */
+            task_completion_rate: number;
+            /** Plan Adherence Rate */
+            plan_adherence_rate: number;
+            /** Weekly Recovered Learning Sessions */
+            weekly_recovered_learning_sessions: number;
+            /** Daily Breakdown */
+            daily_breakdown?: components["schemas"]["AnalyticsDailyMetricResponse"][];
+        };
         /** ApplyScheduleProposalRequest */
         ApplyScheduleProposalRequest: {
             /**
@@ -1073,6 +1467,16 @@ export interface components {
              * @default false
              */
             confirm_soft_overflow: boolean;
+            /**
+             * Confirm Warnings
+             * @default false
+             */
+            confirm_warnings: boolean;
+            /**
+             * Confirm Partial Schedule
+             * @default false
+             */
+            confirm_partial_schedule: boolean;
         };
         /** ApplyScheduleProposalResponse */
         ApplyScheduleProposalResponse: {
@@ -1111,7 +1515,27 @@ export interface components {
             total_shifted_minutes: number;
             /** Trigger Type */
             trigger_type: string;
+            /**
+             * Calendar Sync Status
+             * @default NOT_CONNECTED
+             */
+            calendar_sync_status: string;
+            /**
+             * Backlog Unscheduled Tasks Count
+             * @default 0
+             */
+            backlog_unscheduled_tasks_count: number;
             official_schedule: components["schemas"]["OfficialScheduleResponse"];
+        };
+        /** ApproveMilestonesRequest */
+        ApproveMilestonesRequest: {
+            /** Confirmed Scope Proposal Version */
+            confirmed_scope_proposal_version?: number | null;
+            /**
+             * Accept Fit Capacity
+             * @default false
+             */
+            accept_fit_capacity: boolean;
         };
         /** AvailabilityResponseDTO */
         AvailabilityResponseDTO: {
@@ -1190,8 +1614,22 @@ export interface components {
             question_id: string;
             /** Question Text */
             question_text?: string | null;
-            /** Answer */
+            /**
+             * Answer
+             * @default
+             */
             answer: string;
+            /** Selected Option Ids */
+            selected_option_ids?: string[];
+            /** Free Text */
+            free_text?: string | null;
+        };
+        /** ClarificationOption */
+        ClarificationOption: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
         };
         /** ClarificationQuestion */
         ClarificationQuestion: {
@@ -1227,15 +1665,15 @@ export interface components {
             placeholder: string;
             /**
              * Question Type
-             * @description Loại câu hỏi: 'single_choice' (trắc nghiệm chọn 1 đáp án nhanh bằng 1 click) hoặc 'text' (tự luận ngắn).
+             * @description Loại câu hỏi: 'single_choice' (trắc nghiệm chọn 1 đáp án), 'multiple_choice' (trắc nghiệm chọn nhiều đáp án) hoặc 'text' (tự luận ngắn).
              * @default single_choice
              */
             question_type: string;
             /**
              * Options
-             * @description Danh sách BẮT BUỘC gồm 3 đến 4 phương án lựa chọn thực tế, ngắn gọn khi question_type='single_choice' để người học chọn nhanh bằng 1 click. Để mảng rỗng [] khi question_type='text'.
+             * @description Danh sách gồm 3 đến 5 phương án lựa chọn thực tế, chuyên môn khi question_type='single_choice' hoặc 'multiple_choice'. Để mảng rỗng [] khi question_type='text'.
              */
-            options?: string[];
+            options?: components["schemas"]["ClarificationOption"][];
             /**
              * Question Purpose
              * @description Mục đích sư phạm của câu hỏi nhằm thu thập thông tin gì cho việc lập lộ trình.
@@ -1261,9 +1699,37 @@ export interface components {
             questions?: components["schemas"]["ClarificationQuestion"][];
             /**
              * Questions Version
-             * @default v1.0
+             * @default v2.0
              */
             questions_version: string;
+            /** Session Id */
+            session_id?: string | null;
+            /**
+             * Round
+             * @default 1
+             */
+            round: number;
+            /**
+             * Status
+             * @default WAITING_ANSWER
+             */
+            status: string;
+            /** Information Gaps */
+            information_gaps?: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Next Turn Quota Cost
+             * @default 0
+             */
+            next_turn_quota_cost: number;
+        };
+        /** CompleteTaskRequest */
+        CompleteTaskRequest: {
+            /** Takeaway */
+            takeaway?: string | null;
+            /** Self Confidence */
+            self_confidence?: number | null;
         };
         /** ConfirmPasswordResetSchema */
         ConfirmPasswordResetSchema: {
@@ -1332,6 +1798,48 @@ export interface components {
             start_date?: string | null;
             /** Target Date */
             target_date?: string | null;
+            /** Weekly Commitment Hours */
+            weekly_commitment_hours?: number | null;
+            input_provenance?: components["schemas"]["GoalInputProvenanceSchema"];
+        };
+        /** CreateTaskRequest */
+        CreateTaskRequest: {
+            /**
+             * Roadmap Id
+             * Format: uuid
+             */
+            roadmap_id: string;
+            /**
+             * Milestone Id
+             * Format: uuid
+             */
+            milestone_id: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description?: string | null;
+            /**
+             * Estimated Minutes
+             * @default 30
+             */
+            estimated_minutes: number;
+            /** Scheduled Date */
+            scheduled_date?: string | null;
+            /** Scheduled Start */
+            scheduled_start?: string | null;
+            /** Scheduled End */
+            scheduled_end?: string | null;
+            /** Concept Id */
+            concept_id?: string | null;
+            /** Learning Resources */
+            learning_resources?: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Confirm Soft Overflow
+             * @default false
+             */
+            confirm_soft_overflow: boolean;
         };
         /** DashboardActiveRoadmapDTO */
         DashboardActiveRoadmapDTO: {
@@ -1656,6 +2164,30 @@ export interface components {
              */
             is_today: boolean;
         };
+        /** FinalizeSessionRequest */
+        FinalizeSessionRequest: {
+            /**
+             * Early Stop
+             * @default false
+             */
+            early_stop: boolean;
+            /** Completed Task Ids */
+            completed_task_ids?: string[];
+            /** Takeaway */
+            takeaway?: string | null;
+            /** Self Confidence */
+            self_confidence?: number | null;
+            /** Scratchpad Content */
+            scratchpad_content?: string | null;
+            /** Actual Minutes */
+            actual_minutes?: number | null;
+            /** Checkin Time Sufficiency */
+            checkin_time_sufficiency?: ("TOO_SHORT" | "JUST_RIGHT" | "TOO_LONG") | null;
+            /** Checkin Perceived Difficulty */
+            checkin_perceived_difficulty?: number | null;
+            /** Checkin Focus Level */
+            checkin_focus_level?: number | null;
+        };
         /** GenerateProofResponseDTO */
         GenerateProofResponseDTO: {
             /**
@@ -1691,6 +2223,27 @@ export interface components {
             reflection?: {
                 [key: string]: unknown;
             };
+        };
+        /** GoalInputProvenanceSchema */
+        GoalInputProvenanceSchema: {
+            /**
+             * Target Date
+             * @default SYSTEM_DEFAULT
+             * @enum {string}
+             */
+            target_date: "USER_CONFIRMED" | "USER_EXPLICIT" | "SYSTEM_OBSERVED" | "SYSTEM_DEFAULT" | "AI_INFERRED";
+            /**
+             * Prior Knowledge Level
+             * @default SYSTEM_DEFAULT
+             * @enum {string}
+             */
+            prior_knowledge_level: "USER_CONFIRMED" | "USER_EXPLICIT" | "SYSTEM_OBSERVED" | "SYSTEM_DEFAULT" | "AI_INFERRED";
+            /**
+             * Weekly Commitment Hours
+             * @default SYSTEM_DEFAULT
+             * @enum {string}
+             */
+            weekly_commitment_hours: "USER_CONFIRMED" | "USER_EXPLICIT" | "SYSTEM_OBSERVED" | "SYSTEM_DEFAULT" | "AI_INFERRED";
         };
         /** GoalResponse */
         GoalResponse: {
@@ -1743,6 +2296,13 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** HeartbeatSessionRequest */
+        HeartbeatSessionRequest: {
+            /** Actual Minutes */
+            actual_minutes?: number | null;
+            /** Scratchpad Content */
+            scratchpad_content?: string | null;
         };
         /**
          * InitiateCalendarAuthRequestDTO
@@ -1897,6 +2457,15 @@ export interface components {
             /** Message */
             message: string;
         };
+        /** MilestoneGenerationRequest */
+        MilestoneGenerationRequest: {
+            /**
+             * Generation Strategy
+             * @default FULL_SCOPE
+             * @enum {string}
+             */
+            generation_strategy: "FULL_SCOPE" | "FIT_CAPACITY";
+        };
         /** MilestoneListResponse */
         MilestoneListResponse: {
             /**
@@ -1906,6 +2475,10 @@ export interface components {
             roadmap_id: string;
             /** Milestones */
             milestones: components["schemas"]["MilestoneResponse"][];
+            /** Preliminary Feasibility */
+            preliminary_feasibility?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** MilestoneProofResponseDTO */
         MilestoneProofResponseDTO: {
@@ -1927,6 +2500,17 @@ export interface components {
             confidence: number;
             /** Corrective Action */
             corrective_action: string | null;
+            /**
+             * Is Verified
+             * @default true
+             */
+            is_verified: boolean;
+            /** Calibration Error */
+            calibration_error?: number | null;
+            /** Answer Evidence */
+            answer_evidence?: {
+                [key: string]: unknown;
+            }[];
         };
         /** MilestoneResponse */
         MilestoneResponse: {
@@ -1946,6 +2530,21 @@ export interface components {
             title: string;
             /** Description */
             description?: string | null;
+            /** Learning Outcomes */
+            learning_outcomes?: string[];
+            /** Completion Criteria */
+            completion_criteria?: string | null;
+            /**
+             * Estimated Effort Minutes
+             * @default 60
+             */
+            estimated_effort_minutes: number;
+            /** Required Concepts */
+            required_concepts?: string[];
+            /** Unverified Concepts */
+            unverified_concepts?: string[];
+            /** Prerequisite Milestone Ids */
+            prerequisite_milestone_ids?: string[];
             /** Status */
             status: string;
             /**
@@ -1974,6 +2573,18 @@ export interface components {
             title: string;
             /** Description */
             description?: string | null;
+            /** Learning Outcomes */
+            learning_outcomes?: string[];
+            /** Completion Criteria */
+            completion_criteria?: string | null;
+            /** Estimated Effort Minutes */
+            estimated_effort_minutes?: number | null;
+            /** Required Concepts */
+            required_concepts?: string[];
+            /** Unverified Concepts */
+            unverified_concepts?: string[];
+            /** Prerequisite Milestone Ids */
+            prerequisite_milestone_ids?: string[];
         };
         /** OfficialScheduleResponse */
         OfficialScheduleResponse: {
@@ -2026,6 +2637,39 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** PlanningConflictResponse */
+        PlanningConflictResponse: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+            /** Detail */
+            detail: string;
+            /** Scope Proposal Version */
+            scope_proposal_version?: number | null;
+            /** Scope Proposal Hash */
+            scope_proposal_hash?: string | null;
+            /** Preliminary Feasibility */
+            preliminary_feasibility?: {
+                [key: string]: unknown;
+            } | null;
+            /** Hard Packable Capacity Minutes */
+            hard_packable_capacity_minutes?: number | null;
+            /** Conflicts */
+            conflicts?: {
+                [key: string]: unknown;
+            }[];
+            /** Overflow Minutes */
+            overflow_minutes?: number | null;
+            /** Soft Overflow Warnings */
+            soft_overflow_warnings?: components["schemas"]["SoftOverflowWarningSchema"][];
+            /** Judge Status */
+            judge_status?: string | null;
+            /** Advisory Warnings */
+            advisory_warnings?: string[];
+            /** Schedulable Ratio */
+            schedulable_ratio?: number | null;
         };
         /** ProfileResponseDTO */
         ProfileResponseDTO: {
@@ -2103,8 +2747,12 @@ export interface components {
             completion_criteria?: string | null;
             /** Learning Resources */
             learning_resources?: components["schemas"]["LearningResourceSchema"][];
+            /** Resources */
+            resources?: components["schemas"]["LearningResourceSchema"][];
             /** Concept Ids */
             concept_ids?: string[];
+            /** Covered Outcome Ids */
+            covered_outcome_ids?: string[];
             /**
              * Estimated Minutes
              * @default 45
@@ -2116,6 +2764,8 @@ export interface components {
             scheduled_start?: string | null;
             /** Scheduled End */
             scheduled_end?: string | null;
+            /** Unscheduled Reason */
+            unscheduled_reason?: string | null;
             /** Prerequisite Ids */
             prerequisite_ids?: (string)[];
         };
@@ -2144,6 +2794,27 @@ export interface components {
              */
             email: string;
         };
+        /** RescheduleTaskRequest */
+        RescheduleTaskRequest: {
+            /** Scheduled Date */
+            scheduled_date?: string | null;
+            /** Scheduled Start */
+            scheduled_start?: string | null;
+            /** Scheduled End */
+            scheduled_end?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /**
+             * Allow Stalled Commitment
+             * @default false
+             */
+            allow_stalled_commitment: boolean;
+            /**
+             * Confirm Soft Overflow
+             * @default false
+             */
+            confirm_soft_overflow: boolean;
+        };
         /** ResendRegisterOtpSchema */
         ResendRegisterOtpSchema: {
             /**
@@ -2159,6 +2830,13 @@ export interface components {
              * @description Must be true after explicit learner confirmation
              */
             confirm: boolean;
+        };
+        /** ResolveTakeawayRequest */
+        ResolveTakeawayRequest: {
+            /** Takeaway */
+            takeaway: string;
+            /** Self Confidence */
+            self_confidence?: number | null;
         };
         /** RoadmapDetailResponse */
         RoadmapDetailResponse: {
@@ -2204,6 +2882,10 @@ export interface components {
             /** Scheduled Tasks */
             scheduled_tasks?: components["schemas"]["ScheduledTaskResponse"][];
             current_draft_proposal?: components["schemas"]["ScheduleProposalResponse"] | null;
+            /** Preliminary Feasibility */
+            preliminary_feasibility?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** RoadmapResponse */
         RoadmapResponse: {
@@ -2243,6 +2925,48 @@ export interface components {
              */
             updated_at: string;
             goal?: components["schemas"]["GoalResponse"] | null;
+            /** Preliminary Feasibility */
+            preliminary_feasibility?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ScheduleFeasibilitySchema */
+        ScheduleFeasibilitySchema: {
+            /**
+             * Status
+             * @default FEASIBLE
+             * @enum {string}
+             */
+            status: "FEASIBLE" | "PARTIAL" | "INFEASIBLE";
+            /**
+             * Required Minutes
+             * @default 0
+             */
+            required_minutes: number;
+            /**
+             * Available Minutes
+             * @default 0
+             */
+            available_minutes: number;
+            /**
+             * Scheduled Minutes
+             * @default 0
+             */
+            scheduled_minutes: number;
+            /**
+             * Schedulable Ratio
+             * @default 1
+             */
+            schedulable_ratio: number;
+            /**
+             * Unscheduled Minutes
+             * @default 0
+             */
+            unscheduled_minutes: number;
+            /** Reason Codes */
+            reason_codes?: string[];
+            /** Recommended Actions */
+            recommended_actions?: string[];
         };
         /** ScheduleProposalResponse */
         ScheduleProposalResponse: {
@@ -2273,6 +2997,46 @@ export interface components {
              * @default false
              */
             has_soft_overflow: boolean;
+            /**
+             * Judge Status
+             * @default PASSED
+             */
+            judge_status: string;
+            /**
+             * Is Partial Schedule
+             * @default false
+             */
+            is_partial_schedule: boolean;
+            /**
+             * Scheduled Tasks Count
+             * @default 0
+             */
+            scheduled_tasks_count: number;
+            /**
+             * Unscheduled Tasks Count
+             * @default 0
+             */
+            unscheduled_tasks_count: number;
+            /** Unscheduled Tasks */
+            unscheduled_tasks?: {
+                [key: string]: unknown;
+            }[];
+            feasibility?: components["schemas"]["ScheduleFeasibilitySchema"];
+            /**
+             * Feasibility Verdict
+             * @default VERIFIED_FEASIBLE
+             */
+            feasibility_verdict: string;
+            /**
+             * Schedule Completeness Status
+             * @default FULL
+             * @enum {string}
+             */
+            schedule_completeness_status: "FULL" | "PARTIAL" | "UNDETERMINED" | "INFEASIBLE";
+            /** Availability Source Metadata */
+            availability_source_metadata?: {
+                [key: string]: unknown;
+            };
             /** Tasks */
             tasks?: {
                 [key: string]: unknown;
@@ -2342,8 +3106,36 @@ export interface components {
             /** Roadmap Target Date */
             roadmap_target_date?: string | null;
         };
+        /** SessionTaskResponse */
+        SessionTaskResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Session Id
+             * Format: uuid
+             */
+            session_id: string;
+            /**
+             * Task Id
+             * Format: uuid
+             */
+            task_id: string;
+            /** Allocated Minutes */
+            allocated_minutes: number;
+            /** Actual Minutes */
+            actual_minutes: number;
+            /** Status After Session */
+            status_after_session: string;
+            /** Notes */
+            notes?: string | null;
+        };
         /** SkipClarificationRequest */
         SkipClarificationRequest: {
+            /** Session Id */
+            session_id?: string | null;
             /** Skipped Question Ids */
             skipped_question_ids?: string[];
         };
@@ -2390,8 +3182,125 @@ export interface components {
             /** Streamurl */
             streamUrl: string;
         };
+        /** StartSessionRequest */
+        StartSessionRequest: {
+            /** Task Ids */
+            task_ids: string[];
+            /**
+             * Session Mode
+             * @default STANDARD
+             * @enum {string}
+             */
+            session_mode: "STANDARD" | "MVS";
+            /** Planned Minutes */
+            planned_minutes?: number | null;
+        };
+        /** StudyNoteResponse */
+        StudyNoteResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Note Type */
+            note_type: string;
+            /** Content */
+            content: string;
+            /** Self Confidence */
+            self_confidence?: number | null;
+            /** Alignment Flag */
+            alignment_flag: string;
+            /** Verification Status */
+            verification_status: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** StudySessionResponse */
+        StudySessionResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+            /**
+             * Roadmap Id
+             * Format: uuid
+             */
+            roadmap_id: string;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Ended At */
+            ended_at?: string | null;
+            /** Planned Minutes */
+            planned_minutes: number;
+            /** Actual Minutes */
+            actual_minutes: number;
+            /** Status */
+            status: string;
+            /**
+             * Last Heartbeat At
+             * Format: date-time
+             */
+            last_heartbeat_at: string;
+            /** Session Mode */
+            session_mode: string;
+            /** Pending Takeaway */
+            pending_takeaway: boolean;
+            /** Checkin Time Sufficiency */
+            checkin_time_sufficiency?: string | null;
+            /** Checkin Perceived Difficulty */
+            checkin_perceived_difficulty?: number | null;
+            /** Checkin Focus Level */
+            checkin_focus_level?: number | null;
+            /**
+             * Scratchpad Content
+             * @default
+             */
+            scratchpad_content: string;
+            /** Takeaway Content */
+            takeaway_content?: string | null;
+            /** Takeaway Self Confidence */
+            takeaway_self_confidence?: number | null;
+            /** Session Tasks */
+            session_tasks?: components["schemas"]["SessionTaskResponse"][];
+            /** Notes */
+            notes?: components["schemas"]["StudyNoteResponse"][];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
         /** SubmitClarificationAnswersRequest */
         SubmitClarificationAnswersRequest: {
+            /** Session Id */
+            session_id?: string | null;
+            /**
+             * Round
+             * @default 1
+             */
+            round: number;
             /** Answers */
             answers?: components["schemas"]["ClarificationAnswerItem"][];
             /**
@@ -2420,6 +3329,24 @@ export interface components {
             clarification_context: string;
             /** Unresolved Assumptions */
             unresolved_assumptions?: string[];
+            /** Session Id */
+            session_id?: string | null;
+            /**
+             * Round
+             * @default 1
+             */
+            round: number;
+            /** Questions */
+            questions?: components["schemas"]["ClarificationQuestion"][];
+            /** Information Gaps */
+            information_gaps?: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Next Turn Quota Cost
+             * @default 0
+             */
+            next_turn_quota_cost: number;
             /**
              * Message
              * @default Clarification context updated successfully
@@ -2435,6 +3362,108 @@ export interface components {
             /** Confidence */
             confidence: number;
         };
+        /** TaskDependencyResponse */
+        TaskDependencyResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Predecessor Id
+             * Format: uuid
+             */
+            predecessor_id: string;
+            /**
+             * Successor Id
+             * Format: uuid
+             */
+            successor_id: string;
+            /**
+             * Roadmap Id
+             * Format: uuid
+             */
+            roadmap_id: string;
+            /** Is Mandatory */
+            is_mandatory: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** TaskResponse */
+        TaskResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Roadmap Id
+             * Format: uuid
+             */
+            roadmap_id: string;
+            /**
+             * Milestone Id
+             * Format: uuid
+             */
+            milestone_id: string;
+            /** Official Schedule Id */
+            official_schedule_id?: string | null;
+            /** Parent Task Id */
+            parent_task_id?: string | null;
+            /** Concept Id */
+            concept_id?: string | null;
+            /** Title */
+            title: string;
+            /** Description */
+            description?: string | null;
+            /** Estimated Minutes */
+            estimated_minutes: number;
+            /** Learning Resources */
+            learning_resources?: {
+                [key: string]: unknown;
+            }[];
+            /** Scheduled Date */
+            scheduled_date?: string | null;
+            /** Scheduled Start */
+            scheduled_start?: string | null;
+            /** Scheduled End */
+            scheduled_end?: string | null;
+            /** Status */
+            status: string;
+            /** Completed At */
+            completed_at?: string | null;
+            /** Reschedule Count */
+            reschedule_count: number;
+            /** Is Overdue */
+            is_overdue: boolean;
+            /** Is Blocked */
+            is_blocked: boolean;
+            /** Is Stalled */
+            is_stalled: boolean;
+            /** Predecessor Ids */
+            predecessor_ids?: string[];
+            /** Roadmap Title */
+            roadmap_title?: string | null;
+            /** Priority Rank */
+            priority_rank?: number | null;
+            /** Out Degree */
+            out_degree?: number | null;
+            /** Milestone Sequence */
+            milestone_sequence?: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
         /** TimeSlotDTO */
         TimeSlotDTO: {
             /** Start */
@@ -2446,6 +3475,24 @@ export interface components {
              * @default 0
              */
             end_day_offset: number;
+        };
+        /** TodayFocusResponse */
+        TodayFocusResponse: {
+            /**
+             * Local Date
+             * Format: date
+             */
+            local_date: string;
+            active_session?: components["schemas"]["StudySessionResponse"] | null;
+            pending_takeaway_session?: components["schemas"]["StudySessionResponse"] | null;
+            focus_task?: components["schemas"]["TaskResponse"] | null;
+            /** Today Queue */
+            today_queue?: components["schemas"]["TaskResponse"][];
+            /**
+             * Overdue Tasks Count
+             * @default 0
+             */
+            overdue_tasks_count: number;
         };
         /** UpdateAvailabilityRequestDTO */
         UpdateAvailabilityRequestDTO: {
@@ -2517,6 +3564,15 @@ export interface components {
              * @default false
              */
             reject_invalid: boolean;
+        };
+        /** UpdateTaskRequest */
+        UpdateTaskRequest: {
+            /** Title */
+            title?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Estimated Minutes */
+            estimated_minutes?: number | null;
         };
         /** UserProfileSchema */
         UserProfileSchema: {
@@ -2624,6 +3680,75 @@ export interface components {
             friday: components["schemas"]["DayScheduleDTO"];
             saturday: components["schemas"]["DayScheduleDTO"];
             sunday: components["schemas"]["DayScheduleDTO"];
+        };
+        /** WeeklyScheduleItemResponse */
+        WeeklyScheduleItemResponse: {
+            /**
+             * Block Id
+             * Format: uuid
+             */
+            block_id: string;
+            /**
+             * Roadmap Id
+             * Format: uuid
+             */
+            roadmap_id: string;
+            /** Roadmap Title */
+            roadmap_title: string;
+            /** Roadmap Status */
+            roadmap_status: string;
+            /**
+             * Official Schedule Id
+             * Format: uuid
+             */
+            official_schedule_id: string;
+            /** Task Id */
+            task_id?: string | null;
+            /** Sequence In Task */
+            sequence_in_task: number;
+            /** Block Type */
+            block_type: string;
+            /**
+             * Block Date
+             * Format: date
+             */
+            block_date: string;
+            /**
+             * Start Time
+             * Format: date-time
+             */
+            start_time: string;
+            /**
+             * End Time
+             * Format: date-time
+             */
+            end_time: string;
+            /** Scheduled Duration Minutes */
+            scheduled_duration_minutes: number;
+            /** Block Status */
+            block_status: string;
+            /** Sync Status */
+            sync_status: string;
+            /** Is Protected */
+            is_protected: boolean;
+            /** Placement Rationale */
+            placement_rationale?: string | null;
+            task?: components["schemas"]["TaskResponse"] | null;
+        };
+        /** WeeklyScheduleResponse */
+        WeeklyScheduleResponse: {
+            /**
+             * Week Start
+             * Format: date
+             */
+            week_start: string;
+            /**
+             * Week End
+             * Format: date
+             */
+            week_end: string;
+            /** Items */
+            items?: components["schemas"]["WeeklyScheduleItemResponse"][];
         };
     };
     responses: never;
@@ -3727,7 +4852,9 @@ export interface operations {
     generate_clarification_questions_api_v1_roadmaps_goals__goal_id__clarify_questions_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
             path: {
                 goal_id: string;
             };
@@ -3812,6 +4939,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SubmitClarificationAnswersResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_clarification_state_api_v1_roadmaps_goals__goal_id__clarification_state_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClarificationQuestionsResponse"];
                 };
             };
             /** @description Validation Error */
@@ -4059,7 +5217,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["MilestoneGenerationRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             202: {
@@ -4105,6 +5267,15 @@ export interface operations {
                     "application/json": components["schemas"]["MilestoneListResponse"];
                 };
             };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanningConflictResponse"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -4125,7 +5296,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ApproveMilestonesRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -4134,6 +5309,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MilestoneListResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanningConflictResponse"];
                 };
             };
             /** @description Validation Error */
@@ -4167,6 +5351,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SseJobTicketResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanningConflictResponse"];
                 };
             };
             /** @description Validation Error */
@@ -4236,6 +5429,15 @@ export interface operations {
                     "application/json": components["schemas"]["ScheduleProposalResponse"];
                 };
             };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanningConflictResponse"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -4285,7 +5487,9 @@ export interface operations {
     apply_schedule_proposal_api_v1_roadmaps__roadmap_id__proposals__proposal_id__apply_post: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string | null;
+            };
             path: {
                 roadmap_id: string;
                 proposal_id: string;
@@ -4305,6 +5509,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApplyScheduleProposalResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanningConflictResponse"];
                 };
             };
             /** @description Validation Error */
@@ -4336,6 +5549,543 @@ export interface operations {
                     "application/json": {
                         [key: string]: string;
                     };
+                };
+            };
+        };
+    };
+    list_tasks_api_v1_tasks_get: {
+        parameters: {
+            query?: {
+                roadmap_id?: string | null;
+                status?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_manual_task_api_v1_tasks_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTaskRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_backlog_tasks_api_v1_tasks_backlog_get: {
+        parameters: {
+            query?: {
+                roadmap_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_weekly_schedule_api_v1_tasks_schedule_week_get: {
+        parameters: {
+            query?: {
+                week_start?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WeeklyScheduleResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_task_api_v1_tasks__task_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_task_api_v1_tasks__task_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTaskRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    complete_task_api_v1_tasks__task_id__complete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CompleteTaskRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reopen_task_api_v1_tasks__task_id__reopen_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reschedule_task_api_v1_tasks__task_id__reschedule_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RescheduleTaskRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_task_dependency_api_v1_tasks__task_id__dependencies_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddTaskDependencyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskDependencyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_task_dependency_api_v1_tasks__task_id__dependencies__predecessor_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+                predecessor_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_today_focus_api_v1_sessions_today_focus_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TodayFocusResponse"];
+                };
+            };
+        };
+    };
+    get_active_session_api_v1_sessions_active_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudySessionResponse"] | null;
+                };
+            };
+        };
+    };
+    start_study_session_api_v1_sessions_start_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartSessionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudySessionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    heartbeat_study_session_api_v1_sessions__session_id__heartbeat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["HeartbeatSessionRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudySessionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    finalize_study_session_api_v1_sessions__session_id__finalize_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FinalizeSessionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudySessionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_pending_takeaway_api_v1_sessions__session_id__resolve_takeaway_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveTakeawayRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StudySessionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -4502,7 +6252,7 @@ export interface operations {
             };
         };
     };
-    health_check_api_health_get: {
+    get_analytics_summary_api_v1_analytics_summary_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -4517,9 +6267,71 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    "application/json": components["schemas"]["AnalyticsSummaryResponse"];
+                };
+            };
+        };
+    };
+    get_weekly_analytics_api_v1_analytics_weekly_get: {
+        parameters: {
+            query?: {
+                week_start?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticsWeeklyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    health_check_api_health_get: {
+        parameters: {
+            query?: {
+                probe_ai?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
                     "application/json": {
-                        [key: string]: string;
+                        [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

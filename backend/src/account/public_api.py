@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol, runtime_checkable
 from uuid import UUID
 
 from src.shared_kernel.domain.events import DomainEvent
@@ -97,6 +97,11 @@ class AvailabilitySnapshotDTO:
     daily_quota_minutes: dict[str, int] = field(default_factory=dict)
     availability_slots: tuple[dict[str, Any], ...] = ()
     disabled_weekdays: tuple[str, ...] = ()
+    calendar_integration_mode: str = "NONE"
+    allowed_window_start: str = "07:00"
+    allowed_window_end: str = "23:00"
+    min_session_minutes: int = 30
+    is_persisted: bool = True
 
 
 @dataclass(frozen=True)
@@ -159,7 +164,7 @@ class QuotaFacadePort(Protocol):
         reservation_id: UUID,
         prompt_tokens: int = 0,
         completion_tokens: int = 0,
-        model_name: str = "gemini-2.5-flash",
+        model_name: str = "gemini-3.8-flash",
     ) -> None: ...
 
     async def release_reservation(
@@ -169,6 +174,29 @@ class QuotaFacadePort(Protocol):
     ) -> None: ...
 
     async def expire_stale_reservations(self, now: datetime | None = None) -> int: ...
+
+    async def record_attempt_usage(
+        self,
+        *,
+        user_id: UUID,
+        action_type: str,
+        requested_model: str = "gemini-3.8-flash",
+        resolved_model: str | None = None,
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
+        thinking_tokens: int = 0,
+        latency_ms: int = 0,
+        status: Literal["SUCCESS", "FAILED", "RATE_LIMITED", "TIMEOUT"] = "SUCCESS",
+        usage_completeness: Literal["COMPLETE", "PARTIAL", "UNKNOWN"] = "COMPLETE",
+        usage_source: Literal[
+            "GATEWAY_TELEMETRY", "CACHE", "ESTIMATED", "UNKNOWN"
+        ] = "GATEWAY_TELEMETRY",
+        error_code: str | None = None,
+        error_message: str | None = None,
+        attempt_no: int = 1,
+        idempotency_key: str | None = None,
+        reservation_id: UUID | None = None,
+    ) -> Any: ...
 
 
 @dataclass(frozen=True)
@@ -287,6 +315,7 @@ class CalendarBusyIntervalDTO:
     end_time: datetime
 
 
+@runtime_checkable
 class CalendarConnectionQueryPort(Protocol):
     """Cross-context read-only query port for Google/Outlook Calendar connection state."""
 
@@ -305,6 +334,7 @@ class CalendarConnectionQueryPort(Protocol):
     ) -> list[CalendarBusyIntervalDTO]: ...
 
 
+@runtime_checkable
 class CalendarSyncFacadePort(Protocol):
     """Cross-context facade port for calendar synchronization operations (UC-17)."""
 
@@ -312,7 +342,7 @@ class CalendarSyncFacadePort(Protocol):
         self,
         schedule_id: UUID,
         user_id: UUID,
-    ) -> None: ...
+    ) -> str: ...
 
 
 _quota_factory: Any = None

@@ -12,6 +12,7 @@ import { FormsModule } from '@angular/forms';
 import { RoadmapService } from '../../../services/roadmap.service';
 import {
   ClarificationAnswerItem,
+  ClarificationOption,
   ClarificationQuestion,
   DraftKnowledgeAttachment,
   PriorKnowledgeLevel,
@@ -27,9 +28,9 @@ export const STANDARD_PEDAGOGICAL_QUESTIONS: ClarificationQuestion[] = [
     placeholder: 'Nhập trọng tâm hoặc chọn phương án gợi ý...',
     question_type: 'single_choice',
     options: [
-      'Củng cố lý thuyết cốt lõi & thực hành từ đầu',
-      'Tập trung giải đề & dự án thực chiến chuyên sâu',
-      'Khắc phục điểm nghẽn kiến trúc & tối ưu hiệu năng',
+      { id: 'q1-opt-1', label: 'Củng cố lý thuyết cốt lõi & thực hành từ đầu' },
+      { id: 'q1-opt-2', label: 'Tập trung giải đề & dự án thực chiến chuyên sâu' },
+      { id: 'q1-opt-3', label: 'Khắc phục điểm nghẽn kiến trúc & tối ưu hiệu năng' },
     ],
     question_purpose: 'Xác định trọng số phân bổ thời lượng cho từng cột mốc.',
     expected_answer_format: 'short_text',
@@ -44,9 +45,9 @@ export const STANDARD_PEDAGOGICAL_QUESTIONS: ClarificationQuestion[] = [
     placeholder: 'Chọn nhịp sinh học học tập của bạn...',
     question_type: 'single_choice',
     options: [
-      'Evening Deep Work (20:00 - 22:00)',
-      'Morning Focus (06:00 - 08:00)',
-      'Weekend Intensive & Linh hoạt buổi tối',
+      { id: 'q2-opt-1', label: 'Evening Deep Work (20:00 - 22:00)' },
+      { id: 'q2-opt-2', label: 'Morning Focus (06:00 - 08:00)' },
+      { id: 'q2-opt-3', label: 'Weekend Intensive & Linh hoạt buổi tối' },
     ],
     question_purpose: 'Đồng bộ hóa các phiên Pomodoro khó với nhịp sinh học của bạn.',
     expected_answer_format: 'short_text',
@@ -61,9 +62,9 @@ export const STANDARD_PEDAGOGICAL_QUESTIONS: ClarificationQuestion[] = [
     placeholder: 'Chọn cơ chế tái cân bằng lịch...',
     question_type: 'single_choice',
     options: [
-      'Dời lịch Domino Shift (+2 ngày, bảo toàn nhịp độ)',
-      'Phân bổ bù vào các khung giờ trống cuối tuần',
-      'Đưa vào Hàng chờ Backlog để tự sắp xếp',
+      { id: 'q3-opt-1', label: 'Dời lịch Domino Shift (+2 ngày, bảo toàn nhịp độ)' },
+      { id: 'q3-opt-2', label: 'Phân bổ bù vào các khung giờ trống cuối tuần' },
+      { id: 'q3-opt-3', label: 'Đưa vào Hàng chờ Backlog để tự sắp xếp' },
     ],
     question_purpose: 'Cấu hình chiến lược thích ứng Domino Shift v2.',
     expected_answer_format: 'short_text',
@@ -91,8 +92,12 @@ export class AiGrillMeDialogComponent {
   readonly skipInterview = output<void>();
   readonly generateQuestions = output<void>();
   readonly submitAnswers = output<ClarificationAnswerItem[]>();
+  readonly readyToPlan = output<void>();
 
   readonly answersMap = signal<Record<string, string>>({});
+  readonly selectedOptionIdsMap = signal<Record<string, string[]>>({});
+  readonly freeTextMap = signal<Record<string, string>>({});
+  readonly expandedCustomInputs = signal<Record<string, boolean>>({});
 
   readonly questions = computed<ClarificationQuestion[]>(() =>
     this.roadmapService.clarificationQuestions()
@@ -130,18 +135,25 @@ export class AiGrillMeDialogComponent {
 
   readonly answeredCount = computed<number>(() => {
     const qs = this.questions();
-    const map = this.answersMap();
+    const selected = this.selectedOptionIdsMap();
+    const freeText = this.freeTextMap();
     return qs.filter(q => {
       const qid = q.question_id || q.id;
-      return Boolean(map[qid]?.trim());
+      return Boolean(selected[qid]?.length || freeText[qid]?.trim());
     }).length;
   });
 
-  readonly contextUnderstandingPercent = computed<number>(() => {
+  readonly answerProgressPercent = computed<number>(() => {
     const qs = this.questions();
-    if (qs.length === 0) return 40;
+    if (qs.length === 0) {
+      return ['READY_TO_PLAN', 'SKIPPED'].includes(
+        this.roadmapService.clarificationStatus()
+      )
+        ? 100
+        : 0;
+    }
     const answered = this.answeredCount();
-    return Math.min(100, Math.round(40 + (answered / qs.length) * 60));
+    return Math.min(100, Math.round((answered / qs.length) * 100));
   });
 
   readonly answeredEntries = computed<Array<{ id: string; answer: string }>>(() => {
@@ -162,30 +174,71 @@ export class AiGrillMeDialogComponent {
     return q.question_id || q.id || `q-${index + 1}`;
   }
 
-  getSuggestedOptions(q: ClarificationQuestion): string[] {
-    if (Array.isArray(q.options) && q.options.length > 0) {
-      return q.options;
-    }
-    return [
-      'Ưu tiên nắm vững kiến thức cốt lõi & thực hành',
-      'Tập trung giải quyết bài toán thực tế & luyện đề',
-      'Học theo nhịp độ ổn định vào buổi tối (20:00 - 22:00)',
-    ];
+  getSuggestedOptions(q: ClarificationQuestion): ClarificationOption[] {
+    return Array.isArray(q.options) ? q.options : [];
   }
 
   getAnswer(q: ClarificationQuestion, index: number): string {
     const qid = this.getQuestionId(q, index);
-    return this.answersMap()[qid] ?? '';
+    return this.freeTextMap()[qid] ?? '';
   }
 
-  selectSuggestedChip(q: ClarificationQuestion, index: number, chip: string): void {
+  isMultipleChoice(q: ClarificationQuestion): boolean {
+    return q.question_type === 'multiple_choice';
+  }
+
+  isTextOnly(q: ClarificationQuestion): boolean {
+    return q.question_type === 'text' && (!q.options || q.options.length === 0);
+  }
+
+  isChipSelected(q: ClarificationQuestion, index: number, chip: ClarificationOption): boolean {
     const qid = this.getQuestionId(q, index);
-    this.answersMap.update(prev => ({ ...prev, [qid]: chip }));
+    return (this.selectedOptionIdsMap()[qid] ?? []).includes(chip.id);
+  }
+
+  selectSuggestedChip(q: ClarificationQuestion, index: number, chip: ClarificationOption): void {
+    const qid = this.getQuestionId(q, index);
+    const current = this.selectedOptionIdsMap()[qid] ?? [];
+    let next: string[];
+    if (this.isMultipleChoice(q)) {
+      next = current.includes(chip.id)
+        ? current.filter(id => id !== chip.id)
+        : [...current, chip.id];
+    } else {
+      next = [chip.id];
+    }
+    this.selectedOptionIdsMap.update(prev => ({ ...prev, [qid]: next }));
+    const labels = this.getSuggestedOptions(q)
+      .filter(option => next.includes(option.id))
+      .map(option => option.label);
+    this.answersMap.update(prev => ({ ...prev, [qid]: labels.join(', ') }));
+
+    if (chip.label.toLowerCase().includes('khác')) {
+      this.expandedCustomInputs.update(prev => ({ ...prev, [qid]: true }));
+    }
+  }
+
+  isCustomInputOpen(q: ClarificationQuestion, index: number): boolean {
+    if (this.isTextOnly(q)) return true;
+    const qid = this.getQuestionId(q, index);
+    if (this.expandedCustomInputs()[qid]) return true;
+    const selectedIds = this.selectedOptionIdsMap()[qid] ?? [];
+    return this.getSuggestedOptions(q).some(
+      option => selectedIds.includes(option.id) && option.label.toLowerCase().includes('khác')
+    );
+  }
+
+  toggleCustomInput(q: ClarificationQuestion, index: number): void {
+    const qid = this.getQuestionId(q, index);
+    this.expandedCustomInputs.update(prev => ({ ...prev, [qid]: !prev[qid] }));
   }
 
   onAnswerChange(q: ClarificationQuestion, index: number, value: string): void {
     const qid = this.getQuestionId(q, index);
-    this.answersMap.update(prev => ({ ...prev, [qid]: value }));
+    this.freeTextMap.update(prev => ({ ...prev, [qid]: value }));
+    if (this.isTextOnly(q)) {
+      this.answersMap.update(prev => ({ ...prev, [qid]: value }));
+    }
   }
 
   onGenerateQuestions(): void {
@@ -204,18 +257,23 @@ export class AiGrillMeDialogComponent {
     this.backToStep1.emit();
   }
 
+  onReadyToPlan(): void {
+    this.readyToPlan.emit();
+  }
+
   onSubmit(): void {
     const qs = this.questions();
-    const map = this.answersMap();
+    const selected = this.selectedOptionIdsMap();
+    const freeText = this.freeTextMap();
     const payload: ClarificationAnswerItem[] = qs.map((q, idx) => {
       const qid = this.getQuestionId(q, idx);
-      const fallback = this.getSuggestedOptions(q)[0] ?? 'Theo cấu hình tiêu chuẩn';
       return {
         question_id: qid,
-        question_text: q.text || q.question,
-        answer: (map[qid] || '').trim() || fallback,
+        answer: '',
+        selected_option_ids: selected[qid] ?? [],
+        free_text: (freeText[qid] || '').trim() || null,
       };
-    });
+    }).filter(item => Boolean(item.selected_option_ids?.length || item.free_text));
     this.submitAnswers.emit(payload);
   }
 }

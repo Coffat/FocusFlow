@@ -1,5 +1,6 @@
-from datetime import date
+from datetime import UTC, date
 from uuid import UUID
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -133,8 +134,18 @@ class PlanningDashboardAdapter(PlanningDashboardQueryPort):
         return 10.0
 
     async def get_week_schedule_blocks(
-        self, user_id: UUID, start_date: date, end_date: date
+        self,
+        user_id: UUID,
+        start_date: date,
+        end_date: date,
+        user_timezone: str | None = None,
     ) -> list[PlanningDashboardScheduleBlockDTO]:
+        tz_name = (user_timezone or "").strip() or "UTC"
+        try:
+            user_tz = ZoneInfo(tz_name)
+        except (ZoneInfoNotFoundError, KeyError, ValueError):
+            user_tz = ZoneInfo("UTC")
+
         stmt = (
             select(ScheduleBlockORM, RoadmapORM.title)
             .join(RoadmapORM, RoadmapORM.id == ScheduleBlockORM.roadmap_id)
@@ -155,8 +166,18 @@ class PlanningDashboardAdapter(PlanningDashboardQueryPort):
         for block, roadmap_title in blocks:
             dow = block.block_date.isoweekday()
             day_label = _DAY_LABELS.get(dow, f"Thứ {dow}")
-            start_str = block.start_time.strftime("%H:%M")
-            end_str = block.end_time.strftime("%H:%M")
+            start_aware = (
+                block.start_time
+                if block.start_time.tzinfo is not None
+                else block.start_time.replace(tzinfo=UTC)
+            )
+            end_aware = (
+                block.end_time
+                if block.end_time.tzinfo is not None
+                else block.end_time.replace(tzinfo=UTC)
+            )
+            start_str = start_aware.astimezone(user_tz).strftime("%H:%M")
+            end_str = end_aware.astimezone(user_tz).strftime("%H:%M")
             roadmap_code = f"RD-{str(block.roadmap_id)[:8].upper()}"
 
             category = "Study"

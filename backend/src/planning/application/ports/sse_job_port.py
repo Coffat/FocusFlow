@@ -1,10 +1,40 @@
+import asyncio
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Protocol
 from uuid import UUID
 
-from src.planning.domain.exceptions.planning_exceptions import PlanningDomainError
+from src.planning.domain.exceptions.planning_exceptions import (
+    IdempotencyInProgressError,
+    PlanningDomainError,
+)
+from src.shared_kernel.domain.exceptions import DomainError
+
+# Keep the transport alive beyond the Shared AI Harness hard timeout (110s),
+# leaving enough time to persist and deliver the terminal failure event.
+DEFAULT_SSE_STREAM_TIMEOUT_SECONDS = 210.0
+
+DEFAULT_SSE_TIMEOUT_MESSAGE = (
+    "Quá thời gian xử lý AI. Vui lòng thử lại hoặc tiếp tục từ checkpoint."
+)
+DEFAULT_SSE_FALLBACK_MESSAGE = "Đã xảy ra lỗi trong quá trình xử lý AI. Vui lòng thử lại."
+
+
+def sanitize_sse_error_details(
+    exc: BaseException,
+    *,
+    default_code: str = "AI_GENERATION_FAILED",
+    default_message: str = DEFAULT_SSE_FALLBACK_MESSAGE,
+) -> tuple[str, str]:
+    """Return stable, sanitized `(error_code, error_message)` for SSE `failed` payloads."""
+    if isinstance(exc, (TimeoutError, asyncio.TimeoutError)):
+        return ("AI_GATEWAY_TIMEOUT", DEFAULT_SSE_TIMEOUT_MESSAGE)
+    if isinstance(exc, DomainError):
+        code = str(getattr(exc, "code", "") or default_code).strip() or default_code
+        message = str(getattr(exc, "message", "") or "").strip() or default_message
+        return (code, message)
+    return (default_code, default_message)
 
 
 class SseJobNotFoundError(PlanningDomainError):
@@ -12,6 +42,16 @@ class SseJobNotFoundError(PlanningDomainError):
 
     def __init__(self, message: str = "Không tìm thấy tiến trình sinh lộ trình AI.") -> None:
         super().__init__(message=message, code="SSE_JOB_NOT_FOUND")
+
+
+@dataclass(frozen=True, slots=True)
+class IdempotencySlotClaim:
+    """Result of an atomic idempotency slot claim (`SET NX EX` or in-memory lock)."""
+
+    acquired: bool
+    token: str | None = None
+    existing_job: "SseJobRecord | None" = None
+    in_progress: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,6 +96,35 @@ class SseJobPort(Protocol):
         idempotency_key: str,
     ) -> SseJobRecord | None: ...
 
+    async def claim_idempotency_slot(
+        self,
+        *,
+        user_id: UUID,
+        operation: str,
+        idempotency_key: str,
+        pending_ttl_seconds: int = 30,
+    ) -> IdempotencySlotClaim: ...
+
+    async def finalize_idempotency_slot(
+        self,
+        *,
+        user_id: UUID,
+        operation: str,
+        idempotency_key: str,
+        token: str,
+        job_id: UUID,
+        ttl_seconds: int = 86400,
+    ) -> bool: ...
+
+    async def release_idempotency_slot(
+        self,
+        *,
+        user_id: UUID,
+        operation: str,
+        idempotency_key: str,
+        token: str,
+    ) -> bool: ...
+
     async def create_job(
         self,
         *,
@@ -67,6 +136,7 @@ class SseJobPort(Protocol):
         operation: str,
         idempotency_key: str | None = None,
         ttl_seconds: int = 86400,
+        register_idempotency: bool = True,
     ) -> SseJobRecord: ...
 
     async def get_job_for_user(
@@ -91,5 +161,57 @@ class SseJobPort(Protocol):
         job_id: UUID,
         user_id: UUID,
         last_event_id: int | None = None,
-        timeout_seconds: float = 55.0,
+        timeout_seconds: float = DEFAULT_SSE_STREAM_TIMEOUT_SECONDS,
     ) -> AsyncIterator[SseEventRecord]: ...
+
+
+async def claim_idempotency_slot_with_wait(
+    sse_store: SseJobPort,
+    *,
+    user_id: UUID,
+    operation: str,
+    idempotency_key: str,
+    max_wait_seconds: float = 2.0,
+    pending_ttl_seconds: int = 30,
+) -> tuple[IdempotencySlotClaim, SseJobRecord | None]:
+    """Claim an idempotency slot or wait briefly for an in-flight winner to commit."""
+    cleaned_key = idempotency_key.strip()
+    claim = await sse_store.claim_idempotency_slot(
+        user_id=user_id,
+        operation=operation,
+        idempotency_key=cleaned_key,
+        pending_ttl_seconds=pending_ttl_seconds,
+    )
+    if claim.acquired:
+        return (claim, None)
+    if claim.existing_job is not None:
+        existing = await sse_store.get_job_for_user(
+            job_id=claim.existing_job.job_id,
+            user_id=user_id,
+        )
+        return (claim, existing)
+
+    deadline = asyncio.get_running_loop().time() + max(0.05, float(max_wait_seconds))
+    delay = 0.02
+    while claim.in_progress:
+        remaining = deadline - asyncio.get_running_loop().time()
+        if remaining <= 0:
+            raise IdempotencyInProgressError()
+        await asyncio.sleep(min(delay, remaining))
+        delay = min(0.2, delay * 2.0)
+        claim = await sse_store.claim_idempotency_slot(
+            user_id=user_id,
+            operation=operation,
+            idempotency_key=cleaned_key,
+            pending_ttl_seconds=pending_ttl_seconds,
+        )
+        if claim.acquired:
+            return (claim, None)
+        if claim.existing_job is not None:
+            existing = await sse_store.get_job_for_user(
+                job_id=claim.existing_job.job_id,
+                user_id=user_id,
+            )
+            return (claim, existing)
+
+    raise IdempotencyInProgressError()

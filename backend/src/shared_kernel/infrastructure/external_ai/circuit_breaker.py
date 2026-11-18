@@ -1,10 +1,11 @@
 import asyncio
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Sequence
 from typing import Any, Protocol
 
 import redis.asyncio as redis
 
 from src.shared_kernel.application.llm_port import (
+    LLMGenerationResult,
     LLMProviderPort,
     LLMToolDeclarationDTO,
     LLMToolExecutor,
@@ -152,31 +153,61 @@ class CircuitBreakingLLMProvider(LLMProviderPort):
         if failures >= self._failure_threshold:
             await self._state.open()
 
+    @property
+    def supports_native_structured_output(self) -> bool:
+        return bool(getattr(self._provider, "supports_native_structured_output", True))
+
+    @property
+    def model_identifier(self) -> str:
+        return str(getattr(self._provider, "model_identifier", "gemini-3.8-flash"))
+
+    def resolve_model_for_thinking_level(self, thinking_level: str | None) -> str:
+        fn = getattr(self._provider, "resolve_model_for_thinking_level", None)
+        if callable(fn):
+            return str(fn(thinking_level))
+        return self.model_identifier
+
+    @property
+    def model_used(self) -> str:
+        return str(getattr(self._provider, "model_used", "gemini-3.8-flash"))
+
+    @property
+    def last_model_used(self) -> str:
+        return str(getattr(self._provider, "last_model_used", self.model_used))
+
+    @property
+    def degraded_model_used(self) -> bool:
+        return bool(getattr(self._provider, "degraded_model_used", False))
+
+    @property
+    def last_degraded_model_used(self) -> bool:
+        return bool(getattr(self._provider, "last_degraded_model_used", False))
+
     async def generate_structured(
         self,
-        prompt: str | None = None,
-        system_prompt: str = "",
-        response_schema: dict[str, Any] | type[Any] | None = None,
         *,
-        user_prompt: str | None = None,
-        temperature: float = 0.2,
-        tools: list[LLMToolDeclarationDTO] | None = None,
+        system_prompt: str = "",
+        user_prompt: str = "",
+        response_schema: dict[str, Any] | type[Any] | None = None,
+        tools: Sequence[LLMToolDeclarationDTO | dict[str, Any]] | None = None,
         tool_executor: LLMToolExecutor | None = None,
-        max_tool_calls: int = 4,
+        max_tool_calls: int = 2,
         thinking_level: str | None = None,
-    ) -> tuple[dict[str, Any], int, int]:
+        timeout_seconds: float | None = None,
+        tool_call_timeout_seconds: float | None = None,
+    ) -> tuple[dict[str, Any], int, int] | LLMGenerationResult:
         await self._before_call()
         try:
             result = await self._provider.generate_structured(
-                prompt=prompt,
                 system_prompt=system_prompt,
-                response_schema=response_schema,
                 user_prompt=user_prompt,
-                temperature=temperature,
+                response_schema=response_schema,
                 tools=tools,
                 tool_executor=tool_executor,
                 max_tool_calls=max_tool_calls,
                 thinking_level=thinking_level,
+                timeout_seconds=timeout_seconds,
+                tool_call_timeout_seconds=tool_call_timeout_seconds,
             )
         except Exception as exc:
             await self._record_failure(exc)
@@ -189,14 +220,12 @@ class CircuitBreakingLLMProvider(LLMProviderPort):
         *,
         system_prompt: str,
         user_prompt: str,
-        temperature: float = 0.2,
     ) -> AsyncIterator[str]:
         await self._before_call()
         try:
             async for chunk in self._provider.stream_structured(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
-                temperature=temperature,
             ):
                 yield chunk
         except Exception as exc:

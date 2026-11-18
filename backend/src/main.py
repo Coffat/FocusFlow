@@ -1,7 +1,9 @@
 import json
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from typing import Any
 
+import structlog
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from uuid6 import uuid7
@@ -15,8 +17,19 @@ from src.account.presentation.routers import (
     router as account_router,
 )
 from src.account.presentation.webhook_router import router as webhook_router
-from src.evaluation.presentation.routers import router as evaluation_router
-from src.execution.presentation.routers import router as execution_router
+from src.evaluation.presentation.routers import (
+    analytics_router,
+)
+from src.evaluation.presentation.routers import (
+    router as evaluation_router,
+)
+from src.execution.presentation.routers import (
+    router as execution_router,
+)
+from src.execution.presentation.routers import (
+    sessions_router,
+    tasks_router,
+)
 from src.planning.presentation.routers import (
     roadmaps_router,
 )
@@ -24,8 +37,33 @@ from src.planning.presentation.routers import (
     router as planning_router,
 )
 from src.shared_kernel.config import get_settings
+from src.shared_kernel.infrastructure.external_ai.litellm_adapter import (
+    CobhubCapabilityProbeResult,
+    probe_cobhub_capabilities,
+)
 from src.shared_kernel.infrastructure.worker.broker import broker
 from src.shared_kernel.logging import configure_logging, correlation_id_ctx
+
+_logger = structlog.get_logger(__name__)
+
+
+async def run_startup_ai_probe(app: FastAPI | None = None) -> CobhubCapabilityProbeResult | None:
+    """Probe cobhub gateway capabilities on startup when configured outside test mode."""
+    settings = get_settings()
+    if settings.environment == "test":
+        return None
+    if (settings.llm_provider or "").strip().lower() != "gemini":
+        return None
+    if not (settings.llm_base_url or "").strip():
+        return None
+    try:
+        probe_res = await probe_cobhub_capabilities(settings)
+    except Exception as exc:  # pragma: no cover - defensive startup guard
+        _logger.warning("startup_ai_probe_failed", error=str(exc))
+        return None
+    if app is not None:
+        app.state.ai_gateway_probe = probe_res
+    return probe_res
 
 
 @asynccontextmanager
@@ -33,6 +71,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     configure_logging()
     if not broker.is_worker_process:
         await broker.startup()
+    await run_startup_ai_probe(app)
     yield
     if not broker.is_worker_process:
         await broker.shutdown()
@@ -47,8 +86,8 @@ def create_app() -> FastAPI:
             "(Context-First Modular Monolith + Hexagonal Architecture)"
         ),
         version="2.0.0",
-        docs_url="/docs",
-        redoc_url="/redoc",
+        docs_url="/docs" if settings.debug else None,
+        redoc_url="/redoc" if settings.debug else None,
         lifespan=lifespan,
     )
 
@@ -91,16 +130,49 @@ def create_app() -> FastAPI:
     app.include_router(planning_router)
     app.include_router(roadmaps_router)
     app.include_router(execution_router)
+    app.include_router(tasks_router)
+    app.include_router(sessions_router)
     app.include_router(evaluation_router)
+    app.include_router(analytics_router)
 
     @app.get("/api/health", tags=["System"])
-    async def health_check() -> dict[str, str]:
-        return {
+    async def health_check(probe_ai: bool = False) -> dict[str, Any]:
+        current_settings = get_settings()
+        readiness = (
+            current_settings.staging_readiness_summary()
+            if hasattr(current_settings, "staging_readiness_summary")
+            else settings.staging_readiness_summary()
+        )
+        payload: dict[str, Any] = {
             "status": "healthy",
             "service": "FocusFlow Backend API",
             "version": "2.0.0",
             "architecture": "Context-First Modular Monolith + Hexagonal (Ports & Adapters)",
+            "environment": getattr(current_settings, "environment", settings.environment),
+            "debug": getattr(current_settings, "debug", settings.debug),
+            "readiness": readiness,
         }
+        if probe_ai:
+            try:
+                probe_res = await probe_cobhub_capabilities(get_settings())
+                app.state.ai_gateway_probe = probe_res
+                payload["ai_gateway"] = probe_res.to_dict()
+            except Exception as exc:  # pragma: no cover - defensive health guard
+                payload["ai_gateway"] = {
+                    "status": "degraded",
+                    "probe_succeeded": False,
+                    "error": f"{type(exc).__name__}: {str(exc)[:200]}",
+                }
+        else:
+            cached_probe = getattr(app.state, "ai_gateway_probe", None)
+            if cached_probe is not None and hasattr(cached_probe, "to_dict"):
+                payload["ai_gateway"] = cached_probe.to_dict()
+            else:
+                payload["ai_gateway"] = {
+                    "status": "not_probed",
+                    "configured": bool((get_settings().llm_base_url or "").strip()),
+                }
+        return payload
 
     return app
 

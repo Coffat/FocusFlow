@@ -1,12 +1,8 @@
-export interface DailyStudyMetric {
-  date: string;
-  minutesStudied: number;
-  pomodorosCompleted: number;
-}
+import { components } from '../../../core/api/schema';
 
-export interface AnalyticsSummary {
-  weeklyStudyHours: number;
-  taskCompletionRate: number; // percentage (e.g. 92%)
-  averageFocusScore: number;  // 1-100
-  dailyMetrics: DailyStudyMetric[];
-}
+export type AnalyticsSummaryResponse = components['schemas']['AnalyticsSummaryResponse'];
+export type AnalyticsWeeklyResponse = components['schemas']['AnalyticsWeeklyResponse'];
+export type AnalyticsDailyMetricResponse = components['schemas']['AnalyticsDailyMetricResponse'];
+export type WeeklyReviewResponseDTO = components['schemas']['WeeklyReviewResponseDTO'];
+export type GenerateWeeklyReviewRequestDTO = components['schemas']['GenerateWeeklyReviewRequestDTO'];
+export type RoadmapResponse = components['schemas']['RoadmapResponse'];

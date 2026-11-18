@@ -56,6 +56,10 @@ packages = ["src"]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+    "live_cobhub: Live tests calling cobhub LLM gateway (opt-in)",
+    "live_embedding: Live tests calling Google AI Studio embedding API (opt-in)",
+]
 
 [tool.ruff]
 line-length = 100

@@ -1,11 +1,28 @@
 import pytest
 from uuid6 import uuid7
 
-from src.planning.application.ports.sse_job_port import SseJobNotFoundError
+from src.planning.application.ports.sse_job_port import (
+    DEFAULT_SSE_STREAM_TIMEOUT_SECONDS,
+    SseJobNotFoundError,
+)
+from src.planning.application.use_cases.milestone_use_cases import (
+    _milestone_generation_error_details,
+)
 from src.shared_kernel.infrastructure.sse.job_store import (
     InMemorySseJobStore,
     RedisSseJobStore,
 )
+
+
+def test_sse_transport_outlives_ai_hard_timeout() -> None:
+    assert DEFAULT_SSE_STREAM_TIMEOUT_SECONDS > 55.0
+
+
+def test_milestone_timeout_has_stable_user_facing_error() -> None:
+    code, message = _milestone_generation_error_details(TimeoutError())
+
+    assert code == "AI_GATEWAY_TIMEOUT"
+    assert message == "AI mất quá nhiều thời gian phản hồi. Vui lòng thử lại."
 
 
 @pytest.mark.asyncio

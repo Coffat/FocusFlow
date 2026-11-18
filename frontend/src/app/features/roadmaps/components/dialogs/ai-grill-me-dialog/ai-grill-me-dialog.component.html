@@ -1,54 +1,168 @@
 <div class="flex-1 min-h-0 flex flex-col bg-[#FFFFFF] text-[#111111] overflow-hidden">
-  <!-- PART B: 7/5 TWO-COLUMN SPLIT WORKSPACE -->
-  <div class="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-[#EAEAE6]">
-    <!-- LEFT COLUMN (7 COLS): AI PEDAGOGICAL QUESTIONS -->
-    <div class="lg:col-span-7 lg:h-full lg:overflow-y-auto p-6 sm:p-7 bg-[#FFFFFF] flex flex-col">
-      <!-- STEP TITLE IN CONTENT & PROGRESS PILL -->
-      <div class="mb-5 pb-3 border-b border-[#EAEAE6] flex flex-wrap items-center justify-between gap-3 shrink-0">
-        <div class="space-y-0.5 min-w-0 flex-1">
-          <h2 class="font-serif text-lg sm:text-xl text-[#111111] font-semibold tracking-tight">
-            Phỏng vấn Chẩn đoán Sư phạm (Grill-Me)
+  <!-- FULL-WIDTH 1-COLUMN WORKSPACE CONTAINER -->
+  <div class="flex-1 min-h-0 overflow-y-auto p-6 sm:p-7 bg-[#FFFFFF] flex flex-col space-y-5">
+
+    <!-- NORMALIZED 2-LINE HEADER -->
+    <div
+      data-testid="grill-me-header-card"
+      class="pb-3.5 border-b border-[#EAEAE6] space-y-1.5 shrink-0"
+    >
+      <!-- Line 1: Goal Title + Level Badge (Left) | Progress Pill (Right) -->
+      <div class="flex items-center justify-between gap-4">
+        <div class="flex items-center gap-2.5 min-w-0 flex-1">
+          <h2 class="font-serif text-base sm:text-lg font-semibold text-[#111111] tracking-tight truncate" [title]="displayGoalTitle()">
+            {{ displayGoalTitle() }}
           </h2>
-          <p class="text-xs text-[#555555]">
-            Trả lời nhanh các câu hỏi để hệ thống đo ni đóng giày từng cột mốc học tập.
-          </p>
-        </div>
-        <div class="flex items-center gap-2 font-mono text-[11px] bg-[#FAFAFA] px-3 py-1.5 rounded-lg border border-[#DCDCDC] shrink-0">
-          <span class="text-[#555555]">Tiến độ:</span>
-          <span class="font-bold text-[#246B4A]">
-            {{ answeredCount() }}/{{ questions().length }} câu hỏi
+          <span class="font-mono text-[11px] font-medium text-[#246B4A] bg-[#EBF3EE] px-2 py-0.5 rounded-full border border-[#246B4A]/20 shrink-0">
+            {{ displayLevel() }}
           </span>
+          @if (roadmapService.clarificationStatus() === 'WAITING_FOLLOW_UP' || roadmapService.clarificationRound() >= 2) {
+            <span
+              data-testid="grill-me-round-2-badge"
+              class="font-mono text-[11px] font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-300 shrink-0"
+            >
+              Vòng {{ roadmapService.clarificationRound() >= 2 ? roadmapService.clarificationRound() : 2 }}: Làm rõ bổ sung
+            </span>
+          }
         </div>
+
+        <span
+          data-testid="context-understanding-meter"
+          class="font-mono text-xs text-[#246B4A] bg-[#EBF3EE] px-2.5 py-0.5 rounded-full border border-[#246B4A]/20 shrink-0"
+        >
+          Đã trả lời {{ answeredCount() }}/{{ questions().length }} câu hỏi
+        </span>
       </div>
 
-      @if (questions().length === 0) {
-        <!-- EMPTY QUESTIONS STATE -->
-        <div
-          data-testid="grill-me-empty-state"
-          class="flex-1 min-h-[280px] flex flex-col items-center justify-center rounded-xl border border-dashed border-[#DCDCDC] bg-[#FAFAFA] p-6 text-center space-y-4"
-        >
-          <div class="w-11 h-11 rounded-full bg-[#EBF3EE] text-[#246B4A] mx-auto flex items-center justify-center">
-            <span class="material-symbols-outlined text-[22px]" aria-hidden="true">quiz</span>
-          </div>
+      <!-- Line 2: Concise Helper Description + Subtle Thin Progress Bar -->
+      <div class="flex items-center justify-between gap-4">
+        <p class="text-xs text-[#777773] truncate">
+          Trả lời nhanh các câu hỏi để AI cá nhân hóa lộ trình theo quỹ thời gian của bạn.
+        </p>
+        <div class="w-24 sm:w-32 h-1 bg-[#EAEAE6] rounded-full overflow-hidden shrink-0" aria-hidden="true">
+          <div
+            class="h-full bg-[#246B4A] rounded-full transition-all duration-300"
+            [style.width.%]="answerProgressPercent()"
+          ></div>
+        </div>
+      </div>
+    </div>
 
-          <div class="space-y-1.5 max-w-md mx-auto">
-            <h3 class="text-sm font-semibold text-[#111111]">
-              Chưa có danh sách câu hỏi phỏng vấn chẩn đoán
-            </h3>
-            <p class="text-xs text-[#555555] leading-relaxed">
-              Bạn có thể yêu cầu AI sinh bộ câu hỏi làm rõ từ máy chủ, tải bộ câu hỏi sư phạm mẫu, hoặc bỏ qua bước này để dùng cấu hình mặc định.
-            </p>
-          </div>
+    @if (roadmapService.isGeneratingQuestions()) {
+      <!-- FULL CENTER LOADING SCREEN (TRANH NHÃ, TỐI GIẢN) -->
+      <div
+        data-testid="grill-me-skeleton-loading"
+        class="flex-1 min-h-[380px] flex flex-col items-center justify-center p-8 text-center space-y-4"
+      >
+        <!-- Subtle smooth circular spinner -->
+        <div class="relative w-12 h-12 flex items-center justify-center">
+          <div class="w-10 h-10 rounded-full border-2 border-[#246B4A]/20 border-t-[#246B4A] animate-spin"></div>
+        </div>
 
-          <div class="flex flex-wrap items-center justify-center gap-2.5 pt-2">
+        <div class="space-y-1.5 max-w-md mx-auto">
+          <h3 class="text-base sm:text-lg font-medium text-[#111111] tracking-tight">
+            Đang phân tích mục tiêu &amp; chuẩn bị câu hỏi chẩn đoán...
+          </h3>
+          <p class="text-xs text-[#777773] leading-relaxed">
+            Hệ thống đang chuẩn bị các câu hỏi phù hợp nhất cho bạn...
+          </p>
+        </div>
+      </div>
+    } @else if (roadmapService.errorMessage() && questions().length === 0) {
+      <!-- ERROR BANNER & RETRY STATE (FULL-WIDTH) -->
+      <div
+        data-testid="grill-me-error-state"
+        class="flex-1 min-h-[280px] flex flex-col items-center justify-center rounded-2xl border border-red-200 bg-red-50/60 p-7 text-center space-y-4 shadow-2xs"
+      >
+        <div class="w-12 h-12 rounded-full bg-red-100 text-red-600 mx-auto flex items-center justify-center shadow-xs">
+          <span class="material-symbols-outlined text-[24px]" aria-hidden="true">error_outline</span>
+        </div>
+
+        <div class="space-y-1.5 max-w-md mx-auto">
+          <h3 class="text-sm sm:text-base font-semibold text-red-900">
+            Không thể tạo bộ câu hỏi phỏng vấn chẩn đoán
+          </h3>
+          <p class="text-xs text-red-700 leading-relaxed font-sans">
+            {{ roadmapService.errorMessage() }}
+          </p>
+        </div>
+
+        <div class="flex flex-wrap items-center justify-center gap-2.5 pt-2">
+          <button
+            type="button"
+            (click)="onGenerateQuestions()"
+            [disabled]="roadmapService.isGeneratingQuestions()"
+            data-testid="retry-generate-questions-btn"
+            class="px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-xs font-semibold transition-colors cursor-pointer inline-flex items-center gap-1.5 shadow-xs"
+          >
+            <span class="material-symbols-outlined text-[15px]" aria-hidden="true">refresh</span>
+            <span>Thử lại ngay</span>
+          </button>
+
+          <button
+            type="button"
+            (click)="onLoadStandardPreviewQuestions()"
+            data-testid="error-preview-standard-questions-btn"
+            class="px-4 py-2 rounded-full bg-[#FFFFFF] hover:bg-red-50 text-red-800 border border-red-200 text-xs font-medium transition-colors cursor-pointer"
+          >
+            Xem câu hỏi mẫu
+          </button>
+
+          <button
+            type="button"
+            (click)="onSkipInterview()"
+            data-testid="error-skip-interview-btn"
+            class="px-4 py-2 rounded-full text-xs font-medium text-red-700 hover:text-red-900 hover:bg-red-100/50 transition-colors cursor-pointer"
+          >
+            Bỏ qua bước này
+          </button>
+        </div>
+      </div>
+    } @else if (questions().length === 0) {
+      <!-- EMPTY QUESTIONS STATE (FULL-WIDTH) -->
+      <div
+        data-testid="grill-me-empty-state"
+        class="flex-1 min-h-[280px] flex flex-col items-center justify-center rounded-2xl border border-dashed border-[#DCDCDC] bg-[#FAFAFA] p-8 text-center space-y-4 shadow-2xs"
+      >
+        <div class="w-12 h-12 rounded-full bg-[#EBF3EE] text-[#246B4A] mx-auto flex items-center justify-center shadow-xs">
+          <span class="material-symbols-outlined text-[24px]" aria-hidden="true">
+            {{ roadmapService.clarificationStatus() === 'READY_TO_PLAN' ? 'check_circle' : 'quiz' }}
+          </span>
+        </div>
+
+        <div class="space-y-1.5 max-w-lg mx-auto">
+          <h3 class="text-sm sm:text-base font-semibold text-[#111111]">
+            {{ roadmapService.clarificationStatus() === 'READY_TO_PLAN'
+              ? 'Thông tin hiện tại đã đủ để tạo khung lộ trình'
+              : 'Chưa có danh sách câu hỏi phỏng vấn chẩn đoán' }}
+          </h3>
+          <p class="text-xs text-[#555555] leading-relaxed">
+            {{ roadmapService.clarificationStatus() === 'READY_TO_PLAN'
+              ? 'Không cần thêm câu hỏi. Bạn chủ động tiếp tục khi đã sẵn sàng sử dụng lượt AI để tạo cột mốc.'
+              : 'Bạn có thể yêu cầu AI sinh bộ câu hỏi làm rõ từ máy chủ hoặc bỏ qua bước này để dùng các giả định an toàn.' }}
+          </p>
+        </div>
+
+        <div class="flex flex-wrap items-center justify-center gap-2.5 pt-2">
+          @if (roadmapService.clarificationStatus() === 'READY_TO_PLAN') {
+            <button
+              type="button"
+              (click)="onReadyToPlan()"
+              data-testid="clarification-ready-btn"
+              class="px-5 py-2.5 rounded-full bg-[#246B4A] hover:bg-[#1B5338] text-white text-xs font-semibold transition-colors cursor-pointer shadow-xs inline-flex items-center gap-1.5"
+            >
+              <span>Tạo khung lộ trình</span>
+              <span class="font-mono text-xs" aria-hidden="true">→</span>
+            </button>
+          } @else {
             <button
               type="button"
               (click)="onGenerateQuestions()"
               [disabled]="roadmapService.isGeneratingQuestions()"
               data-testid="generate-questions-btn"
-              class="px-4 py-2 rounded-full bg-[#246B4A] hover:bg-[#1B5338] disabled:opacity-50 text-white text-xs font-semibold transition-colors cursor-pointer inline-flex items-center gap-1.5"
+              class="px-5 py-2.5 rounded-full bg-[#246B4A] hover:bg-[#1B5338] disabled:opacity-50 text-white text-xs font-semibold transition-colors cursor-pointer inline-flex items-center gap-1.5 shadow-xs"
             >
-              <span class="material-symbols-outlined text-[15px]" aria-hidden="true">auto_awesome</span>
+              <span class="material-symbols-outlined text-[16px]" aria-hidden="true">auto_awesome</span>
               <span>Yêu cầu AI Sinh Câu hỏi Làm rõ</span>
             </button>
 
@@ -56,7 +170,7 @@
               type="button"
               (click)="onLoadStandardPreviewQuestions()"
               data-testid="preview-standard-questions-btn"
-              class="px-4 py-2 rounded-full bg-[#FFFFFF] hover:bg-[#F3F3F1] text-[#111111] border border-[#DCDCDC] text-xs font-medium transition-colors cursor-pointer"
+              class="px-4 py-2.5 rounded-full bg-[#FFFFFF] hover:bg-[#F3F3F1] text-[#111111] border border-[#DCDCDC] text-xs font-medium transition-colors cursor-pointer shadow-2xs"
             >
               Xem câu hỏi sư phạm chuẩn
             </button>
@@ -65,200 +179,147 @@
               type="button"
               (click)="onSkipInterview()"
               data-testid="skip-interview-empty-btn"
-              class="px-4 py-2 rounded-full text-xs font-medium text-[#555555] hover:text-[#111111] hover:bg-[#F3F3F1] transition-colors cursor-pointer"
+              class="px-4 py-2.5 rounded-full text-xs font-medium text-[#555555] hover:text-[#111111] hover:bg-[#F3F3F1] transition-colors cursor-pointer"
             >
               Bỏ qua bước này (Dùng cấu hình mặc định)
             </button>
-          </div>
+          }
         </div>
-      } @else {
-        <!-- QUESTIONS LIST -->
-        <div class="space-y-4">
-          @for (q of questions(); track getQuestionId(q, idx); let idx = $index) {
-            <div
-              [attr.data-testid]="'clarification-question-item-' + idx"
-              class="p-4 rounded-xl border border-[#DCDCDC] bg-[#FFFFFF] space-y-3"
-            >
-              <!-- Question Header & Category Badge -->
-              <div class="flex items-start justify-between gap-2">
-                <div class="flex items-start gap-2.5">
-                  <span class="w-5 h-5 rounded bg-[#111111] text-white font-mono text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">
-                    {{ idx + 1 }}
-                  </span>
-                  <div>
-                    <h3 class="text-xs sm:text-sm font-semibold text-[#111111] leading-snug">
-                      {{ q.text || q.question }}
-                    </h3>
-                    @if (q.question_purpose) {
-                      <p class="text-[11px] text-[#8E8E8A] mt-0.5">
-                        {{ q.question_purpose }}
-                      </p>
-                    }
-                  </div>
-                </div>
-
-                <span class="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-[#EBF3EE] text-[#246B4A] border border-[#246B4A]/20 shrink-0">
-                  {{ q.diagnostic_dimension || 'PEDAGOGY' }}
+      </div>
+    } @else {
+      <!-- FULL-WIDTH QUESTIONS LIST (TINH GIẢN, VIỀN MỎNG TINH TẾ) -->
+      @if (roadmapService.clarificationStatus() === 'WAITING_FOLLOW_UP' || roadmapService.clarificationRound() >= 2) {
+        <div
+          role="status"
+          aria-live="polite"
+          data-testid="grill-me-round-2-banner"
+          class="p-3.5 rounded-xl border border-amber-300 bg-amber-50/80 text-amber-900 text-xs flex items-start gap-2.5"
+        >
+          <span class="material-symbols-outlined text-[18px] text-amber-700 shrink-0" aria-hidden="true">forum</span>
+          <span>
+            Đã ghi nhận vòng 1. Vui lòng trả lời câu hỏi làm rõ bổ sung (Vòng {{ roadmapService.clarificationRound() >= 2 ? roadmapService.clarificationRound() : 2 }}) bên dưới để hoàn tất chẩn đoán.
+          </span>
+        </div>
+      }
+      <div class="space-y-4">
+        @for (q of questions(); track getQuestionId(q, idx); let idx = $index) {
+          <div
+            [attr.data-testid]="'clarification-question-item-' + idx"
+            class="p-5 sm:p-6 rounded-xl border border-[#EAEAE6] bg-[#FFFFFF] shadow-2xs space-y-4 transition-all"
+          >
+            <!-- Question Header & Badges -->
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex items-start gap-3">
+                <span class="w-5 h-5 rounded-md bg-[#F4F4F2] text-[#555555] font-mono text-xs font-medium flex items-center justify-center shrink-0 mt-0.5 border border-[#E2E2DE]">
+                  {{ idx + 1 }}
                 </span>
+                <div>
+                  <h3 class="text-xs sm:text-sm font-medium text-[#111111] leading-snug">
+                    {{ q.text || q.question }}
+                  </h3>
+                  @if (q.question_purpose) {
+                    <p class="text-[11px] text-[#777773] mt-1 leading-relaxed">
+                      {{ q.question_purpose }}
+                    </p>
+                  }
+                </div>
               </div>
 
-              <!-- Quick-Select Suggested Answer Chips -->
-              <div class="flex flex-wrap gap-1.5">
-                @for (chip of getSuggestedOptions(q); track chip; let cIdx = $index) {
+              <div class="flex items-center gap-1.5 shrink-0">
+                @if (isMultipleChoice(q)) {
+                  <span class="text-[10px] font-sans text-[#777773] px-2 py-0.5 rounded bg-[#F5F5F3] border border-[#EAEAE6]">
+                    Chọn nhiều
+                  </span>
+                }
+              </div>
+            </div>
+
+            <!-- Question Options -->
+            @if (isTextOnly(q)) {
+              <div>
+                <textarea
+                  rows="3"
+                  [attr.data-testid]="'question-' + idx + '-input'"
+                  [ngModel]="getAnswer(q, idx)"
+                  (ngModelChange)="onAnswerChange(q, idx, $event)"
+                  [placeholder]="q.placeholder || 'Nhập câu trả lời ngắn gọn của bạn...'"
+                  class="w-full rounded-lg border border-[#EAEAE6] bg-[#FAFAFA] p-3 text-xs text-[#111111] placeholder-[#8E8E8A] focus:bg-[#FFFFFF] focus:border-[#246B4A] focus:outline-none focus:ring-1 focus:ring-[#246B4A]/20 resize-none"
+                ></textarea>
+              </div>
+            } @else {
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                @for (chip of getSuggestedOptions(q); track chip.id; let cIdx = $index) {
                   <button
                     type="button"
                     [attr.data-testid]="'question-' + idx + '-chip-' + cIdx"
                     (click)="selectSuggestedChip(q, idx, chip)"
-                    class="text-left text-xs px-3 py-1.5 rounded-lg border transition-all cursor-pointer"
-                    [class.border-[#246B4A]]="getAnswer(q, idx) === chip"
-                    [class.bg-[#EBF3EE]]="getAnswer(q, idx) === chip"
-                    [class.text-[#246B4A]]="getAnswer(q, idx) === chip"
-                    [class.font-semibold]="getAnswer(q, idx) === chip"
-                    [class.border-[#DCDCDC]]="getAnswer(q, idx) !== chip"
-                    [class.bg-[#FAFAFA]]="getAnswer(q, idx) !== chip"
-                    [class.text-[#555555]]="getAnswer(q, idx) !== chip"
-                    [class.hover:border-[#8E8E8A]]="getAnswer(q, idx) !== chip"
+                    [attr.aria-pressed]="isChipSelected(q, idx, chip)"
+                    class="text-left p-3 sm:p-3.5 rounded-lg border text-xs sm:text-[13px] transition-all cursor-pointer flex items-center justify-between gap-3 shadow-2xs group"
+                    [class.border-[#246B4A]]="isChipSelected(q, idx, chip)"
+                    [class.bg-[#F4F9F6]]="isChipSelected(q, idx, chip)"
+                    [class.text-[#246B4A]]="isChipSelected(q, idx, chip)"
+                    [class.font-medium]="isChipSelected(q, idx, chip)"
+                    [class.border-[#EAEAE6]]="!isChipSelected(q, idx, chip)"
+                    [class.bg-[#FAFAFA]]="!isChipSelected(q, idx, chip)"
+                    [class.text-[#333333]]="!isChipSelected(q, idx, chip)"
+                    [class.hover:border-[#D1D1CD]]="!isChipSelected(q, idx, chip)"
+                    [class.hover:bg-white]="!isChipSelected(q, idx, chip)"
                   >
-                    {{ chip }}
+                    <span class="flex-1 leading-snug">{{ chip.label }}</span>
+                    <span
+                      class="material-symbols-outlined text-[18px] shrink-0 transition-transform"
+                      [class.text-[#246B4A]]="isChipSelected(q, idx, chip)"
+                      [class.text-[#C4C4C0]]="!isChipSelected(q, idx, chip)"
+                      aria-hidden="true"
+                    >
+                      {{ isChipSelected(q, idx, chip) ? (isMultipleChoice(q) ? 'check_box' : 'check_circle') : (isMultipleChoice(q) ? 'check_box_outline_blank' : 'radio_button_unchecked') }}
+                    </span>
                   </button>
                 }
               </div>
 
-              <!-- Custom Answer Input / Textarea -->
-              <div>
-                <textarea
-                  rows="2"
-                  [attr.data-testid]="'question-' + idx + '-input'"
-                  [ngModel]="getAnswer(q, idx)"
-                  (ngModelChange)="onAnswerChange(q, idx, $event)"
-                  [placeholder]="q.placeholder || 'Nhập câu trả lời cụ thể của bạn...'"
-                  class="w-full rounded-lg border border-[#DCDCDC] bg-[#FAFAFA] p-2.5 text-xs text-[#111111] placeholder-[#8E8E8A] focus:bg-[#FFFFFF] focus:border-[#246B4A] focus:outline-none focus:ring-2 focus:ring-[#246B4A]/20 resize-none"
-                ></textarea>
-              </div>
-            </div>
-          }
-        </div>
-      }
-    </div>
-
-    <!-- RIGHT COLUMN (5 COLS): CONTEXT UNDERSTANDING METER & LIVE LEARNER PROFILE -->
-    <div class="lg:col-span-5 lg:h-full lg:overflow-y-auto p-6 sm:p-7 bg-[#FAFAFA] space-y-5">
-      <!-- Context Understanding Meter Card -->
-      <div
-        data-testid="context-understanding-meter"
-        class="bg-[#FFFFFF] rounded-xl p-5 border border-[#DCDCDC] space-y-3"
-      >
-        <div class="flex items-center justify-between">
-          <span class="text-[11px] font-mono font-semibold uppercase tracking-wider text-[#555555]">
-            Độ Thấu Hiểu Ngữ Cảnh
-          </span>
-          <span class="font-mono text-xs font-bold text-[#246B4A] bg-[#EBF3EE] px-2 py-0.5 rounded-full border border-[#246B4A]/20">
-            {{ contextUnderstandingPercent() }}%
-          </span>
-        </div>
-
-        <div class="flex items-baseline justify-between">
-          <div class="text-3xl font-serif font-medium text-[#111111] font-mono">
-            {{ contextUnderstandingPercent() }}%
-          </div>
-          <span class="text-xs text-[#555555]">
-            {{ answeredCount() }}/{{ questions().length }} điểm làm rõ
-          </span>
-        </div>
-
-        <div class="w-full h-2 rounded-full bg-[#EAEAE6] overflow-hidden">
-          <div
-            class="h-full rounded-full bg-[#246B4A] transition-all duration-300"
-            [style.width.%]="contextUnderstandingPercent()"
-          ></div>
-        </div>
-
-        <p class="text-[11px] text-[#555555] leading-relaxed">
-          Càng nhiều câu hỏi được trả lời, AI càng phân bổ chính xác thời lượng Pomodoro và độ khó của từng cột mốc.
-        </p>
-      </div>
-
-      <!-- Live Learner Profile Card -->
-      <div
-        data-testid="live-learner-profile-card"
-        class="bg-[#FFFFFF] rounded-xl p-5 border border-[#DCDCDC] space-y-3.5"
-      >
-        <div class="flex items-center justify-between border-b border-[#EAEAE6] pb-2.5">
-          <h4 class="text-xs font-mono font-bold uppercase tracking-wider text-[#111111] flex items-center gap-1.5">
-            <span class="material-symbols-outlined text-[16px] text-[#246B4A]" aria-hidden="true">badge</span>
-            <span>Chân Dung Người Học (Live Profile)</span>
-          </h4>
-          <span class="text-[10px] font-mono text-[#8E8E8A]">SRL FORE-THOUGHT</span>
-        </div>
-
-        <div class="space-y-2.5 text-xs">
-          <div class="flex items-center justify-between gap-2 py-1 border-b border-[#F3F3F1]">
-            <span class="text-[#555555]">Mục tiêu:</span>
-            <span class="font-semibold text-[#111111] text-right truncate max-w-[200px]">
-              {{ displayGoalTitle() }}
-            </span>
-          </div>
-
-          <div class="flex items-center justify-between gap-2 py-1 border-b border-[#F3F3F1]">
-            <span class="text-[#555555]">Trình độ nền:</span>
-            <span class="font-mono font-semibold text-[#246B4A] bg-[#EBF3EE] px-2 py-0.5 rounded text-[11px]">
-              {{ displayLevel() }}
-            </span>
-          </div>
-
-          <div class="flex items-center justify-between gap-2 py-1 border-b border-[#F3F3F1]">
-            <span class="text-[#555555]">Quỹ thời gian:</span>
-            <span class="font-mono font-semibold text-[#111111]">
-              {{ weeklyHours() }} giờ / tuần
-            </span>
-          </div>
-
-          <div class="flex items-center justify-between gap-2 py-1">
-            <span class="text-[#555555]">Hạn chót mục tiêu:</span>
-            <span class="font-mono text-[#111111]">
-              {{ displayDeadline() }}
-            </span>
-          </div>
-        </div>
-
-        @if (attachedSources().length > 0) {
-          <div
-            data-testid="live-profile-knowledge-sources"
-            class="pt-3 border-t border-[#EAEAE6] space-y-1.5"
-          >
-            <span class="block text-[10px] font-mono uppercase tracking-wider text-[#555555]">
-              Tài liệu tham khảo ({{ attachedSources().length }}/3):
-            </span>
-            <div class="flex flex-wrap gap-1.5">
-              @for (src of attachedSources(); track src.id) {
-                <span
-                  class="inline-flex items-center gap-1 text-[11px] bg-[#F3F3F1] text-[#111111] px-2.5 py-1 rounded-md border border-[#DCDCDC] max-w-full truncate"
-                  [title]="src.url || src.title"
-                >
-                  <span class="material-symbols-outlined text-[13px] text-[#246B4A] shrink-0" aria-hidden="true">
-                    {{ src.kind === 'FILE' ? 'description' : 'link' }}
-                  </span>
-                  <span class="truncate max-w-[180px]">{{ src.title }}</span>
-                </span>
+              <!-- Ô nhập tự luận hoặc bổ sung ý kiến thu gọn gàng bên dưới -->
+              @if (isCustomInputOpen(q, idx)) {
+                <div class="pt-1.5 space-y-1.5">
+                  <div class="flex items-center justify-between text-[11px] text-[#777773]">
+                    <span class="font-medium flex items-center gap-1">
+                      <span class="material-symbols-outlined text-[14px] text-[#246B4A]" aria-hidden="true">edit_note</span>
+                      <span>Ý kiến riêng hoặc bổ sung chi tiết:</span>
+                    </span>
+                    <button
+                      type="button"
+                      (click)="toggleCustomInput(q, idx)"
+                      class="text-[10px] text-[#888888] hover:text-[#111111] hover:underline cursor-pointer"
+                    >
+                      Thu gọn ✕
+                    </button>
+                  </div>
+                  <textarea
+                    rows="2"
+                    [attr.data-testid]="'question-' + idx + '-input'"
+                    [ngModel]="getAnswer(q, idx)"
+                    (ngModelChange)="onAnswerChange(q, idx, $event)"
+                    [placeholder]="q.placeholder || 'Nhập câu trả lời cụ thể hoặc bổ sung thêm...'"
+                    class="w-full rounded-lg border border-[#EAEAE6] bg-[#FAFAFA] p-2.5 text-xs text-[#111111] placeholder-[#8E8E8A] focus:bg-[#FFFFFF] focus:border-[#246B4A] focus:outline-none focus:ring-1 focus:ring-[#246B4A]/20 resize-none"
+                  ></textarea>
+                </div>
+              } @else {
+                <div class="pt-0.5">
+                  <button
+                    type="button"
+                    (click)="toggleCustomInput(q, idx)"
+                    class="text-[11px] text-[#777773] hover:text-[#246B4A] inline-flex items-center gap-1 cursor-pointer transition-colors"
+                  >
+                    <span class="material-symbols-outlined text-[14px]" aria-hidden="true">edit_note</span>
+                    <span>Ý kiến khác hoặc ghi chú thêm (tùy chọn)</span>
+                  </button>
+                </div>
               }
-            </div>
-          </div>
-        }
-
-        @if (answeredEntries().length > 0) {
-          <div class="pt-3 border-t border-[#EAEAE6] space-y-1.5">
-            <span class="block text-[10px] font-mono uppercase tracking-wider text-[#555555]">
-              Ngữ cảnh vừa trích xuất:
-            </span>
-            @for (entry of answeredEntries(); track entry.id) {
-              <div class="text-[11px] bg-[#EBF3EE]/60 text-[#246B4A] px-2.5 py-1.5 rounded border border-[#246B4A]/20 truncate">
-                ✓ {{ entry.answer }}
-              </div>
             }
           </div>
         }
       </div>
-    </div>
+    }
   </div>
 
   <!-- PART C: PINNED STICKY ACTION FOOTER -->
@@ -273,7 +334,16 @@
       <span>Quay lại Bước 1</span>
     </button>
 
-    <div class="flex flex-col sm:flex-row items-center gap-2.5 w-full sm:w-auto">
+    <div class="flex flex-wrap items-center gap-2.5 w-full sm:w-auto justify-end">
+      <button
+        type="button"
+        (click)="onLoadStandardPreviewQuestions()"
+        data-testid="preview-standard-questions-btn"
+        class="w-full sm:w-auto px-4 py-2 rounded-full text-xs font-medium text-[#555555] hover:text-[#111111] hover:bg-[#F3F3F1] border border-[#DCDCDC] transition-colors cursor-pointer"
+      >
+        Xem câu hỏi chuẩn
+      </button>
+
       <button
         type="button"
         (click)="onSkipInterview()"
@@ -289,9 +359,15 @@
         (click)="onSubmit()"
         [disabled]="roadmapService.isSubmittingAnswers()"
         data-testid="submit-interview-btn"
-        class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-full bg-[#246B4A] hover:bg-[#1B5338] disabled:opacity-50 text-white text-xs sm:text-sm font-semibold transition-colors cursor-pointer"
+        class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-full bg-[#246B4A] hover:bg-[#1B5338] disabled:opacity-50 text-white text-xs sm:text-sm font-semibold transition-colors cursor-pointer shadow-xs"
       >
-        <span>Hoàn tất Phỏng vấn &amp; Sinh Lộ trình AI</span>
+        <span>
+          @if (roadmapService.clarificationStatus() === 'WAITING_FOLLOW_UP' || roadmapService.clarificationRound() >= 2) {
+            Xác nhận &amp; Hoàn tất chẩn đoán
+          } @else {
+            Gửi câu trả lời
+          }
+        </span>
         <span class="font-mono text-xs" aria-hidden="true">→</span>
       </button>
     </div>

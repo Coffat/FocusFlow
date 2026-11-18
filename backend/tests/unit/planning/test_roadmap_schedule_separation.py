@@ -11,13 +11,13 @@ from src.planning.application.services.validation_gate import ProposalValidation
 from src.planning.domain.exceptions.planning_exceptions import ProposalValidationGateError
 from src.planning.domain.models.schedule_block import ScheduleBlock
 from src.planning.domain.services.validation_types import AvailabilityConfigurationDTO
-from src.shared_kernel.infrastructure.external_ai.litellm_adapter import MockLLMAdapter
+from tests.helpers.llm_stubs import StubLLMAdapter
 
 
 @pytest.mark.asyncio
 async def test_ai_dates_are_discarded_and_allocated_by_availability() -> None:
     milestone_id = uuid7()
-    llm = MockLLMAdapter(
+    llm = StubLLMAdapter(
         canned_responses=[
             {
                 "tasks": [
@@ -317,25 +317,45 @@ def test_gate_rejects_overlapping_sessions_even_in_quota_mode() -> None:
 @pytest.mark.asyncio
 async def test_ai_proposal_is_rejected_when_target_date_has_no_capacity() -> None:
     milestone_id = uuid7()
-    llm = MockLLMAdapter(
-        canned_responses=[
+    canned = {
+        "tasks": [
             {
-                "tasks": [
-                    {
-                        "task_id": f"task-{index}",
-                        "milestone_id": str(milestone_id),
-                        "title": f"Nhiệm vụ {index}",
-                        "estimated_minutes": 120,
-                    }
-                    for index in range(2)
-                ],
-                "dependencies": [],
+                "task_id": f"task-{index}",
+                "milestone_id": str(milestone_id),
+                "title": f"Nhiệm vụ {index}",
+                "estimated_minutes": 120,
             }
-        ]
+            for index in range(2)
+        ],
+        "dependencies": [],
+    }
+    # AC-07 default: returns partial schedule draft instead of failing closed when structural checks pass
+    partial_res = await ProposalValidationGateOrchestrator(
+        llm_provider=StubLLMAdapter(canned_responses=[canned]),
+        enable_tier3_judge=False,
+    ).generate_and_validate_proposal_with_retry(
+        system_prompt="planner",
+        user_prompt="python",
+        response_schema=None,
+        availability=AvailabilityConfigurationDTO(mode="MODE_A", default_daily_quota_minutes=120),
+        valid_milestone_ids={milestone_id},
+        start_date=date(2026, 11, 12),
+        current_roadmap_target_date=date(2026, 11, 12),
+        deterministic_allocation=True,
+        max_retries=0,
     )
+    assert partial_res.is_valid is True
+    assert partial_res.is_partial_schedule is True
+    assert partial_res.scheduled_tasks_count == 1
+    assert partial_res.unscheduled_tasks_count == 1
+    assert "DEADLINE_CAPACITY_EXCEEDED" in str(
+        partial_res.unscheduled_tasks[0].get("unscheduled_reason", "")
+    )
+
+    # When allow_partial_schedule=False is explicitly set, raises ProposalValidationGateError
     with pytest.raises(ProposalValidationGateError):
         await ProposalValidationGateOrchestrator(
-            llm_provider=llm,
+            llm_provider=StubLLMAdapter(canned_responses=[canned]),
             enable_tier3_judge=False,
         ).generate_and_validate_proposal_with_retry(
             system_prompt="planner",
@@ -349,4 +369,5 @@ async def test_ai_proposal_is_rejected_when_target_date_has_no_capacity() -> Non
             current_roadmap_target_date=date(2026, 11, 12),
             deterministic_allocation=True,
             max_retries=0,
+            allow_partial_schedule=False,
         )

@@ -15,6 +15,8 @@ SENSITIVE_KEYS = frozenset(
         "refresh_token",
         "secret_key",
         "llm_api_key",
+        "embedding_api_key",
+        "gemini_api_key",
         "oauth_refresh_token_enc",
         "note_content",
     }

@@ -12,11 +12,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.account.public_api import (
     AvailabilityQueryPort,
+    CalendarConnectionQueryPort,
+    CalendarSyncFacadePort,
     LearnerMemoryQueryPort,
     LearnerProfileQueryPort,
     QuotaFacadePort,
     UserQueryPort,
     create_availability_query_port,
+    create_calendar_connection_query_port,
+    create_calendar_sync_facade,
     create_learner_memory_query_port,
     create_learner_profile_query_port,
     create_quota_facade,
@@ -56,6 +60,7 @@ from src.planning.application.use_cases import (
     GenerateClarificationQuestionsUseCase,
     GetCurrentScheduleProposalUseCase,
     GetRoadmapDetailUseCase,
+    HandleAvailabilityUpdatedEventUseCase,
     InitiateMilestoneGenerationUseCase,
     InitiateOverdueRecoveryUseCase,
     InitiateScheduleProposalGenerationUseCase,
@@ -92,6 +97,7 @@ from src.planning.infrastructure.repositories.sqlalchemy_knowledge_base_reposito
 )
 from src.planning.infrastructure.sse import default_redis_sse_job_store
 from src.shared_kernel.application.embedding_port import EmbeddingProviderPort
+from src.shared_kernel.application.event_bus import OutboxRepositoryPort
 from src.shared_kernel.application.harness.workflow_port import WorkflowRepositoryPort
 from src.shared_kernel.application.llm_port import LLMProviderPort
 from src.shared_kernel.application.uow import AsyncUnitOfWork
@@ -108,6 +114,7 @@ from src.shared_kernel.infrastructure.external_ai.embedding_adapter import LiteL
 from src.shared_kernel.infrastructure.external_ai.litellm_adapter import (
     LiteLLMAdapter,
 )
+from src.shared_kernel.infrastructure.outbox.repository import SqlAlchemyOutboxRepository
 from src.shared_kernel.infrastructure.workflow.repository import SqlAlchemyWorkflowRepository
 
 security_bearer = HTTPBearer(auto_error=False)
@@ -233,6 +240,18 @@ def get_planning_availability_query_port(
     return create_availability_query_port(session)
 
 
+def get_planning_calendar_connection_query_port(
+    session: AsyncSession = Depends(get_planning_db_session),
+) -> CalendarConnectionQueryPort:
+    return create_calendar_connection_query_port(session)
+
+
+def get_planning_calendar_sync_facade(
+    session: AsyncSession = Depends(get_planning_db_session),
+) -> CalendarSyncFacadePort:
+    return create_calendar_sync_facade(session)
+
+
 def get_planning_learner_profile_port(
     session: AsyncSession = Depends(get_planning_db_session),
 ) -> LearnerProfileQueryPort:
@@ -267,6 +286,12 @@ def get_planning_workflow_repository(
     session: AsyncSession = Depends(get_planning_db_session),
 ) -> WorkflowRepositoryPort:
     return SqlAlchemyWorkflowRepository(session)
+
+
+def get_planning_outbox_repository(
+    session: AsyncSession = Depends(get_planning_db_session),
+) -> OutboxRepositoryPort:
+    return SqlAlchemyOutboxRepository(session)
 
 
 def get_llm_provider() -> LLMProviderPort:
@@ -397,6 +422,7 @@ def get_generate_clarification_questions_use_case(
     knowledge_source_repo: KnowledgeSourceRepositoryPort = Depends(get_knowledge_source_repository),
     embedding_provider: EmbeddingProviderPort = Depends(get_planning_embedding_provider),
     workflow_repo: WorkflowRepositoryPort = Depends(get_planning_workflow_repository),
+    availability_query_port: AvailabilityQueryPort = Depends(get_planning_availability_query_port),
 ) -> GenerateClarificationQuestionsUseCase:
     return GenerateClarificationQuestionsUseCase(
         goal_repo=goal_repo,
@@ -407,16 +433,24 @@ def get_generate_clarification_questions_use_case(
         knowledge_source_repo=knowledge_source_repo,
         embedding_provider=embedding_provider,
         workflow_repo=workflow_repo,
+        availability_query_port=availability_query_port,
+        v2_enabled=get_settings().clarification_engine_v2_enabled,
     )
 
 
 def get_submit_clarification_answers_use_case(
     goal_repo: GoalRepositoryPort = Depends(get_goal_repository),
     uow: AsyncUnitOfWork = Depends(get_planning_uow),
+    workflow_repo: WorkflowRepositoryPort = Depends(get_planning_workflow_repository),
+    quota_facade: QuotaFacadePort = Depends(get_planning_quota_facade),
+    llm_provider: LLMProviderPort = Depends(get_llm_provider),
 ) -> SubmitClarificationAnswersUseCase:
     return SubmitClarificationAnswersUseCase(
         goal_repo=goal_repo,
         uow=uow,
+        workflow_repo=workflow_repo,
+        quota_facade=quota_facade,
+        llm_provider=llm_provider,
     )
 
 
@@ -435,8 +469,30 @@ def get_execute_milestone_generation_use_case(
     ),
     embedding_provider: EmbeddingProviderPort | None = Depends(get_planning_embedding_provider),
     workflow_repo: WorkflowRepositoryPort | None = Depends(get_planning_workflow_repository),
+    availability_query_port: AvailabilityQueryPort | None = Depends(
+        get_planning_availability_query_port
+    ),
+    execution_sync_port: ExecutionScheduleSyncPort | None = Depends(
+        get_planning_execution_sync_port
+    ),
+    block_repo: ScheduleBlockRepositoryPort | None = Depends(get_schedule_block_repository),
+    user_query_port: UserQueryPort | None = Depends(get_planning_user_query_port),
+    calendar_connection_query_port: CalendarConnectionQueryPort | None = Depends(
+        get_planning_calendar_connection_query_port
+    ),
+    proposal_repo: ScheduleProposalRepositoryPort | None = Depends(
+        get_schedule_proposal_repository
+    ),
 ) -> ExecuteMilestoneGenerationUseCase:
     effective_kb = knowledge_base if isinstance(knowledge_base, KnowledgeBasePort) else None
+    effective_cal = (
+        calendar_connection_query_port
+        if isinstance(calendar_connection_query_port, CalendarConnectionQueryPort)
+        else None
+    )
+    effective_prop_repo = (
+        proposal_repo if hasattr(proposal_repo, "discard_existing_drafts") else None
+    )
     return ExecuteMilestoneGenerationUseCase(
         goal_repo=goal_repo,
         roadmap_repo=roadmap_repo,
@@ -450,6 +506,12 @@ def get_execute_milestone_generation_use_case(
         knowledge_source_repo=knowledge_source_repo,
         embedding_provider=embedding_provider,
         workflow_repo=workflow_repo,
+        availability_query_port=availability_query_port,
+        execution_sync_port=execution_sync_port,
+        block_repo=block_repo,
+        user_query_port=user_query_port,
+        calendar_connection_query_port=effective_cal,
+        proposal_repo=effective_prop_repo,
     )
 
 
@@ -475,11 +537,32 @@ def get_update_milestones_use_case(
     roadmap_repo: RoadmapRepositoryPort = Depends(get_roadmap_repository),
     milestone_repo: MilestoneRepositoryPort = Depends(get_milestone_repository),
     uow: AsyncUnitOfWork = Depends(get_planning_uow),
+    goal_repo: GoalRepositoryPort = Depends(get_goal_repository),
+    proposal_repo: ScheduleProposalRepositoryPort = Depends(get_schedule_proposal_repository),
+    availability_query_port: AvailabilityQueryPort = Depends(get_planning_availability_query_port),
+    execution_sync_port: ExecutionScheduleSyncPort = Depends(get_planning_execution_sync_port),
+    user_query_port: UserQueryPort = Depends(get_planning_user_query_port),
+    block_repo: ScheduleBlockRepositoryPort = Depends(get_schedule_block_repository),
+    calendar_connection_query_port: CalendarConnectionQueryPort | None = Depends(
+        get_planning_calendar_connection_query_port
+    ),
 ) -> UpdateMilestonesUseCase:
+    effective_cal = (
+        calendar_connection_query_port
+        if isinstance(calendar_connection_query_port, CalendarConnectionQueryPort)
+        else None
+    )
     return UpdateMilestonesUseCase(
         roadmap_repo=roadmap_repo,
         milestone_repo=milestone_repo,
         uow=uow,
+        goal_repo=goal_repo,
+        proposal_repo=proposal_repo,
+        availability_query_port=availability_query_port,
+        execution_sync_port=execution_sync_port,
+        user_query_port=user_query_port,
+        block_repo=block_repo,
+        calendar_connection_query_port=effective_cal,
     )
 
 
@@ -487,11 +570,32 @@ def get_approve_milestones_use_case(
     roadmap_repo: RoadmapRepositoryPort = Depends(get_roadmap_repository),
     milestone_repo: MilestoneRepositoryPort = Depends(get_milestone_repository),
     uow: AsyncUnitOfWork = Depends(get_planning_uow),
+    goal_repo: GoalRepositoryPort = Depends(get_goal_repository),
+    proposal_repo: ScheduleProposalRepositoryPort = Depends(get_schedule_proposal_repository),
+    availability_query_port: AvailabilityQueryPort = Depends(get_planning_availability_query_port),
+    execution_sync_port: ExecutionScheduleSyncPort = Depends(get_planning_execution_sync_port),
+    user_query_port: UserQueryPort = Depends(get_planning_user_query_port),
+    block_repo: ScheduleBlockRepositoryPort = Depends(get_schedule_block_repository),
+    calendar_connection_query_port: CalendarConnectionQueryPort | None = Depends(
+        get_planning_calendar_connection_query_port
+    ),
 ) -> ApproveMilestonesUseCase:
+    effective_cal = (
+        calendar_connection_query_port
+        if isinstance(calendar_connection_query_port, CalendarConnectionQueryPort)
+        else None
+    )
     return ApproveMilestonesUseCase(
         roadmap_repo=roadmap_repo,
         milestone_repo=milestone_repo,
         uow=uow,
+        goal_repo=goal_repo,
+        proposal_repo=proposal_repo,
+        availability_query_port=availability_query_port,
+        execution_sync_port=execution_sync_port,
+        user_query_port=user_query_port,
+        block_repo=block_repo,
+        calendar_connection_query_port=effective_cal,
     )
 
 
@@ -516,8 +620,16 @@ def get_execute_schedule_proposal_generation_use_case(
     ),
     embedding_provider: EmbeddingProviderPort | None = Depends(get_planning_embedding_provider),
     workflow_repo: WorkflowRepositoryPort | None = Depends(get_planning_workflow_repository),
+    calendar_connection_query_port: CalendarConnectionQueryPort | None = Depends(
+        get_planning_calendar_connection_query_port
+    ),
 ) -> ExecuteScheduleProposalGenerationUseCase:
     effective_kb = knowledge_base if isinstance(knowledge_base, KnowledgeBasePort) else None
+    effective_cal = (
+        calendar_connection_query_port
+        if isinstance(calendar_connection_query_port, CalendarConnectionQueryPort)
+        else None
+    )
     return ExecuteScheduleProposalGenerationUseCase(
         goal_repo=goal_repo,
         roadmap_repo=roadmap_repo,
@@ -538,6 +650,7 @@ def get_execute_schedule_proposal_generation_use_case(
         knowledge_source_repo=knowledge_source_repo,
         embedding_provider=embedding_provider,
         workflow_repo=workflow_repo,
+        calendar_connection_query_port=effective_cal,
     )
 
 
@@ -550,7 +663,21 @@ def get_initiate_schedule_proposal_generation_use_case(
     executor: ExecuteScheduleProposalGenerationUseCase = Depends(
         get_execute_schedule_proposal_generation_use_case
     ),
+    goal_repo: GoalRepositoryPort = Depends(get_goal_repository),
+    proposal_repo: ScheduleProposalRepositoryPort = Depends(get_schedule_proposal_repository),
+    availability_query_port: AvailabilityQueryPort = Depends(get_planning_availability_query_port),
+    execution_sync_port: ExecutionScheduleSyncPort = Depends(get_planning_execution_sync_port),
+    user_query_port: UserQueryPort = Depends(get_planning_user_query_port),
+    block_repo: ScheduleBlockRepositoryPort = Depends(get_schedule_block_repository),
+    calendar_connection_query_port: CalendarConnectionQueryPort | None = Depends(
+        get_planning_calendar_connection_query_port
+    ),
 ) -> InitiateScheduleProposalGenerationUseCase:
+    effective_cal = (
+        calendar_connection_query_port
+        if isinstance(calendar_connection_query_port, CalendarConnectionQueryPort)
+        else None
+    )
     return InitiateScheduleProposalGenerationUseCase(
         roadmap_repo=roadmap_repo,
         milestone_repo=milestone_repo,
@@ -558,6 +685,13 @@ def get_initiate_schedule_proposal_generation_use_case(
         sse_job_store=sse_job_store,
         uow=uow,
         executor=executor,
+        goal_repo=goal_repo,
+        proposal_repo=proposal_repo,
+        availability_query_port=availability_query_port,
+        execution_sync_port=execution_sync_port,
+        user_query_port=user_query_port,
+        block_repo=block_repo,
+        calendar_connection_query_port=effective_cal,
     )
 
 
@@ -582,7 +716,16 @@ def get_update_schedule_proposal_use_case(
     uow: AsyncUnitOfWork = Depends(get_planning_uow),
     user_query_port: UserQueryPort = Depends(get_planning_user_query_port),
     block_repo: ScheduleBlockRepositoryPort = Depends(get_schedule_block_repository),
+    calendar_connection_query_port: CalendarConnectionQueryPort | None = Depends(
+        get_planning_calendar_connection_query_port
+    ),
+    goal_repo: GoalRepositoryPort = Depends(get_goal_repository),
 ) -> UpdateScheduleProposalUseCase:
+    effective_cal = (
+        calendar_connection_query_port
+        if isinstance(calendar_connection_query_port, CalendarConnectionQueryPort)
+        else None
+    )
     return UpdateScheduleProposalUseCase(
         roadmap_repo=roadmap_repo,
         milestone_repo=milestone_repo,
@@ -592,6 +735,8 @@ def get_update_schedule_proposal_use_case(
         uow=uow,
         user_query_port=user_query_port,
         block_repo=block_repo,
+        calendar_connection_query_port=effective_cal,
+        goal_repo=goal_repo,
     )
 
 
@@ -608,7 +753,22 @@ def get_apply_schedule_proposal_use_case(
     ),
     uow: AsyncUnitOfWork = Depends(get_planning_uow),
     user_query_port: UserQueryPort = Depends(get_planning_user_query_port),
+    calendar_connection_query_port: CalendarConnectionQueryPort | None = Depends(
+        get_planning_calendar_connection_query_port
+    ),
+    calendar_sync_facade: CalendarSyncFacadePort | None = Depends(
+        get_planning_calendar_sync_facade
+    ),
+    goal_repo: GoalRepositoryPort = Depends(get_goal_repository),
 ) -> ApplyScheduleProposalUseCase:
+    effective_cal = (
+        calendar_connection_query_port
+        if isinstance(calendar_connection_query_port, CalendarConnectionQueryPort)
+        else None
+    )
+    effective_sync = (
+        calendar_sync_facade if isinstance(calendar_sync_facade, CalendarSyncFacadePort) else None
+    )
     return ApplyScheduleProposalUseCase(
         roadmap_repo=roadmap_repo,
         milestone_repo=milestone_repo,
@@ -620,6 +780,9 @@ def get_apply_schedule_proposal_use_case(
         schedule_change_log_port=schedule_change_log_port,
         uow=uow,
         user_query_port=user_query_port,
+        calendar_connection_query_port=effective_cal,
+        calendar_sync_facade=effective_sync,
+        goal_repo=goal_repo,
     )
 
 
@@ -633,7 +796,15 @@ def get_save_manual_roadmap_plan_use_case(
     uow: AsyncUnitOfWork = Depends(get_planning_uow),
     user_query_port: UserQueryPort = Depends(get_planning_user_query_port),
     block_repo: ScheduleBlockRepositoryPort = Depends(get_schedule_block_repository),
+    calendar_connection_query_port: CalendarConnectionQueryPort | None = Depends(
+        get_planning_calendar_connection_query_port
+    ),
 ) -> SaveManualRoadmapPlanUseCase:
+    effective_cal = (
+        calendar_connection_query_port
+        if isinstance(calendar_connection_query_port, CalendarConnectionQueryPort)
+        else None
+    )
     return SaveManualRoadmapPlanUseCase(
         goal_repo=goal_repo,
         roadmap_repo=roadmap_repo,
@@ -644,6 +815,7 @@ def get_save_manual_roadmap_plan_use_case(
         uow=uow,
         user_query_port=user_query_port,
         block_repo=block_repo,
+        calendar_connection_query_port=effective_cal,
     )
 
 
@@ -676,12 +848,66 @@ def get_update_roadmap_use_case(
     roadmap_repo: RoadmapRepositoryPort = Depends(get_roadmap_repository),
     uow: AsyncUnitOfWork = Depends(get_planning_uow),
     user_query_port: UserQueryPort = Depends(get_planning_user_query_port),
+    milestone_repo: MilestoneRepositoryPort = Depends(get_milestone_repository),
+    proposal_repo: ScheduleProposalRepositoryPort = Depends(get_schedule_proposal_repository),
+    availability_query_port: AvailabilityQueryPort = Depends(get_planning_availability_query_port),
+    execution_sync_port: ExecutionScheduleSyncPort = Depends(get_planning_execution_sync_port),
+    block_repo: ScheduleBlockRepositoryPort = Depends(get_schedule_block_repository),
+    calendar_connection_query_port: CalendarConnectionQueryPort | None = Depends(
+        get_planning_calendar_connection_query_port
+    ),
 ) -> UpdateRoadmapUseCase:
+    effective_cal = (
+        calendar_connection_query_port
+        if isinstance(calendar_connection_query_port, CalendarConnectionQueryPort)
+        else None
+    )
     return UpdateRoadmapUseCase(
         goal_repo=goal_repo,
         roadmap_repo=roadmap_repo,
         uow=uow,
         user_query_port=user_query_port,
+        milestone_repo=milestone_repo,
+        proposal_repo=proposal_repo,
+        availability_query_port=availability_query_port,
+        execution_sync_port=execution_sync_port,
+        block_repo=block_repo,
+        calendar_connection_query_port=effective_cal,
+    )
+
+
+def get_handle_availability_updated_event_use_case(
+    roadmap_repo: RoadmapRepositoryPort = Depends(get_roadmap_repository),
+    milestone_repo: MilestoneRepositoryPort = Depends(get_milestone_repository),
+    proposal_repo: ScheduleProposalRepositoryPort = Depends(get_schedule_proposal_repository),
+    availability_query_port: AvailabilityQueryPort = Depends(get_planning_availability_query_port),
+    outbox_repo: OutboxRepositoryPort = Depends(get_planning_outbox_repository),
+    uow: AsyncUnitOfWork = Depends(get_planning_uow),
+    goal_repo: GoalRepositoryPort = Depends(get_goal_repository),
+    execution_sync_port: ExecutionScheduleSyncPort = Depends(get_planning_execution_sync_port),
+    block_repo: ScheduleBlockRepositoryPort = Depends(get_schedule_block_repository),
+    user_query_port: UserQueryPort = Depends(get_planning_user_query_port),
+    calendar_connection_query_port: CalendarConnectionQueryPort | None = Depends(
+        get_planning_calendar_connection_query_port
+    ),
+) -> HandleAvailabilityUpdatedEventUseCase:
+    effective_cal = (
+        calendar_connection_query_port
+        if isinstance(calendar_connection_query_port, CalendarConnectionQueryPort)
+        else None
+    )
+    return HandleAvailabilityUpdatedEventUseCase(
+        roadmap_repo=roadmap_repo,
+        milestone_repo=milestone_repo,
+        proposal_repo=proposal_repo,
+        availability_query_port=availability_query_port,
+        outbox_repo=outbox_repo,
+        uow=uow,
+        goal_repo=goal_repo,
+        execution_sync_port=execution_sync_port,
+        block_repo=block_repo,
+        user_query_port=user_query_port,
+        calendar_connection_query_port=effective_cal,
     )
 
 
@@ -747,7 +973,16 @@ def get_reoptimize_schedule_proposal_use_case(
     learner_profile_port: LearnerProfileQueryPort = Depends(get_planning_learner_profile_port),
     user_query_port: UserQueryPort = Depends(get_planning_user_query_port),
     block_repo: ScheduleBlockRepositoryPort = Depends(get_schedule_block_repository),
+    schedule_repo: OfficialScheduleRepositoryPort = Depends(get_official_schedule_repository),
+    calendar_connection_query_port: CalendarConnectionQueryPort | None = Depends(
+        get_planning_calendar_connection_query_port
+    ),
 ) -> ReoptimizeScheduleProposalUseCase:
+    effective_cal = (
+        calendar_connection_query_port
+        if isinstance(calendar_connection_query_port, CalendarConnectionQueryPort)
+        else None
+    )
     return ReoptimizeScheduleProposalUseCase(
         roadmap_repo=roadmap_repo,
         milestone_repo=milestone_repo,
@@ -758,6 +993,8 @@ def get_reoptimize_schedule_proposal_use_case(
         learner_profile_port=learner_profile_port,
         user_query_port=user_query_port,
         block_repo=block_repo,
+        calendar_connection_query_port=effective_cal,
+        schedule_repo=schedule_repo,
     )
 
 
@@ -772,7 +1009,16 @@ def get_initiate_overdue_recovery_use_case(
     learner_profile_port: LearnerProfileQueryPort = Depends(get_planning_learner_profile_port),
     user_query_port: UserQueryPort = Depends(get_planning_user_query_port),
     block_repo: ScheduleBlockRepositoryPort = Depends(get_schedule_block_repository),
+    schedule_repo: OfficialScheduleRepositoryPort = Depends(get_official_schedule_repository),
+    calendar_connection_query_port: CalendarConnectionQueryPort | None = Depends(
+        get_planning_calendar_connection_query_port
+    ),
 ) -> InitiateOverdueRecoveryUseCase:
+    effective_cal = (
+        calendar_connection_query_port
+        if isinstance(calendar_connection_query_port, CalendarConnectionQueryPort)
+        else None
+    )
     return InitiateOverdueRecoveryUseCase(
         roadmap_repo=roadmap_repo,
         milestone_repo=milestone_repo,
@@ -784,6 +1030,8 @@ def get_initiate_overdue_recovery_use_case(
         learner_profile_port=learner_profile_port,
         user_query_port=user_query_port,
         block_repo=block_repo,
+        calendar_connection_query_port=effective_cal,
+        schedule_repo=schedule_repo,
     )
 
 
@@ -848,3 +1096,4 @@ CreateKnowledgeSourceUseCaseDep = Annotated[
 KnowledgeSourceRepositoryDep = Annotated[
     KnowledgeSourceRepositoryPort, Depends(get_knowledge_source_repository)
 ]
+RoadmapRepositoryDep = Annotated[RoadmapRepositoryPort, Depends(get_roadmap_repository)]

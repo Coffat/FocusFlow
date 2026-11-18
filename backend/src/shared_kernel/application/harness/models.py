@@ -1,10 +1,55 @@
 from __future__ import annotations
 
+import copy
+import hashlib
+import json
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from enum import StrEnum
 from typing import Any
 from uuid import UUID
+
+
+class FrozenSchemaList(list[Any]):
+    """Immutable list used inside frozen PromptTemplate JSON schemas."""
+
+    def _immutable(self, *args: Any, **kwargs: Any) -> Any:
+        raise TypeError("PromptTemplate.output_schema is immutable")
+
+    __setitem__ = _immutable
+    __delitem__ = _immutable
+    append = _immutable
+    extend = _immutable
+    insert = _immutable
+    pop = _immutable
+    remove = _immutable
+    clear = _immutable
+    sort = _immutable
+    reverse = _immutable
+
+
+class FrozenSchemaDict(dict[str, Any]):
+    """Immutable dict used for `PromptTemplate.output_schema` while remaining JSON-serializable."""
+
+    def _immutable(self, *args: Any, **kwargs: Any) -> Any:
+        raise TypeError("PromptTemplate.output_schema is immutable")
+
+    __setitem__ = _immutable
+    __delitem__ = _immutable
+    pop = _immutable
+    popitem = _immutable
+    clear = _immutable
+    update = _immutable
+    setdefault = _immutable
+
+
+def freeze_schema_value(value: Any) -> Any:
+    """Deep-copy and freeze nested dicts/lists for immutable schema storage."""
+    if isinstance(value, dict):
+        return FrozenSchemaDict({str(k): freeze_schema_value(v) for k, v in value.items()})
+    if isinstance(value, (list, tuple)):
+        return FrozenSchemaList(freeze_schema_value(item) for item in value)
+    return copy.deepcopy(value)
 
 
 class ContextLayer(StrEnum):
@@ -33,6 +78,28 @@ class PromptTemplate:
     system_template: str
     output_schema: dict[str, Any]
     checksum: str
+    schema_checksum: str = ""
+    thinking_level: str | None = None
+
+    def __post_init__(self) -> None:
+        frozen_schema = freeze_schema_value(self.output_schema)
+        object.__setattr__(self, "output_schema", frozen_schema)
+        if not self.schema_checksum:
+            canonical_schema = json.dumps(
+                frozen_schema,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            object.__setattr__(
+                self,
+                "schema_checksum",
+                hashlib.sha256(canonical_schema.encode()).hexdigest(),
+            )
+
+    @property
+    def prompt_ref(self) -> str:
+        return f"{self.prompt_id}@{self.version}"
 
 
 @dataclass(frozen=True, slots=True)

@@ -16,11 +16,18 @@ class ScheduleBlockRepositoryPort(Protocol):
         self,
         official_schedule_id: UUID,
         sync_status_in: list[str] | None = None,
+        *,
+        for_update: bool = False,
     ) -> list[ScheduleBlock]:
         """List blocks for an official schedule, optionally filtered by sync_status."""
         ...
 
-    async def list_by_roadmap_ids(self, roadmap_ids: Sequence[UUID]) -> list[ScheduleBlock]:
+    async def list_by_roadmap_ids(
+        self,
+        roadmap_ids: Sequence[UUID],
+        *,
+        for_update: bool = False,
+    ) -> list[ScheduleBlock]:
         """Return blocks belonging to active roadmaps without crossing context tables."""
         ...
 

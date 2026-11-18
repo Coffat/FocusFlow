@@ -1,0 +1,102 @@
+{
+  "prompt_count": 12,
+  "prompts": [
+    {
+      "prompt_checksum": "a62f0ee8191d8f79acf62246ac6d83dfde706eea6144f90abf8910912913ccf8",
+      "prompt_id": "coverage-prerequisite-critic",
+      "schema_checksum": "c65cf105804da7809a185890895226d20ebdaa0f2f14823eab0c0f7c2a4473ba",
+      "skill_id": "coverage-prerequisite-critic",
+      "version": "2.0.0",
+      "workflow_type": "SCHEDULE_GENERATION"
+    },
+    {
+      "prompt_checksum": "61b58841755d9501da29cbd440cb2432f2f5d77364856b39878ff7c0a2be4c50",
+      "prompt_id": "goal-clarifier",
+      "schema_checksum": "c289714d0bdac9356f993285e4549b299f9b932e2214d436a4f1f97991d5ae44",
+      "skill_id": "goal-clarifier",
+      "version": "2.0.0",
+      "workflow_type": "PLAN_CREATION"
+    },
+    {
+      "prompt_checksum": "96cbae5c1e60a314b19322365ffd8d1fd58926a4ced0aae24315fdde5417c5cd",
+      "prompt_id": "goal-clarifier-followup",
+      "schema_checksum": "8649c6f45b373579b7cd566225a8dfce08ef795c459ef74e52559d23d97b01c5",
+      "skill_id": "goal-clarifier",
+      "version": "2.0.0",
+      "workflow_type": "PLAN_CREATION"
+    },
+    {
+      "prompt_checksum": "94e6dc7eacde28b00ec97d6c1d101d37f8d5199af354acd3d37365d9b97aafb6",
+      "prompt_id": "learner-fit-actionability-critic",
+      "schema_checksum": "c65cf105804da7809a185890895226d20ebdaa0f2f14823eab0c0f7c2a4473ba",
+      "skill_id": "learner-fit-actionability-critic",
+      "version": "2.0.0",
+      "workflow_type": "SCHEDULE_GENERATION"
+    },
+    {
+      "prompt_checksum": "9590b16c50cdf7608a91e4626d450a790df354478563089968b19aca338643c5",
+      "prompt_id": "learning-milestone-planner",
+      "schema_checksum": "889b6ee080e13995207f91064b3d2214d420c24b3c8b9c309db353d9e3668eda",
+      "skill_id": "learning-milestone-planner",
+      "version": "2.0.0",
+      "workflow_type": "PLAN_CREATION"
+    },
+    {
+      "prompt_checksum": "b96e2221c0ba0ad72113ac6c9baee52f65ee935e4c4e5263272490c1f7f08471",
+      "prompt_id": "learning-task-decomposer",
+      "schema_checksum": "055cc0720d3455240387975c3c33496da876e19a7ad305218611e71930806281",
+      "skill_id": "learning-task-decomposer",
+      "version": "2.0.0",
+      "workflow_type": "SCHEDULE_GENERATION"
+    },
+    {
+      "prompt_checksum": "4e36a47067a26337872dc1e273af9bd3bcc59244cfdc1d75b79618f02381f048",
+      "prompt_id": "pedagogical-quality-judge",
+      "schema_checksum": "e8bbe373a900180ae8ef415fb027cc30eed9bb9c1c137c85cbd6a1f399177e79",
+      "skill_id": "pedagogical-quality-judge",
+      "version": "2.0.0",
+      "workflow_type": "SCHEDULE_GENERATION"
+    },
+    {
+      "prompt_checksum": "ce08c6d94c47ee058df15b4dd7f2789f6be43a7b9b00d046ac2c767dc8052a10",
+      "prompt_id": "proposal-self-correction",
+      "schema_checksum": "055cc0720d3455240387975c3c33496da876e19a7ad305218611e71930806281",
+      "skill_id": "learning-task-decomposer",
+      "version": "2.0.0",
+      "workflow_type": "SCHEDULE_GENERATION"
+    },
+    {
+      "prompt_checksum": "ad66bc02ff6c93132a611ed6b3dc69366955252dc6785c7c7d2d5a49d16e11eb",
+      "prompt_id": "prove-mode-grader",
+      "schema_checksum": "353d1d5e25ef829b76cac7c8213a82cafe3165b329d9f3d249e3a2527860be56",
+      "skill_id": "prove-mode-grader",
+      "version": "2.0.0",
+      "workflow_type": "CONTINUOUS_LEARNING"
+    },
+    {
+      "prompt_checksum": "5b37543b167daa993dea405081cfe6b271221015fbccdb1e38122c4e20ff2593",
+      "prompt_id": "prove-question-generator",
+      "schema_checksum": "2cfc8133a29f07ded7c4d661d23eb599028e540737e7282e3c514218b4e2e829",
+      "skill_id": "prove-question-generator",
+      "version": "2.0.0",
+      "workflow_type": "CONTINUOUS_LEARNING"
+    },
+    {
+      "prompt_checksum": "5ba1e6abaca752867104d84aefca943201520f638e3495160235592be4e05a85",
+      "prompt_id": "quality-arbiter",
+      "schema_checksum": "c65cf105804da7809a185890895226d20ebdaa0f2f14823eab0c0f7c2a4473ba",
+      "skill_id": "quality-arbiter",
+      "version": "2.0.0",
+      "workflow_type": "SCHEDULE_GENERATION"
+    },
+    {
+      "prompt_checksum": "2e4f02d66bdffd80cef4da493d3593475ebc652f93f0732253d0c8cf5cb70c78",
+      "prompt_id": "weekly-review-advisor",
+      "schema_checksum": "cfac143ae72f9c6ed133190033e0ba767fca78487dbde3c9d5715320a948e5ce",
+      "skill_id": "weekly-review-advisor",
+      "version": "2.0.0",
+      "workflow_type": "WEEKLY_REVIEW"
+    }
+  ],
+  "schema_version": 1
+}

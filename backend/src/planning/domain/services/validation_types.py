@@ -1,7 +1,22 @@
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, time
-from typing import Any
+from typing import Any, Literal
+
+NonSplittableSource = Literal["EXPLICIT_DTO", "DETERMINISTIC_RULE", "DEFAULT_SPLITTABLE"]
+FeasibilityVerdict = Literal[
+    "VERIFIED_FEASIBLE",
+    "EXPLICIT_UNSCHEDULABLE",
+    "HEURISTIC_ALLOCATION_INCOMPLETE",
+]
+ScheduleCompletenessStatus = Literal["FULL", "PARTIAL", "UNDETERMINED", "INFEASIBLE"]
+UnschedulableReasonCode = Literal[
+    "TOTAL_EFFORT_EXCEEDS_HARD_CAPACITY",
+    "TASK_EXCEEDS_CONTINUOUS_SLOT",
+    "CRITICAL_PATH_EXCEEDS_WINDOW",
+    "CALENDAR_CONFLICT_SATURATION",
+    "HEURISTIC_ALLOCATION_INCOMPLETE",
+]
 
 AI_BLOCK_MIN_MINUTES: int = 30
 AI_BLOCK_MAX_MINUTES: int = 120
@@ -88,6 +103,84 @@ class AvailabilityConfigurationDTO:
     timezone: str = "UTC"
 
 
+@dataclass(frozen=True, slots=True)
+class UnscheduledTaskDiagnosticDTO:
+    """Structured diagnostic explaining why a task remained unplaced after Phase 1 scheduling."""
+
+    task_id: str
+    title: str
+    estimated_minutes: int
+    is_non_splittable: bool
+    non_splittable_source: NonSplittableSource
+    verdict: FeasibilityVerdict
+    reason_code: str
+    message: str
+    earliest_feasible_date: date | None = None
+    max_contiguous_window_minutes: int = 0
+    required_minutes: int = 0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "task_id": self.task_id,
+            "title": self.title,
+            "estimated_minutes": self.estimated_minutes,
+            "is_non_splittable": self.is_non_splittable,
+            "non_splittable_source": self.non_splittable_source,
+            "verdict": self.verdict,
+            "reason_code": self.reason_code,
+            "message": self.message,
+            "earliest_feasible_date": (
+                self.earliest_feasible_date.isoformat()
+                if self.earliest_feasible_date is not None
+                else None
+            ),
+            "max_contiguous_window_minutes": self.max_contiguous_window_minutes,
+            "required_minutes": self.required_minutes,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class NecessaryConditionCheckResult:
+    """Mathematical necessary-condition feasibility verification result (NC-1..NC-3)."""
+
+    verdict: FeasibilityVerdict
+    nc1_passed: bool
+    nc2_passed: bool
+    nc3_passed: bool
+    total_required_minutes: int
+    total_hard_packable_minutes: int
+    raw_capacity_without_existing_minutes: int = 0
+    max_contiguous_window_minutes: int = 0
+    violations: tuple[ConstraintViolationDTO, ...] = ()
+    unscheduled_diagnostics: tuple[UnscheduledTaskDiagnosticDTO, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "verdict": self.verdict,
+            "nc1_passed": self.nc1_passed,
+            "nc2_passed": self.nc2_passed,
+            "nc3_passed": self.nc3_passed,
+            "total_required_minutes": self.total_required_minutes,
+            "total_hard_packable_minutes": self.total_hard_packable_minutes,
+            "raw_capacity_without_existing_minutes": self.raw_capacity_without_existing_minutes,
+            "max_contiguous_window_minutes": self.max_contiguous_window_minutes,
+            "violations": [v.to_dict() for v in self.violations],
+            "unscheduled_diagnostics": [d.to_dict() for d in self.unscheduled_diagnostics],
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ScheduleAllocationResult:
+    """Phase 1 allocation output including feasibility verdict and per-task diagnostics."""
+
+    tasks: list[dict[str, Any]]
+    schedule_blocks: list[dict[str, Any]]
+    feasibility_verdict: FeasibilityVerdict
+    necessary_conditions: NecessaryConditionCheckResult
+    unscheduled_diagnostics: tuple[UnscheduledTaskDiagnosticDTO, ...] = ()
+    repairs_attempted: int = 0
+
+
 def normalize_weekday_name(day_val: int | str | date) -> str:
     """Convert date, 0..6 integer, or string day name into lowercase 'monday'..'sunday'."""
     if isinstance(day_val, date):
@@ -148,3 +241,68 @@ def parse_iso_date(val: object) -> date | None:
     if "T" in text:
         return datetime.fromisoformat(text.replace("Z", "+00:00")).date()
     return date.fromisoformat(text[:10])
+
+
+def safe_parse_iso_date(val: object) -> date | None:
+    """Parse ISO date or datetime safely, returning None on invalid strings."""
+    try:
+        return parse_iso_date(val)
+    except ValueError:
+        return None
+
+
+def safe_parse_iso_datetime(val: object) -> datetime | None:
+    """Parse ISO datetime safely, returning None on invalid strings."""
+    try:
+        return parse_iso_datetime(val)
+    except ValueError:
+        return None
+
+
+def classify_schedule_completeness(
+    *,
+    total_tasks: int,
+    scheduled_tasks_count: int,
+    unscheduled_tasks_count: int,
+    available_minutes: int,
+    schedulable_ratio: float,
+    feasibility_verdict: str | None = None,
+    has_schedule_blocks: bool = False,
+    all_scheduled_have_block_times: bool = False,
+    allow_partial_schedule: bool = True,
+) -> ScheduleCompletenessStatus:
+    """Classify deterministic schedule completeness into FULL, PARTIAL, UNDETERMINED, or INFEASIBLE."""
+    if total_tasks <= 0:
+        return "UNDETERMINED"
+    if available_minutes <= 0:
+        return "INFEASIBLE"
+    if feasibility_verdict == "UNDETERMINED":
+        return "UNDETERMINED"
+    if (
+        unscheduled_tasks_count > 0
+        and not feasibility_verdict
+        and not has_schedule_blocks
+        and not all_scheduled_have_block_times
+    ):
+        return "UNDETERMINED"
+    if scheduled_tasks_count == 0 and not feasibility_verdict and not has_schedule_blocks:
+        return "UNDETERMINED"
+    if scheduled_tasks_count == 0 or schedulable_ratio < 0.25:
+        return "INFEASIBLE"
+    if unscheduled_tasks_count > 0 and not allow_partial_schedule:
+        return "INFEASIBLE"
+    if feasibility_verdict == "EXPLICIT_UNSCHEDULABLE" and not allow_partial_schedule:
+        return "INFEASIBLE"
+    if unscheduled_tasks_count > 0:
+        return "PARTIAL"
+    if feasibility_verdict == "EXPLICIT_UNSCHEDULABLE":
+        return "INFEASIBLE"
+    if schedulable_ratio < 1.0 or scheduled_tasks_count < total_tasks:
+        return "UNDETERMINED"
+    if (
+        feasibility_verdict == "VERIFIED_FEASIBLE"
+        or all_scheduled_have_block_times
+        or has_schedule_blocks
+    ):
+        return "FULL"
+    return "UNDETERMINED"

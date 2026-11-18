@@ -7,8 +7,6 @@ from src.planning.domain.models.knowledge_concept import (
     PrerequisiteRelationType,
 )
 from src.planning.domain.models.milestone import (
-    AI_MILESTONE_MAX_COUNT,
-    AI_MILESTONE_MIN_COUNT,
     Milestone,
     MilestoneStatus,
     validate_milestone_sequence,
@@ -28,8 +26,6 @@ from src.planning.domain.models.schedule import (
 from src.planning.domain.models.schedule_block import ScheduleBlock
 
 __all__ = [
-    "AI_MILESTONE_MAX_COUNT",
-    "AI_MILESTONE_MIN_COUNT",
     "ConceptPrerequisiteEdge",
     "ConceptPrerequisiteGraph",
     "ConceptVerificationStatus",

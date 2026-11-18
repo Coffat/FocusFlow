@@ -1,0 +1,105 @@
+{
+  "schema_version": "1.0",
+  "seed": 20261117,
+  "source_file": "docs/experiments/exp_10_planner_tool_rounds_ab.json",
+  "blind_review_doc": "docs/reports/blind-review-hard-6-milestones.md",
+  "plans_count": 12,
+  "mapping": {
+    "M-01": {
+      "scenario_id": "H_E2E_04_LAKEHOUSE_SPARK_ICEBERG",
+      "arm": "arm_b_server_prefetch",
+      "milestones_count": 7,
+      "rounds_count": null,
+      "tool_calls_count": null,
+      "wall_ms": 17832.72
+    },
+    "M-02": {
+      "scenario_id": "H_E2E_06_MLOPS_LLMOPS_PROD",
+      "arm": "arm_a_tool_calling",
+      "milestones_count": 6,
+      "rounds_count": null,
+      "tool_calls_count": null,
+      "wall_ms": 30660.5
+    },
+    "M-03": {
+      "scenario_id": "H_E2E_03_K8S_SECURITY_TERRAFORM",
+      "arm": "arm_a_tool_calling",
+      "milestones_count": 4,
+      "rounds_count": null,
+      "tool_calls_count": null,
+      "wall_ms": 37630.49
+    },
+    "M-04": {
+      "scenario_id": "H_E2E_03_K8S_SECURITY_TERRAFORM",
+      "arm": "arm_b_server_prefetch",
+      "milestones_count": 4,
+      "rounds_count": null,
+      "tool_calls_count": null,
+      "wall_ms": 14768.93
+    },
+    "M-05": {
+      "scenario_id": "H_E2E_01_DISTRIBUTED_GO",
+      "arm": "arm_b_server_prefetch",
+      "milestones_count": 4,
+      "rounds_count": null,
+      "tool_calls_count": null,
+      "wall_ms": 15030.14
+    },
+    "M-06": {
+      "scenario_id": "H_E2E_04_LAKEHOUSE_SPARK_ICEBERG",
+      "arm": "arm_a_tool_calling",
+      "milestones_count": 7,
+      "rounds_count": null,
+      "tool_calls_count": null,
+      "wall_ms": 47072.06
+    },
+    "M-07": {
+      "scenario_id": "H_E2E_06_MLOPS_LLMOPS_PROD",
+      "arm": "arm_b_server_prefetch",
+      "milestones_count": 6,
+      "rounds_count": null,
+      "tool_calls_count": null,
+      "wall_ms": 17330.98
+    },
+    "M-08": {
+      "scenario_id": "H_E2E_05_FULLSTACK_NEXTJS_PG",
+      "arm": "arm_a_tool_calling",
+      "milestones_count": 4,
+      "rounds_count": null,
+      "tool_calls_count": null,
+      "wall_ms": 33150.25
+    },
+    "M-09": {
+      "scenario_id": "H_E2E_05_FULLSTACK_NEXTJS_PG",
+      "arm": "arm_b_server_prefetch",
+      "milestones_count": 4,
+      "rounds_count": null,
+      "tool_calls_count": null,
+      "wall_ms": 12648.0
+    },
+    "M-10": {
+      "scenario_id": "H_E2E_02_EMBEDDED_RUST_RTOS",
+      "arm": "arm_b_server_prefetch",
+      "milestones_count": 6,
+      "rounds_count": null,
+      "tool_calls_count": null,
+      "wall_ms": 17622.03
+    },
+    "M-11": {
+      "scenario_id": "H_E2E_01_DISTRIBUTED_GO",
+      "arm": "arm_a_tool_calling",
+      "milestones_count": 4,
+      "rounds_count": null,
+      "tool_calls_count": null,
+      "wall_ms": 34925.7
+    },
+    "M-12": {
+      "scenario_id": "H_E2E_02_EMBEDDED_RUST_RTOS",
+      "arm": "arm_a_tool_calling",
+      "milestones_count": 7,
+      "rounds_count": null,
+      "tool_calls_count": null,
+      "wall_ms": 51562.93
+    }
+  }
+}

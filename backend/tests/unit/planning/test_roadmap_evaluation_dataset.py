@@ -66,8 +66,8 @@ from src.planning.infrastructure.repositories.sqlalchemy_knowledge_base_reposito
 )
 from src.shared_kernel.application.llm_port import LLMProviderPort
 from src.shared_kernel.application.uow import AsyncUnitOfWork
-from src.shared_kernel.infrastructure.external_ai.litellm_adapter import MockLLMAdapter
 from src.shared_kernel.infrastructure.sse.job_store import InMemorySseJobStore
+from tests.helpers.llm_stubs import StubLLMAdapter
 
 
 class _EvalGoalRepo(GoalRepositoryPort):
@@ -424,12 +424,12 @@ async def test_10_scenario_ai_roadmap_evaluation_dataset_end_to_end() -> None:
         clar_uc = GenerateClarificationQuestionsUseCase(
             goal_repo=goal_repo,
             quota_facade=clar_quota,
-            llm_provider=MockLLMAdapter(),
+            llm_provider=StubLLMAdapter(),
             uow=uow,
         )
         known_dims = set(RoadmapContextBuilder.extract_known_diagnostic_dimensions(goal))
         q_resp = await clar_uc.execute(user_id=user_id, goal_id=goal_id, now=now)
-        assert 2 <= len(q_resp.questions) <= 3
+        assert 1 <= len(q_resp.questions) <= 3
         if all(q.diagnostic_dimension not in known_dims for q in q_resp.questions):
             clarification_non_redundant_passed += 1
 
@@ -497,7 +497,7 @@ async def test_10_scenario_ai_roadmap_evaluation_dataset_end_to_end() -> None:
             roadmap_repo=roadmap_repo,
             milestone_repo=milestone_repo,
             quota_facade=ms_quota,
-            llm_provider=MockLLMAdapter(),
+            llm_provider=StubLLMAdapter(),
             sse_job_store=sse_store,
             uow=uow,
             knowledge_base=kb_repo,
@@ -509,7 +509,9 @@ async def test_10_scenario_ai_roadmap_evaluation_dataset_end_to_end() -> None:
             reservation_id=ms_res_id,
             now=now,
         )
-        assert 3 <= len(milestones) <= 7
+        assert milestones
+        assert [m.sequence_order for m in milestones] == list(range(1, len(milestones) + 1))
+        assert all(m.learning_outcomes and m.completion_criteria for m in milestones)
         kb_grounding_passed += 1
 
         approve_uc = ApproveMilestonesUseCase(
@@ -585,7 +587,7 @@ async def test_10_scenario_ai_roadmap_evaluation_dataset_end_to_end() -> None:
         custom_llm: LLMProviderPort
         if sid == "S06_MACHINE_LEARNING_DISABLED_WEEKDAYS_ALLOCATION":
             # LLM returns unscheduled atomic tasks -> SpatioTemporalRuleEngine.allocate_tasks_to_availability schedules them avoiding disabled_weekdays
-            custom_llm = MockLLMAdapter(
+            custom_llm = StubLLMAdapter(
                 canned_responses=[
                     {
                         "tasks": [
@@ -651,7 +653,7 @@ async def test_10_scenario_ai_roadmap_evaluation_dataset_end_to_end() -> None:
                 ],
                 "dependencies": [],
             }
-            custom_llm = MockLLMAdapter(canned_responses=[bad_attempt, good_attempt])
+            custom_llm = StubLLMAdapter(canned_responses=[bad_attempt, good_attempt])
         elif sid == "S09_TIER3_PEDAGOGICAL_JUDGE_WARNING_DETECTION":
             # Inverted prerequisites (Advanced DP before Basic Tree) -> Tier 3 Judge emits warning
             inverted_proposal = {
@@ -679,9 +681,9 @@ async def test_10_scenario_ai_roadmap_evaluation_dataset_end_to_end() -> None:
                 ],
                 "dependencies": [],
             }
-            custom_llm = MockLLMAdapter(canned_responses=[inverted_proposal])
+            custom_llm = StubLLMAdapter(canned_responses=[inverted_proposal])
         else:
-            custom_llm = MockLLMAdapter()
+            custom_llm = StubLLMAdapter()
 
         prop_uc = ExecuteScheduleProposalGenerationUseCase(
             goal_repo=goal_repo,
@@ -735,7 +737,7 @@ async def test_10_scenario_ai_roadmap_evaluation_dataset_end_to_end() -> None:
             with pytest.raises(UnauthorizedToolCallError):
                 await judge_dispatcher.dispatch("search_learning_concepts", {"query": "jwt"})
 
-            class _TimeoutJudgeLLM(MockLLMAdapter):
+            class _TimeoutJudgeLLM(StubLLMAdapter):
                 async def generate_structured(
                     self, *args: Any, **kwargs: Any
                 ) -> tuple[dict[str, Any], int, int]:
@@ -765,3 +767,391 @@ async def test_10_scenario_ai_roadmap_evaluation_dataset_end_to_end() -> None:
     assert constraint_compliance_passed == 10
     assert single_quota_commit_passed == 10
     assert tier3_pedagogical_passed == 10
+
+
+@pytest.mark.asyncio
+async def test_task_decomposer_summary_step_records_thinking_tokens_and_commits_quota() -> None:
+    """TASK_DECOMPOSER summary WorkflowStepExecution stores thinking/prompt/output tokens and quota includes thinking."""
+    from src.shared_kernel.application.harness.models import WorkflowRun, WorkflowStepExecution
+    from src.shared_kernel.application.llm_port import LLMGenerationResult
+
+    user_id = uuid7()
+    goal_id = uuid7()
+    roadmap_id = uuid7()
+    now = datetime(2026, 11, 2, 9, 0, tzinfo=UTC)
+
+    goal_repo = _EvalGoalRepo()
+    roadmap_repo = _EvalRoadmapRepo()
+    milestone_repo = _EvalMilestoneRepo()
+    proposal_repo = _EvalProposalRepo()
+    uow = _EvalUoW()
+    sse_store = InMemorySseJobStore()
+
+    await goal_repo.save(
+        Goal(
+            id=goal_id,
+            user_id=user_id,
+            title="Học FastAPI & AsyncIO",
+            raw_description="Xây dựng API backend.",
+            prior_knowledge_level="BEGINNER",
+            target_date=date(2026, 12, 1),
+            status=GoalStatus.ACTIVE,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    await roadmap_repo.save(
+        Roadmap(
+            id=roadmap_id,
+            goal_id=goal_id,
+            user_id=user_id,
+            title="Lộ trình FastAPI",
+            description="Xây dựng API backend.",
+            start_date=date(2026, 11, 2),
+            target_date=date(2026, 12, 1),
+            status=RoadmapStatus.INITIALIZED,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    mid = uuid7()
+    m1 = Milestone(
+        id=mid,
+        roadmap_id=roadmap_id,
+        sequence_order=1,
+        title="Chặng 1: Nền tảng FastAPI",
+        learning_outcomes=("M1-O1: Tạo endpoint CRUD",),
+        completion_criteria="Chạy được test endpoint.",
+        estimated_effort_minutes=120,
+        required_concepts=("fastapi-routing",),
+        created_at=now,
+        updated_at=now,
+    )
+    m1.approve(now)
+    await milestone_repo.save_many(roadmap_id, [m1])
+
+    class _ThinkingStubLLM(StubLLMAdapter):
+        async def generate_structured(
+            self,
+            *,
+            system_prompt: str = "",
+            user_prompt: str = "",
+            response_schema: dict[str, Any] | type[Any] | None = None,
+            tools: Any = None,
+            tool_executor: Any = None,
+            max_tool_calls: int = 2,
+            thinking_level: str | None = None,
+            timeout_seconds: float | None = None,
+            tool_call_timeout_seconds: float | None = None,
+        ) -> LLMGenerationResult:
+            del (
+                system_prompt,
+                response_schema,
+                tools,
+                tool_executor,
+                max_tool_calls,
+                thinking_level,
+                timeout_seconds,
+                tool_call_timeout_seconds,
+            )
+            if "[INDEPENDENT_CRITIC:" in user_prompt:
+                return LLMGenerationResult(
+                    payload={"status": "PASS", "score": 90, "issues": []},
+                    prompt_tokens=30,
+                    output_tokens=15,
+                    thinking_tokens=3,
+                    model_id="gemini-3.8-flash-low",
+                )
+            if "[PROPOSAL_PAYLOAD]" in user_prompt or "pedagogical-quality-judge" in user_prompt:
+                return LLMGenerationResult(
+                    payload={"score": 88, "issues": []},
+                    prompt_tokens=25,
+                    output_tokens=12,
+                    thinking_tokens=2,
+                    model_id="gemini-3.8-flash-low",
+                )
+            return LLMGenerationResult(
+                payload={
+                    "tasks": [
+                        {
+                            "task_id": "T1",
+                            "milestone_id": str(mid),
+                            "title": "Đọc tài liệu FastAPI Router",
+                            "task_type": "THEORY",
+                            "estimated_minutes": 45,
+                            "covered_outcome_ids": ["M1-O1"],
+                            "concept_ids": ["fastapi-routing"],
+                            "learning_objective": "Hiểu router và Depends.",
+                            "completion_criteria": "Hoàn thành 1 router mẫu.",
+                        },
+                        {
+                            "task_id": "T2",
+                            "milestone_id": str(mid),
+                            "title": "Thực hành viết test FastAPI",
+                            "task_type": "PRACTICE",
+                            "estimated_minutes": 60,
+                            "covered_outcome_ids": ["M1-O1"],
+                            "concept_ids": ["fastapi-routing"],
+                            "learning_objective": "Viết pytest cho endpoint.",
+                            "completion_criteria": "Pass 3 test case.",
+                        },
+                    ],
+                    "dependencies": [
+                        {"predecessor_id": "T1", "successor_id": "T2", "is_mandatory": True}
+                    ],
+                },
+                prompt_tokens=100,
+                output_tokens=80,
+                thinking_tokens=20,
+                model_id="gemini-3.8-flash-medium",
+            )
+
+    class _TrackingQuota(_EvalQuotaFacade):
+        def __init__(self) -> None:
+            super().__init__()
+            self.commits: list[dict[str, Any]] = []
+
+        async def commit_reservation(
+            self,
+            reservation_id: UUID,
+            *,
+            prompt_tokens: int = 0,
+            completion_tokens: int = 0,
+            model_name: str = "gemini-3.8-flash",
+            now: datetime | None = None,
+        ) -> None:
+            self.commits.append(
+                {
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "model_name": model_name,
+                }
+            )
+            await super().commit_reservation(
+                reservation_id,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                model_name=model_name,
+                now=now,
+            )
+
+    class _WfRepo:
+        def __init__(self) -> None:
+            self.runs: list[WorkflowRun] = []
+            self.steps: list[WorkflowStepExecution] = []
+
+        async def add_run(self, run: WorkflowRun) -> None:
+            self.runs.append(run)
+
+        async def add_step(self, step: WorkflowStepExecution) -> None:
+            self.steps.append(step)
+
+    quota = _TrackingQuota()
+    wf_repo = _WfRepo()
+    job_id = uuid7()
+    res_id = uuid7()
+    await sse_store.create_job(
+        job_id=job_id,
+        user_id=user_id,
+        roadmap_id=roadmap_id,
+        reservation_id=res_id,
+        job_type="SCHEDULE_PROPOSAL_GEN",
+        operation=f"SCHEDULE_PROPOSAL_GEN:{roadmap_id}",
+    )
+    avail = AvailabilitySnapshotDTO(
+        user_id=user_id,
+        mode="MODE_A",
+        daily_cap_minutes=120,
+        weekly_capacity_minutes=840,
+        calendar_integration_mode="NONE",
+        allowed_window_start="07:00",
+        allowed_window_end="23:00",
+        min_session_minutes=30,
+    )
+    profile = LearnerProfileDTO(
+        user_id=user_id,
+        opt_session_minutes=60,
+        estimation_bias_beta=1.0,
+        peak_productivity_slots=("evening",),
+    )
+
+    uc = ExecuteScheduleProposalGenerationUseCase(
+        goal_repo=goal_repo,
+        roadmap_repo=roadmap_repo,
+        milestone_repo=milestone_repo,
+        proposal_repo=proposal_repo,
+        availability_query_port=_EvalAvailabilityPort(avail),
+        learner_profile_port=_EvalLearnerProfilePort(profile),
+        execution_sync_port=_EvalExecutionSyncPort(),
+        quota_facade=quota,
+        llm_provider=_ThinkingStubLLM(),
+        sse_job_store=sse_store,
+        uow=uow,
+        workflow_repo=wf_repo,  # type: ignore[arg-type]
+        enable_tier3_judge=True,
+    )
+    await uc.execute(
+        job_id=job_id,
+        user_id=user_id,
+        roadmap_id=roadmap_id,
+        reservation_id=res_id,
+        now=now,
+    )
+
+    # Decomposer (100p, 80o, 20t) + 2 Critics (30p, 15o, 3t each) + Judge (25p, 12o, 2t)
+    # Total: prompt=185, completion=122 (includes 28 thinking_tokens), thinking=28
+    assert len(quota.commits) == 1
+    assert quota.commits[0]["prompt_tokens"] == 185
+    assert quota.commits[0]["completion_tokens"] == 122
+
+    summary_steps = [
+        s
+        for s in wf_repo.steps
+        if s.step_name == "TASK_DECOMPOSER" and "proposal_id" in s.output_payload
+    ]
+    assert len(summary_steps) == 1
+    out = summary_steps[0].output_payload
+    assert out["prompt_tokens"] == 185
+    assert out["output_tokens"] == 122
+    assert out["completion_tokens"] == 122
+    assert out["thinking_tokens"] == 28
+
+
+@pytest.mark.asyncio
+async def test_milestone_generation_skips_critic_on_low_budget_without_crashing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When remaining SSE pipeline budget < ai_min_critic_remaining_seconds, Milestone Gen skips Critic with warning."""
+    from types import SimpleNamespace
+
+    import src.planning.application.use_cases.milestone_use_cases as ms_mod
+    from src.shared_kernel.application.llm_port import LLMGenerationResult
+
+    user_id = uuid7()
+    goal_id = uuid7()
+    roadmap_id = uuid7()
+    now = datetime(2026, 11, 2, 9, 0, tzinfo=UTC)
+
+    goal_repo = _EvalGoalRepo()
+    roadmap_repo = _EvalRoadmapRepo()
+    milestone_repo = _EvalMilestoneRepo()
+    uow = _EvalUoW()
+    quota = _EvalQuotaFacade()
+    sse_store = InMemorySseJobStore()
+
+    await goal_repo.save(
+        Goal(
+            id=goal_id,
+            user_id=user_id,
+            title="Học FastAPI Backend",
+            raw_description="Xây dựng API.",
+            prior_knowledge_level="BEGINNER",
+            target_date=date(2026, 12, 1),
+            status=GoalStatus.ACTIVE,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    await roadmap_repo.save(
+        Roadmap(
+            id=roadmap_id,
+            goal_id=goal_id,
+            user_id=user_id,
+            title="Lộ trình FastAPI",
+            description="Xây dựng API.",
+            start_date=date(2026, 11, 2),
+            target_date=date(2026, 12, 1),
+            status=RoadmapStatus.INITIALIZED,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+
+    class _SlowPlannerLLM(StubLLMAdapter):
+        async def generate_structured(
+            self,
+            *,
+            system_prompt: str = "",
+            user_prompt: str = "",
+            response_schema: dict[str, Any] | type[Any] | None = None,
+            tools: Any = None,
+            tool_executor: Any = None,
+            max_tool_calls: int = 2,
+            thinking_level: str | None = None,
+            timeout_seconds: float | None = None,
+            tool_call_timeout_seconds: float | None = None,
+        ) -> LLMGenerationResult:
+            del system_prompt, response_schema, tools, tool_executor, max_tool_calls
+            del thinking_level, timeout_seconds, tool_call_timeout_seconds
+            if "[INDEPENDENT_CRITIC:" in user_prompt:
+                raise AssertionError("Critic must be skipped when budget is below threshold!")
+            await asyncio.sleep(0.08)
+            return LLMGenerationResult(
+                payload={
+                    "milestones": [
+                        {
+                            "sequence_order": 1,
+                            "title": "Nền tảng FastAPI",
+                            "description": "Học Pydantic và Router",
+                            "learning_outcomes": ["M1-O1: Tạo CRUD API"],
+                            "completion_criteria": "Pass 3 unit test",
+                            "estimated_effort_minutes": 180,
+                            "required_concepts": [],
+                            "unverified_concepts": ["fastapi-routing"],
+                            "dependencies": [],
+                        }
+                    ],
+                    "scope_summary": "Bao phủ cốt lõi FastAPI.",
+                    "deferred_scope": [],
+                },
+                prompt_tokens=60,
+                output_tokens=50,
+                thinking_tokens=10,
+                model_id="gemini-3.8-flash-low",
+            )
+
+    fake_settings = SimpleNamespace(
+        ai_hard_timeout_seconds=55.0,
+        ai_sse_pipeline_timeout_seconds=0.15,
+        ai_milestone_planner_timeout_seconds=1.0,
+        ai_tool_call_timeout_seconds=1.0,
+        llm_tool_timeout_seconds=1.0,
+        ai_quality_critic_timeout_seconds=1.0,
+        ai_quality_arbiter_timeout_seconds=1.0,
+        ai_min_critic_remaining_seconds=0.5,
+        ai_min_retry_remaining_seconds=0.5,
+    )
+    monkeypatch.setattr(ms_mod, "get_settings", lambda: fake_settings)
+
+    job_id = uuid7()
+    res_id = await quota.reserve_slot(user_id, f"MILESTONE_GEN:{roadmap_id}")
+    await sse_store.create_job(
+        job_id=job_id,
+        user_id=user_id,
+        roadmap_id=roadmap_id,
+        reservation_id=res_id,
+        job_type="MILESTONE_GEN",
+        operation=f"MILESTONE_GEN:{roadmap_id}",
+    )
+
+    ms_uc = ExecuteMilestoneGenerationUseCase(
+        goal_repo=goal_repo,
+        roadmap_repo=roadmap_repo,
+        milestone_repo=milestone_repo,
+        quota_facade=quota,
+        llm_provider=_SlowPlannerLLM(),
+        sse_job_store=sse_store,
+        uow=uow,
+    )
+    milestones = await ms_uc.execute(
+        job_id=job_id,
+        user_id=user_id,
+        roadmap_id=roadmap_id,
+        reservation_id=res_id,
+        now=now,
+    )
+    assert len(milestones) == 1
+    saved_roadmap = await roadmap_repo.get_by_id_for_user(roadmap_id, user_id)
+    assert saved_roadmap is not None
+    assert saved_roadmap.planning_metadata["quality_reviews"][0]["status"] == "SKIPPED_LOW_BUDGET"
+    assert any("Critic" in w for w in saved_roadmap.planning_metadata["advisory_warnings"])

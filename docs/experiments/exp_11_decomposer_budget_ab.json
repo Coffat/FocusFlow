@@ -1,0 +1,1012 @@
+{
+  "schema_version": "1.0",
+  "experiment": "exp_11_decomposer_budget_ab",
+  "timestamp": "2026-11-17T04:06:20Z",
+  "gateway_base_url": "http://127.0.0.1:8045",
+  "part_1_g4_g5_120s": {
+    "decomposer_timeout_seconds": 120.0,
+    "thinking_level": "LOW",
+    "summary": {
+      "before_no_budget": {
+        "count": 2,
+        "attempt_1_pass_count": 1,
+        "attempt_1_pass_at_1_rate": 0.5,
+        "final_pass_count": 2,
+        "final_pass_rate": 1.0,
+        "retry_count": 1,
+        "retry_rate": 0.5,
+        "attempt_1_failure_rule_codes": {
+          "CAPACITY_EXCEEDED_BEFORE_TARGET_DATE": 1,
+          "SCHEDULE_BLOCK_EFFORT_MISMATCH": 3
+        },
+        "latency_ms": {
+          "count": 2,
+          "min": 67609.44,
+          "p50": 102779.58,
+          "p95": 134432.706,
+          "max": 137949.72,
+          "mean": 102779.58
+        },
+        "prompt_tokens_total": 24292,
+        "output_tokens_total": 29083,
+        "thinking_tokens_total": 0
+      },
+      "after_with_budget": {
+        "count": 2,
+        "attempt_1_pass_count": 1,
+        "attempt_1_pass_at_1_rate": 0.5,
+        "final_pass_count": 2,
+        "final_pass_rate": 1.0,
+        "retry_count": 1,
+        "retry_rate": 0.5,
+        "attempt_1_failure_rule_codes": {
+          "CAPACITY_EXCEEDED_BEFORE_TARGET_DATE": 1,
+          "SCHEDULE_BLOCK_EFFORT_MISMATCH": 3
+        },
+        "latency_ms": {
+          "count": 2,
+          "min": 69960.4,
+          "p50": 105146.53,
+          "p95": 136814.047,
+          "max": 140332.66,
+          "mean": 105146.53
+        },
+        "prompt_tokens_total": 23319,
+        "output_tokens_total": 29135,
+        "thinking_tokens_total": 0
+      }
+    },
+    "runs": [
+      {
+        "case_id": "G4_BEGINNER_IELTS_WRITING",
+        "arm": "before_no_budget",
+        "include_budget_context": false,
+        "attempt_1_passed": true,
+        "final_passed": true,
+        "retried": false,
+        "attempts_used": 1,
+        "attempt_1_failure_rule_codes": [],
+        "wall_ms": 67609.44,
+        "model_id": "gemini-3.8-flash-low",
+        "prompt_tokens": 9823,
+        "output_tokens": 9450,
+        "thinking_tokens": 0,
+        "tasks_count": 30,
+        "total_estimated_minutes": 2340,
+        "soft_warnings_count": 0,
+        "retry_history": [],
+        "gate_violations": [],
+        "error": null,
+        "precomputed_schedule_budget": null
+      },
+      {
+        "case_id": "G4_BEGINNER_IELTS_WRITING",
+        "arm": "after_with_budget",
+        "include_budget_context": true,
+        "attempt_1_passed": true,
+        "final_passed": true,
+        "retried": false,
+        "attempts_used": 1,
+        "attempt_1_failure_rule_codes": [],
+        "wall_ms": 69960.4,
+        "model_id": "gemini-3.8-flash-low",
+        "prompt_tokens": 9140,
+        "output_tokens": 9762,
+        "thinking_tokens": 0,
+        "tasks_count": 32,
+        "total_estimated_minutes": 2400,
+        "soft_warnings_count": 0,
+        "retry_history": [],
+        "gate_violations": [],
+        "error": null,
+        "precomputed_schedule_budget": {
+          "max_available_minutes_until_target_date": 3060,
+          "total_milestone_effort_minutes": 2460,
+          "recommended_minutes_per_task": 60,
+          "recommended_task_count_range": {
+            "min_tasks": 21,
+            "max_tasks": 51
+          },
+          "capacity_fit_ratio": 1.2439,
+          "fits_milestone_effort": true
+        }
+      },
+      {
+        "case_id": "G5_INTERMEDIATE_DATA_ENG_AIRFLOW_DBT",
+        "arm": "before_no_budget",
+        "include_budget_context": false,
+        "attempt_1_passed": false,
+        "final_passed": true,
+        "retried": true,
+        "attempts_used": 2,
+        "attempt_1_failure_rule_codes": [
+          "CAPACITY_EXCEEDED_BEFORE_TARGET_DATE",
+          "SCHEDULE_BLOCK_EFFORT_MISMATCH",
+          "SCHEDULE_BLOCK_EFFORT_MISMATCH",
+          "SCHEDULE_BLOCK_EFFORT_MISMATCH"
+        ],
+        "wall_ms": 137949.72,
+        "model_id": "gemini-3.8-flash-low",
+        "prompt_tokens": 14469,
+        "output_tokens": 19633,
+        "thinking_tokens": 0,
+        "tasks_count": 33,
+        "total_estimated_minutes": 2040,
+        "soft_warnings_count": 0,
+        "retry_history": [
+          {
+            "attempt": 1,
+            "violations": [
+              {
+                "task_index": 30,
+                "field": "estimated_minutes",
+                "rule_code": "CAPACITY_EXCEEDED_BEFORE_TARGET_DATE",
+                "expected_bound": "Tổng thời lượng <= 2250 phút rảnh trước 2026-12-22",
+                "actual_value": "Yêu cầu 2040 phút (dư 0 phút)",
+                "suggested_fix": "Gộp hoặc rút gọn các nhiệm vụ trong biên [30, 120] phút để tổng nỗ lực không vượt quá 2250 phút khả dụng trước 2026-12-22."
+              },
+              {
+                "task_index": null,
+                "field": "schedule_blocks",
+                "rule_code": "SCHEDULE_BLOCK_EFFORT_MISMATCH",
+                "expected_bound": "60 phút cho task T31",
+                "actual_value": "0 phút",
+                "suggested_fix": "Phân bổ đủ nỗ lực ước tính của nhiệm vụ."
+              },
+              {
+                "task_index": null,
+                "field": "schedule_blocks",
+                "rule_code": "SCHEDULE_BLOCK_EFFORT_MISMATCH",
+                "expected_bound": "60 phút cho task T32",
+                "actual_value": "0 phút",
+                "suggested_fix": "Phân bổ đủ nỗ lực ước tính của nhiệm vụ."
+              },
+              {
+                "task_index": null,
+                "field": "schedule_blocks",
+                "rule_code": "SCHEDULE_BLOCK_EFFORT_MISMATCH",
+                "expected_bound": "120 phút cho task T33",
+                "actual_value": "0 phút",
+                "suggested_fix": "Phân bổ đủ nỗ lực ước tính của nhiệm vụ."
+              }
+            ]
+          }
+        ],
+        "gate_violations": [],
+        "error": null,
+        "precomputed_schedule_budget": null
+      },
+      {
+        "case_id": "G5_INTERMEDIATE_DATA_ENG_AIRFLOW_DBT",
+        "arm": "after_with_budget",
+        "include_budget_context": true,
+        "attempt_1_passed": false,
+        "final_passed": true,
+        "retried": true,
+        "attempts_used": 2,
+        "attempt_1_failure_rule_codes": [
+          "CAPACITY_EXCEEDED_BEFORE_TARGET_DATE",
+          "SCHEDULE_BLOCK_EFFORT_MISMATCH",
+          "SCHEDULE_BLOCK_EFFORT_MISMATCH",
+          "SCHEDULE_BLOCK_EFFORT_MISMATCH"
+        ],
+        "wall_ms": 140332.66,
+        "model_id": "gemini-3.8-flash-low",
+        "prompt_tokens": 14179,
+        "output_tokens": 19373,
+        "thinking_tokens": 0,
+        "tasks_count": 30,
+        "total_estimated_minutes": 1800,
+        "soft_warnings_count": 0,
+        "retry_history": [
+          {
+            "attempt": 1,
+            "violations": [
+              {
+                "task_index": 30,
+                "field": "estimated_minutes",
+                "rule_code": "CAPACITY_EXCEEDED_BEFORE_TARGET_DATE",
+                "expected_bound": "Tổng thời lượng <= 2250 phút rảnh trước 2026-12-22",
+                "actual_value": "Yêu cầu 1980 phút (dư 0 phút)",
+                "suggested_fix": "Gộp hoặc rút gọn các nhiệm vụ trong biên [30, 120] phút để tổng nỗ lực không vượt quá 2250 phút khả dụng trước 2026-12-22."
+              },
+              {
+                "task_index": null,
+                "field": "schedule_blocks",
+                "rule_code": "SCHEDULE_BLOCK_EFFORT_MISMATCH",
+                "expected_bound": "60 phút cho task T31",
+                "actual_value": "0 phút",
+                "suggested_fix": "Phân bổ đủ nỗ lực ước tính của nhiệm vụ."
+              },
+              {
+                "task_index": null,
+                "field": "schedule_blocks",
+                "rule_code": "SCHEDULE_BLOCK_EFFORT_MISMATCH",
+                "expected_bound": "60 phút cho task T32",
+                "actual_value": "0 phút",
+                "suggested_fix": "Phân bổ đủ nỗ lực ước tính của nhiệm vụ."
+              },
+              {
+                "task_index": null,
+                "field": "schedule_blocks",
+                "rule_code": "SCHEDULE_BLOCK_EFFORT_MISMATCH",
+                "expected_bound": "60 phút cho task T33",
+                "actual_value": "0 phút",
+                "suggested_fix": "Phân bổ đủ nỗ lực ước tính của nhiệm vụ."
+              }
+            ]
+          }
+        ],
+        "gate_violations": [],
+        "error": null,
+        "precomputed_schedule_budget": {
+          "max_available_minutes_until_target_date": 2250,
+          "total_milestone_effort_minutes": 2040,
+          "recommended_minutes_per_task": 60,
+          "recommended_task_count_range": {
+            "min_tasks": 17,
+            "max_tasks": 37
+          },
+          "capacity_fit_ratio": 1.1029,
+          "fits_milestone_effort": true
+        }
+      }
+    ]
+  },
+  "part_2_hard_6_goals": {
+    "timeout_25s": {
+      "decomposer_timeout_seconds": 25.0,
+      "thinking_level": "LOW",
+      "summary": {
+        "before_no_budget": {
+          "count": 6,
+          "attempt_1_pass_count": 4,
+          "attempt_1_pass_at_1_rate": 0.6667,
+          "final_pass_count": 4,
+          "final_pass_rate": 0.6667,
+          "retry_count": 0,
+          "retry_rate": 0.0,
+          "attempt_1_failure_rule_codes": {
+            "TimeoutError": 2
+          },
+          "latency_ms": {
+            "count": 6,
+            "min": 21010.89,
+            "p50": 22820.025,
+            "p95": 25013.37,
+            "max": 25013.95,
+            "mean": 22952.887
+          },
+          "prompt_tokens_total": 9908,
+          "output_tokens_total": 11502,
+          "thinking_tokens_total": 0
+        },
+        "after_with_budget": {
+          "count": 6,
+          "attempt_1_pass_count": 6,
+          "attempt_1_pass_at_1_rate": 1.0,
+          "final_pass_count": 6,
+          "final_pass_rate": 1.0,
+          "retry_count": 0,
+          "retry_rate": 0.0,
+          "attempt_1_failure_rule_codes": {},
+          "latency_ms": {
+            "count": 6,
+            "min": 20416.8,
+            "p50": 21765.64,
+            "p95": 22514.028,
+            "max": 22536.86,
+            "mean": 21590.22
+          },
+          "prompt_tokens_total": 15492,
+          "output_tokens_total": 16918,
+          "thinking_tokens_total": 0
+        }
+      },
+      "runs": [
+        {
+          "case_id": "H_E2E_01_DISTRIBUTED_GO",
+          "arm": "before_no_budget",
+          "include_budget_context": false,
+          "attempt_1_passed": true,
+          "final_passed": true,
+          "retried": false,
+          "attempts_used": 1,
+          "attempt_1_failure_rule_codes": [],
+          "wall_ms": 21010.89,
+          "model_id": "gemini-3.8-flash-low",
+          "prompt_tokens": 2447,
+          "output_tokens": 2821,
+          "thinking_tokens": 0,
+          "tasks_count": 10,
+          "total_estimated_minutes": 600,
+          "soft_warnings_count": 0,
+          "retry_history": [],
+          "gate_violations": [],
+          "error": null,
+          "precomputed_schedule_budget": null
+        },
+        {
+          "case_id": "H_E2E_01_DISTRIBUTED_GO",
+          "arm": "after_with_budget",
+          "include_budget_context": true,
+          "attempt_1_passed": true,
+          "final_passed": true,
+          "retried": false,
+          "attempts_used": 1,
+          "attempt_1_failure_rule_codes": [],
+          "wall_ms": 22445.53,
+          "model_id": "gemini-3.8-flash-low",
+          "prompt_tokens": 2550,
+          "output_tokens": 2845,
+          "thinking_tokens": 0,
+          "tasks_count": 10,
+          "total_estimated_minutes": 600,
+          "soft_warnings_count": 0,
+          "retry_history": [],
+          "gate_violations": [],
+          "error": null,
+          "precomputed_schedule_budget": {
+            "max_available_minutes_until_target_date": 2280,
+            "total_milestone_effort_minutes": 600,
+            "recommended_minutes_per_task": 60,
+            "recommended_task_count_range": {
+              "min_tasks": 5,
+              "max_tasks": 38
+            },
+            "capacity_fit_ratio": 3.8,
+            "fits_milestone_effort": true
+          }
+        },
+        {
+          "case_id": "H_E2E_02_EMBEDDED_RUST_RTOS",
+          "arm": "before_no_budget",
+          "include_budget_context": false,
+          "attempt_1_passed": false,
+          "final_passed": false,
+          "retried": false,
+          "attempts_used": 1,
+          "attempt_1_failure_rule_codes": [
+            "TimeoutError"
+          ],
+          "wall_ms": 25011.63,
+          "model_id": null,
+          "prompt_tokens": 0,
+          "output_tokens": 0,
+          "thinking_tokens": 0,
+          "tasks_count": 0,
+          "total_estimated_minutes": 0,
+          "soft_warnings_count": 0,
+          "retry_history": [],
+          "gate_violations": [],
+          "error": "TimeoutError: ",
+          "precomputed_schedule_budget": null
+        },
+        {
+          "case_id": "H_E2E_02_EMBEDDED_RUST_RTOS",
+          "arm": "after_with_budget",
+          "include_budget_context": true,
+          "attempt_1_passed": true,
+          "final_passed": true,
+          "retried": false,
+          "attempts_used": 1,
+          "attempt_1_failure_rule_codes": [],
+          "wall_ms": 21741.3,
+          "model_id": "gemini-3.8-flash-low",
+          "prompt_tokens": 2600,
+          "output_tokens": 2794,
+          "thinking_tokens": 0,
+          "tasks_count": 10,
+          "total_estimated_minutes": 600,
+          "soft_warnings_count": 0,
+          "retry_history": [],
+          "gate_violations": [],
+          "error": null,
+          "precomputed_schedule_budget": {
+            "max_available_minutes_until_target_date": 3480,
+            "total_milestone_effort_minutes": 600,
+            "recommended_minutes_per_task": 60,
+            "recommended_task_count_range": {
+              "min_tasks": 5,
+              "max_tasks": 58
+            },
+            "capacity_fit_ratio": 5.8,
+            "fits_milestone_effort": true
+          }
+        },
+        {
+          "case_id": "H_E2E_03_K8S_SECURITY_TERRAFORM",
+          "arm": "before_no_budget",
+          "include_budget_context": false,
+          "attempt_1_passed": true,
+          "final_passed": true,
+          "retried": false,
+          "attempts_used": 1,
+          "attempt_1_failure_rule_codes": [],
+          "wall_ms": 21040.8,
+          "model_id": "gemini-3.8-flash-low",
+          "prompt_tokens": 2481,
+          "output_tokens": 2835,
+          "thinking_tokens": 0,
+          "tasks_count": 10,
+          "total_estimated_minutes": 600,
+          "soft_warnings_count": 0,
+          "retry_history": [],
+          "gate_violations": [],
+          "error": null,
+          "precomputed_schedule_budget": null
+        },
+        {
+          "case_id": "H_E2E_03_K8S_SECURITY_TERRAFORM",
+          "arm": "after_with_budget",
+          "include_budget_context": true,
+          "attempt_1_passed": true,
+          "final_passed": true,
+          "retried": false,
+          "attempts_used": 1,
+          "attempt_1_failure_rule_codes": [],
+          "wall_ms": 20610.85,
+          "model_id": "gemini-3.8-flash-low",
+          "prompt_tokens": 2584,
+          "output_tokens": 2693,
+          "thinking_tokens": 0,
+          "tasks_count": 10,
+          "total_estimated_minutes": 600,
+          "soft_warnings_count": 0,
+          "retry_history": [],
+          "gate_violations": [],
+          "error": null,
+          "precomputed_schedule_budget": {
+            "max_available_minutes_until_target_date": 2280,
+            "total_milestone_effort_minutes": 600,
+            "recommended_minutes_per_task": 60,
+            "recommended_task_count_range": {
+              "min_tasks": 5,
+              "max_tasks": 38
+            },
+            "capacity_fit_ratio": 3.8,
+            "fits_milestone_effort": true
+          }
+        },
+        {
+          "case_id": "H_E2E_04_LAKEHOUSE_SPARK_ICEBERG",
+          "arm": "before_no_budget",
+          "include_budget_context": false,
+          "attempt_1_passed": false,
+          "final_passed": false,
+          "retried": false,
+          "attempts_used": 1,
+          "attempt_1_failure_rule_codes": [
+            "TimeoutError"
+          ],
+          "wall_ms": 25013.95,
+          "model_id": null,
+          "prompt_tokens": 0,
+          "output_tokens": 0,
+          "thinking_tokens": 0,
+          "tasks_count": 0,
+          "total_estimated_minutes": 0,
+          "soft_warnings_count": 0,
+          "retry_history": [],
+          "gate_violations": [],
+          "error": "TimeoutError: ",
+          "precomputed_schedule_budget": null
+        },
+        {
+          "case_id": "H_E2E_04_LAKEHOUSE_SPARK_ICEBERG",
+          "arm": "after_with_budget",
+          "include_budget_context": true,
+          "attempt_1_passed": true,
+          "final_passed": true,
+          "retried": false,
+          "attempts_used": 1,
+          "attempt_1_failure_rule_codes": [],
+          "wall_ms": 22536.86,
+          "model_id": "gemini-3.8-flash-low",
+          "prompt_tokens": 2572,
+          "output_tokens": 2873,
+          "thinking_tokens": 0,
+          "tasks_count": 10,
+          "total_estimated_minutes": 600,
+          "soft_warnings_count": 0,
+          "retry_history": [],
+          "gate_violations": [],
+          "error": null,
+          "precomputed_schedule_budget": {
+            "max_available_minutes_until_target_date": 2940,
+            "total_milestone_effort_minutes": 600,
+            "recommended_minutes_per_task": 60,
+            "recommended_task_count_range": {
+              "min_tasks": 5,
+              "max_tasks": 49
+            },
+            "capacity_fit_ratio": 4.9,
+            "fits_milestone_effort": true
+          }
+        },
+        {
+          "case_id": "H_E2E_05_FULLSTACK_NEXTJS_PG",
+          "arm": "before_no_budget",
+          "include_budget_context": false,
+          "attempt_1_passed": true,
+          "final_passed": true,
+          "retried": false,
+          "attempts_used": 1,
+          "attempt_1_failure_rule_codes": [],
+          "wall_ms": 23561.17,
+          "model_id": "gemini-3.8-flash-low",
+          "prompt_tokens": 2493,
+          "output_tokens": 3039,
+          "thinking_tokens": 0,
+          "tasks_count": 10,
+          "total_estimated_minutes": 600,
+          "soft_warnings_count": 0,
+          "retry_history": [],
+          "gate_violations": [],
+          "error": null,
+          "precomputed_schedule_budget": null
+        },
+        {
+          "case_id": "H_E2E_05_FULLSTACK_NEXTJS_PG",
+          "arm": "after_with_budget",
+          "include_budget_context": true,
+          "attempt_1_passed": true,
+          "final_passed": true,
+          "retried": false,
+          "attempts_used": 1,
+          "attempt_1_failure_rule_codes": [],
+          "wall_ms": 20416.8,
+          "model_id": "gemini-3.8-flash-low",
+          "prompt_tokens": 2596,
+          "output_tokens": 2876,
+          "thinking_tokens": 0,
+          "tasks_count": 10,
+          "total_estimated_minutes": 600,
+          "soft_warnings_count": 0,
+          "retry_history": [],
+          "gate_violations": [],
+          "error": null,
+          "precomputed_schedule_budget": {
+            "max_available_minutes_until_target_date": 2280,
+            "total_milestone_effort_minutes": 600,
+            "recommended_minutes_per_task": 60,
+            "recommended_task_count_range": {
+              "min_tasks": 5,
+              "max_tasks": 38
+            },
+            "capacity_fit_ratio": 3.8,
+            "fits_milestone_effort": true
+          }
+        },
+        {
+          "case_id": "H_E2E_06_MLOPS_LLMOPS_PROD",
+          "arm": "before_no_budget",
+          "include_budget_context": false,
+          "attempt_1_passed": true,
+          "final_passed": true,
+          "retried": false,
+          "attempts_used": 1,
+          "attempt_1_failure_rule_codes": [],
+          "wall_ms": 22078.88,
+          "model_id": "gemini-3.8-flash-low",
+          "prompt_tokens": 2487,
+          "output_tokens": 2807,
+          "thinking_tokens": 0,
+          "tasks_count": 10,
+          "total_estimated_minutes": 600,
+          "soft_warnings_count": 0,
+          "retry_history": [],
+          "gate_violations": [],
+          "error": null,
+          "precomputed_schedule_budget": null
+        },
+        {
+          "case_id": "H_E2E_06_MLOPS_LLMOPS_PROD",
+          "arm": "after_with_budget",
+          "include_budget_context": true,
+          "attempt_1_passed": true,
+          "final_passed": true,
+          "retried": false,
+          "attempts_used": 1,
+          "attempt_1_failure_rule_codes": [],
+          "wall_ms": 21789.98,
+          "model_id": "gemini-3.8-flash-low",
+          "prompt_tokens": 2590,
+          "output_tokens": 2837,
+          "thinking_tokens": 0,
+          "tasks_count": 10,
+          "total_estimated_minutes": 600,
+          "soft_warnings_count": 0,
+          "retry_history": [],
+          "gate_violations": [],
+          "error": null,
+          "precomputed_schedule_budget": {
+            "max_available_minutes_until_target_date": 3480,
+            "total_milestone_effort_minutes": 600,
+            "recommended_minutes_per_task": 60,
+            "recommended_task_count_range": {
+              "min_tasks": 5,
+              "max_tasks": 58
+            },
+            "capacity_fit_ratio": 5.8,
+            "fits_milestone_effort": true
+          }
+        }
+      ]
+    },
+    "timeout_40s": {
+      "decomposer_timeout_seconds": 40.0,
+      "thinking_level": "LOW",
+      "summary": {
+        "before_no_budget": {
+          "count": 6,
+          "attempt_1_pass_count": 6,
+          "attempt_1_pass_at_1_rate": 1.0,
+          "final_pass_count": 6,
+          "final_pass_rate": 1.0,
+          "retry_count": 0,
+          "retry_rate": 0.0,
+          "attempt_1_failure_rule_codes": {},
+          "latency_ms": {
+            "count": 6,
+            "min": 22277.5,
+            "p50": 23504.19,
+            "p95": 24558.685,
+            "max": 24673.01,
+            "mean": 23522.488
+          },
+          "prompt_tokens_total": 14874,
+          "output_tokens_total": 18199,
+          "thinking_tokens_total": 0
+        },
+        "after_with_budget": {
+          "count": 6,
+          "attempt_1_pass_count": 6,
+          "attempt_1_pass_at_1_rate": 1.0,
+          "final_pass_count": 6,
+          "final_pass_rate": 1.0,
+          "retry_count": 0,
+          "retry_rate": 0.0,
+          "attempt_1_failure_rule_codes": {},
+          "latency_ms": {
+            "count": 6,
+            "min": 19586.82,
+            "p50": 22143.53,
+            "p95": 23441.77,
+            "max": 23587.5,
+            "mean": 22021.078
+          },
+          "prompt_tokens_total": 15492,
+          "output_tokens_total": 17470,
+          "thinking_tokens_total": 0
+        }
+      },
+      "runs": [
+        {
+          "case_id": "H_E2E_01_DISTRIBUTED_GO",
+          "arm": "before_no_budget",
+          "include_budget_context": false,
+          "attempt_1_passed": true,
+          "final_passed": true,
+          "retried": false,
+          "attempts_used": 1,
+          "attempt_1_failure_rule_codes": [],
+          "wall_ms": 23177.18,
+          "model_id": "gemini-3.8-flash-low",
+          "prompt_tokens": 2447,
+          "output_tokens": 2897,
+          "thinking_tokens": 0,
+          "tasks_count": 10,
+          "total_estimated_minutes": 600,
+          "soft_warnings_count": 0,
+          "retry_history": [],
+          "gate_violations": [],
+          "error": null,
+          "precomputed_schedule_budget": null
+        },
+        {
+          "case_id": "H_E2E_01_DISTRIBUTED_GO",
+          "arm": "after_with_budget",
+          "include_budget_context": true,
+          "attempt_1_passed": true,
+          "final_passed": true,
+          "retried": false,
+          "attempts_used": 1,
+          "attempt_1_failure_rule_codes": [],
+          "wall_ms": 23004.58,
+          "model_id": "gemini-3.8-flash-low",
+          "prompt_tokens": 2550,
+          "output_tokens": 2819,
+          "thinking_tokens": 0,
+          "tasks_count": 10,
+          "total_estimated_minutes": 600,
+          "soft_warnings_count": 0,
+          "retry_history": [],
+          "gate_violations": [],
+          "error": null,
+          "precomputed_schedule_budget": {
+            "max_available_minutes_until_target_date": 2280,
+            "total_milestone_effort_minutes": 600,
+            "recommended_minutes_per_task": 60,
+            "recommended_task_count_range": {
+              "min_tasks": 5,
+              "max_tasks": 38
+            },
+            "capacity_fit_ratio": 3.8,
+            "fits_milestone_effort": true
+          }
+        },
+        {
+          "case_id": "H_E2E_02_EMBEDDED_RUST_RTOS",
+          "arm": "before_no_budget",
+          "include_budget_context": false,
+          "attempt_1_passed": true,
+          "final_passed": true,
+          "retried": false,
+          "attempts_used": 1,
+          "attempt_1_failure_rule_codes": [],
+          "wall_ms": 24215.71,
+          "model_id": "gemini-3.8-flash-low",
+          "prompt_tokens": 2497,
+          "output_tokens": 2933,
+          "thinking_tokens": 0,
+          "tasks_count": 10,
+          "total_estimated_minutes": 600,
+          "soft_warnings_count": 0,
+          "retry_history": [],
+          "gate_violations": [],
+          "error": null,
+          "precomputed_schedule_budget": null
+        },
+        {
+          "case_id": "H_E2E_02_EMBEDDED_RUST_RTOS",
+          "arm": "after_with_budget",
+          "include_budget_context": true,
+          "attempt_1_passed": true,
+          "final_passed": true,
+          "retried": false,
+          "attempts_used": 1,
+          "attempt_1_failure_rule_codes": [],
+          "wall_ms": 23587.5,
+          "model_id": "gemini-3.8-flash-low",
+          "prompt_tokens": 2600,
+          "output_tokens": 2905,
+          "thinking_tokens": 0,
+          "tasks_count": 10,
+          "total_estimated_minutes": 600,
+          "soft_warnings_count": 0,
+          "retry_history": [],
+          "gate_violations": [],
+          "error": null,
+          "precomputed_schedule_budget": {
+            "max_available_minutes_until_target_date": 3480,
+            "total_milestone_effort_minutes": 600,
+            "recommended_minutes_per_task": 60,
+            "recommended_task_count_range": {
+              "min_tasks": 5,
+              "max_tasks": 58
+            },
+            "capacity_fit_ratio": 5.8,
+            "fits_milestone_effort": true
+          }
+        },
+        {
+          "case_id": "H_E2E_03_K8S_SECURITY_TERRAFORM",
+          "arm": "before_no_budget",
+          "include_budget_context": false,
+          "attempt_1_passed": true,
+          "final_passed": true,
+          "retried": false,
+          "attempts_used": 1,
+          "attempt_1_failure_rule_codes": [],
+          "wall_ms": 22960.33,
+          "model_id": "gemini-3.8-flash-low",
+          "prompt_tokens": 2481,
+          "output_tokens": 3116,
+          "thinking_tokens": 0,
+          "tasks_count": 10,
+          "total_estimated_minutes": 600,
+          "soft_warnings_count": 0,
+          "retry_history": [],
+          "gate_violations": [],
+          "error": null,
+          "precomputed_schedule_budget": null
+        },
+        {
+          "case_id": "H_E2E_03_K8S_SECURITY_TERRAFORM",
+          "arm": "after_with_budget",
+          "include_budget_context": true,
+          "attempt_1_passed": true,
+          "final_passed": true,
+          "retried": false,
+          "attempts_used": 1,
+          "attempt_1_failure_rule_codes": [],
+          "wall_ms": 22088.94,
+          "model_id": "gemini-3.8-flash-low",
+          "prompt_tokens": 2584,
+          "output_tokens": 2849,
+          "thinking_tokens": 0,
+          "tasks_count": 10,
+          "total_estimated_minutes": 600,
+          "soft_warnings_count": 0,
+          "retry_history": [],
+          "gate_violations": [],
+          "error": null,
+          "precomputed_schedule_budget": {
+            "max_available_minutes_until_target_date": 2280,
+            "total_milestone_effort_minutes": 600,
+            "recommended_minutes_per_task": 60,
+            "recommended_task_count_range": {
+              "min_tasks": 5,
+              "max_tasks": 38
+            },
+            "capacity_fit_ratio": 3.8,
+            "fits_milestone_effort": true
+          }
+        },
+        {
+          "case_id": "H_E2E_04_LAKEHOUSE_SPARK_ICEBERG",
+          "arm": "before_no_budget",
+          "include_budget_context": false,
+          "attempt_1_passed": true,
+          "final_passed": true,
+          "retried": false,
+          "attempts_used": 1,
+          "attempt_1_failure_rule_codes": [],
+          "wall_ms": 23831.2,
+          "model_id": "gemini-3.8-flash-low",
+          "prompt_tokens": 2469,
+          "output_tokens": 3160,
+          "thinking_tokens": 0,
+          "tasks_count": 10,
+          "total_estimated_minutes": 600,
+          "soft_warnings_count": 0,
+          "retry_history": [],
+          "gate_violations": [],
+          "error": null,
+          "precomputed_schedule_budget": null
+        },
+        {
+          "case_id": "H_E2E_04_LAKEHOUSE_SPARK_ICEBERG",
+          "arm": "after_with_budget",
+          "include_budget_context": true,
+          "attempt_1_passed": true,
+          "final_passed": true,
+          "retried": false,
+          "attempts_used": 1,
+          "attempt_1_failure_rule_codes": [],
+          "wall_ms": 19586.82,
+          "model_id": "gemini-3.8-flash-low",
+          "prompt_tokens": 2572,
+          "output_tokens": 2927,
+          "thinking_tokens": 0,
+          "tasks_count": 10,
+          "total_estimated_minutes": 600,
+          "soft_warnings_count": 0,
+          "retry_history": [],
+          "gate_violations": [],
+          "error": null,
+          "precomputed_schedule_budget": {
+            "max_available_minutes_until_target_date": 2940,
+            "total_milestone_effort_minutes": 600,
+            "recommended_minutes_per_task": 60,
+            "recommended_task_count_range": {
+              "min_tasks": 5,
+              "max_tasks": 49
+            },
+            "capacity_fit_ratio": 4.9,
+            "fits_milestone_effort": true
+          }
+        },
+        {
+          "case_id": "H_E2E_05_FULLSTACK_NEXTJS_PG",
+          "arm": "before_no_budget",
+          "include_budget_context": false,
+          "attempt_1_passed": true,
+          "final_passed": true,
+          "retried": false,
+          "attempts_used": 1,
+          "attempt_1_failure_rule_codes": [],
+          "wall_ms": 24673.01,
+          "model_id": "gemini-3.8-flash-low",
+          "prompt_tokens": 2493,
+          "output_tokens": 3055,
+          "thinking_tokens": 0,
+          "tasks_count": 10,
+          "total_estimated_minutes": 600,
+          "soft_warnings_count": 0,
+          "retry_history": [],
+          "gate_violations": [],
+          "error": null,
+          "precomputed_schedule_budget": null
+        },
+        {
+          "case_id": "H_E2E_05_FULLSTACK_NEXTJS_PG",
+          "arm": "after_with_budget",
+          "include_budget_context": true,
+          "attempt_1_passed": true,
+          "final_passed": true,
+          "retried": false,
+          "attempts_used": 1,
+          "attempt_1_failure_rule_codes": [],
+          "wall_ms": 22198.12,
+          "model_id": "gemini-3.8-flash-low",
+          "prompt_tokens": 2596,
+          "output_tokens": 2959,
+          "thinking_tokens": 0,
+          "tasks_count": 10,
+          "total_estimated_minutes": 600,
+          "soft_warnings_count": 0,
+          "retry_history": [],
+          "gate_violations": [],
+          "error": null,
+          "precomputed_schedule_budget": {
+            "max_available_minutes_until_target_date": 2280,
+            "total_milestone_effort_minutes": 600,
+            "recommended_minutes_per_task": 60,
+            "recommended_task_count_range": {
+              "min_tasks": 5,
+              "max_tasks": 38
+            },
+            "capacity_fit_ratio": 3.8,
+            "fits_milestone_effort": true
+          }
+        },
+        {
+          "case_id": "H_E2E_06_MLOPS_LLMOPS_PROD",
+          "arm": "before_no_budget",
+          "include_budget_context": false,
+          "attempt_1_passed": true,
+          "final_passed": true,
+          "retried": false,
+          "attempts_used": 1,
+          "attempt_1_failure_rule_codes": [],
+          "wall_ms": 22277.5,
+          "model_id": "gemini-3.8-flash-low",
+          "prompt_tokens": 2487,
+          "output_tokens": 3038,
+          "thinking_tokens": 0,
+          "tasks_count": 10,
+          "total_estimated_minutes": 600,
+          "soft_warnings_count": 0,
+          "retry_history": [],
+          "gate_violations": [],
+          "error": null,
+          "precomputed_schedule_budget": null
+        },
+        {
+          "case_id": "H_E2E_06_MLOPS_LLMOPS_PROD",
+          "arm": "after_with_budget",
+          "include_budget_context": true,
+          "attempt_1_passed": true,
+          "final_passed": true,
+          "retried": false,
+          "attempts_used": 1,
+          "attempt_1_failure_rule_codes": [],
+          "wall_ms": 21660.51,
+          "model_id": "gemini-3.8-flash-low",
+          "prompt_tokens": 2590,
+          "output_tokens": 3011,
+          "thinking_tokens": 0,
+          "tasks_count": 10,
+          "total_estimated_minutes": 600,
+          "soft_warnings_count": 0,
+          "retry_history": [],
+          "gate_violations": [],
+          "error": null,
+          "precomputed_schedule_budget": {
+            "max_available_minutes_until_target_date": 3480,
+            "total_milestone_effort_minutes": 600,
+            "recommended_minutes_per_task": 60,
+            "recommended_task_count_range": {
+              "min_tasks": 5,
+              "max_tasks": 58
+            },
+            "capacity_fit_ratio": 5.8,
+            "fits_milestone_effort": true
+          }
+        }
+      ]
+    }
+  }
+}

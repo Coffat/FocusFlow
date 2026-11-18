@@ -1,6 +1,8 @@
-from datetime import date, timedelta
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from src.account.public_api import UserQueryPort
 from src.evaluation.application.dtos.dashboard_dtos import (
     DashboardActiveRoadmapDTO,
     DashboardAdaptationStatusDTO,
@@ -18,6 +20,16 @@ from src.execution.public_api import ExecutionDashboardQueryPort
 from src.planning.public_api import PlanningDashboardQueryPort
 
 
+def _resolve_zoneinfo(user_timezone: str | None) -> ZoneInfo:
+    raw = (user_timezone or "").strip()
+    if not raw:
+        return ZoneInfo("UTC")
+    try:
+        return ZoneInfo(raw)
+    except ZoneInfoNotFoundError:
+        return ZoneInfo("UTC")
+
+
 class GetDashboardSummaryUseCase:
     """Use case cung cấp dữ liệu tổng quan bảng điều khiển (User Dashboard) từ dữ liệu thực tế."""
 
@@ -26,13 +38,33 @@ class GetDashboardSummaryUseCase:
         planning_port: PlanningDashboardQueryPort,
         execution_port: ExecutionDashboardQueryPort,
         intelligence_repo: EvaluationIntelligenceRepositoryPort,
+        user_query_port: UserQueryPort | None = None,
     ) -> None:
         self._planning_port = planning_port
         self._execution_port = execution_port
         self._intelligence_repo = intelligence_repo
+        self._user_query_port = user_query_port
 
-    async def execute(self, user_id: UUID) -> DashboardSummaryResponseDTO:
-        today = date.today()
+    async def execute(
+        self,
+        user_id: UUID,
+        *,
+        now: datetime | None = None,
+        user_timezone: str | None = None,
+    ) -> DashboardSummaryResponseDTO:
+        effective_tz_name = (user_timezone or "").strip()
+        if not effective_tz_name and self._user_query_port is not None:
+            user_snap = await self._user_query_port.get_user_by_id(user_id)
+            if user_snap is not None and user_snap.timezone:
+                effective_tz_name = user_snap.timezone
+        if not effective_tz_name:
+            effective_tz_name = "UTC"
+        user_tz = _resolve_zoneinfo(effective_tz_name)
+        effective_now = now or datetime.now(UTC)
+        if effective_now.tzinfo is None:
+            effective_now = effective_now.replace(tzinfo=UTC)
+
+        today = effective_now.astimezone(user_tz).date()
         start_of_week = today - timedelta(days=today.weekday())
         end_of_week = start_of_week + timedelta(days=6)
 
@@ -40,14 +72,30 @@ class GetDashboardSummaryUseCase:
         active_roadmaps_raw = await self._planning_port.get_active_roadmaps_for_user(user_id)
         target_hours = await self._planning_port.get_monthly_target_hours(user_id)
         schedule_blocks_raw = await self._planning_port.get_week_schedule_blocks(
-            user_id, start_of_week, end_of_week
+            user_id,
+            start_of_week,
+            end_of_week,
+            user_timezone=effective_tz_name,
         )
 
-        today_queue_raw = await self._execution_port.get_today_queue(user_id, today)
-        study_distribution_raw = await self._execution_port.get_7day_study_distribution(
-            user_id, today
+        today_queue_raw = await self._execution_port.get_today_queue(
+            user_id,
+            today,
+            user_timezone=effective_tz_name,
+            now=effective_now,
         )
-        kpi_stats = await self._execution_port.get_execution_kpis(user_id, today)
+        study_distribution_raw = await self._execution_port.get_7day_study_distribution(
+            user_id,
+            today,
+            user_timezone=effective_tz_name,
+            now=effective_now,
+        )
+        kpi_stats = await self._execution_port.get_execution_kpis(
+            user_id,
+            today,
+            user_timezone=effective_tz_name,
+            now=effective_now,
+        )
 
         latest_weekly_review = await self._intelligence_repo.latest_weekly_review(user_id)
 

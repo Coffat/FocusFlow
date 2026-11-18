@@ -1,13 +1,11 @@
 <app-wizard-dialog-shell
   [open]="open()"
   [activeStep]="currentStep()"
-  title="WIZARD KHỞI TẠO LỘ TRÌNH HỌC TẬP"
+  title="Tạo lộ trình học tập"
   [maxWidthClass]="shellMaxWidthClass()"
   [errorMessage]="shellErrorMessage()"
-  [sseProgress]="shellSseProgress()"
   (stepChange)="onStepChange($event)"
   (closeDialog)="onClose()"
-  (saveDraftAndExit)="onSaveDraftAndExit()"
 >
   @switch (currentStep()) {
     @case (1) {
@@ -31,6 +29,7 @@
         (generateQuestions)="onGenerateQuestions()"
         (skipInterview)="onSkipInterview()"
         (submitAnswers)="onSubmitInterviewAnswers($event)"
+        (readyToPlan)="onClarificationReady()"
       />
     }
     @case (3) {
@@ -40,12 +39,16 @@
         (generateMilestones)="onGenerateMilestones($event)"
         (saveMilestones)="onSaveMilestones($event)"
         (approveMilestones)="onApproveMilestones()"
+        (approveFitCapacity)="onApproveFitCapacity($event)"
+        (regenerateFitCapacity)="onRegenerateRoadmapFitCapacity()"
       />
     }
     @case (4) {
       <app-schedule-proposal-dialog
         (backToStep3)="onStepChange(3)"
         (generateProposal)="onGenerateProposal()"
+        (regenerateRoadmapFitCapacity)="onRegenerateRoadmapFitCapacity()"
+        (manualScheduleFallback)="onManualScheduleFallback()"
         (updateProposal)="onUpdateProposal()"
         (applyProposal)="onApplyProposal($event)"
       />

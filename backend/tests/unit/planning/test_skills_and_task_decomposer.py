@@ -17,7 +17,6 @@ from src.planning.application.services.roadmap_skills import (
     build_milestone_planner_prompt,
     build_pedagogical_judge_prompt,
     build_task_decomposer_prompt,
-    build_task_repair_prompt,
     get_roadmap_skill,
 )
 from src.planning.application.services.validation_gate import (
@@ -37,7 +36,7 @@ from src.planning.domain.services.validation_types import (
 from src.planning.infrastructure.repositories.sqlalchemy_knowledge_base_repository import (
     VERIFIED_SEED_CONCEPTS,
 )
-from src.shared_kernel.infrastructure.external_ai.litellm_adapter import MockLLMAdapter
+from tests.helpers.llm_stubs import StubLLMAdapter
 
 
 def test_four_versioned_skills_and_prompt_builders_contract() -> None:
@@ -47,9 +46,15 @@ def test_four_versioned_skills_and_prompt_builders_contract() -> None:
         "learning-task-decomposer",
         "pedagogical-quality-judge",
     }
+    expected_levels = {
+        "goal-clarifier": "LOW",
+        "learning-milestone-planner": "LOW",
+        "learning-task-decomposer": "LOW",
+        "pedagogical-quality-judge": "LOW",
+    }
     for skill in ROADMAP_SKILL_REGISTRY.values():
-        assert skill.version == "1.0.0"
-        assert skill.thinking_level == "MEDIUM"
+        assert skill.version == "2.0.0"
+        assert skill.thinking_level == expected_levels[skill.skill_id]
         assert get_roadmap_skill(skill.skill_id) == skill
 
     assert GOAL_CLARIFIER_SKILL.allowed_tools == ()
@@ -69,9 +74,8 @@ def test_four_versioned_skills_and_prompt_builders_contract() -> None:
     p2 = build_milestone_planner_prompt("ctx-2", goal_title="Học FastAPI")
     p3 = build_task_decomposer_prompt("ctx-3")
     p4 = build_pedagogical_judge_prompt({"tasks": []}, context_block="ctx-4")
-    p5 = build_task_repair_prompt(
+    p5 = ProposalValidationGateOrchestrator.build_self_correction_prompt(
         p3,
-        failed_attempt_number=1,
         violations=[
             ConstraintViolationDTO(
                 task_index=0,
@@ -82,14 +86,16 @@ def test_four_versioned_skills_and_prompt_builders_contract() -> None:
                 suggested_fix="Giảm thời lượng xuống <= 120 phút.",
             )
         ],
+        attempt_number=1,
     )
 
-    assert "[SKILL: goal-clarifier@v1.0.0]" in p1
-    assert "[SKILL: learning-milestone-planner@v1.0.0]" in p2
-    assert "[SKILL: learning-task-decomposer@v1.0.0]" in p3
-    assert "[SKILL: pedagogical-quality-judge@v1.0.0]" in p4
+    assert "[SKILL: goal-clarifier@v2.0.0]" in p1
+    assert "[SKILL: learning-milestone-planner@v2.0.0]" in p2
+    assert "[SKILL: learning-task-decomposer@v2.0.0]" in p3
+    assert "[SKILL: pedagogical-quality-judge@v2.0.0]" in p4
     assert "[SELF-CORRECTION RETRY ATTEMPT #1]" in p5
     assert "AI_BLOCK_DURATION_BOUNDS" in p5
+    assert "sinh lại TOÀN BỘ danh sách hợp lệ" in p5
 
 
 def test_roadmap_context_builder_separates_four_blocks_and_sanitizes_injection() -> None:
@@ -144,6 +150,121 @@ def test_roadmap_context_builder_separates_four_blocks_and_sanitizes_injection()
     assert "<script>" not in ctx
     assert "IGNORE ALL PREVIOUS INSTRUCTIONS" not in ctx
     assert "py-syntax-variables" in ctx
+    assert "precomputed_schedule_budget:" in ctx
+
+
+def test_roadmap_context_builder_precomputed_schedule_budget_and_edge_cases() -> None:
+    import json
+    from types import SimpleNamespace
+
+    now = datetime(2026, 11, 2, 10, 0, tzinfo=UTC)
+    user_id = uuid7()
+    goal = Goal(
+        id=uuid7(),
+        user_id=user_id,
+        title="Học FastAPI",
+        raw_description="Xây REST API",
+        target_date=date(2026, 11, 5),
+        prior_knowledge_level="INTERMEDIATE",
+        status=GoalStatus.ACTIVE,
+        created_at=now,
+        updated_at=now,
+    )
+    roadmap = Roadmap(
+        id=uuid7(),
+        user_id=user_id,
+        goal_id=goal.id,
+        title="FastAPI 4 ngày",
+        start_date=date(2026, 11, 2),
+        target_date=date(2026, 11, 5),
+        status=RoadmapStatus.INITIALIZED,
+        created_at=now,
+        updated_at=now,
+    )
+    milestones = [
+        Milestone(
+            id=uuid7(),
+            roadmap_id=roadmap.id,
+            sequence_order=1,
+            title="Cột mốc 1",
+            estimated_effort_minutes=150,
+            status=MilestoneStatus.APPROVED,
+            created_at=now,
+            updated_at=now,
+        ),
+        Milestone(
+            id=uuid7(),
+            roadmap_id=roadmap.id,
+            sequence_order=2,
+            title="Cột mốc 2",
+            estimated_effort_minutes=150,
+            status=MilestoneStatus.APPROVED,
+            created_at=now,
+            updated_at=now,
+        ),
+    ]
+    # 4 days (Nov 2..5) * 90m = 360m raw, minus 60m existing -> 300m available.
+    # With daily_workload_cap_minutes=60: 4 * 60 = 240m raw, minus 60m on Nov 2 -> 180m available.
+    avail = AvailabilityConfigurationDTO(mode="MODE_A", default_daily_quota_minutes=90)
+    existing = [
+        SimpleNamespace(scheduled_date=date(2026, 11, 2), estimated_minutes=60, status="TODO")
+    ]
+    profile = SimpleNamespace(opt_session_minutes=60)
+
+    ctx = RoadmapContextBuilder.build_task_decomposition_context(
+        goal=goal,
+        roadmap=roadmap,
+        milestones=milestones,
+        availability=avail,
+        learner_profile=profile,
+        existing_tasks=existing,
+        daily_workload_cap_minutes=60,
+    )
+    system_section = ctx.split("[SYSTEM_DERIVED_FACTS]", 1)[1].split(
+        "[KNOWLEDGE_BASE_EVIDENCE]", 1
+    )[0]
+    budget_line = next(
+        line
+        for line in system_section.splitlines()
+        if line.startswith("precomputed_schedule_budget:")
+    )
+    budget = json.loads(budget_line.split("precomputed_schedule_budget:", 1)[1].strip())
+    assert budget == {
+        "max_available_minutes_until_target_date": 180,
+        "total_milestone_effort_minutes": 300,
+        "recommended_minutes_per_task": 60,
+        "recommended_task_count_range": {"min_tasks": 3, "max_tasks": 3},
+        "capacity_fit_ratio": 0.6,
+        "fits_milestone_effort": False,
+    }
+    assert (
+        budget["recommended_task_count_range"]["max_tasks"] * budget["recommended_minutes_per_task"]
+        <= budget["max_available_minutes_until_target_date"]
+    )
+
+    # Backward-compatibility toggle omits precomputed_schedule_budget
+    ctx_no_budget = RoadmapContextBuilder.build_task_decomposition_context(
+        goal=goal,
+        roadmap=roadmap,
+        milestones=milestones,
+        availability=avail,
+        learner_profile=profile,
+        include_precomputed_budget=False,
+    )
+    assert "precomputed_schedule_budget:" not in ctx_no_budget
+
+    # Tight infeasible window caps min_tasks <= max_tasks and clamps opt_session_minutes to [30, 120]
+    tight_budget = RoadmapContextBuilder.compute_schedule_budget(
+        availability=AvailabilityConfigurationDTO(mode="MODE_A", default_daily_quota_minutes=45),
+        milestones=milestones,
+        start_date=date(2026, 11, 2),
+        target_date=date(2026, 11, 2),
+        learner_profile=SimpleNamespace(opt_session_minutes=15),
+    )
+    assert tight_budget["recommended_minutes_per_task"] == 30
+    assert tight_budget["max_available_minutes_until_target_date"] == 45
+    assert tight_budget["recommended_task_count_range"] == {"min_tasks": 1, "max_tasks": 1}
+    assert tight_budget["fits_milestone_effort"] is False
 
 
 def test_deterministic_slot_allocator_mode_a_and_mode_b_with_dag_and_disabled_days() -> None:
@@ -216,7 +337,7 @@ def test_deterministic_slot_allocator_mode_a_and_mode_b_with_dag_and_disabled_da
 
     # Validate the allocated tasks pass Tier 1 & Tier 2 with zero violations!
     orchestrator = ProposalValidationGateOrchestrator(
-        llm_provider=MockLLMAdapter(),
+        llm_provider=StubLLMAdapter(),
         enable_tier3_judge=True,
     )
     violations_t1 = orchestrator.run_tier1_gate(
@@ -273,7 +394,7 @@ async def test_tier3_pedagogical_judge_detects_inverted_prerequisites_and_all_th
         "dependencies": [],
     }
 
-    orchestrator = ProposalValidationGateOrchestrator(llm_provider=MockLLMAdapter())
+    orchestrator = ProposalValidationGateOrchestrator(llm_provider=StubLLMAdapter())
     avail = AvailabilityConfigurationDTO(mode="QUOTA", default_daily_quota_minutes=120)
     res = await orchestrator.validate_proposal(
         proposal_with_pedagogical_issues,
@@ -287,3 +408,60 @@ async def test_tier3_pedagogical_judge_detects_inverted_prerequisites_and_all_th
     assert len(res.advisory_warnings) >= 2
     assert any("PREREQUISITE_ORDER" in w for w in res.advisory_warnings)
     assert any("THEORY_PRACTICE_BALANCE" in w for w in res.advisory_warnings)
+
+
+def test_prompt_registry_uses_canonical_skill_ids_and_immutable_schemas() -> None:
+    """T2.5: build_planning_prompt_registry registers canonical skill IDs with immutable schemas."""
+    from src.planning.application.services.roadmap_skills import build_planning_prompt_registry
+
+    registry = build_planning_prompt_registry()
+    expected_ids = (
+        "goal-clarifier",
+        "learning-milestone-planner",
+        "learning-task-decomposer",
+        "pedagogical-quality-judge",
+    )
+    for skill_id in expected_ids:
+        tpl = registry.latest(skill_id)
+        assert tpl.prompt_id == skill_id
+        assert tpl.skill_id == skill_id
+        with pytest.raises(TypeError):
+            tpl.output_schema["properties"] = {}  # type: ignore[index]
+
+    judge_tpl = registry.latest("pedagogical-quality-judge")
+    assert set(judge_tpl.output_schema["properties"].keys()) == {"score", "issues"}
+
+
+def test_verify_skill_stage_tool_authority_rejects_mismatch_and_unknown_tools() -> None:
+    """T2.5: Tool authority rejects missing pipeline stages or unknown tool declarations."""
+    from src.planning.application.services.knowledge_tool_dispatcher import RoadmapPipelineStage
+    from src.planning.application.services.roadmap_skills import (
+        GOAL_CLARIFIER_SKILL,
+        MILESTONE_PLANNER_SKILL,
+        SkillDefinition,
+        verify_skill_stage_tool_authority,
+    )
+
+    verified = verify_skill_stage_tool_authority()
+    assert verified[RoadmapPipelineStage.GOAL_CLARIFICATION] == frozenset()
+
+    with pytest.raises(ValueError, match="Missing SkillDefinition"):
+        verify_skill_stage_tool_authority({"goal-clarifier": GOAL_CLARIFIER_SKILL})
+
+    bad_skill = SkillDefinition(
+        skill_id="bad-skill",
+        version="1.0.0",
+        title="Bad Skill",
+        stage=RoadmapPipelineStage.MILESTONE_PLANNING,
+        thinking_level="MEDIUM",
+        allowed_tools=("nonexistent_tool",),
+        max_tool_calls=1,
+        system_instruction="sys",
+    )
+    with pytest.raises(ValueError, match="unknown tools"):
+        verify_skill_stage_tool_authority(
+            {
+                GOAL_CLARIFIER_SKILL.skill_id: GOAL_CLARIFIER_SKILL,
+                MILESTONE_PLANNER_SKILL.skill_id: bad_skill,
+            }
+        )

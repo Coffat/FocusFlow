@@ -6,10 +6,12 @@ from collections.abc import Callable
 from typing import Any, cast
 from uuid import UUID
 
+from src.planning.application.ports.sse_job_port import SseJobPort, sanitize_sse_error_details
 from src.planning.presentation.deps import (
     get_execute_milestone_generation_use_case,
     get_execute_schedule_proposal_generation_use_case,
     get_goal_repository,
+    get_handle_availability_updated_event_use_case,
     get_ingest_knowledge_source_use_case,
     get_knowledge_base_repository,
     get_knowledge_file_store,
@@ -17,10 +19,12 @@ from src.planning.presentation.deps import (
     get_llm_provider,
     get_milestone_repository,
     get_planning_availability_query_port,
+    get_planning_calendar_connection_query_port,
     get_planning_embedding_provider,
     get_planning_execution_sync_port,
     get_planning_learner_memory_port,
     get_planning_learner_profile_port,
+    get_planning_outbox_repository,
     get_planning_quota_facade,
     get_planning_uow,
     get_planning_user_query_port,
@@ -31,6 +35,7 @@ from src.planning.presentation.deps import (
     get_sse_job_store,
 )
 from src.shared_kernel.infrastructure.database.session import async_session_factory
+from src.shared_kernel.infrastructure.outbox.repository import SqlAlchemyOutboxRepository
 from src.shared_kernel.infrastructure.worker.broker import (
     broker,
     get_registered_dependency_overrides,
@@ -64,23 +69,32 @@ async def execute_ai_roadmap_generation(
 
     async with async_session_factory() as session:
         uow = get_planning_uow(session)
-        goal_repo = get_goal_repository(session)
-        roadmap_repo = get_roadmap_repository(session)
-        milestone_repo = get_milestone_repository(session)
         quota_facade = get_planning_quota_facade(session)
-        llm_provider = await _resolve_dep(get_llm_provider, get_llm_provider)
-        sse_store = await _resolve_dep(get_sse_job_store, get_sse_job_store)
-        knowledge_base = get_knowledge_base_repository(session)
-        learner_memory_port = get_planning_learner_memory_port(session)
-        knowledge_source_repo = get_knowledge_source_repository(session)
-        embedding_provider = await _resolve_dep(
-            get_planning_embedding_provider,
-            get_planning_embedding_provider,
-        )
-        workflow_repo = get_planning_workflow_repository(session)
+        sse_store: SseJobPort | None = None
+        execute_started = False
 
         try:
-            if job_type.upper() == "MILESTONE_GEN":
+            goal_repo = get_goal_repository(session)
+            roadmap_repo = get_roadmap_repository(session)
+            milestone_repo = get_milestone_repository(session)
+            llm_provider = await _resolve_dep(get_llm_provider, get_llm_provider)
+            sse_store = await _resolve_dep(get_sse_job_store, get_sse_job_store)
+            knowledge_base = get_knowledge_base_repository(session)
+            learner_memory_port = get_planning_learner_memory_port(session)
+            knowledge_source_repo = get_knowledge_source_repository(session)
+            embedding_provider = await _resolve_dep(
+                get_planning_embedding_provider,
+                get_planning_embedding_provider,
+            )
+            workflow_repo = get_planning_workflow_repository(session)
+
+            if job_type.upper().startswith("MILESTONE_GEN"):
+                avail_port = get_planning_availability_query_port(session)
+                exec_sync_port = get_planning_execution_sync_port(session)
+                block_repo = get_schedule_block_repository(session)
+                user_query_port = get_planning_user_query_port(session)
+                cal_conn_port = get_planning_calendar_connection_query_port(session)
+                proposal_repo = get_schedule_proposal_repository(session)
                 ms_uc = get_execute_milestone_generation_use_case(
                     goal_repo=goal_repo,
                     roadmap_repo=roadmap_repo,
@@ -94,12 +108,22 @@ async def execute_ai_roadmap_generation(
                     knowledge_source_repo=knowledge_source_repo,
                     embedding_provider=embedding_provider,
                     workflow_repo=workflow_repo,
+                    availability_query_port=avail_port,
+                    execution_sync_port=exec_sync_port,
+                    block_repo=block_repo,
+                    user_query_port=user_query_port,
+                    calendar_connection_query_port=cal_conn_port,
+                    proposal_repo=proposal_repo,
                 )
+                execute_started = True
                 await ms_uc.execute(
                     job_id=UUID(job_id),
                     user_id=UUID(user_id),
                     roadmap_id=UUID(roadmap_id),
                     reservation_id=UUID(reservation_id),
+                    generation_strategy=(
+                        job_type.split(":", 1)[1] if ":" in job_type else "FULL_SCOPE"
+                    ),
                 )
             else:
                 proposal_repo = get_schedule_proposal_repository(session)
@@ -108,6 +132,7 @@ async def execute_ai_roadmap_generation(
                 exec_sync_port = get_planning_execution_sync_port(session)
                 user_query_port = get_planning_user_query_port(session)
                 block_repo = get_schedule_block_repository(session)
+                cal_conn_port = get_planning_calendar_connection_query_port(session)
                 prop_uc = get_execute_schedule_proposal_generation_use_case(
                     goal_repo=goal_repo,
                     roadmap_repo=roadmap_repo,
@@ -127,27 +152,81 @@ async def execute_ai_roadmap_generation(
                     knowledge_source_repo=knowledge_source_repo,
                     embedding_provider=embedding_provider,
                     workflow_repo=workflow_repo,
+                    calendar_connection_query_port=cal_conn_port,
                 )
+                execute_started = True
                 await prop_uc.execute(
                     job_id=UUID(job_id),
                     user_id=UUID(user_id),
                     roadmap_id=UUID(roadmap_id),
                     reservation_id=UUID(reservation_id),
                 )
+        except asyncio.CancelledError:
+            if not execute_started:
+
+                async def _release_setup_cancel() -> None:
+                    await session.rollback()
+                    async with uow:
+                        await quota_facade.release_reservation(
+                            UUID(reservation_id),
+                            reason="CANCELLED",
+                        )
+                        await uow.commit()
+
+                try:
+                    await asyncio.shield(_release_setup_cancel())
+                except Exception:
+                    logger.warning(
+                        "Failed to release reservation %s during task cancellation",
+                        reservation_id,
+                    )
+            raise
         except Exception as exc:
             logger.exception("Background AI roadmap generation failed for job %s", job_id)
+            error_code, error_message = sanitize_sse_error_details(exc)
+            if not execute_started:
+                try:
+                    await session.rollback()
+                    async with uow:
+                        await quota_facade.release_reservation(
+                            UUID(reservation_id),
+                            reason=error_code,
+                        )
+                        await uow.commit()
+                except Exception:
+                    logger.warning(
+                        "Failed to release reservation %s after setup error for job %s",
+                        reservation_id,
+                        job_id,
+                    )
+
             try:
-                await sse_store.append_event(
-                    job_id=UUID(job_id),
-                    event="failed",
-                    status="FAILED",
-                    data={
-                        "stage": "FAILED",
-                        "progress": 0,
-                        "code": "AI_GENERATION_FAILED",
-                        "message": str(exc) or "AI generation background failure",
-                    },
-                )
+                if sse_store is None:
+                    sse_store = await _resolve_dep(get_sse_job_store, get_sse_job_store)
+                already_terminal = False
+                try:
+                    existing_job = await sse_store.get_job_for_user(
+                        job_id=UUID(job_id),
+                        user_id=UUID(user_id),
+                    )
+                    already_terminal = existing_job.status in ("COMPLETED", "FAILED") or any(
+                        ev.event in ("completed", "failed") for ev in existing_job.events
+                    )
+                except Exception:
+                    already_terminal = False
+
+                if not already_terminal:
+                    await sse_store.append_event(
+                        job_id=UUID(job_id),
+                        event="failed",
+                        status="FAILED",
+                        data={
+                            "stage": "FAILED",
+                            "progress": 100,
+                            "error": error_message,
+                            "error_code": error_code,
+                        },
+                    )
             except Exception:
                 pass
 
@@ -226,3 +305,63 @@ async def dispatch_ingest_knowledge_source(*, source_id: str, user_id: str) -> N
                 exc,
             )
     await ingest_knowledge_source(source_id=source_id, user_id=user_id)
+
+
+@broker.task
+async def consume_availability_updated_event(event_id: str, user_id: str) -> int:
+    """Idempotent Taskiq consumer for `AvailabilityUpdatedEvent` refreshing preliminary feasibility."""
+    async with async_session_factory() as session:
+        uc = get_handle_availability_updated_event_use_case(
+            roadmap_repo=get_roadmap_repository(session),
+            milestone_repo=get_milestone_repository(session),
+            proposal_repo=get_schedule_proposal_repository(session),
+            availability_query_port=get_planning_availability_query_port(session),
+            outbox_repo=get_planning_outbox_repository(session),
+            uow=get_planning_uow(session),
+            goal_repo=get_goal_repository(session),
+            execution_sync_port=get_planning_execution_sync_port(session),
+            block_repo=get_schedule_block_repository(session),
+            user_query_port=get_planning_user_query_port(session),
+            calendar_connection_query_port=get_planning_calendar_connection_query_port(session),
+        )
+        return await uc.execute(event_id=UUID(event_id), user_id=UUID(user_id))
+
+
+@broker.task(schedule=[{"cron": "* * * * *"}])
+async def poll_planning_outbox_events(batch_size: int = 50) -> int:
+    """Poll unprocessed `AvailabilityUpdatedEvent` outbox rows idempotently via `processed_events`."""
+    from src.planning.application.use_cases import HandleAvailabilityUpdatedEventUseCase
+
+    processed = 0
+    async with async_session_factory() as session:
+        outbox_repo = SqlAlchemyOutboxRepository(session)
+        events = await outbox_repo.list_unprocessed_events(
+            event_type="AvailabilityUpdatedEvent",
+            consumer_name=HandleAvailabilityUpdatedEventUseCase.CONSUMER_NAME,
+            limit=batch_size,
+        )
+        if not events:
+            return 0
+
+        uc = get_handle_availability_updated_event_use_case(
+            roadmap_repo=get_roadmap_repository(session),
+            milestone_repo=get_milestone_repository(session),
+            proposal_repo=get_schedule_proposal_repository(session),
+            availability_query_port=get_planning_availability_query_port(session),
+            outbox_repo=outbox_repo,
+            uow=get_planning_uow(session),
+            goal_repo=get_goal_repository(session),
+            execution_sync_port=get_planning_execution_sync_port(session),
+            block_repo=get_schedule_block_repository(session),
+            user_query_port=get_planning_user_query_port(session),
+            calendar_connection_query_port=get_planning_calendar_connection_query_port(session),
+        )
+        event_pairs = [
+            (ev.id, (ev.payload or {}).get("user_id"))
+            for ev in events
+            if (ev.payload or {}).get("user_id")
+        ]
+        for event_id, raw_uid in event_pairs:
+            await uc.execute(event_id=event_id, user_id=UUID(str(raw_uid)))
+            processed += 1
+    return processed

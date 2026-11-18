@@ -17,7 +17,9 @@ import {
   ClarificationAnswerItem,
   PriorKnowledgeLevel,
   ProposedTaskItemSchema,
+  formatEffortMinutes,
 } from '../../models/roadmap.model';
+import { FitCapacityScopePanelComponent } from '../shared/fit-capacity-scope-panel/fit-capacity-scope-panel.component';
 
 @Component({
   selector: 'app-roadmap-page',
@@ -27,6 +29,7 @@ import {
     FormsModule,
     RouterLink,
     BadgeDirective,
+    FitCapacityScopePanelComponent,
   ],
   templateUrl: './roadmap-page.component.html',
   styleUrl: './roadmap-page.component.scss',
@@ -228,11 +231,13 @@ export class RoadmapPageComponent implements OnInit {
   onSubmitClarification(goalId: string): void {
     const questions = this.roadmapService.clarificationQuestions();
     const map = this.userAnswers();
-    const answers: ClarificationAnswerItem[] = questions.map(q => ({
-      question_id: q.question_id,
-      question_text: q.text,
-      answer: (map[q.question_id] || '').trim() || (q.options?.[0] ?? 'Không có ý kiến cụ thể'),
-    }));
+    const answers: ClarificationAnswerItem[] = questions
+      .map(q => ({
+        question_id: q.question_id,
+        question_text: q.text,
+        answer: (map[q.question_id] || '').trim(),
+      }))
+      .filter(answer => answer.answer.length > 0);
     this.roadmapService.submitClarificationAnswers(goalId, answers);
   }
 
@@ -257,6 +262,42 @@ export class RoadmapPageComponent implements OnInit {
   onToggleSoftOverflow(event: Event): void {
     const checked = (event.target as HTMLInputElement).checked;
     this.roadmapService.setConfirmSoftOverflow(checked);
+  }
+
+  onToggleConfirmWarnings(event: Event): void {
+    const checked = (event.target as HTMLInputElement).checked;
+    this.roadmapService.setConfirmWarnings(checked);
+  }
+
+  onToggleConfirmPartialSchedule(event: Event): void {
+    const checked = (event.target as HTMLInputElement).checked;
+    this.roadmapService.setConfirmPartialSchedule(checked);
+  }
+
+  onRetryFailedAi(): void {
+    const stage = this.roadmapService.lastFailedStage();
+    const roadmapId = this.selectedDetail()?.id;
+    if (!stage) {
+      return;
+    }
+    if (!roadmapId) {
+      this.roadmapService.retryFailedAiGeneration();
+      return;
+    }
+    if (stage === 'MILESTONES') {
+      const params = this.roadmapService.lastMilestoneGenerationParams();
+      if (params && (params.additionalContext || params.generationStrategy !== 'FULL_SCOPE')) {
+        this.roadmapService.generateMilestonesWithAi(
+          roadmapId,
+          params.additionalContext,
+          params.generationStrategy
+        );
+      } else {
+        this.roadmapService.generateMilestonesWithAi(roadmapId);
+      }
+      return;
+    }
+    this.roadmapService.generateScheduleProposalWithAi(roadmapId);
   }
 
   getTaskGlobalIndex(task: ProposedTaskItemSchema): number {
@@ -357,6 +398,25 @@ export class RoadmapPageComponent implements OnInit {
 
   onArchiveRoadmap(roadmapId: string): void {
     this.roadmapService.archiveRoadmap(roadmapId);
+  }
+
+  onApproveFitCapacity(roadmapId: string, confirmedVersion: number): void {
+    this.roadmapService.approveMilestones(roadmapId, undefined, {
+      confirmedScopeProposalVersion: confirmedVersion,
+      acceptFitCapacity: true,
+    });
+  }
+
+  onRegenerateFitCapacity(roadmapId: string): void {
+    this.roadmapService.generateMilestonesWithAi(
+      roadmapId,
+      'Thu hẹp phạm vi theo quỹ giờ hiện tại và liệt kê rõ nội dung bị hoãn.',
+      'FIT_CAPACITY'
+    );
+  }
+
+  formatEffort(minutes: number | null | undefined): string {
+    return formatEffortMinutes(minutes);
   }
 
   getStatusBadgeVariant(status: string): BadgeVariant {

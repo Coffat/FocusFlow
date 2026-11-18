@@ -325,6 +325,90 @@
       <!-- RIGHT COLUMN (lg:col-span-8): 7 Days Interactive Schedule -->
       <main class="lg:col-span-8 space-y-4">
 
+        <!-- Confirmation Box: Manual Hybrid Mode vs Google Calendar Sync (CONNECTED) -->
+        @if (showModeConflictBox()) {
+          <section
+            role="alertdialog"
+            aria-label="Xác nhận chế độ nguồn thời gian rảnh chủ đạo"
+            data-testid="availability-mode-conflict-box"
+            class="bg-[#FDF6E7] rounded-2xl border-2 border-[#B45309]/40 p-5 shadow-md space-y-4"
+          >
+            <div class="flex items-start gap-3">
+              <lucide-icon name="alert-triangle" [size]="20" class="text-[#B45309] shrink-0 mt-0.5"></lucide-icon>
+              <div class="space-y-1">
+                <h3 class="text-sm sm:text-base font-bold font-serif text-[#1B1C1C]">
+                  Xác nhận Chế độ Nguồn Thời Gian Rảnh Chủ Đạo
+                </h3>
+                <p class="text-xs text-[#656464] leading-relaxed">
+                  Bạn đang đồng thời cấu hình <strong>Rảnh Lai thủ công (Mode A/B)</strong> và bật <strong>Đồng bộ tự động Google Calendar (CONNECTED)</strong>. Vui lòng chọn 1 chế độ chủ đạo để bộ xếp lịch tất định áp dụng:
+                </p>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button
+                type="button"
+                data-testid="choose-manual-hybrid-mode-btn"
+                (click)="chooseManualHybridPrimaryMode()"
+                class="p-3.5 rounded-xl border border-[#EAE8E7] bg-white hover:border-[#246B4A] hover:bg-emerald-50/40 text-left transition-all cursor-pointer space-y-1.5"
+              >
+                <div class="text-xs font-bold text-[#1B1C1C] flex items-center justify-between gap-2">
+                  <span>1. Dùng Rảnh Lai thủ công (Mode A/B)</span>
+                  <span class="font-mono text-[10px] px-2 py-0.5 rounded bg-emerald-50 text-[#246B4A] border border-emerald-200">
+                    Mode A/B
+                  </span>
+                </div>
+                <p class="text-[11px] text-[#656464] leading-relaxed">
+                  Vô hiệu hóa đồng bộ lịch tự động (<code>calendarIntegrationMode = 'NONE'</code>) và xếp lịch theo đúng Quỹ giờ / Khung giờ Rảnh Lai bạn đã thiết lập.
+                </p>
+              </button>
+
+              <button
+                type="button"
+                data-testid="choose-google-calendar-mode-btn"
+                (click)="chooseGoogleCalendarPrimaryMode()"
+                class="p-3.5 rounded-xl border border-[#246B4A]/40 bg-white hover:border-[#246B4A] hover:bg-emerald-50/40 text-left transition-all cursor-pointer space-y-1.5"
+              >
+                <div class="text-xs font-bold text-[#246B4A] flex items-center justify-between gap-2">
+                  <span>2. Dùng Đồng bộ Google Calendar (CONNECTED)</span>
+                  <span class="font-mono text-[10px] px-2 py-0.5 rounded bg-[#246B4A] text-white">
+                    Google Sync
+                  </span>
+                </div>
+                <p class="text-[11px] text-[#656464] leading-relaxed">
+                  Hệ thống sẽ lấy khung giờ cho phép trong ngày trừ đi khoảng bận của Google Calendar và sắp xếp theo khung giờ cố định giống Mode B (vô hiệu hóa việc dùng riêng lẻ quỹ giờ Rảnh Lai).
+                </p>
+              </button>
+            </div>
+          </section>
+        }
+
+        @if (isGoogleCalendarPrimaryMode()) {
+          <section
+            role="status"
+            data-testid="google-calendar-primary-active-banner"
+            class="bg-emerald-50/80 rounded-2xl border border-emerald-200 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+          >
+            <div class="flex items-start gap-2.5 text-xs text-[#246B4A]">
+              <lucide-icon name="check-circle-2" [size]="17" class="shrink-0 mt-0.5"></lucide-icon>
+              <div class="space-y-0.5">
+                <div class="font-bold">Đang dùng Đồng bộ Google Calendar (CONNECTED) làm chế độ chủ đạo</div>
+                <p class="text-[11px] text-[#1B1C1C]/80 leading-relaxed">
+                  Hệ thống lấy khung giờ cho phép trong ngày ({{ service.allowedWindow().start }} – {{ service.allowedWindow().end }}) trừ đi khoảng bận trên Google Calendar và xếp theo khung giờ cố định giống Mode B (quỹ giờ Rảnh Lai riêng lẻ đang được bỏ qua).
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              data-testid="switch-back-to-manual-hybrid-btn"
+              (click)="chooseManualHybridPrimaryMode()"
+              class="px-3.5 py-1.5 rounded-full bg-white border border-emerald-300 text-[#246B4A] hover:bg-emerald-100 text-xs font-semibold transition-colors cursor-pointer shrink-0"
+            >
+              Chuyển sang Rảnh Lai thủ công
+            </button>
+          </section>
+        }
+
         <!-- Toolbar Header -->
         <div class="bg-white rounded-2xl border border-[#EAE8E7] p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>

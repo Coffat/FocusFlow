@@ -19,10 +19,12 @@ describe('AppFooterComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('hiển thị đầy đủ trạng thái hệ thống: Gemini 1.5 Pro và WCAG 2.2 AA', () => {
+  it('hiển thị đầy đủ trạng thái hệ thống: Gemini 3.8 Flash và WCAG 2.2 AA', () => {
     const el = fixture.nativeElement as HTMLElement;
-    expect(el.textContent).toContain('Gemini 1.5 Pro via SSE');
+    expect(el.textContent).toContain('Gemini 3.8 Flash via SSE');
     expect(el.textContent).toContain('WCAG 2.2 AA');
+    const footer = el.querySelector('footer');
+    expect(footer?.className).not.toContain('fixed');
   });
 
   it('hiển thị gợi ý phím tắt', () => {

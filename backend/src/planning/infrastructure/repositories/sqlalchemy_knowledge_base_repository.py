@@ -7,6 +7,9 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.planning.application.ports.knowledge_base_port import KnowledgeBasePort
+from src.planning.application.services.learning_resource_discovery import (
+    tokenize_meaningful_terms,
+)
 from src.planning.domain.models.knowledge_concept import (
     ConceptPrerequisiteEdge,
     ConceptPrerequisiteGraph,
@@ -405,6 +408,162 @@ VERIFIED_SEED_CONCEPTS: tuple[LearningConcept, ...] = (
         ),
         verification_status=ConceptVerificationStatus.VERIFIED,
     ),
+    # 7. Go, Rust, Java/Spring, React/Next.js, Cloud/DevOps, Kernel/eBPF, Distributed Systems, IELTS
+    LearningConcept(
+        concept_id="go-fundamentals-concurrency",
+        title="Ngôn ngữ Go, Goroutines, Channels & Concurrency Patterns",
+        summary="Cú pháp Go, interfaces, error handling, goroutines, channels và context cancellation.",
+        domain="go",
+        difficulty_level="INTERMEDIATE",
+        estimated_effort_minutes=150,
+        keywords=("go", "golang", "goroutine", "channel", "concurrency", "backend"),
+        learning_outcomes=(
+            "Viết dịch vụ Go idiomatic với interface nhỏ gọn và xử lý lỗi tường minh",
+            "Điều phối tác vụ đồng thời an toàn bằng goroutines, channels và context",
+        ),
+        verification_status=ConceptVerificationStatus.VERIFIED,
+    ),
+    LearningConcept(
+        concept_id="k8s-architecture-workloads",
+        title="Kiến trúc Kubernetes, Pods, Deployments, Services & Helm",
+        summary="Control plane, worker nodes, Pods, Deployments, Ingress, ConfigMaps/Secrets và autoscaling.",
+        domain="kubernetes",
+        difficulty_level="INTERMEDIATE",
+        estimated_effort_minutes=180,
+        keywords=("kubernetes", "k8s", "kubectl", "pod", "deployment", "helm", "cloud-native"),
+        learning_outcomes=(
+            "Triển khai và mở rộng workload stateless/stateful trên Kubernetes",
+            "Cấu hình Service, Ingress, readiness/liveness probes và resource limits",
+        ),
+        verification_status=ConceptVerificationStatus.VERIFIED,
+    ),
+    LearningConcept(
+        concept_id="ebpf-kernel-observability",
+        title="eBPF, Linux Kernel Verifier, Maps & Observability/Networking",
+        summary="Kiến trúc eBPF trong Linux kernel, kprobes/tracepoints, XDP, maps và giám sát hiệu năng không xâm lấn.",
+        domain="ebpf",
+        difficulty_level="ADVANCED",
+        estimated_effort_minutes=180,
+        keywords=("ebpf", "bpf", "xdp", "cilium", "libbpf", "kernel", "observability"),
+        learning_outcomes=(
+            "Giải thích cơ chế an toàn của eBPF Verifier và giao tiếp user-kernel qua BPF Maps",
+            "Ứng dụng eBPF/XDP để theo dõi syscall, latency và packet filtering",
+        ),
+        verification_status=ConceptVerificationStatus.VERIFIED,
+    ),
+    LearningConcept(
+        concept_id="rust-ownership-async",
+        title="Rust Ownership, Borrowing, Lifetimes & Async Concurrency",
+        summary="Mô hình bộ nhớ không GC của Rust: ownership, borrowing, lifetimes, traits và async/await với Tokio.",
+        domain="rust",
+        difficulty_level="INTERMEDIATE",
+        estimated_effort_minutes=180,
+        keywords=("rust", "cargo", "ownership", "borrowing", "lifetimes", "tokio", "systems"),
+        learning_outcomes=(
+            "Quản lý bộ nhớ an toàn lúc biên dịch theo quy tắc Ownership & Borrowing",
+            "Thiết kế module bằng Traits, Result/Option và lập trình bất đồng bộ với Rust",
+        ),
+        verification_status=ConceptVerificationStatus.VERIFIED,
+    ),
+    LearningConcept(
+        concept_id="dist-kafka-event-streaming",
+        title="Apache Kafka, Event Streaming & Hệ thống Phân tán Tin cậy",
+        summary="Kiến trúc Broker, Topic/Partition, Consumer Groups, offset commit, Raft/consensus và delivery semantics.",
+        domain="distributed-systems",
+        difficulty_level="ADVANCED",
+        estimated_effort_minutes=180,
+        keywords=(
+            "kafka",
+            "apache kafka",
+            "event streaming",
+            "distributed systems",
+            "partition",
+            "raft",
+        ),
+        learning_outcomes=(
+            "Thiết kế luồng sự kiện Kafka với phân vùng (partitioning) và consumer group cân bằng tải",
+            "Đảm bảo xử lý at-least-once/idempotent và hiểu các mẫu hệ thống phân tán",
+        ),
+        verification_status=ConceptVerificationStatus.VERIFIED,
+    ),
+    LearningConcept(
+        concept_id="docker-containers-compose",
+        title="Docker Containers, Multi-Stage Dockerfile & Docker Compose",
+        summary="Đóng gói ứng dụng với OCI container, tối ưu layer/multi-stage build, network, volume và Docker Compose.",
+        domain="devops",
+        difficulty_level="BEGINNER",
+        estimated_effort_minutes=120,
+        keywords=("docker", "container", "dockerfile", "docker compose", "devops"),
+        learning_outcomes=(
+            "Viết Dockerfile multi-stage gọn nhẹ và an toàn cho môi trường production",
+            "Điều phối nhiều dịch vụ phụ thuộc (DB, Redis, API) bằng Docker Compose",
+        ),
+        verification_status=ConceptVerificationStatus.VERIFIED,
+    ),
+    LearningConcept(
+        concept_id="cloud-aws-core-iam-vpc",
+        title="Nền tảng AWS Cloud: IAM, VPC, Compute & Well-Architected",
+        summary="Phân quyền tối thiểu với IAM, thiết kế mạng VPC/subnet, EC2/ECS/Lambda, S3 và kiến trúc đám mây.",
+        domain="cloud",
+        difficulty_level="INTERMEDIATE",
+        estimated_effort_minutes=150,
+        keywords=("aws", "cloud", "iam", "vpc", "ec2", "s3", "lambda", "eks"),
+        learning_outcomes=(
+            "Thiết kế phân quyền IAM least-privilege và phân tách mạng public/private trong VPC",
+            "Áp dụng 6 trụ cột AWS Well-Architected vào hệ thống thực tế",
+        ),
+        verification_status=ConceptVerificationStatus.VERIFIED,
+    ),
+    LearningConcept(
+        concept_id="fe-react-nextjs-app-router",
+        title="React Components, Hooks & Next.js App Router",
+        summary="Quản lý state và lifecycle với React Hooks, Server/Client Components và định tuyến Next.js App Router.",
+        domain="frontend",
+        difficulty_level="INTERMEDIATE",
+        estimated_effort_minutes=150,
+        keywords=("react", "nextjs", "next.js", "hooks", "app router", "frontend"),
+        learning_outcomes=(
+            "Xây dựng giao diện React theo thành phần tái sử dụng và Hooks chuẩn xác",
+            "Tổ chức định tuyến và data fetching với Next.js App Router",
+        ),
+        verification_status=ConceptVerificationStatus.VERIFIED,
+    ),
+    LearningConcept(
+        concept_id="java-spring-boot-apis",
+        title="Java Hiện đại & Xây dựng REST API với Spring Boot",
+        summary="Cốt lõi Java SE, Dependency Injection, Spring Web MVC, Spring Data JPA và Spring Security.",
+        domain="java",
+        difficulty_level="INTERMEDIATE",
+        estimated_effort_minutes=180,
+        keywords=("java", "spring", "spring boot", "jpa", "hibernate", "backend"),
+        learning_outcomes=(
+            "Xây dựng dịch vụ RESTful phân tầng chuẩn với Spring Boot và JPA",
+            "Cấu hình xác thực, validation và xử lý ngoại lệ tập trung trong Spring",
+        ),
+        verification_status=ConceptVerificationStatus.VERIFIED,
+    ),
+    LearningConcept(
+        concept_id="eng-ielts-academic-skills",
+        title="IELTS & Tiếng Anh Học thuật (Reading, Writing, Listening, Speaking)",
+        summary="Chiến lược làm bài IELTS Academic 4 kỹ năng, cấu trúc bài luận Task 1/Task 2 và từ vựng học thuật.",
+        domain="english",
+        difficulty_level="INTERMEDIATE",
+        estimated_effort_minutes=150,
+        keywords=(
+            "ielts",
+            "academic english",
+            "writing",
+            "speaking",
+            "reading",
+            "listening",
+            "english",
+        ),
+        learning_outcomes=(
+            "Lập dàn ý và viết bài IELTS Academic Task 1/Task 2 mạch lạc đúng tiêu chí chấm điểm",
+            "Áp dụng kỹ thuật skimming/scanning và note-taking cho Reading và Listening",
+        ),
+        verification_status=ConceptVerificationStatus.VERIFIED,
+    ),
 )
 
 VERIFIED_SEED_EDGES: tuple[ConceptPrerequisiteEdge, ...] = (
@@ -667,14 +826,30 @@ VERIFIED_SEED_RESOURCES: tuple[LearningResource, ...] = (
         domain="dsa",
         concept_id="dsa-two-pointers-sliding-window",
     ),
-    # 4. Frontend / Angular
+    # 4. Frontend / Angular / React / JS / TS
+    LearningResource(
+        title="JavaScript Guide — MDN Web Docs",
+        url="https://developer.mozilla.org/en-US/docs/Web/JavaScript",
+        type="DOCS",
+        description="Tài liệu chính thức MDN về JavaScript ES6+, Promises, Async/Await và Event Loop.",
+        domain="frontend",
+        concept_id="js-es6-async-dom",
+    ),
+    LearningResource(
+        title="TypeScript Handbook Official Documentation",
+        url="https://www.typescriptlang.org/docs/",
+        type="DOCS",
+        description="Tài liệu chính thức TypeScript về strict mode, generics, narrowing và utility types.",
+        domain="frontend",
+        concept_id="ts-strict-type-system",
+    ),
     LearningResource(
         title="Angular 21 Docs: Standalone Components, Signals & Zoneless",
         url="https://angular.dev/guide/signals",
         type="DOCS",
         description="Tài liệu kiến trúc Angular hiện đại với Signals, OnPush change detection và control flow mới.",
         domain="frontend",
-        concept_id="fe-angular-signals",
+        concept_id="angular-standalone-signals",
     ),
     LearningResource(
         title="PrimeNG Components & Tailwind CSS v4 Integration Guide",
@@ -682,7 +857,267 @@ VERIFIED_SEED_RESOURCES: tuple[LearningResource, ...] = (
         type="DOCS",
         description="Bộ thư viện UI components và hướng dẫn tích hợp Tailwind v4 thiết kế giao diện chuẩn a11y.",
         domain="frontend",
-        concept_id="fe-primeng-tailwind",
+        concept_id="angular-routing-reactive-forms",
+    ),
+    LearningResource(
+        title="Angular Routing & Reactive Forms Official Guide",
+        url="https://angular.dev/guide/routing",
+        type="DOCS",
+        description="Hướng dẫn chính thức Angular Router, functional guards và Reactive Forms.",
+        domain="frontend",
+        concept_id="angular-routing-reactive-forms",
+    ),
+    LearningResource(
+        title="React Official Learn Documentation",
+        url="https://react.dev/learn",
+        type="DOCS",
+        description="Tài liệu chính thức React về Components, State, Hooks và Rendering.",
+        domain="frontend",
+        concept_id="fe-react-nextjs-app-router",
+    ),
+    LearningResource(
+        title="Next.js Official App Router Documentation",
+        url="https://nextjs.org/docs",
+        type="DOCS",
+        description="Tài liệu chính thức Next.js về App Router, Server Components và Routing.",
+        domain="frontend",
+        concept_id="fe-react-nextjs-app-router",
+    ),
+    # 5. DSA Additional Concepts
+    LearningResource(
+        title="CP-Algorithms: Trees, Graphs, Dijkstra & Dynamic Programming",
+        url="https://cp-algorithms.com/",
+        type="TUTORIAL",
+        description="Tài liệu thuật toán chuẩn về duyệt đồ thị, Topological Sort, Dijkstra và Quy hoạch động.",
+        domain="dsa",
+        concept_id="dsa-graphs-shortest-path",
+    ),
+    # 6. System Design & Distributed Systems
+    LearningResource(
+        title="Cloud Architecture Design Patterns — Microsoft Learn",
+        url="https://learn.microsoft.com/en-us/azure/architecture/patterns/",
+        type="DOCS",
+        description="Danh mục mẫu kiến trúc hệ thống: Modular Monolith, Circuit Breaker, CQRS và Event Sourcing.",
+        domain="system-design",
+        concept_id="sys-hexagonal-modular-monolith",
+    ),
+    LearningResource(
+        title="Redis Official Documentation: Caching, Data Structures & Streams",
+        url="https://redis.io/docs/latest/",
+        type="DOCS",
+        description="Tài liệu chính thức Redis cho chiến lược caching, TTL và Redis Streams.",
+        domain="system-design",
+        concept_id="sys-caching-redis-queues",
+    ),
+    LearningResource(
+        title="Transactional Outbox Pattern — Microservices.io",
+        url="https://microservices.io/patterns/data/transactional-outbox.html",
+        type="DOCS",
+        description="Đặc tả chuẩn mẫu Transactional Outbox đảm bảo nhất quán dữ liệu liên ngữ cảnh.",
+        domain="system-design",
+        concept_id="sys-transactional-outbox-sse",
+    ),
+    LearningResource(
+        title="Server-Sent Events (EventSource) — MDN Web Docs",
+        url="https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events",
+        type="DOCS",
+        description="Chuẩn giao thức SSE streaming một chiều trên HTTP cho tác vụ thời gian thực.",
+        domain="system-design",
+        concept_id="sys-transactional-outbox-sse",
+    ),
+    # 7. Machine Learning & AI Engineering
+    LearningResource(
+        title="NumPy Official Documentation",
+        url="https://numpy.org/doc/stable/",
+        type="DOCS",
+        description="Tài liệu chính thức NumPy về ndarray, broadcasting và đại số tuyến tính.",
+        domain="machine-learning",
+        concept_id="ml-math-numpy-pandas",
+    ),
+    LearningResource(
+        title="Pandas Official Documentation",
+        url="https://pandas.pydata.org/docs/",
+        type="DOCS",
+        description="Tài liệu chính thức Pandas về xử lý, làm sạch và phân tích dữ liệu dạng bảng.",
+        domain="machine-learning",
+        concept_id="ml-math-numpy-pandas",
+    ),
+    LearningResource(
+        title="scikit-learn Official User Guide",
+        url="https://scikit-learn.org/stable/user_guide.html",
+        type="DOCS",
+        description="Tài liệu chính thức scikit-learn cho học có giám sát, Cross-Validation và đánh giá mô hình.",
+        domain="machine-learning",
+        concept_id="ml-supervised-evaluation",
+    ),
+    LearningResource(
+        title="PyTorch Official Documentation",
+        url="https://pytorch.org/docs/stable/index.html",
+        type="DOCS",
+        description="Tài liệu chính thức PyTorch về Tensors, Autograd và Deep Learning.",
+        domain="machine-learning",
+        concept_id="ml-supervised-evaluation",
+    ),
+    LearningResource(
+        title="Google Gemini API Official Documentation",
+        url="https://ai.google.dev/gemini-api/docs",
+        type="DOCS",
+        description="Tài liệu chính thức Gemini API về Structured Outputs, Function Calling và Grounding.",
+        domain="machine-learning",
+        concept_id="ai-llm-structured-rag-agents",
+    ),
+    LearningResource(
+        title="Hugging Face Official Documentation",
+        url="https://huggingface.co/docs",
+        type="DOCS",
+        description="Tài liệu chính thức Transformers, Tokenizers, Datasets và RAG pipelines.",
+        domain="machine-learning",
+        concept_id="ai-llm-structured-rag-agents",
+    ),
+    # 8. Go, Kubernetes, eBPF, Rust, Kafka, Docker, AWS, Java/Spring, IELTS
+    LearningResource(
+        title="Effective Go — Official Go Documentation",
+        url="https://go.dev/doc/effective_go",
+        type="DOCS",
+        description="Cẩm nang chính thức viết mã Go idiomatic, goroutines, channels và interfaces.",
+        domain="go",
+        concept_id="go-fundamentals-concurrency",
+    ),
+    LearningResource(
+        title="A Tour of Go — Official Interactive Guide",
+        url="https://go.dev/tour/welcome/1",
+        type="TUTORIAL",
+        description="Bài học tương tác chính thức từ go.dev về cú pháp và concurrency trong Go.",
+        domain="go",
+        concept_id="go-fundamentals-concurrency",
+    ),
+    LearningResource(
+        title="Kubernetes Official Documentation: Concepts & Overview",
+        url="https://kubernetes.io/docs/concepts/overview/",
+        type="DOCS",
+        description="Tài liệu chính thức Kubernetes về kiến trúc cluster, Pods, Services và Workloads.",
+        domain="kubernetes",
+        concept_id="k8s-architecture-workloads",
+    ),
+    LearningResource(
+        title="Kubernetes Basics Interactive Tutorials",
+        url="https://kubernetes.io/docs/tutorials/kubernetes-basics/",
+        type="TUTORIAL",
+        description="Hướng dẫn thực hành triển khai và mở rộng ứng dụng trên Kubernetes.",
+        domain="kubernetes",
+        concept_id="k8s-architecture-workloads",
+    ),
+    LearningResource(
+        title="eBPF.io: What is eBPF? Architecture & Use Cases",
+        url="https://ebpf.io/what-is-ebpf/",
+        type="DOCS",
+        description="Tài liệu chính thức về kiến trúc eBPF, verifier, maps và observability.",
+        domain="ebpf",
+        concept_id="ebpf-kernel-observability",
+    ),
+    LearningResource(
+        title="Linux Kernel BPF Official Documentation",
+        url="https://docs.kernel.org/bpf/index.html",
+        type="DOCS",
+        description="Tài liệu chính thức từ Linux Kernel về BPF instruction set, verifier và helpers.",
+        domain="ebpf",
+        concept_id="ebpf-kernel-observability",
+    ),
+    LearningResource(
+        title="The Rust Programming Language (Official Book)",
+        url="https://doc.rust-lang.org/book/",
+        type="BOOK",
+        description="Giáo trình chính thức Rust về Ownership, Borrowing, Lifetimes và Concurrency.",
+        domain="rust",
+        concept_id="rust-ownership-async",
+    ),
+    LearningResource(
+        title="Rust Standard Library Official Reference",
+        url="https://doc.rust-lang.org/std/",
+        type="DOCS",
+        description="Tài liệu tra cứu thư viện chuẩn Rust, collections và đồng bộ hóa.",
+        domain="rust",
+        concept_id="rust-ownership-async",
+    ),
+    LearningResource(
+        title="Apache Kafka Official Documentation",
+        url="https://kafka.apache.org/documentation/",
+        type="DOCS",
+        description="Tài liệu chính thức Apache Kafka về Broker, Partition, Consumer Group và Streams.",
+        domain="distributed-systems",
+        concept_id="dist-kafka-event-streaming",
+    ),
+    LearningResource(
+        title="Patterns of Distributed Systems — Martin Fowler",
+        url="https://martinfowler.com/articles/patterns-of-distributed-systems/",
+        type="DOCS",
+        description="Các mẫu thiết kế hệ thống phân tán cốt lõi: Consensus, WAL, Lease và Idempotency.",
+        domain="distributed-systems",
+        concept_id="dist-kafka-event-streaming",
+    ),
+    LearningResource(
+        title="Docker Official Get Started Guide",
+        url="https://docs.docker.com/get-started/",
+        type="DOCS",
+        description="Hướng dẫn chính thức Docker containers, Dockerfile và volumes.",
+        domain="devops",
+        concept_id="docker-containers-compose",
+    ),
+    LearningResource(
+        title="Docker Compose Official Documentation",
+        url="https://docs.docker.com/compose/",
+        type="DOCS",
+        description="Tài liệu chính thức điều phối đa container với Docker Compose.",
+        domain="devops",
+        concept_id="docker-containers-compose",
+    ),
+    LearningResource(
+        title="AWS Official Documentation",
+        url="https://docs.aws.amazon.com/",
+        type="DOCS",
+        description="Tài liệu chính thức AWS IAM, VPC, EC2, S3, ECS và Lambda.",
+        domain="cloud",
+        concept_id="cloud-aws-core-iam-vpc",
+    ),
+    LearningResource(
+        title="AWS Well-Architected Framework",
+        url="https://docs.aws.amazon.com/wellarchitected/latest/framework/welcome.html",
+        type="DOCS",
+        description="Chuẩn thiết kế kiến trúc đám mây AWS an toàn, tin cậy và tối ưu chi phí.",
+        domain="cloud",
+        concept_id="cloud-aws-core-iam-vpc",
+    ),
+    LearningResource(
+        title="Oracle Official Java Documentation",
+        url="https://docs.oracle.com/en/java/",
+        type="DOCS",
+        description="Tài liệu ngôn ngữ Java SE, JVM, Collections và Concurrency.",
+        domain="java",
+        concept_id="java-spring-boot-apis",
+    ),
+    LearningResource(
+        title="Spring Boot Official Reference Documentation",
+        url="https://docs.spring.io/spring-boot/index.html",
+        type="DOCS",
+        description="Tài liệu chính thức xây dựng REST API, Spring Data JPA và Security với Spring Boot.",
+        domain="java",
+        concept_id="java-spring-boot-apis",
+    ),
+    LearningResource(
+        title="IELTS Official Preparation Resources",
+        url="https://ielts.org/take-a-test/preparation-resources",
+        type="DOCS",
+        description="Tài liệu luyện thi IELTS chính thức cho Listening, Reading, Writing và Speaking.",
+        domain="english",
+        concept_id="eng-ielts-academic-skills",
+    ),
+    LearningResource(
+        title="British Council LearnEnglish Official Hub",
+        url="https://learnenglish.britishcouncil.org/",
+        type="PRACTICE",
+        description="Tài liệu học và luyện tập Academic English, ngữ pháp và viết luận chuẩn CEFR/IELTS.",
+        domain="english",
+        concept_id="eng-ielts-academic-skills",
     ),
 )
 
@@ -709,45 +1144,49 @@ def _filter_learning_resources(
         "PROJECT": {"TUTORIAL", "DOCS", "PRACTICE"},
     }
     preferred_types = task_type_resource_pref.get(t_norm or "", set())
+    query_tokens = tokenize_meaningful_terms(q_norm or "") if q_norm else []
+    has_filter = bool(concept_id_set or dom_norm or query_tokens or q_norm)
 
     results: list[tuple[float, LearningResource]] = []
     for r in resources:
-        score = 0.0
         r_cid = r.concept_id.lower()
         r_dom = r.domain.lower()
         r_type = r.type.upper()
 
-        if concept_id_set:
-            if r_cid in concept_id_set:
-                score += 5.0
-            else:
-                score += 0.5
-        else:
-            score += 1.0
+        if not has_filter:
+            base_score = 1.0 + (2.0 if preferred_types and r_type in preferred_types else 0.0)
+            results.append((base_score, r))
+            continue
+
+        relevance_score = 0.0
+        if concept_id_set and r_cid in concept_id_set:
+            relevance_score += 5.0
 
         if dom_norm:
             if dom_norm in r_dom or r_dom in dom_norm:
-                score += 3.0
+                relevance_score += 3.0
             elif not concept_id_set:
                 continue
 
-        if preferred_types and r_type in preferred_types:
-            score += 2.0
-
-        if q_norm:
-            tokens = [w for w in re.split(r"\s+", q_norm) if len(w) > 1]
+        if query_tokens:
             text_corpus = f"{r.title} {r.description} {r.domain} {r.concept_id}".lower()
-            match_count = sum(1 for tok in tokens if tok in text_corpus)
-            if tokens:
-                score += (match_count / len(tokens)) * 4.0
+            corpus_terms = set(tokenize_meaningful_terms(text_corpus))
+            match_count = sum(
+                1
+                for tok in query_tokens
+                if tok in corpus_terms or (len(tok) >= 4 and tok in text_corpus)
+            )
+            if match_count > 0:
+                relevance_score += (match_count / len(query_tokens)) * 4.0
 
-        if score > 0.0:
-            results.append((score, r))
+        # Never return unrelated fallback resources when query/domain/concept_ids had 0 overlap
+        if relevance_score <= 0.0:
+            continue
 
-    if not results and (query or domain or concept_ids):
-        # Fallback to general resources
-        for r in resources:
-            results.append((1.0, r))
+        if preferred_types and r_type in preferred_types:
+            relevance_score += 2.0
+
+        results.append((relevance_score, r))
 
     results.sort(key=lambda item: (-item[0], item[1].title))
     return [r for _, r in results[:clamped_limit]]

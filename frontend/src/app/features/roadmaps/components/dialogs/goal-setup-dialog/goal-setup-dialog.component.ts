@@ -295,22 +295,29 @@ export class GoalSetupDialogComponent {
     }
 
     this.validationError.set(null);
-    const attachedSummary =
-      this.attachments().length > 0
-        ? ` • Tài liệu đính kèm (${this.attachments().length}/3): ${this.attachments()
-            .map(a => a.title)
-            .join(', ')}`
-        : '';
-    const description = `Cam kết ${this.weeklyHours()} giờ/tuần (~${this.dailyHoursEstimate()}h/ngày) • Tổng ước tính ${this.totalEstimatedHours()} giờ (${this.estimatedPomodoros()} phiên Pomodoro).${attachedSummary}`;
-
     const payload: CreateRoadmapRequest = {
       title: trimmed,
-      description,
+      description: trimmed,
       goal_title: trimmed,
-      goal_description: description,
+      goal_description: trimmed,
       prior_knowledge_level: this.currentLevel(),
       start_date: getTodayIso(),
       target_date: this.targetDeadline() || getDefaultDeadlineIso(12),
+      weekly_commitment_hours: this.weeklyHours(),
+      input_provenance: {
+        target_date:
+          (this.targetDeadline() || getDefaultDeadlineIso(12)) !== getDefaultDeadlineIso(12)
+            ? 'USER_EXPLICIT'
+            : 'USER_CONFIRMED',
+        prior_knowledge_level:
+          this.currentLevel() !== this.initialLevel()
+            ? 'USER_EXPLICIT'
+            : 'USER_CONFIRMED',
+        weekly_commitment_hours:
+          this.weeklyHours() !== this.initialWeeklyHours()
+            ? 'USER_EXPLICIT'
+            : 'USER_CONFIRMED',
+      },
     };
 
     this.submitAttachments.emit(this.attachments());

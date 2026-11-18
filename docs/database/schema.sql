@@ -1,1298 +1,2359 @@
--- =============================================================================
--- FocusFlow Relational Database Schema DDL v3.2 (PostgreSQL 16 + pgvector)
--- Kiến trúc: Context-First Modular Monolith + FocusFlow Learning Intelligence Harness
---            (4 Bounded Contexts + Shared Kernel)
--- Tổng số bảng vật lý: 35 Bảng chuẩn hóa 3NF/BCNF kết hợp Controlled JSONB Value Objects có ràng buộc CHECK nghiêm ngặt
---                      (12 account, 10 planning, 5 execution, 4 evaluation, 4 shared_kernel)
--- Tiêu chuẩn: ISO/IEC 9075:2023 SQL, Defense-in-Depth Constraints, ACID Outbox
--- Chiến lược Khóa chính: UUIDv7 sinh tại Backend (FastAPI - RFC 9562), fallback DB
--- Quy tắc Modular Monolith: Giữ FK vật lý ở tầng DB để bảo toàn toàn vẹn tham chiếu,
---                           nhưng cấm ORM JOIN chéo Context trong code (giao tiếp qua
---                           public_api.py và Transactional Outbox outbox_events).
--- Quản lý Thời gian: TIMESTAMPTZ (UTC) cho toàn bộ mốc thời gian; cột timezone trong users
--- =============================================================================
+-- ============================================================================
+-- FocusFlow — PostgreSQL 16 Physical Database DDL
+-- GENERATED from Alembic head via backend/scripts/dump_schema.sh
+-- DO NOT EDIT BY HAND. All schema changes must go through Alembic migrations.
+-- ============================================================================
 
--- =============================================================================
--- KÍCH HOẠT EXTENSION PGVECTOR (HYBRID RAG: TSVECTOR GIN + PGVECTOR HNSW)
--- PostgreSQL 16 (pgvector) cung cấp khả năng truy xuất ngữ nghĩa (semantic chunk
--- retrieval) kết hợp cùng tìm kiếm toàn văn bản native (tsvector GIN) ngay trong
--- cùng cụm CSDL quan hệ mà không cần triển khai thêm container Vector DB riêng biệt.
--- =============================================================================
-CREATE EXTENSION IF NOT EXISTS vector;
+--
+-- PostgreSQL database dump
+--
 
--- =============================================================================
--- 0. HÀM TRIGGER DÙNG CHUNG CẬP NHẬT UPDATED_AT (26 BẢNG CÓ CỘT UPDATED_AT)
--- =============================================================================
-CREATE OR REPLACE FUNCTION fn_set_updated_at()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+\restrict ksecOrFoe4YIR9lYCw8RygNUJnINrwfLr6TAjvZMbPBevhAGy1DVOduAagc3Db9
 
--- =============================================================================
--- BOUNDED CONTEXT 1: ACCOUNT (`account` — 12 BẢNG)
--- Trách nhiệm: Quản lý định danh, xác thực, hồ sơ năng lực SRL, trí nhớ người học
---              cấu trúc hóa (4 Categories × 3 Epistemic Levels), mức độ thành thạo
---              khái niệm (Skill Mastery), cấu hình lịch rảnh Mode A/B, kết nối lịch
---              OAuth 2 chiều, hạn ngạch AI 2 pha và thanh toán.
--- =============================================================================
+-- Dumped from database version 16.15 (Debian 16.15-1.pgdg12+2)
+-- Dumped by pg_dump version 16.15 (Debian 16.15-1.pgdg12+2)
 
--- -----------------------------------------------------------------------------
--- 1. BẢNG USERS (Người dùng hệ thống)
--- Gốc quản lý định danh người học, phân quyền RBAC, gói dịch vụ và trạng thái khóa
--- -----------------------------------------------------------------------------
-CREATE TABLE users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email VARCHAR(255) NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    full_name VARCHAR(100) NOT NULL,
-    timezone VARCHAR(50) NOT NULL DEFAULT 'Asia/Ho_Chi_Minh',
-    role VARCHAR(20) NOT NULL DEFAULT 'LEARNER',
-    tier VARCHAR(20) NOT NULL DEFAULT 'FREE',
-    is_locked BOOLEAN NOT NULL DEFAULT FALSE,
-    premium_expires_at TIMESTAMPTZ NULL,
-    last_login_at TIMESTAMPTZ NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_users_email UNIQUE (email),
-    CONSTRAINT chk_users_role CHECK (role IN ('LEARNER', 'ADMIN')),
-    CONSTRAINT chk_users_tier CHECK (tier IN ('FREE', 'PREMIUM'))
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+--
+-- Name: vector; Type: EXTENSION; Schema: -; Owner: -
+--
+
+CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA public;
+
+
+--
+-- Name: EXTENSION vector; Type: COMMENT; Schema: -; Owner: -
+--
+
+COMMENT ON EXTENSION vector IS 'vector data type and ivfflat and hnsw access methods';
+
+
+--
+-- Name: fn_set_updated_at(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_set_updated_at() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+        BEGIN
+            NEW.updated_at = NOW();
+            RETURN NEW;
+        END;
+        $$;
+
+
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
+--
+-- Name: ai_quota_reservations; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_quota_reservations (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    quota_id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    operation_type character varying(50) NOT NULL,
+    status character varying(20) DEFAULT 'RESERVED'::character varying NOT NULL,
+    tokens_reserved integer DEFAULT 0 NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    resolved_at timestamp with time zone,
+    CONSTRAINT chk_ai_quota_res_resolved CHECK (((((status)::text = 'RESERVED'::text) AND (resolved_at IS NULL)) OR (((status)::text <> 'RESERVED'::text) AND (resolved_at IS NOT NULL)))),
+    CONSTRAINT chk_ai_quota_res_status CHECK (((status)::text = ANY ((ARRAY['RESERVED'::character varying, 'COMMITTED'::character varying, 'RELEASED'::character varying, 'EXPIRED'::character varying])::text[]))),
+    CONSTRAINT chk_ai_quota_res_tokens CHECK ((tokens_reserved >= 0))
 );
 
--- -----------------------------------------------------------------------------
--- 2. BẢNG LEARNER_PROFILES (Hồ sơ Năng lực & Trí nhớ Người học - Zimmerman SRL)
--- Quan hệ 1:1 với users, lưu trữ thói quen học tập được tổng hợp qua Taskiq Worker
--- -----------------------------------------------------------------------------
-CREATE TABLE learner_profiles (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL,
-    optimal_focus_duration_mins INTEGER NOT NULL DEFAULT 25,
-    peak_productivity_slots JSONB NOT NULL DEFAULT '["MORNING", "EVENING"]'::jsonb,
-    estimation_bias_factor NUMERIC(4, 2) NOT NULL DEFAULT 1.00,
-    weekly_completion_rate NUMERIC(5, 2) NOT NULL DEFAULT 0.00,
-    total_completed_sessions INTEGER NOT NULL DEFAULT 0,
-    is_cold_start BOOLEAN NOT NULL DEFAULT TRUE,
-    last_aggregated_at TIMESTAMPTZ DEFAULT NOW(),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_learner_profiles_user_id UNIQUE (user_id),
-    CONSTRAINT fk_learner_profiles_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT chk_learner_profiles_duration CHECK (optimal_focus_duration_mins BETWEEN 15 AND 120),
-    CONSTRAINT chk_learner_profiles_bias CHECK (estimation_bias_factor BETWEEN 0.50 AND 2.00),
-    CONSTRAINT chk_learner_profiles_rate CHECK (weekly_completion_rate BETWEEN 0.00 AND 100.00),
-    CONSTRAINT chk_learner_profiles_sessions CHECK (total_completed_sessions >= 0)
+
+--
+-- Name: ai_quotas; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_quotas (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    monthly_limit integer DEFAULT 30 NOT NULL,
+    used_calls integer DEFAULT 0 NOT NULL,
+    reserved_calls integer DEFAULT 0 NOT NULL,
+    tokens_consumed bigint DEFAULT '0'::bigint NOT NULL,
+    cycle_start timestamp with time zone NOT NULL,
+    cycle_end timestamp with time zone NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_ai_quotas_cycle CHECK ((cycle_end > cycle_start)),
+    CONSTRAINT chk_ai_quotas_limit CHECK (((used_calls + reserved_calls) <= monthly_limit)),
+    CONSTRAINT chk_ai_quotas_monthly_limit CHECK ((monthly_limit > 0)),
+    CONSTRAINT chk_ai_quotas_reserved_calls CHECK ((reserved_calls >= 0)),
+    CONSTRAINT chk_ai_quotas_tokens CHECK ((tokens_consumed >= 0)),
+    CONSTRAINT chk_ai_quotas_used_calls CHECK ((used_calls >= 0))
 );
 
--- -----------------------------------------------------------------------------
--- 3. BẢNG WEBCAL_TOKENS (Token Đồng bộ Lịch Ngoài 1 Chiều iCal/WebCal Feed)
--- Lưu SHA-256 digest của 32-byte hex CSPRN cho URL đăng ký iCal riêng tư (.ics)
--- -----------------------------------------------------------------------------
-CREATE TABLE webcal_tokens (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL,
-    token_hash VARCHAR(64) NOT NULL,
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    last_used_at TIMESTAMPTZ,
-    rotated_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_webcal_tokens_user_id UNIQUE (user_id),
-    CONSTRAINT uq_webcal_tokens_token_hash UNIQUE (token_hash),
-    CONSTRAINT fk_webcal_tokens_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT chk_webcal_tokens_hash CHECK (token_hash ~ '^[0-9a-f]{64}$')
+
+--
+-- Name: ai_reviews; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_reviews (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    roadmap_id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    milestone_id uuid,
+    review_cycle character varying(20) NOT NULL,
+    period_start date,
+    period_end date,
+    quantitative_summary jsonb DEFAULT '{}'::jsonb NOT NULL,
+    strengths_feedback text NOT NULL,
+    bottlenecks_feedback text NOT NULL,
+    action_recommendations text NOT NULL,
+    model_used character varying(100) NOT NULL,
+    generated_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    user_reflection_payload jsonb DEFAULT '{}'::jsonb NOT NULL,
+    CONSTRAINT chk_ai_reviews_cycle CHECK (((review_cycle)::text = ANY ((ARRAY['WEEKLY'::character varying, 'MILESTONE'::character varying])::text[]))),
+    CONSTRAINT chk_ai_reviews_period_order CHECK (((((review_cycle)::text = 'MILESTONE'::text) AND (milestone_id IS NOT NULL) AND (period_start IS NULL) AND (period_end IS NULL)) OR (((review_cycle)::text = 'WEEKLY'::text) AND (milestone_id IS NULL) AND (period_start IS NOT NULL) AND (period_end IS NOT NULL) AND (period_end >= period_start)))),
+    CONSTRAINT chk_ai_reviews_quantitative_summary CHECK ((jsonb_typeof(quantitative_summary) = 'object'::text)),
+    CONSTRAINT chk_ai_reviews_reflection CHECK ((jsonb_typeof(user_reflection_payload) = 'object'::text))
 );
 
--- -----------------------------------------------------------------------------
--- 4. BẢNG CALENDAR_CONNECTIONS (Kết nối Lịch Ngoại vi 2 Chiều OAuth - Chuẩn hóa 3NF/BCNF)
--- Tách biệt hoàn toàn khỏi WebCal 1 chiều (.ics), quản lý refresh token mã hóa Fernet (SRS §12)
--- -----------------------------------------------------------------------------
-CREATE TABLE calendar_connections (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL,
-    provider VARCHAR(30) NOT NULL DEFAULT 'GOOGLE',
-    external_calendar_id VARCHAR(255) NOT NULL DEFAULT 'primary',
-    oauth_refresh_token_encrypted TEXT NOT NULL,
-    sync_status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
-    last_synced_at TIMESTAMPTZ,
-    error_detail TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_calendar_connections_user_provider UNIQUE (user_id, provider),
-    CONSTRAINT fk_calendar_connections_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT chk_calendar_connections_provider CHECK (provider IN ('GOOGLE', 'OUTLOOK', 'LOCAL_MOCK')),
-    CONSTRAINT chk_calendar_connections_status CHECK (sync_status IN ('ACTIVE', 'REVOKED', 'ERROR'))
+
+--
+-- Name: ai_usage_logs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_usage_logs (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    action_type character varying(50) NOT NULL,
+    model_name character varying(100) DEFAULT 'gpt-4o-mini'::character varying NOT NULL,
+    prompt_tokens integer DEFAULT 0 NOT NULL,
+    completion_tokens integer DEFAULT 0 NOT NULL,
+    total_tokens integer DEFAULT 0 NOT NULL,
+    latency_ms integer DEFAULT 0 NOT NULL,
+    status character varying(20) DEFAULT 'SUCCESS'::character varying NOT NULL,
+    error_message text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    estimated_cost_usd numeric(12,6) DEFAULT '0'::numeric NOT NULL,
+    error_code character varying(80),
+    idempotency_key character varying(255),
+    audit_metadata jsonb,
+    CONSTRAINT chk_ai_usage_logs_action CHECK (((action_type)::text = ANY ((ARRAY['ROADMAP_GENERATION'::character varying, 'SCHEDULE_PROPOSAL'::character varying, 'AI_REVIEW_WEEKLY'::character varying, 'AI_REVIEW_MILESTONE'::character varying, 'MILESTONE_BREAKDOWN'::character varying, 'CHAT_ASSISTANT'::character varying, 'KNOWLEDGE_INGESTION'::character varying, 'WHAT_IF_SIMULATION'::character varying, 'OVERDUE_RECOVERY'::character varying, 'CONTINUOUS_LEARNING'::character varying, 'GOAL_CLARIFICATION'::character varying])::text[]))),
+    CONSTRAINT chk_ai_usage_logs_latency CHECK ((latency_ms >= 0)),
+    CONSTRAINT chk_ai_usage_logs_status CHECK (((status)::text = ANY ((ARRAY['SUCCESS'::character varying, 'FAILED'::character varying, 'RATE_LIMITED'::character varying, 'TIMEOUT'::character varying])::text[]))),
+    CONSTRAINT chk_ai_usage_logs_tokens CHECK (((prompt_tokens >= 0) AND (completion_tokens >= 0) AND (total_tokens >= 0)))
 );
 
--- -----------------------------------------------------------------------------
--- 5. BẢNG AVAILABILITIES (Cấu hình Quỹ Thời gian Rảnh Tổng thể)
--- Mỗi người dùng có 1 bản ghi cấu hình chế độ rảnh (Mode A quỹ giờ / Mode B khung giờ)
--- Hàm kiểm định miền giá trị Controlled JSONB Value Object cho daily_quotas:
---   (1) jsonb_typeof(p_quotas) = 'object'
---   (2) Mọi key thuộc ('MON'..'SUN', 'MONDAY'..'SUNDAY')
---   (3) Mọi value là kiểu number và nằm trong miền [0.5, 14.0] giờ/ngày
---   (4) Khi mode = 'MODE_A', bắt buộc có ít nhất 1 ngày được cấu hình (p_quotas <> '{}'::jsonb)
--- -----------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION fn_validate_daily_quotas(p_quotas JSONB, p_mode VARCHAR)
-RETURNS BOOLEAN
-LANGUAGE sql
-IMMUTABLE
-AS $$
-    SELECT
-        p_quotas IS NOT NULL
-        AND jsonb_typeof(p_quotas) = 'object'
-        AND (p_mode <> 'MODE_A' OR p_quotas <> '{}'::jsonb)
-        AND NOT EXISTS (
-            SELECT 1
-            FROM jsonb_each(p_quotas) AS e(key, value)
-            WHERE e.key NOT IN (
-                'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN',
-                'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'
-            )
-            OR jsonb_typeof(e.value) <> 'number'
-            OR (
-                CASE
-                    WHEN jsonb_typeof(e.value) = 'number'
-                    THEN ((e.value::text)::numeric NOT BETWEEN 0.5 AND 14.0)
-                    ELSE TRUE
-                END
-            )
-        );
-$$;
 
-CREATE TABLE availabilities (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL,
-    mode VARCHAR(20) NOT NULL DEFAULT 'MODE_A',
-    calendar_integration_mode VARCHAR(20) NOT NULL DEFAULT 'NONE',
-    daily_quotas JSONB NOT NULL DEFAULT '{}'::jsonb,
-    min_session_minutes INTEGER NOT NULL DEFAULT 30,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_availabilities_user_id UNIQUE (user_id),
-    CONSTRAINT fk_availabilities_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT chk_availabilities_mode CHECK (mode IN ('MODE_A', 'MODE_B')),
-    CONSTRAINT chk_availabilities_cal_mode CHECK (calendar_integration_mode IN ('NONE', 'EXPORT_ICS', 'CONNECTED')),
-    CONSTRAINT chk_availabilities_quotas_json CHECK (fn_validate_daily_quotas(daily_quotas, mode)),
-    CONSTRAINT chk_availabilities_min_session CHECK (min_session_minutes BETWEEN 15 AND 120)
+--
+-- Name: alembic_version; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.alembic_version (
+    version_num character varying(32) NOT NULL
 );
 
--- -----------------------------------------------------------------------------
--- 6. BẢNG AVAILABILITY_SLOTS (Khung Giờ Rảnh Chi tiết - Chuẩn hóa 100% 3NF)
--- Ánh xạ trực tiếp sang Value Object WeeklySchedule & TimeSlot tại Repository Layer
--- -----------------------------------------------------------------------------
-CREATE TABLE availability_slots (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    availability_id UUID NOT NULL,
-    day_of_week SMALLINT NOT NULL,
-    start_time TIME NOT NULL,
-    end_time TIME NOT NULL,
-    end_day_offset SMALLINT NOT NULL DEFAULT 0,
-    slot_type VARCHAR(20) NOT NULL DEFAULT 'ALLOWED',
-    energy_level VARCHAR(10) NOT NULL DEFAULT 'MEDIUM',
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT fk_avail_slots_availability FOREIGN KEY (availability_id) REFERENCES availabilities(id) ON DELETE CASCADE,
-    CONSTRAINT chk_avail_slots_day CHECK (day_of_week BETWEEN 0 AND 6),
-    CONSTRAINT chk_avail_slots_offset CHECK (end_day_offset IN (0, 1)),
-    CONSTRAINT chk_avail_slots_type CHECK (slot_type IN ('ALLOWED', 'FIXED')),
-    CONSTRAINT chk_avail_slots_energy CHECK (energy_level IN ('LOW', 'MEDIUM', 'HIGH')),
-    CONSTRAINT chk_avail_slots_time CHECK (end_day_offset = 1 OR end_time > start_time)
+
+--
+-- Name: availabilities; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.availabilities (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    mode character varying(20) DEFAULT 'MODE_A'::character varying NOT NULL,
+    calendar_integration_mode character varying(20) DEFAULT 'NONE'::character varying NOT NULL,
+    daily_quotas jsonb DEFAULT '{}'::jsonb NOT NULL,
+    min_session_minutes integer DEFAULT 30 NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_availabilities_cal_mode CHECK (((calendar_integration_mode)::text = ANY ((ARRAY['NONE'::character varying, 'EXPORT_ICS'::character varying, 'CONNECTED'::character varying])::text[]))),
+    CONSTRAINT chk_availabilities_min_session CHECK (((min_session_minutes >= 15) AND (min_session_minutes <= 120))),
+    CONSTRAINT chk_availabilities_mode CHECK (((mode)::text = ANY ((ARRAY['MODE_A'::character varying, 'MODE_B'::character varying])::text[])))
 );
 
--- -----------------------------------------------------------------------------
--- 7. BẢNG AI_QUOTAS (Hạn ngạch AI Chu kỳ Hiện tại - 2-Phase ACID Quota Guard)
--- Quản trị số lượt gọi AI theo chu kỳ tháng (Free: 30, Premium: 300) kèm reserved_calls
--- -----------------------------------------------------------------------------
-CREATE TABLE ai_quotas (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL,
-    monthly_limit INTEGER NOT NULL DEFAULT 30,
-    used_calls INTEGER NOT NULL DEFAULT 0,
-    reserved_calls INTEGER NOT NULL DEFAULT 0,
-    tokens_consumed BIGINT NOT NULL DEFAULT 0,
-    cycle_start TIMESTAMPTZ NOT NULL,
-    cycle_end TIMESTAMPTZ NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_ai_quotas_user_id UNIQUE (user_id),
-    CONSTRAINT fk_ai_quotas_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT chk_ai_quotas_monthly_limit CHECK (monthly_limit > 0),
-    CONSTRAINT chk_ai_quotas_used_calls CHECK (used_calls >= 0),
-    CONSTRAINT chk_ai_quotas_reserved_calls CHECK (reserved_calls >= 0),
-    CONSTRAINT chk_ai_quotas_tokens CHECK (tokens_consumed >= 0),
-    CONSTRAINT chk_ai_quotas_limit CHECK (used_calls + reserved_calls <= monthly_limit),
-    CONSTRAINT chk_ai_quotas_cycle CHECK (cycle_end > cycle_start)
+
+--
+-- Name: availability_slots; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.availability_slots (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    availability_id uuid NOT NULL,
+    day_of_week smallint NOT NULL,
+    start_time time without time zone NOT NULL,
+    end_time time without time zone NOT NULL,
+    end_day_offset smallint DEFAULT '0'::smallint NOT NULL,
+    slot_type character varying(20) DEFAULT 'ALLOWED'::character varying NOT NULL,
+    is_active boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    energy_level character varying(10) DEFAULT 'MEDIUM'::character varying NOT NULL,
+    CONSTRAINT chk_avail_slots_day CHECK (((day_of_week >= 0) AND (day_of_week <= 6))),
+    CONSTRAINT chk_avail_slots_energy CHECK (((energy_level)::text = ANY ((ARRAY['LOW'::character varying, 'MEDIUM'::character varying, 'HIGH'::character varying])::text[]))),
+    CONSTRAINT chk_avail_slots_offset CHECK ((end_day_offset = ANY (ARRAY[0, 1]))),
+    CONSTRAINT chk_avail_slots_time CHECK (((end_day_offset = 1) OR (end_time > start_time))),
+    CONSTRAINT chk_avail_slots_type CHECK (((slot_type)::text = ANY ((ARRAY['ALLOWED'::character varying, 'FIXED'::character varying])::text[])))
 );
 
--- -----------------------------------------------------------------------------
--- 8. BẢNG AI_QUOTA_RESERVATIONS (Sổ cái Giữ chỗ Hạn ngạch AI 2 Pha - NEW v3.0)
--- Đảm bảo 0% mất hạn ngạch khi luồng gọi LLM bị timeout hoặc ngắt kết nối SSE
--- -----------------------------------------------------------------------------
-CREATE TABLE ai_quota_reservations (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    quota_id UUID NOT NULL,
-    user_id UUID NOT NULL,
-    operation_type VARCHAR(50) NOT NULL,
-    status VARCHAR(20) NOT NULL DEFAULT 'RESERVED',
-    tokens_reserved INTEGER NOT NULL DEFAULT 0,
-    expires_at TIMESTAMPTZ NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    resolved_at TIMESTAMPTZ,
-    CONSTRAINT fk_ai_quota_res_quota FOREIGN KEY (quota_id) REFERENCES ai_quotas(id) ON DELETE CASCADE,
-    CONSTRAINT fk_ai_quota_res_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT chk_ai_quota_res_status CHECK (status IN ('RESERVED', 'COMMITTED', 'RELEASED', 'EXPIRED')),
-    CONSTRAINT chk_ai_quota_res_tokens CHECK (tokens_reserved >= 0),
-    CONSTRAINT chk_ai_quota_res_resolved CHECK (
-        (status = 'RESERVED' AND resolved_at IS NULL) OR
-        (status != 'RESERVED' AND resolved_at IS NOT NULL)
-    )
+
+--
+-- Name: calendar_connections; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.calendar_connections (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    provider character varying(30) DEFAULT 'GOOGLE'::character varying NOT NULL,
+    external_calendar_id character varying(255) DEFAULT 'primary'::character varying NOT NULL,
+    oauth_refresh_token_encrypted text NOT NULL,
+    sync_status character varying(20) DEFAULT 'ACTIVE'::character varying NOT NULL,
+    sync_token text,
+    channel_id character varying(255),
+    resource_id character varying(255),
+    channel_token_hash character varying(64),
+    channel_expiration timestamp with time zone,
+    source_calendars_json jsonb DEFAULT '["primary"]'::jsonb NOT NULL,
+    sync_metadata_json jsonb DEFAULT '{}'::jsonb NOT NULL,
+    last_synced_at timestamp with time zone,
+    error_detail text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_calendar_connections_provider CHECK (((provider)::text = ANY ((ARRAY['GOOGLE'::character varying, 'OUTLOOK'::character varying, 'LOCAL_MOCK'::character varying])::text[]))),
+    CONSTRAINT chk_calendar_connections_status CHECK (((sync_status)::text = ANY ((ARRAY['ACTIVE'::character varying, 'REVOKED'::character varying, 'ERROR'::character varying])::text[])))
 );
 
--- -----------------------------------------------------------------------------
--- 9. BẢNG AI_USAGE_LOGS (Nhật ký Kiểm toán Gọi Dịch vụ AI Chi tiết)
--- Ghi nhận lịch sử kiểm toán đa nhà cung cấp (Provider-Agnostic LLMPort)
--- -----------------------------------------------------------------------------
-CREATE TABLE ai_usage_logs (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL,
-    reservation_id UUID NULL REFERENCES ai_quota_reservations(id) ON DELETE SET NULL,
-    action_type VARCHAR(50) NOT NULL,
-    model_name VARCHAR(100) NOT NULL DEFAULT 'gemini-2.5-flash',
-    attempt_no SMALLINT NOT NULL DEFAULT 1 CHECK (attempt_no BETWEEN 1 AND 5),
-    prompt_tokens INTEGER NOT NULL DEFAULT 0,
-    completion_tokens INTEGER NOT NULL DEFAULT 0,
-    total_tokens INTEGER NOT NULL DEFAULT 0,
-    latency_ms INTEGER NOT NULL DEFAULT 0,
-    estimated_cost_usd NUMERIC(10, 6) NOT NULL DEFAULT 0.000000 CHECK (estimated_cost_usd >= 0),
-    status VARCHAR(20) NOT NULL DEFAULT 'SUCCESS',
-    error_message TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT fk_ai_usage_logs_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT chk_ai_usage_logs_action CHECK (action_type IN (
-        'ROADMAP_GENERATION',
-        'MILESTONE_BREAKDOWN',
-        'SCHEDULE_PROPOSAL',
-        'AI_RESCHEDULE',
-        'TASK_MICRO_STEPPING',
-        'MILESTONE_PROVE_CHECK',
-        'AI_REVIEW_WEEKLY',
-        'AI_REVIEW_MILESTONE',
-        'CHAT_ASSISTANT',
-        'KNOWLEDGE_INGESTION',
-        'WHAT_IF_SIMULATION'
-    )),
-    CONSTRAINT chk_ai_usage_logs_tokens CHECK (prompt_tokens >= 0 AND completion_tokens >= 0 AND total_tokens >= 0),
-    CONSTRAINT chk_ai_usage_logs_latency CHECK (latency_ms >= 0),
-    CONSTRAINT chk_ai_usage_logs_status CHECK (status IN ('SUCCESS', 'FAILED', 'RATE_LIMITED', 'TIMEOUT'))
+
+--
+-- Name: concept_prerequisites; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.concept_prerequisites (
+    source_concept_id character varying(120) NOT NULL,
+    prerequisite_concept_id character varying(120) NOT NULL,
+    relation_type character varying(30) DEFAULT 'REQUIRES'::character varying NOT NULL,
+    rationale text DEFAULT ''::text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_concept_prerequisites_no_self_loop CHECK (((source_concept_id)::text <> (prerequisite_concept_id)::text)),
+    CONSTRAINT chk_concept_prerequisites_relation_type CHECK (((relation_type)::text = ANY ((ARRAY['REQUIRES'::character varying, 'RECOMMENDED_BEFORE'::character varying])::text[])))
 );
 
--- -----------------------------------------------------------------------------
--- 10. BẢNG PAYMENT_TRANSACTIONS (Giao dịch Thanh toán Nâng cấp Gói - NEW v3.0)
--- Hỗ trợ cổng thanh toán PayOS, VNPay Sandbox và LocalMockPaymentAdapter
--- -----------------------------------------------------------------------------
-CREATE TABLE payment_transactions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL,
-    transaction_ref VARCHAR(100) NOT NULL,
-    gateway_provider VARCHAR(20) NOT NULL DEFAULT 'PAYOS',
-    amount_vnd INTEGER NOT NULL,
-    currency VARCHAR(10) NOT NULL DEFAULT 'VND',
-    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
-    qr_code_url TEXT,
-    webhook_signature_verified BOOLEAN NOT NULL DEFAULT FALSE,
-    paid_at TIMESTAMPTZ,
-    expires_at TIMESTAMPTZ NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_payment_transactions_ref UNIQUE (transaction_ref),
-    CONSTRAINT fk_payment_transactions_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT,
-    CONSTRAINT chk_payment_transactions_provider CHECK (gateway_provider IN ('PAYOS', 'VNPAY', 'MOCK')),
-    CONSTRAINT chk_payment_transactions_amount CHECK (amount_vnd > 0),
-    CONSTRAINT chk_payment_transactions_status CHECK (status IN ('PENDING', 'PAID', 'FAILED', 'CANCELLED', 'EXPIRED')),
-    CONSTRAINT chk_payment_transactions_paid_at CHECK (
-        (status = 'PAID' AND paid_at IS NOT NULL) OR
-        (status != 'PAID' AND paid_at IS NULL)
-    )
+
+--
+-- Name: goals; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.goals (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    title text NOT NULL,
+    raw_description text NOT NULL,
+    target_date date,
+    status character varying(20) DEFAULT 'ACTIVE'::character varying NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    prior_knowledge_level character varying(50) DEFAULT 'BEGINNER'::character varying NOT NULL,
+    clarification_context text,
+    CONSTRAINT chk_goals_status CHECK (((status)::text = ANY ((ARRAY['ACTIVE'::character varying, 'COMPLETED'::character varying, 'ARCHIVED'::character varying])::text[])))
 );
 
--- -----------------------------------------------------------------------------
--- 11. BẢNG LEARNER_MEMORY_ITEMS (Trí nhớ Người học Cấu trúc hóa - NEW v3.2)
--- Phân tầng 4 Danh mục (PROFILE, BEHAVIORAL, KNOWLEDGE, INTERACTION) × 3 Mức nhận thức
--- (EXPLICIT, OBSERVED, INFERRED) kèm độ tin cậy, kích thước mẫu và xác nhận của người học
--- -----------------------------------------------------------------------------
-CREATE TABLE learner_memory_items (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL,
-    memory_category VARCHAR(30) NOT NULL,
-    epistemic_type VARCHAR(20) NOT NULL,
-    memory_key VARCHAR(120) NOT NULL,
-    claim_value JSONB NOT NULL,
-    source_evidence TEXT NOT NULL DEFAULT '',
-    sample_size INTEGER NOT NULL DEFAULT 1,
-    observation_window_days INTEGER NULL,
-    confidence_score NUMERIC(4, 3) NOT NULL DEFAULT 1.000,
-    confirmation_status VARCHAR(25) NOT NULL DEFAULT 'UNCONFIRMED',
-    confirmed_at TIMESTAMPTZ NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_learner_memory_items_user_cat_key UNIQUE (user_id, memory_category, memory_key),
-    CONSTRAINT fk_learner_memory_items_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT chk_learner_memory_items_category CHECK (
-        memory_category IN ('PROFILE', 'BEHAVIORAL', 'KNOWLEDGE', 'INTERACTION')
-    ),
-    CONSTRAINT chk_learner_memory_items_epistemic CHECK (
-        epistemic_type IN ('EXPLICIT', 'OBSERVED', 'INFERRED')
-    ),
-    CONSTRAINT chk_learner_memory_items_claim_json CHECK (jsonb_typeof(claim_value) = 'object'),
-    CONSTRAINT chk_learner_memory_items_sample_size CHECK (sample_size >= 0),
-    CONSTRAINT chk_learner_memory_items_window CHECK (
-        observation_window_days IS NULL OR observation_window_days >= 0
-    ),
-    CONSTRAINT chk_learner_memory_items_confidence CHECK (
-        confidence_score BETWEEN 0.000 AND 1.000
-    ),
-    CONSTRAINT chk_learner_memory_items_confirmation CHECK (
-        confirmation_status IN ('UNCONFIRMED', 'CONFIRMED', 'REJECTED', 'EDITED')
-    )
+
+--
+-- Name: knowledge_chunks; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.knowledge_chunks (
+    id uuid NOT NULL,
+    source_id uuid NOT NULL,
+    goal_id uuid NOT NULL,
+    chunk_index integer NOT NULL,
+    section_title character varying(255),
+    page_number integer,
+    content text NOT NULL,
+    token_count integer NOT NULL,
+    search_vector tsvector GENERATED ALWAYS AS (to_tsvector('simple'::regconfig, content)) STORED NOT NULL,
+    embedding public.vector(768),
+    provenance_json jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_knowledge_chunks_index CHECK ((chunk_index >= 0)),
+    CONSTRAINT chk_knowledge_chunks_page CHECK (((page_number IS NULL) OR (page_number >= 1))),
+    CONSTRAINT chk_knowledge_chunks_provenance CHECK ((jsonb_typeof(provenance_json) = 'object'::text)),
+    CONSTRAINT chk_knowledge_chunks_tokens CHECK ((token_count > 0))
 );
 
--- -----------------------------------------------------------------------------
--- 12. BẢNG LEARNER_CONCEPT_MASTERIES (Theo dõi Thành thạo Khái niệm & Ôn tập Thông minh - NEW v3.2)
--- Lưu vết điểm thành thạo (0..100), cấp độ năng lực, mẫu lỗi sai và lịch ôn tập tiếp theo
--- -----------------------------------------------------------------------------
-CREATE TABLE learner_concept_masteries (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL,
-    concept_id VARCHAR(120) NOT NULL,
-    mastery_score NUMERIC(5, 2) NOT NULL DEFAULT 0.00,
-    mastery_level VARCHAR(20) NOT NULL DEFAULT 'NOVICE',
-    evidence_count INTEGER NOT NULL DEFAULT 0,
-    mistake_pattern_summary JSONB NOT NULL DEFAULT '[]'::jsonb,
-    last_practiced_at TIMESTAMPTZ NULL,
-    next_review_at TIMESTAMPTZ NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_learner_concept_masteries_user_concept UNIQUE (user_id, concept_id),
-    CONSTRAINT fk_learner_mastery_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT chk_learner_mastery_score CHECK (mastery_score BETWEEN 0.00 AND 100.00),
-    CONSTRAINT chk_learner_mastery_level CHECK (
-        mastery_level IN ('NOVICE', 'DEVELOPING', 'PROFICIENT', 'MASTERED')
-    ),
-    CONSTRAINT chk_learner_mastery_evidence CHECK (evidence_count >= 0),
-    CONSTRAINT chk_learner_mastery_mistakes_json CHECK (jsonb_typeof(mistake_pattern_summary) = 'array')
+
+--
+-- Name: knowledge_sources; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.knowledge_sources (
+    id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    goal_id uuid NOT NULL,
+    source_type character varying(20) NOT NULL,
+    title character varying(255) NOT NULL,
+    source_uri text,
+    content_hash character varying(64) NOT NULL,
+    ingestion_status character varying(20) DEFAULT 'PENDING'::character varying NOT NULL,
+    chunk_count integer DEFAULT 0 NOT NULL,
+    provenance_metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    error_detail text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_knowledge_sources_chunks CHECK ((chunk_count >= 0)),
+    CONSTRAINT chk_knowledge_sources_hash CHECK (((content_hash)::text ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT chk_knowledge_sources_provenance CHECK ((jsonb_typeof(provenance_metadata) = 'object'::text)),
+    CONSTRAINT chk_knowledge_sources_status CHECK (((ingestion_status)::text = ANY ((ARRAY['PENDING'::character varying, 'PROCESSING'::character varying, 'INDEXED'::character varying, 'FAILED'::character varying, 'QUARANTINED'::character varying])::text[]))),
+    CONSTRAINT chk_knowledge_sources_type CHECK (((source_type)::text = ANY ((ARRAY['PDF'::character varying, 'DOCX'::character varying, 'TXT'::character varying, 'URL'::character varying])::text[])))
 );
 
--- =============================================================================
--- BOUNDED CONTEXT 2: PLANNING (`planning` — 10 BẢNG)
--- Trách nhiệm: Quản lý mục tiêu, lộ trình, cột mốc, lịch học chính thức (Frozen Baseline
---              kèm Resilience Policy), đề xuất lịch xem trước (What-If Simulation),
---              cơ sở tri thức, Knowledge Engine (RAG Ingestion & Hybrid Retrieval)
---              và các khối lịch học chi tiết (schedule_blocks).
--- =============================================================================
 
--- -----------------------------------------------------------------------------
--- 13. BẢNG GOALS (Mục tiêu Học tập)
--- Mục tiêu tổng quát của người học trước khi phân rã thành lộ trình
--- -----------------------------------------------------------------------------
-CREATE TABLE goals (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL,
-    title TEXT NOT NULL,
-    raw_description TEXT NOT NULL,
-    target_date DATE,
-    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
-    prior_knowledge_level VARCHAR(50) NOT NULL DEFAULT 'BEGINNER',
-    clarification_context TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT fk_goals_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT chk_goals_status CHECK (status IN ('DRAFT', 'CLARIFIED', 'ACTIVE', 'PAUSED', 'COMPLETED', 'ABANDONED'))
+--
+-- Name: learner_concept_masteries; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.learner_concept_masteries (
+    id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    concept_key character varying(160) NOT NULL,
+    mastery_score numeric(5,4) NOT NULL,
+    evidence_count integer NOT NULL,
+    last_evidence_type character varying(40) NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_learner_mastery_evidence CHECK ((evidence_count > 0)),
+    CONSTRAINT chk_learner_mastery_score CHECK (((mastery_score >= (0)::numeric) AND (mastery_score <= (1)::numeric)))
 );
 
--- -----------------------------------------------------------------------------
--- 14. BẢNG ROADMAPS (Lộ trình Tự học Thích ứng)
--- Bản thiết kế học tập chia nhỏ từ mục tiêu, quản lý trạng thái, budget dời lịch & dormant
--- -----------------------------------------------------------------------------
-CREATE TABLE roadmaps (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL,
-    goal_id UUID NOT NULL,
-    title VARCHAR(255) NOT NULL,
-    description TEXT,
-    status VARCHAR(20) NOT NULL DEFAULT 'INITIALIZED',
-    start_date DATE,
-    target_date DATE,
-    weekly_reschedule_budget SMALLINT NOT NULL DEFAULT 3,
-    weekly_reschedule_used SMALLINT NOT NULL DEFAULT 0,
-    budget_week_start DATE NOT NULL DEFAULT CURRENT_DATE,
-    last_study_activity_at TIMESTAMPTZ,
-    reset_ritual_count SMALLINT NOT NULL DEFAULT 0,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT fk_roadmaps_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_roadmaps_goal FOREIGN KEY (goal_id) REFERENCES goals(id) ON DELETE CASCADE,
-    CONSTRAINT uq_roadmaps_goal UNIQUE (goal_id),
-    CONSTRAINT chk_roadmaps_status CHECK (status IN ('INITIALIZED', 'ACTIVE', 'PAUSED', 'COMPLETED', 'ARCHIVED')),
-    CONSTRAINT chk_roadmaps_dates CHECK (target_date IS NULL OR start_date IS NULL OR target_date >= start_date),
-    CONSTRAINT chk_roadmaps_weekly_budget CHECK (weekly_reschedule_budget BETWEEN 1 AND 10),
-    CONSTRAINT chk_roadmaps_weekly_used CHECK (weekly_reschedule_used >= 0),
-    CONSTRAINT chk_roadmaps_reset_count CHECK (reset_ritual_count >= 0)
+
+--
+-- Name: learner_memory_items; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.learner_memory_items (
+    id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    memory_key character varying(160) NOT NULL,
+    value jsonb NOT NULL,
+    category character varying(30) NOT NULL,
+    epistemic_level character varying(20) NOT NULL,
+    confidence double precision NOT NULL,
+    sample_size integer DEFAULT 0 NOT NULL,
+    evidence jsonb DEFAULT '[]'::jsonb NOT NULL,
+    observation_started_at timestamp with time zone,
+    observation_ended_at timestamp with time zone,
+    status character varying(20) DEFAULT 'PENDING'::character varying NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_learner_memory_confidence CHECK (((confidence >= (0)::double precision) AND (confidence <= (1)::double precision))),
+    CONSTRAINT chk_learner_memory_epistemic CHECK (((epistemic_level)::text = ANY ((ARRAY['EXPLICIT'::character varying, 'OBSERVED'::character varying, 'INFERRED'::character varying])::text[]))),
+    CONSTRAINT chk_learner_memory_sample_size CHECK ((sample_size >= 0)),
+    CONSTRAINT chk_learner_memory_status CHECK (((status)::text = ANY ((ARRAY['PENDING'::character varying, 'CONFIRMED'::character varying, 'REJECTED'::character varying])::text[])))
 );
 
--- -----------------------------------------------------------------------------
--- 15. BẢNG MILESTONES (Các Mốc Kiến thức Tuần tự Cấp 1)
--- Thứ tự sequence_order là duy nhất trong cùng Roadmap, hỗ trợ trạng thái kiểm chứng Prove
--- -----------------------------------------------------------------------------
-CREATE TABLE milestones (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    roadmap_id UUID NOT NULL,
-    sequence_order INTEGER NOT NULL,
-    title VARCHAR(255) NOT NULL,
-    description TEXT,
-    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
-    proof_status VARCHAR(20) NOT NULL DEFAULT 'UNVERIFIED',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT fk_milestones_roadmap FOREIGN KEY (roadmap_id) REFERENCES roadmaps(id) ON DELETE CASCADE,
-    CONSTRAINT uq_milestones_roadmap_seq UNIQUE (roadmap_id, sequence_order) DEFERRABLE INITIALLY DEFERRED,
-    CONSTRAINT chk_milestones_seq CHECK (sequence_order >= 1),
-    CONSTRAINT chk_milestones_status CHECK (status IN ('PENDING', 'APPROVED', 'IN_PROGRESS', 'COMPLETED')),
-    CONSTRAINT chk_milestones_proof_status CHECK (
-        proof_status IN ('UNVERIFIED', 'PENDING_REVIEW', 'PROVEN', 'NEEDS_REVIEW')
-    )
+
+--
+-- Name: learner_profiles; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.learner_profiles (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    optimal_focus_duration_mins integer DEFAULT 25 NOT NULL,
+    peak_productivity_slots jsonb DEFAULT '["MORNING", "EVENING"]'::jsonb NOT NULL,
+    estimation_bias_factor numeric(4,2) DEFAULT 1.00 NOT NULL,
+    weekly_completion_rate numeric(5,2) DEFAULT 0.00 NOT NULL,
+    total_completed_sessions integer DEFAULT 0 NOT NULL,
+    is_cold_start boolean DEFAULT true NOT NULL,
+    last_aggregated_at timestamp with time zone DEFAULT now(),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_learner_profiles_bias CHECK (((estimation_bias_factor >= 0.50) AND (estimation_bias_factor <= 2.00))),
+    CONSTRAINT chk_learner_profiles_duration CHECK (((optimal_focus_duration_mins >= 15) AND (optimal_focus_duration_mins <= 120))),
+    CONSTRAINT chk_learner_profiles_rate CHECK (((weekly_completion_rate >= 0.00) AND (weekly_completion_rate <= 100.00))),
+    CONSTRAINT chk_learner_profiles_sessions CHECK ((total_completed_sessions >= 0))
 );
 
--- -----------------------------------------------------------------------------
--- 16. BẢNG OFFICIAL_SCHEDULES (Lịch trình Học tập Chính thức - Frozen Baseline & Resilience Policy)
--- Đóng băng chỉ số kế hoạch cơ sở cho KPI 3 và lưu chính sách chống đứt gãy (Buffer, Cap, Stability)
--- -----------------------------------------------------------------------------
-CREATE TABLE official_schedules (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    roadmap_id UUID NOT NULL,
-    version_number INTEGER NOT NULL DEFAULT 1 CHECK (version_number >= 1),
-    strategy VARCHAR(20) NOT NULL DEFAULT 'MERGE_EXISTING' CHECK (strategy IN ('MERGE_EXISTING', 'REPLACE_ALL')),
-    total_sessions INTEGER NOT NULL DEFAULT 0,
-    total_planned_minutes INTEGER NOT NULL DEFAULT 0,
-    buffer_minutes_per_week INTEGER NOT NULL DEFAULT 60,
-    recovery_window_days SMALLINT NOT NULL DEFAULT 7,
-    daily_workload_cap_minutes INTEGER NOT NULL DEFAULT 180,
-    stability_weight NUMERIC(3, 2) NOT NULL DEFAULT 0.80,
-    activated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_official_schedules_roadmap UNIQUE (roadmap_id),
-    CONSTRAINT fk_official_schedules_roadmap FOREIGN KEY (roadmap_id) REFERENCES roadmaps(id) ON DELETE CASCADE,
-    CONSTRAINT chk_official_schedules_sessions CHECK (total_sessions >= 0),
-    CONSTRAINT chk_official_schedules_minutes CHECK (total_planned_minutes >= 0),
-    CONSTRAINT chk_official_schedules_buffer CHECK (buffer_minutes_per_week >= 0),
-    CONSTRAINT chk_official_schedules_recovery_window CHECK (recovery_window_days BETWEEN 1 AND 30),
-    CONSTRAINT chk_official_schedules_daily_cap CHECK (daily_workload_cap_minutes BETWEEN 15 AND 720),
-    CONSTRAINT chk_official_schedules_stability_weight CHECK (stability_weight BETWEEN 0.00 AND 1.00)
+
+--
+-- Name: learning_concepts; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.learning_concepts (
+    concept_id character varying(120) NOT NULL,
+    title character varying(255) NOT NULL,
+    summary text NOT NULL,
+    domain character varying(100) NOT NULL,
+    difficulty_level character varying(50) DEFAULT 'BEGINNER'::character varying NOT NULL,
+    estimated_effort_minutes integer DEFAULT 60 NOT NULL,
+    keywords jsonb DEFAULT '[]'::jsonb NOT NULL,
+    learning_outcomes jsonb DEFAULT '[]'::jsonb NOT NULL,
+    verification_status character varying(30) DEFAULT 'VERIFIED'::character varying NOT NULL,
+    version character varying(20) DEFAULT '1.0.0'::character varying NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_learning_concepts_effort_positive CHECK ((estimated_effort_minutes > 0)),
+    CONSTRAINT chk_learning_concepts_verification_status CHECK (((verification_status)::text = ANY ((ARRAY['VERIFIED'::character varying, 'UNVERIFIED'::character varying, 'DEPRECATED'::character varying])::text[])))
 );
 
--- -----------------------------------------------------------------------------
--- 17. BẢNG SCHEDULE_PROPOSALS (Bản Đề xuất Lịch Xem trước & What-If Simulation)
--- Chứa proposal_data JSONB xem trước, hỗ trợ đo KPI AI Proposal Edit Rate và Snapshot gốc
--- -----------------------------------------------------------------------------
-CREATE TABLE schedule_proposals (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    roadmap_id UUID NOT NULL,
-    user_id UUID NOT NULL,
-    proposal_data JSONB NOT NULL,
-    status VARCHAR(20) NOT NULL DEFAULT 'DRAFT',
-    proposal_type VARCHAR(30) NOT NULL DEFAULT 'INITIAL_SCHEDULE',
-    original_proposal_data JSONB,
-    user_edit_count INTEGER NOT NULL DEFAULT 0,
-    applied_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT fk_schedule_proposals_roadmap FOREIGN KEY (roadmap_id) REFERENCES roadmaps(id) ON DELETE CASCADE,
-    CONSTRAINT fk_schedule_proposals_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT chk_schedule_proposals_status CHECK (status IN ('DRAFT', 'APPLIED', 'DISCARDED')),
-    CONSTRAINT chk_schedule_proposals_data CHECK (jsonb_typeof(proposal_data) = 'object'),
-    CONSTRAINT chk_schedule_proposals_type CHECK (
-        proposal_type IN (
-            'INITIAL_SCHEDULE',
-            'AI_RECOVERY',
-            'POST_FAILURE_RESET',
-            'WHAT_IF_SIMULATION',
-            'SCHEDULE_ONLY_REOPTIMIZE'
-        )
-    ),
-    CONSTRAINT chk_schedule_proposals_edits CHECK (user_edit_count >= 0)
+
+--
+-- Name: milestone_proofs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.milestone_proofs (
+    id uuid NOT NULL,
+    milestone_id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    status character varying(24) DEFAULT 'DRAFT'::character varying NOT NULL,
+    questions jsonb DEFAULT '[]'::jsonb NOT NULL,
+    answers jsonb DEFAULT '[]'::jsonb NOT NULL,
+    score integer,
+    confidence numeric(5,4),
+    corrective_action text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    submitted_at timestamp with time zone,
+    CONSTRAINT chk_milestone_proofs_confidence CHECK (((confidence IS NULL) OR ((confidence >= (0)::numeric) AND (confidence <= (1)::numeric)))),
+    CONSTRAINT chk_milestone_proofs_status CHECK (((status)::text = ANY ((ARRAY['DRAFT'::character varying, 'READY'::character varying, 'SUBMITTED'::character varying, 'PASSED'::character varying, 'NEEDS_REVIEW'::character varying])::text[])))
 );
 
--- -----------------------------------------------------------------------------
--- 18. BẢNG LEARNING_CONCEPTS (Cơ sở Tri thức Học thuật Đã Xác thực - Knowledge Base)
--- Phục vụ tra cứu chỉ đọc (Read-only Tool Calling) cho AI Milestone Planner & Task Decomposer
--- -----------------------------------------------------------------------------
-CREATE TABLE learning_concepts (
-    concept_id VARCHAR(120) PRIMARY KEY,
-    title VARCHAR(255) NOT NULL,
-    summary TEXT NOT NULL,
-    domain VARCHAR(100) NOT NULL,
-    difficulty_level VARCHAR(50) NOT NULL DEFAULT 'BEGINNER',
-    estimated_effort_minutes INTEGER NOT NULL DEFAULT 60,
-    keywords JSONB NOT NULL DEFAULT '[]'::jsonb,
-    learning_outcomes JSONB NOT NULL DEFAULT '[]'::jsonb,
-    verification_status VARCHAR(30) NOT NULL DEFAULT 'VERIFIED',
-    version VARCHAR(20) NOT NULL DEFAULT '1.0.0',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT chk_learning_concepts_verification_status CHECK (verification_status IN ('VERIFIED', 'UNVERIFIED', 'DEPRECATED')),
-    CONSTRAINT chk_learning_concepts_effort_positive CHECK (estimated_effort_minutes > 0)
+
+--
+-- Name: milestones; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.milestones (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    roadmap_id uuid NOT NULL,
+    sequence_order integer NOT NULL,
+    title character varying(255) NOT NULL,
+    description text,
+    status character varying(20) DEFAULT 'PENDING'::character varying NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    proof_status character varying(20) DEFAULT 'UNVERIFIED'::character varying NOT NULL,
+    learning_outcomes jsonb DEFAULT '[]'::jsonb NOT NULL,
+    completion_criteria text,
+    estimated_effort_minutes integer DEFAULT 60 NOT NULL,
+    required_concepts jsonb DEFAULT '[]'::jsonb NOT NULL,
+    unverified_concepts jsonb DEFAULT '[]'::jsonb NOT NULL,
+    prerequisite_milestone_ids jsonb DEFAULT '[]'::jsonb NOT NULL,
+    CONSTRAINT chk_milestones_proof_status CHECK (((proof_status)::text = ANY ((ARRAY['UNVERIFIED'::character varying, 'PENDING_REVIEW'::character varying, 'PROVEN'::character varying, 'NEEDS_REVIEW'::character varying])::text[]))),
+    CONSTRAINT chk_milestones_seq CHECK ((sequence_order >= 1)),
+    CONSTRAINT chk_milestones_status CHECK (((status)::text = ANY ((ARRAY['PENDING'::character varying, 'APPROVED'::character varying, 'IN_PROGRESS'::character varying, 'COMPLETED'::character varying])::text[])))
 );
 
--- Bổ sung khóa ngoại từ learner_concept_masteries (account BC) sang learning_concepts (planning BC)
-ALTER TABLE learner_concept_masteries
-    ADD CONSTRAINT fk_learner_mastery_concept
-    FOREIGN KEY (concept_id) REFERENCES learning_concepts(concept_id) ON DELETE CASCADE;
 
--- -----------------------------------------------------------------------------
--- 19. BẢNG CONCEPT_PREREQUISITES (Quan hệ Tiên quyết Giữa các Khái niệm Tri thức)
--- -----------------------------------------------------------------------------
-CREATE TABLE concept_prerequisites (
-    source_concept_id VARCHAR(120) NOT NULL,
-    prerequisite_concept_id VARCHAR(120) NOT NULL,
-    relation_type VARCHAR(30) NOT NULL DEFAULT 'REQUIRES',
-    rationale TEXT NOT NULL DEFAULT '',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (source_concept_id, prerequisite_concept_id),
-    CONSTRAINT fk_concept_prerequisites_source FOREIGN KEY (source_concept_id) REFERENCES learning_concepts(concept_id) ON DELETE CASCADE,
-    CONSTRAINT fk_concept_prerequisites_prereq FOREIGN KEY (prerequisite_concept_id) REFERENCES learning_concepts(concept_id) ON DELETE CASCADE,
-    CONSTRAINT chk_concept_prerequisites_relation_type CHECK (relation_type IN ('REQUIRES', 'RECOMMENDED_BEFORE')),
-    CONSTRAINT chk_concept_prerequisites_no_self_loop CHECK (source_concept_id <> prerequisite_concept_id)
+--
+-- Name: official_schedules; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.official_schedules (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    roadmap_id uuid NOT NULL,
+    total_sessions integer DEFAULT 0 NOT NULL,
+    total_planned_minutes integer DEFAULT 0 NOT NULL,
+    activated_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    buffer_minutes_per_week integer DEFAULT 60 NOT NULL,
+    recovery_window_days smallint DEFAULT '7'::smallint NOT NULL,
+    daily_workload_cap_minutes integer DEFAULT 180 NOT NULL,
+    stability_weight numeric(4,3) DEFAULT 0.800 NOT NULL,
+    CONSTRAINT chk_official_schedules_minutes CHECK ((total_planned_minutes >= 0)),
+    CONSTRAINT chk_official_schedules_resilience CHECK (((buffer_minutes_per_week >= 0) AND ((recovery_window_days >= 7) AND (recovery_window_days <= 14)) AND ((daily_workload_cap_minutes >= 30) AND (daily_workload_cap_minutes <= 840)) AND ((stability_weight >= (0)::numeric) AND (stability_weight <= (1)::numeric)))),
+    CONSTRAINT chk_official_schedules_sessions CHECK ((total_sessions >= 0))
 );
 
--- -----------------------------------------------------------------------------
--- 20. BẢNG KNOWLEDGE_SOURCES (Nguồn Tài liệu Học tập Đầu vào - Knowledge Engine - NEW v3.2)
--- Quản lý tài liệu PDF/DOCX/TXT và URL người học cung cấp, kiểm soát SSRF & Provenance
--- -----------------------------------------------------------------------------
-CREATE TABLE knowledge_sources (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL,
-    goal_id UUID NOT NULL,
-    source_type VARCHAR(20) NOT NULL,
-    title VARCHAR(255) NOT NULL,
-    source_uri TEXT NULL,
-    content_hash VARCHAR(64) NOT NULL,
-    ingestion_status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
-    chunk_count INTEGER NOT NULL DEFAULT 0,
-    provenance_metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-    error_detail TEXT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT fk_knowledge_sources_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_knowledge_sources_goal FOREIGN KEY (goal_id) REFERENCES goals(id) ON DELETE CASCADE,
-    CONSTRAINT chk_knowledge_sources_type CHECK (source_type IN ('PDF', 'DOCX', 'TXT', 'URL')),
-    CONSTRAINT chk_knowledge_sources_hash CHECK (content_hash ~ '^[0-9a-f]{64}$'),
-    CONSTRAINT chk_knowledge_sources_status CHECK (
-        ingestion_status IN ('PENDING', 'PROCESSING', 'INDEXED', 'FAILED', 'QUARANTINED')
-    ),
-    CONSTRAINT chk_knowledge_sources_chunks CHECK (chunk_count >= 0),
-    CONSTRAINT chk_knowledge_sources_provenance CHECK (jsonb_typeof(provenance_metadata) = 'object')
+
+--
+-- Name: outbox_events; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.outbox_events (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    aggregate_type character varying(100) NOT NULL,
+    aggregate_id uuid NOT NULL,
+    event_type character varying(120) NOT NULL,
+    payload jsonb NOT NULL,
+    status character varying(20) DEFAULT 'PENDING'::character varying NOT NULL,
+    retry_count integer DEFAULT 0 NOT NULL,
+    correlation_id character varying(64),
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    published_at timestamp with time zone,
+    CONSTRAINT chk_outbox_events_payload CHECK ((jsonb_typeof(payload) = 'object'::text)),
+    CONSTRAINT chk_outbox_events_published CHECK (((((status)::text = 'PUBLISHED'::text) AND (published_at IS NOT NULL)) OR (((status)::text <> 'PUBLISHED'::text) AND (published_at IS NULL)))),
+    CONSTRAINT chk_outbox_events_retry CHECK ((retry_count >= 0)),
+    CONSTRAINT chk_outbox_events_status CHECK (((status)::text = ANY ((ARRAY['PENDING'::character varying, 'PUBLISHED'::character varying, 'FAILED'::character varying])::text[])))
 );
 
--- -----------------------------------------------------------------------------
--- 21. BẢNG KNOWLEDGE_CHUNKS (Phân đoạn Tri thức RAG - Hybrid TSVECTOR + PGVECTOR - NEW v3.2)
--- Lưu từng phân đoạn văn bản, chỉ mục tìm kiếm từ khóa (tsvector) và vector ngữ nghĩa 768 chiều
--- -----------------------------------------------------------------------------
-CREATE TABLE knowledge_chunks (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    source_id UUID NOT NULL,
-    goal_id UUID NOT NULL,
-    chunk_index INTEGER NOT NULL,
-    section_title VARCHAR(255) NULL,
-    page_number INTEGER NULL,
-    content TEXT NOT NULL,
-    token_count INTEGER NOT NULL,
-    search_vector TSVECTOR NULL,
-    embedding vector(768) NULL,
-    provenance_json JSONB NOT NULL DEFAULT '{}'::jsonb,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_knowledge_chunks_source_idx UNIQUE (source_id, chunk_index),
-    CONSTRAINT fk_knowledge_chunks_source FOREIGN KEY (source_id) REFERENCES knowledge_sources(id) ON DELETE CASCADE,
-    CONSTRAINT fk_knowledge_chunks_goal FOREIGN KEY (goal_id) REFERENCES goals(id) ON DELETE CASCADE,
-    CONSTRAINT chk_knowledge_chunks_index CHECK (chunk_index >= 0),
-    CONSTRAINT chk_knowledge_chunks_page CHECK (page_number IS NULL OR page_number >= 1),
-    CONSTRAINT chk_knowledge_chunks_tokens CHECK (token_count > 0),
-    CONSTRAINT chk_knowledge_chunks_provenance CHECK (jsonb_typeof(provenance_json) = 'object')
+
+--
+-- Name: pause_records; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.pause_records (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    roadmap_id uuid NOT NULL,
+    pause_start_date date NOT NULL,
+    pause_end_date date NOT NULL,
+    shifted_days integer NOT NULL,
+    reason text,
+    status character varying(20) DEFAULT 'ACTIVE'::character varying NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_pause_records_dates CHECK ((pause_end_date >= pause_start_date)),
+    CONSTRAINT chk_pause_records_duration CHECK ((shifted_days = ((pause_end_date - pause_start_date) + 1))),
+    CONSTRAINT chk_pause_records_shifted CHECK ((shifted_days > 0)),
+    CONSTRAINT chk_pause_records_status CHECK (((status)::text = ANY ((ARRAY['ACTIVE'::character varying, 'COMPLETED'::character varying, 'CANCELLED'::character varying])::text[])))
 );
 
--- -----------------------------------------------------------------------------
--- 22. BẢNG SCHEDULE_BLOCKS (Khối Lịch Học Thực thi & Ánh xạ Sự kiện Lịch Ngoại vi - NEW v3.2)
--- Tách biệt hoàn toàn khối lượng ước tính của Task (tasks.estimated_minutes) với thời lượng
--- phân bổ trên từng khung lịch (scheduled_duration_minutes), hỗ trợ Buffer/Revision/Recovery
--- và lưu external_calendar_event_id để đồng bộ Google/Outlook Calendar 2 chiều chuẩn 3NF
--- -----------------------------------------------------------------------------
-CREATE TABLE schedule_blocks (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    roadmap_id UUID NOT NULL,
-    official_schedule_id UUID NOT NULL,
-    task_id UUID NULL,
-    sequence_in_task SMALLINT NOT NULL DEFAULT 1,
-    block_type VARCHAR(20) NOT NULL DEFAULT 'STUDY',
-    block_date DATE NOT NULL,
-    start_time TIMESTAMPTZ NOT NULL,
-    end_time TIMESTAMPTZ NOT NULL,
-    scheduled_duration_minutes INTEGER NOT NULL,
-    is_protected BOOLEAN NOT NULL DEFAULT FALSE,
-    status VARCHAR(20) NOT NULL DEFAULT 'PLANNED',
-    external_calendar_event_id VARCHAR(255) NULL,
-    placement_rationale TEXT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT fk_schedule_blocks_roadmap FOREIGN KEY (roadmap_id) REFERENCES roadmaps(id) ON DELETE CASCADE,
-    CONSTRAINT fk_schedule_blocks_schedule FOREIGN KEY (official_schedule_id) REFERENCES official_schedules(id) ON DELETE CASCADE,
-    CONSTRAINT chk_schedule_blocks_seq CHECK (sequence_in_task >= 1),
-    CONSTRAINT chk_schedule_blocks_type CHECK (block_type IN ('STUDY', 'BUFFER', 'REVISION', 'RECOVERY')),
-    CONSTRAINT chk_schedule_blocks_duration CHECK (scheduled_duration_minutes BETWEEN 10 AND 240),
-    CONSTRAINT chk_schedule_blocks_status CHECK (
-        status IN ('PLANNED', 'COMPLETED', 'MISSED', 'RESCHEDULED', 'CANCELLED')
-    ),
-    CONSTRAINT chk_schedule_blocks_time_order CHECK (end_time > start_time)
+
+--
+-- Name: payment_transactions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.payment_transactions (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    transaction_ref character varying(100) NOT NULL,
+    gateway_provider character varying(20) DEFAULT 'PAYOS'::character varying NOT NULL,
+    amount_vnd integer NOT NULL,
+    currency character varying(10) DEFAULT 'VND'::character varying NOT NULL,
+    status character varying(20) DEFAULT 'PENDING'::character varying NOT NULL,
+    qr_code_url text,
+    webhook_signature_verified boolean DEFAULT false NOT NULL,
+    paid_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_payment_transactions_amount CHECK ((amount_vnd > 0)),
+    CONSTRAINT chk_payment_transactions_paid_at CHECK (((((status)::text = ANY ((ARRAY['PAID'::character varying, 'REFUNDED'::character varying])::text[])) AND (paid_at IS NOT NULL)) OR (((status)::text <> ALL ((ARRAY['PAID'::character varying, 'REFUNDED'::character varying])::text[])) AND (paid_at IS NULL)))),
+    CONSTRAINT chk_payment_transactions_provider CHECK (((gateway_provider)::text = ANY ((ARRAY['PAYOS'::character varying, 'VNPAY'::character varying, 'MOCK'::character varying])::text[]))),
+    CONSTRAINT chk_payment_transactions_status CHECK (((status)::text = ANY ((ARRAY['PENDING'::character varying, 'PAID'::character varying, 'FAILED'::character varying, 'CANCELLED'::character varying, 'REFUNDED'::character varying])::text[])))
 );
 
--- =============================================================================
--- BOUNDED CONTEXT 3: EXECUTION (`execution` — 5 BẢNG)
--- Trách nhiệm: Quản lý nhiệm vụ học tập chi tiết (tasks kèm trích dẫn nguồn RAG),
---              đồ thị tiên quyết DAG (task_dependencies), vận hành không gian học tập
---              Pomodoro/Stopwatch kèm Daily Check-in, Heartbeat 60s và ghi chú.
--- =============================================================================
 
--- -----------------------------------------------------------------------------
--- 23. BẢNG TASKS (Nhiệm vụ Học tập Chi tiết Cấp 2)
--- Lưu ý: estimated_minutes đại diện cho nỗ lực ước tính bởi AI (estimated_effort),
--- trong khi schedule_blocks.scheduled_duration_minutes đại diện cho thời lượng phân bổ lịch.
--- Cột learning_resources_json lưu danh sách trích dẫn nguồn từ Knowledge Engine.
--- -----------------------------------------------------------------------------
-CREATE TABLE tasks (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    roadmap_id UUID NOT NULL,
-    milestone_id UUID NOT NULL,
-    official_schedule_id UUID,
-    parent_task_id UUID,
-    concept_id VARCHAR(120),
-    title VARCHAR(255) NOT NULL,
-    description TEXT,
-    estimated_minutes INTEGER NOT NULL,
-    learning_resources_json JSONB NOT NULL DEFAULT '[]'::jsonb,
-    scheduled_date DATE,
-    scheduled_start TIMESTAMPTZ,
-    scheduled_end TIMESTAMPTZ,
-    status VARCHAR(20) NOT NULL DEFAULT 'TODO',
-    completed_at TIMESTAMPTZ,
-    reschedule_count INTEGER NOT NULL DEFAULT 0,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT fk_tasks_roadmap FOREIGN KEY (roadmap_id) REFERENCES roadmaps(id) ON DELETE CASCADE,
-    CONSTRAINT fk_tasks_milestone FOREIGN KEY (milestone_id) REFERENCES milestones(id) ON DELETE CASCADE,
-    CONSTRAINT fk_tasks_official_schedule FOREIGN KEY (official_schedule_id) REFERENCES official_schedules(id) ON DELETE SET NULL,
-    CONSTRAINT fk_tasks_parent_task FOREIGN KEY (parent_task_id) REFERENCES tasks(id) ON DELETE SET NULL,
-    CONSTRAINT fk_tasks_concept FOREIGN KEY (concept_id) REFERENCES learning_concepts(concept_id) ON DELETE SET NULL,
-    CONSTRAINT chk_tasks_estimated_minutes CHECK (estimated_minutes BETWEEN 15 AND 240),
-    CONSTRAINT chk_tasks_learning_resources_json CHECK (jsonb_typeof(learning_resources_json) = 'array'),
-    CONSTRAINT chk_tasks_status CHECK (status IN ('TODO', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED')),
-    CONSTRAINT chk_tasks_reschedule_count CHECK (reschedule_count >= 0),
-    CONSTRAINT chk_tasks_no_self_parent CHECK (parent_task_id IS NULL OR parent_task_id <> id),
-    CONSTRAINT chk_tasks_scheduled_time_order CHECK (
-        (scheduled_start IS NULL AND scheduled_end IS NULL)
-        OR (scheduled_start IS NOT NULL AND scheduled_end IS NOT NULL AND scheduled_end > scheduled_start)
-    ),
-    CONSTRAINT chk_tasks_completed_at CHECK (
-        (status = 'COMPLETED' AND completed_at IS NOT NULL) OR
-        (status != 'COMPLETED' AND completed_at IS NULL)
-    )
+--
+-- Name: processed_events; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.processed_events (
+    event_id uuid NOT NULL,
+    handler_name character varying(120) NOT NULL,
+    processed_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
--- Bổ sung khóa ngoại từ schedule_blocks (planning BC) sang tasks (execution BC)
-ALTER TABLE schedule_blocks
-    ADD CONSTRAINT fk_schedule_blocks_task
-    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE;
 
--- -----------------------------------------------------------------------------
--- 24. BẢNG TASK_DEPENDENCIES (Quan hệ Tiên quyết Giữa các Nhiệm vụ - DAG)
--- Quản lý đồ thị có hướng không chu trình (DAG), kiểm định bởi DagCycleValidator
--- -----------------------------------------------------------------------------
-CREATE TABLE task_dependencies (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    predecessor_id UUID NOT NULL,
-    successor_id UUID NOT NULL,
-    roadmap_id UUID NOT NULL,
-    is_mandatory BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_task_deps_pair UNIQUE (predecessor_id, successor_id),
-    CONSTRAINT fk_task_deps_pred FOREIGN KEY (predecessor_id) REFERENCES tasks(id) ON DELETE CASCADE,
-    CONSTRAINT fk_task_deps_succ FOREIGN KEY (successor_id) REFERENCES tasks(id) ON DELETE CASCADE,
-    CONSTRAINT fk_task_deps_roadmap FOREIGN KEY (roadmap_id) REFERENCES roadmaps(id) ON DELETE CASCADE,
-    CONSTRAINT chk_task_deps_not_self CHECK (predecessor_id <> successor_id)
+--
+-- Name: roadmaps; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.roadmaps (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    goal_id uuid NOT NULL,
+    title character varying(255) NOT NULL,
+    description text,
+    status character varying(20) DEFAULT 'INITIALIZED'::character varying NOT NULL,
+    start_date date,
+    target_date date,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    weekly_reschedule_budget smallint DEFAULT '3'::smallint NOT NULL,
+    weekly_reschedule_used smallint DEFAULT '0'::smallint NOT NULL,
+    budget_week_start date,
+    last_study_activity_at timestamp with time zone,
+    reset_ritual_count integer DEFAULT 0 NOT NULL,
+    planning_metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    CONSTRAINT chk_roadmaps_dates CHECK (((target_date IS NULL) OR (start_date IS NULL) OR (target_date >= start_date))),
+    CONSTRAINT chk_roadmaps_reset_count CHECK ((reset_ritual_count >= 0)),
+    CONSTRAINT chk_roadmaps_status CHECK (((status)::text = ANY ((ARRAY['INITIALIZED'::character varying, 'ACTIVE'::character varying, 'PAUSED'::character varying, 'COMPLETED'::character varying, 'ARCHIVED'::character varying])::text[]))),
+    CONSTRAINT chk_roadmaps_weekly_budget CHECK (((weekly_reschedule_budget >= 0) AND (weekly_reschedule_used >= 0)))
 );
 
--- -----------------------------------------------------------------------------
--- 25. BẢNG STUDY_SESSIONS (Phiên Thực thi Học tập Pomodoro / Stopwatch / MVS & Daily Check-in)
--- Hỗ trợ Minimum Viable Session (10-15p), tín hiệu Heartbeat 60s, nợ Takeaway và 3 câu hỏi
--- khảo sát nhanh cuối phiên (Daily Learning Check-in: thời lượng, độ khó, mức tập trung)
--- -----------------------------------------------------------------------------
-CREATE TABLE study_sessions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL,
-    roadmap_id UUID NOT NULL,
-    session_mode VARCHAR(20) NOT NULL DEFAULT 'STANDARD',
-    timer_mode VARCHAR(20) NOT NULL DEFAULT 'POMODORO' CHECK (timer_mode IN ('POMODORO', 'STOPWATCH')),
-    started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    ended_at TIMESTAMPTZ,
-    planned_minutes INTEGER NOT NULL,
-    actual_minutes INTEGER NOT NULL DEFAULT 0,
-    status VARCHAR(20) NOT NULL DEFAULT 'IN_PROGRESS',
-    pending_takeaway BOOLEAN NOT NULL DEFAULT FALSE,
-    checkin_time_sufficiency VARCHAR(20) NULL,
-    checkin_perceived_difficulty VARCHAR(20) NULL,
-    checkin_focus_level SMALLINT NULL,
-    last_heartbeat_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT fk_study_sessions_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_study_sessions_roadmap FOREIGN KEY (roadmap_id) REFERENCES roadmaps(id) ON DELETE CASCADE,
-    CONSTRAINT chk_study_sessions_mode CHECK (session_mode IN ('STANDARD', 'MVS')),
-    CONSTRAINT chk_study_sessions_planned_min CHECK (planned_minutes > 0),
-    CONSTRAINT chk_study_sessions_actual_min CHECK (actual_minutes >= 0),
-    CONSTRAINT chk_study_sessions_status CHECK (status IN ('IN_PROGRESS', 'COMPLETED', 'PARTIAL_COMPLETED', 'CANCELLED')),
-    CONSTRAINT chk_study_sessions_times CHECK (ended_at IS NULL OR ended_at >= started_at),
-    CONSTRAINT chk_study_sessions_status_ended CHECK (
-        (status = 'IN_PROGRESS' AND ended_at IS NULL) OR
-        (status != 'IN_PROGRESS' AND ended_at IS NOT NULL)
-    ),
-    CONSTRAINT chk_study_sessions_checkin_time CHECK (
-        checkin_time_sufficiency IS NULL OR checkin_time_sufficiency IN ('ENOUGH', 'TIGHT', 'INSUFFICIENT')
-    ),
-    CONSTRAINT chk_study_sessions_checkin_diff CHECK (
-        checkin_perceived_difficulty IS NULL OR checkin_perceived_difficulty IN ('EASY', 'AS_EXPECTED', 'HARDER')
-    ),
-    CONSTRAINT chk_study_sessions_checkin_focus CHECK (
-        checkin_focus_level IS NULL OR (checkin_focus_level BETWEEN 1 AND 5)
-    )
+
+--
+-- Name: schedule_blocks; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.schedule_blocks (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    roadmap_id uuid NOT NULL,
+    official_schedule_id uuid NOT NULL,
+    task_id uuid,
+    sequence_in_task smallint DEFAULT '1'::smallint NOT NULL,
+    block_type character varying(20) DEFAULT 'STUDY'::character varying NOT NULL,
+    block_date date NOT NULL,
+    start_time timestamp with time zone NOT NULL,
+    end_time timestamp with time zone NOT NULL,
+    scheduled_duration_minutes integer NOT NULL,
+    is_protected boolean DEFAULT false NOT NULL,
+    status character varying(20) DEFAULT 'PLANNED'::character varying NOT NULL,
+    external_calendar_event_id character varying(255),
+    etag character varying(255),
+    sync_status character varying(30) DEFAULT 'SYNCED'::character varying NOT NULL,
+    last_synced_at timestamp with time zone,
+    placement_rationale text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_schedule_blocks_duration CHECK (((scheduled_duration_minutes >= 10) AND (scheduled_duration_minutes <= 240))),
+    CONSTRAINT chk_schedule_blocks_seq CHECK ((sequence_in_task >= 1)),
+    CONSTRAINT chk_schedule_blocks_status CHECK (((status)::text = ANY ((ARRAY['PLANNED'::character varying, 'COMPLETED'::character varying, 'MISSED'::character varying, 'RESCHEDULED'::character varying, 'CANCELLED'::character varying])::text[]))),
+    CONSTRAINT chk_schedule_blocks_time_order CHECK ((end_time > start_time)),
+    CONSTRAINT chk_schedule_blocks_type CHECK (((block_type)::text = ANY ((ARRAY['STUDY'::character varying, 'BUFFER'::character varying, 'REVISION'::character varying, 'RECOVERY'::character varying])::text[])))
 );
 
--- -----------------------------------------------------------------------------
--- 26. BẢNG SESSION_TASKS (Bảng Trung gian Nhiều - Nhiều giữa Phiên học và Nhiệm vụ)
--- Bảo vệ lịch sử: ON DELETE RESTRICT trên task_id chặn xóa cứng nhiệm vụ đã học
--- -----------------------------------------------------------------------------
-CREATE TABLE session_tasks (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    session_id UUID NOT NULL,
-    task_id UUID NOT NULL,
-    allocated_minutes INTEGER NOT NULL DEFAULT 0,
-    actual_minutes INTEGER NOT NULL DEFAULT 0,
-    status_after_session VARCHAR(20) NOT NULL DEFAULT 'IN_PROGRESS',
-    notes TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_session_tasks_session_task UNIQUE (session_id, task_id),
-    CONSTRAINT fk_session_tasks_session FOREIGN KEY (session_id) REFERENCES study_sessions(id) ON DELETE CASCADE,
-    CONSTRAINT fk_session_tasks_task FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE RESTRICT,
-    CONSTRAINT chk_session_tasks_allocated CHECK (allocated_minutes >= 0),
-    CONSTRAINT chk_session_tasks_actual CHECK (actual_minutes >= 0),
-    CONSTRAINT chk_session_tasks_status_after CHECK (status_after_session IN ('TODO', 'IN_PROGRESS', 'COMPLETED'))
+
+--
+-- Name: schedule_change_logs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.schedule_change_logs (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    roadmap_id uuid NOT NULL,
+    schedule_id uuid,
+    task_id uuid,
+    trigger_type character varying(30) NOT NULL,
+    reason text,
+    affected_tasks_count integer DEFAULT 1 NOT NULL,
+    total_shifted_minutes integer DEFAULT 0 NOT NULL,
+    diff_payload jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    disruption_category character varying(40),
+    counts_toward_budget boolean DEFAULT true NOT NULL,
+    CONSTRAINT chk_sched_change_logs_affected CHECK ((affected_tasks_count >= 0)),
+    CONSTRAINT chk_sched_change_logs_minutes CHECK ((total_shifted_minutes >= 0)),
+    CONSTRAINT chk_sched_change_logs_payload CHECK ((jsonb_typeof(diff_payload) = 'object'::text)),
+    CONSTRAINT chk_sched_change_logs_trigger CHECK (((trigger_type)::text = ANY ((ARRAY['DOMINO_SHIFT'::character varying, 'MANUAL_EDIT'::character varying, 'AI_REPLAN'::character varying, 'CALENDAR_SYNC'::character varying])::text[])))
 );
 
--- -----------------------------------------------------------------------------
--- 27. BẢNG STUDY_NOTES (Ghi chép Học tập: Scratchpad, Takeaway, Tổng quát)
--- Tích hợp Confidence Calibration, AI Evidence Score & Anti-Fake Takeaway Verification
--- -----------------------------------------------------------------------------
-CREATE TABLE study_notes (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL,
-    session_id UUID,
-    task_id UUID,
-    note_type VARCHAR(20) NOT NULL,
-    content TEXT NOT NULL DEFAULT '',
-    self_confidence SMALLINT,
-    ai_evidence_score NUMERIC(3, 2),
-    alignment_flag VARCHAR(25) NOT NULL DEFAULT 'UNCHECKED',
-    verification_status VARCHAR(25) NOT NULL DEFAULT 'PENDING_PROVE',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT fk_study_notes_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_study_notes_session FOREIGN KEY (session_id) REFERENCES study_sessions(id) ON DELETE CASCADE,
-    CONSTRAINT fk_study_notes_task FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL,
-    CONSTRAINT chk_study_notes_context_anchor CHECK (session_id IS NOT NULL OR task_id IS NOT NULL),
-    CONSTRAINT chk_study_notes_type CHECK (note_type IN ('SCRATCHPAD', 'TAKEAWAY', 'GENERAL')),
-    CONSTRAINT chk_study_notes_confidence CHECK (
-        self_confidence IS NULL OR (self_confidence BETWEEN 1 AND 5)
-    ),
-    CONSTRAINT chk_study_notes_evidence_score CHECK (
-        ai_evidence_score IS NULL OR (ai_evidence_score BETWEEN 1.00 AND 5.00)
-    ),
-    CONSTRAINT chk_study_notes_alignment CHECK (
-        alignment_flag IN ('UNCHECKED', 'ALIGNED', 'SUPERFICIAL', 'OFF_TOPIC', 'CONTRADICTORY')
-    ),
-    CONSTRAINT chk_study_notes_verification CHECK (
-        verification_status IN ('PENDING_PROVE', 'VERIFIED', 'FLAGGED_SHALLOW', 'NEEDS_REVIEW')
-    ),
-    CONSTRAINT chk_study_notes_takeaway_min_length CHECK (
-        note_type <> 'TAKEAWAY' OR char_length(btrim(content)) >= 30
-    )
+
+--
+-- Name: schedule_proposals; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.schedule_proposals (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    roadmap_id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    proposal_data jsonb NOT NULL,
+    status character varying(20) DEFAULT 'DRAFT'::character varying NOT NULL,
+    applied_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    proposal_type character varying(35) DEFAULT 'INITIAL_SCHEDULE'::character varying NOT NULL,
+    original_proposal_data jsonb DEFAULT '{}'::jsonb NOT NULL,
+    user_edit_count integer DEFAULT 0 NOT NULL,
+    pedagogical_warnings jsonb DEFAULT '[]'::jsonb NOT NULL,
+    CONSTRAINT chk_schedule_proposals_data CHECK ((jsonb_typeof(proposal_data) = 'object'::text)),
+    CONSTRAINT chk_schedule_proposals_edit_count CHECK ((user_edit_count >= 0)),
+    CONSTRAINT chk_schedule_proposals_original CHECK ((jsonb_typeof(original_proposal_data) = 'object'::text)),
+    CONSTRAINT chk_schedule_proposals_status CHECK (((status)::text = ANY ((ARRAY['DRAFT'::character varying, 'APPLIED'::character varying, 'DISCARDED'::character varying])::text[]))),
+    CONSTRAINT chk_schedule_proposals_type CHECK (((proposal_type)::text = ANY ((ARRAY['INITIAL_SCHEDULE'::character varying, 'AI_RECOVERY'::character varying, 'POST_FAILURE_RESET'::character varying, 'SCHEDULE_ONLY_REOPTIMIZE'::character varying, 'WHAT_IF_SIMULATION'::character varying])::text[]))),
+    CONSTRAINT chk_schedule_proposals_warnings CHECK ((jsonb_typeof(pedagogical_warnings) = 'array'::text))
 );
 
--- =============================================================================
--- BOUNDED CONTEXT 4: EVALUATION (`evaluation` — 4 BẢNG)
--- Trách nhiệm: Quản lý lịch sử tạm dừng & tịnh tiến Domino Shift (pause_records),
---              tính toán chỉ số định lượng (QuantitativeMetrics), sinh báo cáo
---              AI Review kèm phản tư tuần (Weekly Reflection), nhật ký biến động lịch
---              và kiểm chứng Prove Mode tích hợp Mistake Intelligence.
--- =============================================================================
 
--- -----------------------------------------------------------------------------
--- 28. BẢNG PAUSE_RECORDS (Lịch sử Tạm dừng Lộ trình & Tịnh tiến Domino Shift)
--- shifted_days khớp chính xác số ngày tạm dừng (pause_end_date - pause_start_date; NULL khi ACTIVE)
--- -----------------------------------------------------------------------------
-CREATE TABLE pause_records (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    roadmap_id UUID NOT NULL,
-    pause_start_date DATE NOT NULL,
-    pause_end_date DATE NULL,
-    shifted_days INTEGER NULL,
-    reason TEXT,
-    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT fk_pause_records_roadmap FOREIGN KEY (roadmap_id) REFERENCES roadmaps(id) ON DELETE CASCADE,
-    CONSTRAINT chk_pause_records_status CHECK (status IN ('ACTIVE', 'COMPLETED')),
-    CONSTRAINT chk_pause_records_lifecycle CHECK (
-        (status = 'ACTIVE' AND pause_end_date IS NULL AND shifted_days IS NULL) OR
-        (status = 'COMPLETED' AND pause_end_date IS NOT NULL AND shifted_days IS NOT NULL AND shifted_days = (pause_end_date - pause_start_date) AND shifted_days >= 0)
-    )
+--
+-- Name: session_tasks; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.session_tasks (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    session_id uuid NOT NULL,
+    task_id uuid NOT NULL,
+    allocated_minutes integer DEFAULT 0 NOT NULL,
+    actual_minutes integer DEFAULT 0 NOT NULL,
+    status_after_session character varying(20) DEFAULT 'IN_PROGRESS'::character varying NOT NULL,
+    notes text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_session_tasks_actual CHECK ((actual_minutes >= 0)),
+    CONSTRAINT chk_session_tasks_allocated CHECK ((allocated_minutes >= 0)),
+    CONSTRAINT chk_session_tasks_status_after CHECK (((status_after_session)::text = ANY ((ARRAY['TODO'::character varying, 'IN_PROGRESS'::character varying, 'COMPLETED'::character varying])::text[])))
 );
 
--- -----------------------------------------------------------------------------
--- 29. BẢNG AI_REVIEWS (Báo cáo Đánh giá Tiến độ, Phản tư Tuần & Khuyến nghị Thích ứng)
--- quantitative_summary JSONB lưu QuantitativeMetrics; user_reflection_payload lưu 2-3 câu
--- hỏi & trả lời phản tư chủ quan của người học (Weekly Reflection); model_used mặc định gemini-2.5-flash
--- -----------------------------------------------------------------------------
-CREATE TABLE ai_reviews (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    roadmap_id UUID NOT NULL,
-    user_id UUID NOT NULL,
-    milestone_id UUID,
-    review_cycle VARCHAR(20) NOT NULL,
-    period_start DATE,
-    period_end DATE,
-    quantitative_summary JSONB NOT NULL DEFAULT '{}'::jsonb,
-    user_reflection_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
-    strengths_feedback TEXT NOT NULL,
-    bottlenecks_feedback TEXT NOT NULL,
-    action_recommendations TEXT NOT NULL,
-    model_used VARCHAR(100) NOT NULL DEFAULT 'gemini-2.5-flash',
-    generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT fk_ai_reviews_roadmap FOREIGN KEY (roadmap_id) REFERENCES roadmaps(id) ON DELETE CASCADE,
-    CONSTRAINT fk_ai_reviews_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_ai_reviews_milestone FOREIGN KEY (milestone_id) REFERENCES milestones(id) ON DELETE CASCADE,
-    CONSTRAINT chk_ai_reviews_cycle CHECK (review_cycle IN ('WEEKLY', 'MILESTONE')),
-    CONSTRAINT chk_ai_reviews_quantitative_summary CHECK (jsonb_typeof(quantitative_summary) = 'object'),
-    CONSTRAINT chk_ai_reviews_user_reflection CHECK (jsonb_typeof(user_reflection_payload) = 'object'),
-    CONSTRAINT chk_ai_reviews_period_order CHECK (
-        (review_cycle = 'MILESTONE' AND milestone_id IS NOT NULL AND period_start IS NULL AND period_end IS NULL) OR
-        (review_cycle = 'WEEKLY' AND milestone_id IS NULL AND period_start IS NOT NULL AND period_end IS NOT NULL AND period_end >= period_start)
-    )
+
+--
+-- Name: study_notes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.study_notes (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    session_id uuid,
+    task_id uuid,
+    note_type character varying(20) NOT NULL,
+    content text DEFAULT ''::text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    self_confidence smallint,
+    ai_evidence_score numeric(4,2),
+    alignment_flag character varying(20) DEFAULT 'UNCHECKED'::character varying NOT NULL,
+    verification_status character varying(25) DEFAULT 'PENDING_PROVE'::character varying NOT NULL,
+    CONSTRAINT chk_study_notes_alignment CHECK (((alignment_flag)::text = ANY ((ARRAY['UNCHECKED'::character varying, 'ALIGNED'::character varying, 'SUPERFICIAL'::character varying, 'OFF_TOPIC'::character varying, 'CONTRADICTORY'::character varying])::text[]))),
+    CONSTRAINT chk_study_notes_confidence CHECK (((self_confidence IS NULL) OR ((self_confidence >= 1) AND (self_confidence <= 5)))),
+    CONSTRAINT chk_study_notes_evidence CHECK (((ai_evidence_score IS NULL) OR ((ai_evidence_score >= (1)::numeric) AND (ai_evidence_score <= (5)::numeric)))),
+    CONSTRAINT chk_study_notes_type CHECK (((note_type)::text = ANY ((ARRAY['SCRATCHPAD'::character varying, 'TAKEAWAY'::character varying, 'GENERAL'::character varying])::text[]))),
+    CONSTRAINT chk_study_notes_verification CHECK (((verification_status)::text = ANY ((ARRAY['PENDING_PROVE'::character varying, 'VERIFIED'::character varying, 'FLAGGED_SHALLOW'::character varying, 'NEEDS_REVIEW'::character varying])::text[])))
 );
 
--- -----------------------------------------------------------------------------
--- 30. BẢNG SCHEDULE_CHANGE_LOGS (Nhật ký Kiểm toán Biến động Lịch học - NEW v3.0)
--- Lưu vết bất biến mọi đợt dời lịch, phân loại gián đoạn chính đáng vs trì hoãn
--- -----------------------------------------------------------------------------
-CREATE TABLE schedule_change_logs (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    roadmap_id UUID NOT NULL,
-    schedule_id UUID,
-    task_id UUID,
-    trigger_type VARCHAR(30) NOT NULL,
-    reason TEXT,
-    affected_tasks_count INTEGER NOT NULL DEFAULT 1,
-    total_shifted_minutes INTEGER NOT NULL DEFAULT 0,
-    diff_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
-    disruption_category VARCHAR(30) NOT NULL DEFAULT 'UNSPECIFIED',
-    counts_toward_budget BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT fk_sched_change_logs_roadmap FOREIGN KEY (roadmap_id) REFERENCES roadmaps(id) ON DELETE CASCADE,
-    CONSTRAINT fk_sched_change_logs_schedule FOREIGN KEY (schedule_id) REFERENCES official_schedules(id) ON DELETE SET NULL,
-    CONSTRAINT fk_sched_change_logs_task FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL,
-    CONSTRAINT chk_sched_change_logs_trigger CHECK (trigger_type IN (
-        'DOMINO_SHIFT',
-        'MANUAL_PROACTIVE_EDIT',
-        'OVERDUE_RESCHEDULE',
-        'AI_REPLAN',
-        'STALLED_COMMITMENT_CONTRACT',
-        'BACKLOG_QUEUE_MOVE',
-        'POST_FAILURE_RESET',
-        'CALENDAR_SYNC'
-    )),
-    CONSTRAINT chk_sched_change_logs_disruption CHECK (disruption_category IN (
-        'UNSPECIFIED',
-        'LEGITIMATE_HEALTH',
-        'LEGITIMATE_WORK_SCHOOL',
-        'LEGITIMATE_EXTERNAL_CALENDAR',
-        'OVERLOAD_TASK_TOO_LARGE',
-        'OVERLOAD_PREREQUISITE_GAP',
-        'PROCRASTINATION_LOW_ENERGY',
-        'PROCRASTINATION_AVOIDANCE'
-    )),
-    CONSTRAINT chk_sched_change_logs_affected CHECK (affected_tasks_count >= 0),
-    CONSTRAINT chk_sched_change_logs_minutes CHECK (total_shifted_minutes >= 0),
-    CONSTRAINT chk_sched_change_logs_payload CHECK (jsonb_typeof(diff_payload) = 'object')
+
+--
+-- Name: study_sessions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.study_sessions (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    roadmap_id uuid NOT NULL,
+    started_at timestamp with time zone DEFAULT now() NOT NULL,
+    ended_at timestamp with time zone,
+    planned_minutes integer NOT NULL,
+    actual_minutes integer DEFAULT 0 NOT NULL,
+    status character varying(20) DEFAULT 'IN_PROGRESS'::character varying NOT NULL,
+    last_heartbeat_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    session_mode character varying(15) DEFAULT 'STANDARD'::character varying NOT NULL,
+    pending_takeaway boolean DEFAULT false NOT NULL,
+    checkin_time_sufficiency character varying(15),
+    checkin_perceived_difficulty smallint,
+    checkin_focus_level smallint,
+    CONSTRAINT chk_study_sessions_actual_min CHECK ((actual_minutes >= 0)),
+    CONSTRAINT chk_study_sessions_checkin_scores CHECK ((((checkin_perceived_difficulty IS NULL) OR ((checkin_perceived_difficulty >= 1) AND (checkin_perceived_difficulty <= 5))) AND ((checkin_focus_level IS NULL) OR ((checkin_focus_level >= 1) AND (checkin_focus_level <= 5))))),
+    CONSTRAINT chk_study_sessions_checkin_time CHECK (((checkin_time_sufficiency IS NULL) OR ((checkin_time_sufficiency)::text = ANY ((ARRAY['TOO_SHORT'::character varying, 'JUST_RIGHT'::character varying, 'TOO_LONG'::character varying])::text[])))),
+    CONSTRAINT chk_study_sessions_mode CHECK (((session_mode)::text = ANY ((ARRAY['STANDARD'::character varying, 'MVS'::character varying])::text[]))),
+    CONSTRAINT chk_study_sessions_planned_min CHECK ((planned_minutes > 0)),
+    CONSTRAINT chk_study_sessions_status CHECK (((status)::text = ANY ((ARRAY['IN_PROGRESS'::character varying, 'COMPLETED'::character varying, 'PARTIAL_COMPLETED'::character varying, 'CANCELLED'::character varying])::text[]))),
+    CONSTRAINT chk_study_sessions_status_ended CHECK (((((status)::text = 'IN_PROGRESS'::text) AND (ended_at IS NULL)) OR (((status)::text <> 'IN_PROGRESS'::text) AND (ended_at IS NOT NULL)))),
+    CONSTRAINT chk_study_sessions_times CHECK (((ended_at IS NULL) OR (ended_at >= started_at)))
 );
 
--- -----------------------------------------------------------------------------
--- 31. BẢNG MILESTONE_PROOFS (Kiểm chứng Bằng chứng Học tập Prove Mode & Mistake Intelligence)
--- Lưu vết AI Recall Check, câu trả lời, Calibration Gap, phân loại lỗi sai
--- (MISSING_FOUNDATION, CONCEPT_MISCONCEPTION, PROCESS_ERROR, LACK_OF_PRACTICE) và kết luận Prove
--- -----------------------------------------------------------------------------
-CREATE TABLE milestone_proofs (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    milestone_id UUID NOT NULL,
-    roadmap_id UUID NOT NULL,
-    user_id UUID NOT NULL,
-    attempt_no SMALLINT NOT NULL DEFAULT 1,
-    recall_exchanges_payload JSONB NOT NULL DEFAULT '[]'::jsonb,
-    mistake_taxonomy_json JSONB NOT NULL DEFAULT '[]'::jsonb,
-    avg_self_confidence NUMERIC(3, 2) NOT NULL,
-    ai_evidence_score NUMERIC(3, 2) NOT NULL,
-    calibration_gap NUMERIC(4, 2) GENERATED ALWAYS AS (avg_self_confidence - ai_evidence_score) STORED,
-    proof_verdict VARCHAR(25) NOT NULL DEFAULT 'PENDING',
-    feedback_summary TEXT NOT NULL DEFAULT '',
-    corrective_task_id UUID,
-    model_used VARCHAR(100) NOT NULL DEFAULT 'gemini-2.5-flash',
-    evaluated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT uq_milestone_proofs_attempt UNIQUE (milestone_id, attempt_no),
-    CONSTRAINT fk_milestone_proofs_milestone FOREIGN KEY (milestone_id) REFERENCES milestones(id) ON DELETE CASCADE,
-    CONSTRAINT fk_milestone_proofs_roadmap FOREIGN KEY (roadmap_id) REFERENCES roadmaps(id) ON DELETE CASCADE,
-    CONSTRAINT fk_milestone_proofs_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_milestone_proofs_corrective_task FOREIGN KEY (corrective_task_id) REFERENCES tasks(id) ON DELETE SET NULL,
-    CONSTRAINT chk_milestone_proofs_attempt CHECK (attempt_no >= 1),
-    CONSTRAINT chk_milestone_proofs_confidence CHECK (avg_self_confidence BETWEEN 1.00 AND 5.00),
-    CONSTRAINT chk_milestone_proofs_score CHECK (ai_evidence_score BETWEEN 1.00 AND 5.00),
-    CONSTRAINT chk_milestone_proofs_verdict CHECK (
-        proof_verdict IN ('PENDING', 'PROVEN', 'NEEDS_REVIEW', 'FLAGGED_SHALLOW')
-    ),
-    CONSTRAINT chk_milestone_proofs_exchanges_json CHECK (jsonb_typeof(recall_exchanges_payload) = 'array'),
-    CONSTRAINT chk_milestone_proofs_mistake_taxonomy CHECK (jsonb_typeof(mistake_taxonomy_json) = 'array')
+
+--
+-- Name: task_dependencies; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.task_dependencies (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    predecessor_id uuid NOT NULL,
+    successor_id uuid NOT NULL,
+    roadmap_id uuid NOT NULL,
+    is_mandatory boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_task_deps_not_self CHECK ((predecessor_id <> successor_id))
 );
 
--- =============================================================================
--- BOUNDED CONTEXT 5 / SHARED KERNEL (`shared_kernel` — 4 BẢNG)
--- Trách nhiệm: Đảm bảo phát sự kiện liên Bounded Context tin cậy (Transactional Outbox),
---              tiêu thụ sự kiện bất biến (Idempotent Consumer) trên Taskiq Worker,
---              và quản lý trạng thái thực thi bền vững của 5 Workflow cốt lõi
---              (workflow_runs & workflow_step_executions).
--- =============================================================================
 
--- -----------------------------------------------------------------------------
--- 32. BẢNG OUTBOX_EVENTS (Hàng đợi Sự kiện Giao dịch Liên Context - NEW v3.0)
--- Ghi cùng giao dịch ACID với Aggregate Root, tiếp vận sang Taskiq Redis Streams
--- -----------------------------------------------------------------------------
-CREATE TABLE outbox_events (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    aggregate_type VARCHAR(100) NOT NULL,
-    aggregate_id UUID NOT NULL,
-    event_type VARCHAR(120) NOT NULL,
-    payload JSONB NOT NULL,
-    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
-    retry_count INTEGER NOT NULL DEFAULT 0,
-    correlation_id VARCHAR(64),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    published_at TIMESTAMPTZ,
-    CONSTRAINT chk_outbox_events_status CHECK (status IN ('PENDING', 'PUBLISHED', 'FAILED')),
-    CONSTRAINT chk_outbox_events_retry CHECK (retry_count >= 0),
-    CONSTRAINT chk_outbox_events_payload CHECK (jsonb_typeof(payload) = 'object'),
-    CONSTRAINT chk_outbox_events_published CHECK (
-        (status = 'PUBLISHED' AND published_at IS NOT NULL) OR
-        (status != 'PUBLISHED' AND published_at IS NULL)
-    )
+--
+-- Name: tasks; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.tasks (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    roadmap_id uuid NOT NULL,
+    milestone_id uuid NOT NULL,
+    official_schedule_id uuid,
+    title character varying(255) NOT NULL,
+    description text,
+    estimated_minutes integer NOT NULL,
+    scheduled_date date,
+    scheduled_start timestamp with time zone,
+    scheduled_end timestamp with time zone,
+    status character varying(20) DEFAULT 'TODO'::character varying NOT NULL,
+    completed_at timestamp with time zone,
+    reschedule_count integer DEFAULT 0 NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    parent_task_id uuid,
+    concept_id character varying(120),
+    learning_resources_json jsonb DEFAULT '[]'::jsonb NOT NULL,
+    CONSTRAINT chk_tasks_completed_at CHECK (((((status)::text = 'COMPLETED'::text) AND (completed_at IS NOT NULL)) OR (((status)::text <> 'COMPLETED'::text) AND (completed_at IS NULL)))),
+    CONSTRAINT chk_tasks_estimated_minutes CHECK (((estimated_minutes >= 15) AND (estimated_minutes <= 240))),
+    CONSTRAINT chk_tasks_reschedule_count CHECK ((reschedule_count >= 0)),
+    CONSTRAINT chk_tasks_resources_json CHECK ((jsonb_typeof(learning_resources_json) = 'array'::text)),
+    CONSTRAINT chk_tasks_scheduled_time_order CHECK ((((scheduled_start IS NULL) AND (scheduled_end IS NULL)) OR ((scheduled_start IS NOT NULL) AND (scheduled_end IS NOT NULL) AND (scheduled_end > scheduled_start)))),
+    CONSTRAINT chk_tasks_status CHECK (((status)::text = ANY ((ARRAY['TODO'::character varying, 'IN_PROGRESS'::character varying, 'COMPLETED'::character varying, 'CANCELLED'::character varying])::text[])))
 );
 
--- -----------------------------------------------------------------------------
--- 33. BẢNG PROCESSED_EVENTS (Sổ cái Chống Xử lý Trùng Sự kiện - NEW v3.0)
--- Khóa chính kép (event_id, handler_name) bảo đảm Idempotent Consumer cho Taskiq
--- -----------------------------------------------------------------------------
-CREATE TABLE processed_events (
-    event_id UUID NOT NULL,
-    handler_name VARCHAR(120) NOT NULL,
-    processed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT pk_processed_events PRIMARY KEY (event_id, handler_name),
-    CONSTRAINT fk_processed_events_outbox FOREIGN KEY (event_id) REFERENCES outbox_events(id) ON DELETE CASCADE
+
+--
+-- Name: users; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.users (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    email character varying(255) NOT NULL,
+    password_hash character varying(255) NOT NULL,
+    full_name character varying(100) NOT NULL,
+    timezone character varying(50) DEFAULT 'Asia/Ho_Chi_Minh'::character varying NOT NULL,
+    role character varying(20) DEFAULT 'LEARNER'::character varying NOT NULL,
+    tier character varying(20) DEFAULT 'FREE'::character varying NOT NULL,
+    is_locked boolean DEFAULT false NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_users_role CHECK (((role)::text = ANY ((ARRAY['LEARNER'::character varying, 'ADMIN'::character varying])::text[]))),
+    CONSTRAINT chk_users_tier CHECK (((tier)::text = ANY ((ARRAY['FREE'::character varying, 'PREMIUM'::character varying])::text[])))
 );
 
--- -----------------------------------------------------------------------------
--- 34. BẢNG WORKFLOW_RUNS (Trạng thái Điều phối Workflow Bền vững - NEW v3.2)
--- Lưu vết tiến trình thực thi của 5 Workflow cốt lõi (hỗ trợ Pause/Resume Human-in-the-Loop)
--- -----------------------------------------------------------------------------
-CREATE TABLE workflow_runs (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL,
-    goal_id UUID NULL,
-    roadmap_id UUID NULL,
-    workflow_type VARCHAR(40) NOT NULL,
-    current_step VARCHAR(60) NOT NULL,
-    status VARCHAR(25) NOT NULL DEFAULT 'RUNNING',
-    context_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
-    error_detail TEXT NULL,
-    started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    paused_at TIMESTAMPTZ NULL,
-    completed_at TIMESTAMPTZ NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT fk_workflow_runs_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_workflow_runs_goal FOREIGN KEY (goal_id) REFERENCES goals(id) ON DELETE CASCADE,
-    CONSTRAINT fk_workflow_runs_roadmap FOREIGN KEY (roadmap_id) REFERENCES roadmaps(id) ON DELETE CASCADE,
-    CONSTRAINT chk_workflow_runs_type CHECK (
-        workflow_type IN (
-            'PLAN_CREATION',
-            'SCHEDULE_GENERATION',
-            'OVERDUE_RECOVERY',
-            'WEEKLY_REVIEW',
-            'CONTINUOUS_LEARNING'
-        )
-    ),
-    CONSTRAINT chk_workflow_runs_status CHECK (
-        status IN ('RUNNING', 'PAUSED_WAITING_USER', 'COMPLETED', 'FAILED', 'CANCELLED')
-    ),
-    CONSTRAINT chk_workflow_runs_snapshot CHECK (jsonb_typeof(context_snapshot) = 'object')
+
+--
+-- Name: webcal_tokens; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.webcal_tokens (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    token_hash character varying(64) NOT NULL,
+    oauth_refresh_token_encrypted text,
+    external_calendar_id character varying(255),
+    is_active boolean DEFAULT true NOT NULL,
+    last_used_at timestamp with time zone,
+    rotated_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_webcal_tokens_hash CHECK (((token_hash)::text ~ '^[0-9a-f]{64}$'::text))
 );
 
--- -----------------------------------------------------------------------------
--- 35. BẢNG WORKFLOW_STEP_EXECUTIONS (Nhật ký Điểm dừng & Truy vết Từng Bước Workflow - NEW v3.2)
--- Ghi nhận chi tiết đầu vào/đầu ra và liên kết ai_usage_logs của từng bước trong Workflow
--- -----------------------------------------------------------------------------
-CREATE TABLE workflow_step_executions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    workflow_run_id UUID NOT NULL,
-    step_name VARCHAR(60) NOT NULL,
-    step_order SMALLINT NOT NULL,
-    status VARCHAR(25) NOT NULL DEFAULT 'RUNNING',
-    input_summary JSONB NOT NULL DEFAULT '{}'::jsonb,
-    output_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
-    ai_usage_log_id UUID NULL,
-    retry_count SMALLINT NOT NULL DEFAULT 0,
-    started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    completed_at TIMESTAMPTZ NULL,
-    CONSTRAINT fk_workflow_steps_run FOREIGN KEY (workflow_run_id) REFERENCES workflow_runs(id) ON DELETE CASCADE,
-    CONSTRAINT fk_workflow_steps_ai_log FOREIGN KEY (ai_usage_log_id) REFERENCES ai_usage_logs(id) ON DELETE SET NULL,
-    CONSTRAINT chk_workflow_steps_order CHECK (step_order >= 1),
-    CONSTRAINT chk_workflow_steps_status CHECK (
-        status IN ('PENDING', 'RUNNING', 'WAITING_USER', 'COMPLETED', 'FAILED', 'SKIPPED')
-    ),
-    CONSTRAINT chk_workflow_steps_input_json CHECK (jsonb_typeof(input_summary) = 'object'),
-    CONSTRAINT chk_workflow_steps_output_json CHECK (jsonb_typeof(output_payload) = 'object'),
-    CONSTRAINT chk_workflow_steps_retry CHECK (retry_count >= 0)
+
+--
+-- Name: workflow_runs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.workflow_runs (
+    id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    goal_id uuid,
+    roadmap_id uuid,
+    workflow_type character varying(40) NOT NULL,
+    current_step character varying(60) NOT NULL,
+    status character varying(25) DEFAULT 'RUNNING'::character varying NOT NULL,
+    context_snapshot jsonb DEFAULT '{}'::jsonb NOT NULL,
+    error_detail text,
+    started_at timestamp with time zone DEFAULT now() NOT NULL,
+    paused_at timestamp with time zone,
+    completed_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chk_workflow_runs_snapshot CHECK ((jsonb_typeof(context_snapshot) = 'object'::text)),
+    CONSTRAINT chk_workflow_runs_status CHECK (((status)::text = ANY ((ARRAY['RUNNING'::character varying, 'PAUSED_WAITING_USER'::character varying, 'COMPLETED'::character varying, 'FAILED'::character varying, 'CANCELLED'::character varying])::text[]))),
+    CONSTRAINT chk_workflow_runs_type CHECK (((workflow_type)::text = ANY ((ARRAY['PLAN_CREATION'::character varying, 'SCHEDULE_GENERATION'::character varying, 'OVERDUE_RECOVERY'::character varying, 'WEEKLY_REVIEW'::character varying, 'CONTINUOUS_LEARNING'::character varying])::text[])))
 );
 
--- =============================================================================
--- 6. TRIGGERS: TỰ ĐỘNG CẬP NHẬT UPDATED_AT CHO TẤT CẢ 26 BẢNG CÓ CỘT UPDATED_AT
--- =============================================================================
-CREATE TRIGGER trg_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
-CREATE TRIGGER trg_learner_profiles_updated_at BEFORE UPDATE ON learner_profiles FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
-CREATE TRIGGER trg_webcal_tokens_updated_at BEFORE UPDATE ON webcal_tokens FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
-CREATE TRIGGER trg_calendar_connections_updated_at BEFORE UPDATE ON calendar_connections FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
-CREATE TRIGGER trg_availabilities_updated_at BEFORE UPDATE ON availabilities FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
-CREATE TRIGGER trg_availability_slots_updated_at
-    BEFORE UPDATE ON availability_slots
-    FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
-CREATE TRIGGER trg_ai_quotas_updated_at BEFORE UPDATE ON ai_quotas FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
-CREATE TRIGGER trg_payment_transactions_updated_at BEFORE UPDATE ON payment_transactions FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
-CREATE TRIGGER trg_learner_memory_items_updated_at BEFORE UPDATE ON learner_memory_items FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
-CREATE TRIGGER trg_learner_concept_masteries_updated_at BEFORE UPDATE ON learner_concept_masteries FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
-CREATE TRIGGER trg_goals_updated_at BEFORE UPDATE ON goals FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
-CREATE TRIGGER trg_roadmaps_updated_at BEFORE UPDATE ON roadmaps FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
-CREATE TRIGGER trg_milestones_updated_at BEFORE UPDATE ON milestones FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
-CREATE TRIGGER trg_official_schedules_updated_at BEFORE UPDATE ON official_schedules FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
-CREATE TRIGGER trg_schedule_proposals_updated_at BEFORE UPDATE ON schedule_proposals FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
-CREATE TRIGGER trg_learning_concepts_updated_at BEFORE UPDATE ON learning_concepts FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
-CREATE TRIGGER trg_knowledge_sources_updated_at BEFORE UPDATE ON knowledge_sources FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
-CREATE TRIGGER trg_schedule_blocks_updated_at BEFORE UPDATE ON schedule_blocks FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
-CREATE TRIGGER trg_tasks_updated_at BEFORE UPDATE ON tasks FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
-CREATE TRIGGER trg_study_sessions_updated_at BEFORE UPDATE ON study_sessions FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
-CREATE TRIGGER trg_session_tasks_updated_at BEFORE UPDATE ON session_tasks FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
-CREATE TRIGGER trg_study_notes_updated_at BEFORE UPDATE ON study_notes FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
-CREATE TRIGGER trg_pause_records_updated_at BEFORE UPDATE ON pause_records FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
-CREATE TRIGGER trg_ai_reviews_updated_at BEFORE UPDATE ON ai_reviews FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
-CREATE TRIGGER trg_milestone_proofs_updated_at BEFORE UPDATE ON milestone_proofs FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
-CREATE TRIGGER trg_workflow_runs_updated_at BEFORE UPDATE ON workflow_runs FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
 
--- =============================================================================
--- CHỈ MỤC HIỆU NĂNG & BẢO VỆ ĐỒNG THỜI (INDEXES & PARTIAL CONSTRAINTS — 67 CHỈ MỤC)
--- =============================================================================
+--
+-- Name: workflow_step_executions; Type: TABLE; Schema: public; Owner: -
+--
 
--- 1. BẢO VỆ TÍNH DUY NHẤT & BẤT BIẾN ĐỒNG THỜI
--- 1.1 Email duy nhất không phân biệt hoa thường
-CREATE UNIQUE INDEX uq_users_lower_email ON users (LOWER(email));
+CREATE TABLE public.workflow_step_executions (
+    id uuid NOT NULL,
+    workflow_run_id uuid NOT NULL,
+    step_name character varying(60) NOT NULL,
+    step_order smallint NOT NULL,
+    status character varying(25) DEFAULT 'RUNNING'::character varying NOT NULL,
+    input_summary jsonb DEFAULT '{}'::jsonb NOT NULL,
+    output_payload jsonb DEFAULT '{}'::jsonb NOT NULL,
+    ai_usage_log_id uuid,
+    retry_count smallint DEFAULT '0'::smallint NOT NULL,
+    started_at timestamp with time zone DEFAULT now() NOT NULL,
+    completed_at timestamp with time zone,
+    CONSTRAINT chk_workflow_steps_input_json CHECK ((jsonb_typeof(input_summary) = 'object'::text)),
+    CONSTRAINT chk_workflow_steps_order CHECK ((step_order >= 1)),
+    CONSTRAINT chk_workflow_steps_output_json CHECK ((jsonb_typeof(output_payload) = 'object'::text)),
+    CONSTRAINT chk_workflow_steps_retry CHECK ((retry_count >= 0)),
+    CONSTRAINT chk_workflow_steps_status CHECK (((status)::text = ANY ((ARRAY['PENDING'::character varying, 'RUNNING'::character varying, 'WAITING_USER'::character varying, 'COMPLETED'::character varying, 'FAILED'::character varying, 'SKIPPED'::character varying])::text[])))
+);
 
--- 1.2 Mỗi người dùng tại một thời điểm chỉ có tối đa 1 phiên học đang chạy (IN_PROGRESS)
-CREATE UNIQUE INDEX uq_study_sessions_user_active ON study_sessions(user_id) WHERE status = 'IN_PROGRESS';
 
--- 1.3 Mỗi lộ trình tại một thời điểm chỉ có tối đa 1 bản đề xuất lịch ở dạng nháp (DRAFT)
-CREATE UNIQUE INDEX uq_schedule_proposals_roadmap_draft ON schedule_proposals(roadmap_id) WHERE status = 'DRAFT';
+--
+-- Name: ai_quota_reservations ai_quota_reservations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
 
--- 1.4 Chống tạo trùng báo cáo đánh giá AI Review tuần (Idempotency cho Taskiq Retry)
-CREATE UNIQUE INDEX uq_ai_reviews_weekly ON ai_reviews (roadmap_id, period_start, period_end) WHERE review_cycle = 'WEEKLY';
+ALTER TABLE ONLY public.ai_quota_reservations
+    ADD CONSTRAINT ai_quota_reservations_pkey PRIMARY KEY (id);
 
--- 1.5 Chống tạo trùng báo cáo đánh giá AI Review theo mốc kiến thức (Idempotency cho Taskiq Retry)
-CREATE UNIQUE INDEX uq_ai_reviews_milestone ON ai_reviews (roadmap_id, milestone_id) WHERE review_cycle = 'MILESTONE';
 
--- 1.6 Chống xung đột khung giờ rảnh đồng thời (DEC-03)
-CREATE UNIQUE INDEX uq_availability_slots_active_time ON availability_slots (availability_id, day_of_week, start_time) WHERE is_active = TRUE;
+--
+-- Name: ai_quotas ai_quotas_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
 
--- 1.7 Duy nhất 1 ghi chép đúc kết TAKEAWAY cho mỗi cặp phiên học và nhiệm vụ (DEC-02)
-CREATE UNIQUE INDEX uq_study_notes_takeaway ON study_notes (session_id, task_id) WHERE note_type = 'TAKEAWAY';
+ALTER TABLE ONLY public.ai_quotas
+    ADD CONSTRAINT ai_quotas_pkey PRIMARY KEY (id);
 
--- 2. TỐI ƯU HÓA TRUY VẤN NÓNG (HOT QUERIES), QUOTA SWEEPER, OUTBOX RELAY, HYBRID RAG & DASHBOARD
--- 2.1 Quét nhanh các bản ghi giữ chỗ Quota quá hạn (Taskiq QuotaSweeper mỗi 60s)
-CREATE INDEX idx_quota_reservations_cleanup ON ai_quota_reservations(expires_at) WHERE status = 'RESERVED';
-CREATE INDEX idx_quota_reservations_user_status ON ai_quota_reservations(user_id, status, created_at DESC);
 
--- 2.2 Truy vấn lịch sử giao dịch thanh toán của người dùng và đối soát trạng thái
-CREATE INDEX idx_payment_transactions_user_created ON payment_transactions(user_id, created_at DESC);
-CREATE INDEX idx_payment_transactions_status ON payment_transactions(status, created_at DESC);
-CREATE INDEX idx_payment_transactions_pending_expires ON payment_transactions (expires_at) WHERE status = 'PENDING';
+--
+-- Name: ai_reviews ai_reviews_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
 
--- 2.3 Lịch sử phiên học của người dùng sắp xếp giảm dần theo thời gian bắt đầu
-CREATE INDEX idx_study_sessions_user_started ON study_sessions(user_id, started_at DESC);
+ALTER TABLE ONLY public.ai_reviews
+    ADD CONSTRAINT ai_reviews_pkey PRIMARY KEY (id);
 
--- 2.4 Lịch sử phiên học theo lộ trình
-CREATE INDEX idx_study_sessions_roadmap_started ON study_sessions(roadmap_id, started_at DESC);
 
--- 2.5 Quét Heartbeat định kỳ phát hiện phiên học gián đoạn (Taskiq AbandonedSessionSweeper mỗi 60s)
-CREATE INDEX idx_study_sessions_heartbeat ON study_sessions(last_heartbeat_at) WHERE status = 'IN_PROGRESS';
+--
+-- Name: ai_usage_logs ai_usage_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
 
--- 2.6 Lộ trình theo người dùng và trạng thái hoạt động
-CREATE INDEX idx_roadmaps_user_status ON roadmaps(user_id, status);
+ALTER TABLE ONLY public.ai_usage_logs
+    ADD CONSTRAINT ai_usage_logs_pkey PRIMARY KEY (id);
 
--- 2.7 Lộ trình theo mục tiêu
-CREATE INDEX idx_roadmaps_goal_id ON roadmaps(goal_id);
 
--- 2.8 Truy vấn nhiệm vụ theo lộ trình và ngày lên lịch
-CREATE INDEX idx_tasks_roadmap_scheduled_date ON tasks(roadmap_id, scheduled_date);
+--
+-- Name: alembic_version alembic_version_pkc; Type: CONSTRAINT; Schema: public; Owner: -
+--
 
--- 2.9 Truy vấn nhiệm vụ theo mốc thời gian bắt đầu (phục vụ Calendar View)
-CREATE INDEX idx_tasks_scheduled_start ON tasks(scheduled_start) WHERE scheduled_start IS NOT NULL;
+ALTER TABLE ONLY public.alembic_version
+    ADD CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num);
 
--- 2.10 Phát hiện nhiệm vụ quá hạn (Deterministic Overdue Query)
-CREATE INDEX idx_tasks_overdue ON tasks(scheduled_date) WHERE status IN ('TODO', 'IN_PROGRESS') AND scheduled_date IS NOT NULL;
 
--- 2.11 Nhiệm vụ theo mốc kiến thức và lịch chính thức
-CREATE INDEX idx_tasks_milestone_id ON tasks(milestone_id);
-CREATE INDEX idx_tasks_official_schedule_id ON tasks(official_schedule_id);
+--
+-- Name: availabilities availabilities_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
 
--- 2.12 Đồ thị phụ thuộc nhiệm vụ (DAG: tra cứu task trước và sau)
-CREATE INDEX idx_task_deps_successor ON task_dependencies(successor_id);
-CREATE INDEX idx_task_deps_predecessor ON task_dependencies(predecessor_id);
-CREATE INDEX idx_task_deps_roadmap ON task_dependencies(roadmap_id);
+ALTER TABLE ONLY public.availabilities
+    ADD CONSTRAINT availabilities_pkey PRIMARY KEY (id);
 
--- 2.13 Tra cứu liên kết phiên học và nhiệm vụ
-CREATE INDEX idx_session_tasks_task_id ON session_tasks(task_id);
-CREATE INDEX idx_session_tasks_session_id ON session_tasks(session_id);
 
--- 2.14 Kiểm toán và thống kê lượng gọi AI của người dùng
-CREATE INDEX idx_ai_usage_logs_user_action ON ai_usage_logs(user_id, action_type, created_at DESC);
+--
+-- Name: availability_slots availability_slots_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
 
--- 2.15 Khung giờ rảnh theo cấu hình tuần
-CREATE INDEX idx_avail_slots_availability_day ON availability_slots(availability_id, day_of_week);
+ALTER TABLE ONLY public.availability_slots
+    ADD CONSTRAINT availability_slots_pkey PRIMARY KEY (id);
 
--- 2.16 Mục tiêu theo người dùng
-CREATE INDEX idx_goals_user_id ON goals(user_id);
 
--- 2.17 Đề xuất lịch theo lộ trình và trạng thái
-CREATE INDEX idx_schedule_proposals_roadmap_status ON schedule_proposals(roadmap_id, status);
-CREATE INDEX idx_schedule_proposals_user_id ON schedule_proposals(user_id);
+--
+-- Name: calendar_connections calendar_connections_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
 
--- 2.18 Lịch sử tạm dừng lộ trình
-CREATE INDEX idx_pause_records_roadmap_id ON pause_records(roadmap_id);
+ALTER TABLE ONLY public.calendar_connections
+    ADD CONSTRAINT calendar_connections_pkey PRIMARY KEY (id);
 
--- 2.19 Báo cáo AI theo lộ trình và chu kỳ
-CREATE INDEX idx_ai_reviews_roadmap_cycle ON ai_reviews(roadmap_id, review_cycle, generated_at DESC);
-CREATE INDEX idx_ai_reviews_user_id ON ai_reviews(user_id);
 
--- 2.20 Ghi chép học tập theo người dùng và phiên
-CREATE INDEX idx_study_notes_user_session ON study_notes(user_id, session_id);
-CREATE INDEX idx_study_notes_task_id ON study_notes(task_id);
+--
+-- Name: concept_prerequisites concept_prerequisites_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
 
--- 2.21 Nhật ký biến động lịch trình theo lộ trình và loại tác nhân
-CREATE INDEX idx_sched_change_logs_roadmap_created ON schedule_change_logs(roadmap_id, created_at DESC);
-CREATE INDEX idx_sched_change_logs_trigger ON schedule_change_logs(trigger_type, created_at DESC);
+ALTER TABLE ONLY public.concept_prerequisites
+    ADD CONSTRAINT concept_prerequisites_pkey PRIMARY KEY (source_concept_id, prerequisite_concept_id);
 
--- 2.22 Quét nhanh sự kiện Outbox đang chờ phát (Taskiq OutboxRelayTask)
-CREATE INDEX idx_outbox_events_pending ON outbox_events(created_at ASC) WHERE status = 'PENDING';
-CREATE INDEX idx_outbox_events_aggregate ON outbox_events(aggregate_type, aggregate_id);
 
--- 2.23 Chỉ mục Cơ sở Tri thức Học thuật (Knowledge Base)
-CREATE INDEX idx_learning_concepts_domain_level ON learning_concepts(domain, difficulty_level, verification_status);
-CREATE INDEX idx_concept_prerequisites_source ON concept_prerequisites(source_concept_id);
-CREATE INDEX idx_concept_prerequisites_prereq ON concept_prerequisites(prerequisite_concept_id);
+--
+-- Name: goals goals_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
 
--- 2.24 Chỉ mục Kết nối Lịch Ngoại vi OAuth
-CREATE INDEX idx_calendar_connections_user_status ON calendar_connections(user_id, sync_status);
+ALTER TABLE ONLY public.goals
+    ADD CONSTRAINT goals_pkey PRIMARY KEY (id);
 
--- 2.25 Truy vấn các task con của một task cha (Micro-Stepping) & Ground Truth Concept
-CREATE INDEX idx_tasks_parent_task_id ON tasks(parent_task_id) WHERE parent_task_id IS NOT NULL;
-CREATE INDEX idx_tasks_concept_id ON tasks(concept_id) WHERE concept_id IS NOT NULL;
 
--- 2.26 Truy vấn Backlog Recovery Queue theo Roadmap
-CREATE INDEX idx_tasks_backlog_queue ON tasks(roadmap_id, milestone_id, reschedule_count DESC)
-    WHERE scheduled_date IS NULL AND status IN ('TODO', 'IN_PROGRESS');
+--
+-- Name: knowledge_chunks knowledge_chunks_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
 
--- 2.27 Quét nhanh các lộ trình Dormant (không có hoạt động học >= 7 ngày)
-CREATE INDEX idx_roadmaps_dormant_scan ON roadmaps(status, last_study_activity_at)
-    WHERE status = 'ACTIVE';
+ALTER TABLE ONLY public.knowledge_chunks
+    ADD CONSTRAINT knowledge_chunks_pkey PRIMARY KEY (id);
 
--- 2.28 Truy vấn phiên học còn nợ Takeaway do Auto-close (UC-15)
-CREATE INDEX idx_study_sessions_pending_takeaway ON study_sessions(user_id, ended_at DESC)
-    WHERE pending_takeaway = TRUE;
 
--- 2.29 Truy vấn lịch sử kiểm chứng Prove Mode theo Milestone và Người học
-CREATE INDEX idx_milestone_proofs_milestone ON milestone_proofs(milestone_id, attempt_no DESC);
-CREATE INDEX idx_milestone_proofs_user_verdict ON milestone_proofs(user_id, proof_verdict, evaluated_at DESC);
+--
+-- Name: knowledge_sources knowledge_sources_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
 
--- 2.30 Truy vấn Trí nhớ Người học Cấu trúc hóa (Structured Learner Memory)
-CREATE INDEX idx_learner_memory_items_user_cat ON learner_memory_items(user_id, memory_category, confirmation_status);
+ALTER TABLE ONLY public.knowledge_sources
+    ADD CONSTRAINT knowledge_sources_pkey PRIMARY KEY (id);
 
--- 2.31 Truy vấn Mức độ Thành thạo Khái niệm & Lịch Ôn tập Thông minh (Skill Mastery)
-CREATE INDEX idx_learner_concept_masteries_user_review ON learner_concept_masteries(user_id, next_review_at)
-    WHERE next_review_at IS NOT NULL;
-CREATE INDEX idx_learner_concept_masteries_concept ON learner_concept_masteries(concept_id);
 
--- 2.32 Truy vấn Nguồn Tài liệu Học tập (Knowledge Sources)
-CREATE INDEX idx_knowledge_sources_goal_status ON knowledge_sources(goal_id, ingestion_status);
-CREATE INDEX idx_knowledge_sources_user_created ON knowledge_sources(user_id, created_at DESC);
+--
+-- Name: learner_concept_masteries learner_concept_masteries_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
 
--- 2.33 Truy vấn Hybrid RAG trên Phân đoạn Tri thức (B-Tree + GIN TSVECTOR + HNSW PGVECTOR)
-CREATE INDEX idx_knowledge_chunks_goal_id ON knowledge_chunks(goal_id);
-CREATE INDEX idx_knowledge_chunks_search_vector ON knowledge_chunks USING GIN (search_vector);
-CREATE INDEX idx_knowledge_chunks_embedding_hnsw ON knowledge_chunks USING hnsw (embedding vector_cosine_ops);
+ALTER TABLE ONLY public.learner_concept_masteries
+    ADD CONSTRAINT learner_concept_masteries_pkey PRIMARY KEY (id);
 
--- 2.34 Truy vấn Khối Lịch Học Thực thi & Đồng bộ Sự kiện Lịch Ngoại vi (Schedule Blocks)
-CREATE INDEX idx_schedule_blocks_roadmap_date ON schedule_blocks(roadmap_id, block_date, start_time);
-CREATE INDEX idx_schedule_blocks_schedule_id ON schedule_blocks(official_schedule_id);
-CREATE INDEX idx_schedule_blocks_task_id ON schedule_blocks(task_id) WHERE task_id IS NOT NULL;
-CREATE INDEX idx_schedule_blocks_external_event ON schedule_blocks(external_calendar_event_id)
-    WHERE external_calendar_event_id IS NOT NULL;
 
--- 2.35 Truy vấn Điều phối Workflow Bền vững & Nhật ký Từng Bước (Durable Workflows)
-CREATE INDEX idx_workflow_runs_user_status ON workflow_runs(user_id, status, updated_at DESC);
-CREATE INDEX idx_workflow_runs_roadmap_type ON workflow_runs(roadmap_id, workflow_type)
-    WHERE roadmap_id IS NOT NULL;
-CREATE INDEX idx_workflow_step_executions_run_order ON workflow_step_executions(workflow_run_id, step_order);
+--
+-- Name: learner_memory_items learner_memory_items_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
 
--- 2.36 Các chỉ mục Khóa ngoại tối ưu hóa hiệu năng (Foreign Key Optimization Indexes)
-CREATE INDEX idx_ai_quota_reservations_quota_id ON ai_quota_reservations(quota_id);
-CREATE INDEX idx_sched_change_logs_schedule_id ON schedule_change_logs(schedule_id) WHERE schedule_id IS NOT NULL;
-CREATE INDEX idx_sched_change_logs_task_id ON schedule_change_logs(task_id) WHERE task_id IS NOT NULL;
-CREATE INDEX idx_milestone_proofs_roadmap_id ON milestone_proofs(roadmap_id);
-CREATE INDEX idx_milestone_proofs_corrective_task_id ON milestone_proofs(corrective_task_id) WHERE corrective_task_id IS NOT NULL;
-CREATE INDEX idx_workflow_runs_goal_id ON workflow_runs(goal_id) WHERE goal_id IS NOT NULL;
-CREATE INDEX idx_workflow_step_executions_ai_log_id ON workflow_step_executions(ai_usage_log_id) WHERE ai_usage_log_id IS NOT NULL;
+ALTER TABLE ONLY public.learner_memory_items
+    ADD CONSTRAINT learner_memory_items_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: learner_profiles learner_profiles_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.learner_profiles
+    ADD CONSTRAINT learner_profiles_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: learning_concepts learning_concepts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.learning_concepts
+    ADD CONSTRAINT learning_concepts_pkey PRIMARY KEY (concept_id);
+
+
+--
+-- Name: milestone_proofs milestone_proofs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.milestone_proofs
+    ADD CONSTRAINT milestone_proofs_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: milestones milestones_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.milestones
+    ADD CONSTRAINT milestones_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: official_schedules official_schedules_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.official_schedules
+    ADD CONSTRAINT official_schedules_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: outbox_events outbox_events_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.outbox_events
+    ADD CONSTRAINT outbox_events_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: pause_records pause_records_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pause_records
+    ADD CONSTRAINT pause_records_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: payment_transactions payment_transactions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payment_transactions
+    ADD CONSTRAINT payment_transactions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: processed_events processed_events_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.processed_events
+    ADD CONSTRAINT processed_events_pkey PRIMARY KEY (event_id, handler_name);
+
+
+--
+-- Name: roadmaps roadmaps_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.roadmaps
+    ADD CONSTRAINT roadmaps_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: schedule_blocks schedule_blocks_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.schedule_blocks
+    ADD CONSTRAINT schedule_blocks_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: schedule_change_logs schedule_change_logs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.schedule_change_logs
+    ADD CONSTRAINT schedule_change_logs_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: schedule_proposals schedule_proposals_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.schedule_proposals
+    ADD CONSTRAINT schedule_proposals_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: session_tasks session_tasks_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.session_tasks
+    ADD CONSTRAINT session_tasks_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: study_notes study_notes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.study_notes
+    ADD CONSTRAINT study_notes_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: study_sessions study_sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.study_sessions
+    ADD CONSTRAINT study_sessions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: task_dependencies task_dependencies_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.task_dependencies
+    ADD CONSTRAINT task_dependencies_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: tasks tasks_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tasks
+    ADD CONSTRAINT tasks_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_quotas uq_ai_quotas_user_id; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_quotas
+    ADD CONSTRAINT uq_ai_quotas_user_id UNIQUE (user_id);
+
+
+--
+-- Name: availabilities uq_availabilities_user_id; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.availabilities
+    ADD CONSTRAINT uq_availabilities_user_id UNIQUE (user_id);
+
+
+--
+-- Name: calendar_connections uq_calendar_connections_user_provider; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.calendar_connections
+    ADD CONSTRAINT uq_calendar_connections_user_provider UNIQUE (user_id, provider);
+
+
+--
+-- Name: knowledge_chunks uq_knowledge_chunks_source_idx; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.knowledge_chunks
+    ADD CONSTRAINT uq_knowledge_chunks_source_idx UNIQUE (source_id, chunk_index);
+
+
+--
+-- Name: knowledge_sources uq_knowledge_sources_owner_hash; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.knowledge_sources
+    ADD CONSTRAINT uq_knowledge_sources_owner_hash UNIQUE (user_id, goal_id, content_hash);
+
+
+--
+-- Name: learner_concept_masteries uq_learner_mastery_user_concept; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.learner_concept_masteries
+    ADD CONSTRAINT uq_learner_mastery_user_concept UNIQUE (user_id, concept_key);
+
+
+--
+-- Name: learner_memory_items uq_learner_memory_user_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.learner_memory_items
+    ADD CONSTRAINT uq_learner_memory_user_key UNIQUE (user_id, memory_key);
+
+
+--
+-- Name: learner_profiles uq_learner_profiles_user_id; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.learner_profiles
+    ADD CONSTRAINT uq_learner_profiles_user_id UNIQUE (user_id);
+
+
+--
+-- Name: milestones uq_milestones_roadmap_seq; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.milestones
+    ADD CONSTRAINT uq_milestones_roadmap_seq UNIQUE (roadmap_id, sequence_order) DEFERRABLE INITIALLY DEFERRED;
+
+
+--
+-- Name: official_schedules uq_official_schedules_roadmap; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.official_schedules
+    ADD CONSTRAINT uq_official_schedules_roadmap UNIQUE (roadmap_id);
+
+
+--
+-- Name: payment_transactions uq_payment_transactions_ref; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payment_transactions
+    ADD CONSTRAINT uq_payment_transactions_ref UNIQUE (transaction_ref);
+
+
+--
+-- Name: session_tasks uq_session_tasks_session_task; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.session_tasks
+    ADD CONSTRAINT uq_session_tasks_session_task UNIQUE (session_id, task_id);
+
+
+--
+-- Name: study_notes uq_study_notes_session_type; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.study_notes
+    ADD CONSTRAINT uq_study_notes_session_type UNIQUE (session_id, note_type);
+
+
+--
+-- Name: task_dependencies uq_task_deps_pair; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.task_dependencies
+    ADD CONSTRAINT uq_task_deps_pair UNIQUE (predecessor_id, successor_id);
+
+
+--
+-- Name: users uq_users_email; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT uq_users_email UNIQUE (email);
+
+
+--
+-- Name: webcal_tokens uq_webcal_tokens_token_hash; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.webcal_tokens
+    ADD CONSTRAINT uq_webcal_tokens_token_hash UNIQUE (token_hash);
+
+
+--
+-- Name: webcal_tokens uq_webcal_tokens_user_id; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.webcal_tokens
+    ADD CONSTRAINT uq_webcal_tokens_user_id UNIQUE (user_id);
+
+
+--
+-- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: webcal_tokens webcal_tokens_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.webcal_tokens
+    ADD CONSTRAINT webcal_tokens_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: workflow_runs workflow_runs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.workflow_runs
+    ADD CONSTRAINT workflow_runs_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: workflow_step_executions workflow_step_executions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.workflow_step_executions
+    ADD CONSTRAINT workflow_step_executions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: idx_ai_quota_reservations_quota_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_ai_quota_reservations_quota_id ON public.ai_quota_reservations USING btree (quota_id);
+
+
+--
+-- Name: idx_ai_reviews_roadmap_cycle; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_ai_reviews_roadmap_cycle ON public.ai_reviews USING btree (roadmap_id, review_cycle, generated_at DESC);
+
+
+--
+-- Name: idx_ai_reviews_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_ai_reviews_user_id ON public.ai_reviews USING btree (user_id);
+
+
+--
+-- Name: idx_ai_usage_logs_user_action; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_ai_usage_logs_user_action ON public.ai_usage_logs USING btree (user_id, action_type, created_at DESC);
+
+
+--
+-- Name: idx_avail_slots_availability_day; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_avail_slots_availability_day ON public.availability_slots USING btree (availability_id, day_of_week);
+
+
+--
+-- Name: idx_calendar_connections_channel; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_calendar_connections_channel ON public.calendar_connections USING btree (channel_id) WHERE (channel_id IS NOT NULL);
+
+
+--
+-- Name: idx_calendar_connections_user_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_calendar_connections_user_status ON public.calendar_connections USING btree (user_id, sync_status);
+
+
+--
+-- Name: idx_concept_prerequisites_prereq; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_concept_prerequisites_prereq ON public.concept_prerequisites USING btree (prerequisite_concept_id);
+
+
+--
+-- Name: idx_concept_prerequisites_source; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_concept_prerequisites_source ON public.concept_prerequisites USING btree (source_concept_id);
+
+
+--
+-- Name: idx_goals_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_goals_user_id ON public.goals USING btree (user_id);
+
+
+--
+-- Name: idx_knowledge_chunks_embedding_hnsw; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_knowledge_chunks_embedding_hnsw ON public.knowledge_chunks USING hnsw (embedding public.vector_cosine_ops);
+
+
+--
+-- Name: idx_knowledge_chunks_goal_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_knowledge_chunks_goal_id ON public.knowledge_chunks USING btree (goal_id);
+
+
+--
+-- Name: idx_knowledge_chunks_search_vector; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_knowledge_chunks_search_vector ON public.knowledge_chunks USING gin (search_vector);
+
+
+--
+-- Name: idx_knowledge_sources_goal_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_knowledge_sources_goal_status ON public.knowledge_sources USING btree (goal_id, ingestion_status);
+
+
+--
+-- Name: idx_learner_memory_context; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_learner_memory_context ON public.learner_memory_items USING btree (user_id, status, category);
+
+
+--
+-- Name: idx_learning_concepts_domain_level; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_learning_concepts_domain_level ON public.learning_concepts USING btree (domain, difficulty_level, verification_status);
+
+
+--
+-- Name: idx_milestone_proofs_owner; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_milestone_proofs_owner ON public.milestone_proofs USING btree (user_id, milestone_id);
+
+
+--
+-- Name: idx_outbox_events_aggregate; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_outbox_events_aggregate ON public.outbox_events USING btree (aggregate_type, aggregate_id);
+
+
+--
+-- Name: idx_outbox_events_pending; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_outbox_events_pending ON public.outbox_events USING btree (created_at) WHERE ((status)::text = 'PENDING'::text);
+
+
+--
+-- Name: idx_pause_records_roadmap_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_pause_records_roadmap_id ON public.pause_records USING btree (roadmap_id);
+
+
+--
+-- Name: idx_payment_transactions_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_payment_transactions_status ON public.payment_transactions USING btree (status, created_at DESC);
+
+
+--
+-- Name: idx_payment_transactions_user_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_payment_transactions_user_created ON public.payment_transactions USING btree (user_id, created_at DESC);
+
+
+--
+-- Name: idx_quota_reservations_cleanup; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_quota_reservations_cleanup ON public.ai_quota_reservations USING btree (expires_at) WHERE ((status)::text = 'RESERVED'::text);
+
+
+--
+-- Name: idx_quota_reservations_user_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_quota_reservations_user_status ON public.ai_quota_reservations USING btree (user_id, status, created_at DESC);
+
+
+--
+-- Name: idx_roadmaps_goal_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_roadmaps_goal_id ON public.roadmaps USING btree (goal_id);
+
+
+--
+-- Name: idx_roadmaps_user_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_roadmaps_user_status ON public.roadmaps USING btree (user_id, status);
+
+
+--
+-- Name: idx_sched_change_logs_roadmap_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_sched_change_logs_roadmap_created ON public.schedule_change_logs USING btree (roadmap_id, created_at DESC);
+
+
+--
+-- Name: idx_sched_change_logs_schedule_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_sched_change_logs_schedule_id ON public.schedule_change_logs USING btree (schedule_id) WHERE (schedule_id IS NOT NULL);
+
+
+--
+-- Name: idx_sched_change_logs_task_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_sched_change_logs_task_id ON public.schedule_change_logs USING btree (task_id) WHERE (task_id IS NOT NULL);
+
+
+--
+-- Name: idx_sched_change_logs_trigger; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_sched_change_logs_trigger ON public.schedule_change_logs USING btree (trigger_type, created_at DESC);
+
+
+--
+-- Name: idx_schedule_blocks_external_event; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_schedule_blocks_external_event ON public.schedule_blocks USING btree (external_calendar_event_id) WHERE (external_calendar_event_id IS NOT NULL);
+
+
+--
+-- Name: idx_schedule_blocks_roadmap_date; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_schedule_blocks_roadmap_date ON public.schedule_blocks USING btree (roadmap_id, block_date, start_time);
+
+
+--
+-- Name: idx_schedule_blocks_schedule_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_schedule_blocks_schedule_id ON public.schedule_blocks USING btree (official_schedule_id);
+
+
+--
+-- Name: idx_schedule_blocks_task_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_schedule_blocks_task_id ON public.schedule_blocks USING btree (task_id) WHERE (task_id IS NOT NULL);
+
+
+--
+-- Name: idx_schedule_proposals_roadmap_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_schedule_proposals_roadmap_status ON public.schedule_proposals USING btree (roadmap_id, status);
+
+
+--
+-- Name: idx_schedule_proposals_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_schedule_proposals_user_id ON public.schedule_proposals USING btree (user_id);
+
+
+--
+-- Name: idx_session_tasks_session_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_session_tasks_session_id ON public.session_tasks USING btree (session_id);
+
+
+--
+-- Name: idx_session_tasks_task_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_session_tasks_task_id ON public.session_tasks USING btree (task_id);
+
+
+--
+-- Name: idx_study_notes_task_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_study_notes_task_id ON public.study_notes USING btree (task_id);
+
+
+--
+-- Name: idx_study_notes_user_session; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_study_notes_user_session ON public.study_notes USING btree (user_id, session_id);
+
+
+--
+-- Name: idx_study_sessions_heartbeat; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_study_sessions_heartbeat ON public.study_sessions USING btree (last_heartbeat_at) WHERE ((status)::text = 'IN_PROGRESS'::text);
+
+
+--
+-- Name: idx_study_sessions_roadmap_started; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_study_sessions_roadmap_started ON public.study_sessions USING btree (roadmap_id, started_at DESC);
+
+
+--
+-- Name: idx_study_sessions_user_started; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_study_sessions_user_started ON public.study_sessions USING btree (user_id, started_at DESC);
+
+
+--
+-- Name: idx_task_deps_predecessor; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_task_deps_predecessor ON public.task_dependencies USING btree (predecessor_id);
+
+
+--
+-- Name: idx_task_deps_roadmap; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_task_deps_roadmap ON public.task_dependencies USING btree (roadmap_id);
+
+
+--
+-- Name: idx_task_deps_successor; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_task_deps_successor ON public.task_dependencies USING btree (successor_id);
+
+
+--
+-- Name: idx_tasks_concept_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_tasks_concept_id ON public.tasks USING btree (concept_id);
+
+
+--
+-- Name: idx_tasks_milestone_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_tasks_milestone_id ON public.tasks USING btree (milestone_id);
+
+
+--
+-- Name: idx_tasks_official_schedule_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_tasks_official_schedule_id ON public.tasks USING btree (official_schedule_id);
+
+
+--
+-- Name: idx_tasks_overdue; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_tasks_overdue ON public.tasks USING btree (scheduled_date) WHERE (((status)::text = ANY ((ARRAY['TODO'::character varying, 'IN_PROGRESS'::character varying])::text[])) AND (scheduled_date IS NOT NULL));
+
+
+--
+-- Name: idx_tasks_parent_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_tasks_parent_id ON public.tasks USING btree (parent_task_id);
+
+
+--
+-- Name: idx_tasks_roadmap_scheduled_date; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_tasks_roadmap_scheduled_date ON public.tasks USING btree (roadmap_id, scheduled_date);
+
+
+--
+-- Name: idx_tasks_scheduled_start; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_tasks_scheduled_start ON public.tasks USING btree (scheduled_start) WHERE (scheduled_start IS NOT NULL);
+
+
+--
+-- Name: idx_workflow_runs_goal_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_workflow_runs_goal_id ON public.workflow_runs USING btree (goal_id);
+
+
+--
+-- Name: idx_workflow_runs_roadmap_type; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_workflow_runs_roadmap_type ON public.workflow_runs USING btree (roadmap_id, workflow_type);
+
+
+--
+-- Name: idx_workflow_runs_user_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_workflow_runs_user_status ON public.workflow_runs USING btree (user_id, status, updated_at);
+
+
+--
+-- Name: idx_workflow_step_executions_ai_log_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_workflow_step_executions_ai_log_id ON public.workflow_step_executions USING btree (ai_usage_log_id);
+
+
+--
+-- Name: idx_workflow_step_executions_run_order; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_workflow_step_executions_run_order ON public.workflow_step_executions USING btree (workflow_run_id, step_order);
+
+
+--
+-- Name: uq_ai_reviews_milestone; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_ai_reviews_milestone ON public.ai_reviews USING btree (roadmap_id, milestone_id) WHERE ((review_cycle)::text = 'MILESTONE'::text);
+
+
+--
+-- Name: uq_ai_reviews_weekly; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_ai_reviews_weekly ON public.ai_reviews USING btree (roadmap_id, period_start, period_end) WHERE ((review_cycle)::text = 'WEEKLY'::text);
+
+
+--
+-- Name: uq_ai_usage_logs_idempotency_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_ai_usage_logs_idempotency_key ON public.ai_usage_logs USING btree (idempotency_key) WHERE (idempotency_key IS NOT NULL);
+
+
+--
+-- Name: uq_schedule_proposals_roadmap_draft; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_schedule_proposals_roadmap_draft ON public.schedule_proposals USING btree (roadmap_id) WHERE ((status)::text = 'DRAFT'::text);
+
+
+--
+-- Name: uq_study_sessions_user_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_study_sessions_user_active ON public.study_sessions USING btree (user_id) WHERE ((status)::text = 'IN_PROGRESS'::text);
+
+
+--
+-- Name: uq_users_lower_email; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_users_lower_email ON public.users USING btree (lower((email)::text));
+
+
+--
+-- Name: ai_quotas trg_ai_quotas_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_ai_quotas_updated_at BEFORE UPDATE ON public.ai_quotas FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
+
+
+--
+-- Name: ai_reviews trg_ai_reviews_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_ai_reviews_updated_at BEFORE UPDATE ON public.ai_reviews FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
+
+
+--
+-- Name: availabilities trg_availabilities_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_availabilities_updated_at BEFORE UPDATE ON public.availabilities FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
+
+
+--
+-- Name: availability_slots trg_availability_slots_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_availability_slots_updated_at BEFORE UPDATE ON public.availability_slots FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
+
+
+--
+-- Name: calendar_connections trg_calendar_connections_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_calendar_connections_updated_at BEFORE UPDATE ON public.calendar_connections FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
+
+
+--
+-- Name: goals trg_goals_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_goals_updated_at BEFORE UPDATE ON public.goals FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
+
+
+--
+-- Name: learner_profiles trg_learner_profiles_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_learner_profiles_updated_at BEFORE UPDATE ON public.learner_profiles FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
+
+
+--
+-- Name: milestones trg_milestones_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_milestones_updated_at BEFORE UPDATE ON public.milestones FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
+
+
+--
+-- Name: official_schedules trg_official_schedules_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_official_schedules_updated_at BEFORE UPDATE ON public.official_schedules FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
+
+
+--
+-- Name: pause_records trg_pause_records_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_pause_records_updated_at BEFORE UPDATE ON public.pause_records FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
+
+
+--
+-- Name: payment_transactions trg_payment_transactions_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_payment_transactions_updated_at BEFORE UPDATE ON public.payment_transactions FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
+
+
+--
+-- Name: roadmaps trg_roadmaps_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_roadmaps_updated_at BEFORE UPDATE ON public.roadmaps FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
+
+
+--
+-- Name: schedule_blocks trg_schedule_blocks_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_schedule_blocks_updated_at BEFORE UPDATE ON public.schedule_blocks FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
+
+
+--
+-- Name: schedule_proposals trg_schedule_proposals_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_schedule_proposals_updated_at BEFORE UPDATE ON public.schedule_proposals FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
+
+
+--
+-- Name: session_tasks trg_session_tasks_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_session_tasks_updated_at BEFORE UPDATE ON public.session_tasks FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
+
+
+--
+-- Name: study_notes trg_study_notes_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_study_notes_updated_at BEFORE UPDATE ON public.study_notes FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
+
+
+--
+-- Name: study_sessions trg_study_sessions_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_study_sessions_updated_at BEFORE UPDATE ON public.study_sessions FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
+
+
+--
+-- Name: tasks trg_tasks_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_tasks_updated_at BEFORE UPDATE ON public.tasks FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
+
+
+--
+-- Name: users trg_users_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_users_updated_at BEFORE UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
+
+
+--
+-- Name: webcal_tokens trg_webcal_tokens_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_webcal_tokens_updated_at BEFORE UPDATE ON public.webcal_tokens FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
+
+
+--
+-- Name: ai_quotas ai_quotas_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_quotas
+    ADD CONSTRAINT ai_quotas_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: availabilities availabilities_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.availabilities
+    ADD CONSTRAINT availabilities_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: availability_slots availability_slots_availability_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.availability_slots
+    ADD CONSTRAINT availability_slots_availability_id_fkey FOREIGN KEY (availability_id) REFERENCES public.availabilities(id) ON DELETE CASCADE;
+
+
+--
+-- Name: ai_quota_reservations fk_ai_quota_res_quota; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_quota_reservations
+    ADD CONSTRAINT fk_ai_quota_res_quota FOREIGN KEY (quota_id) REFERENCES public.ai_quotas(id) ON DELETE CASCADE;
+
+
+--
+-- Name: ai_quota_reservations fk_ai_quota_res_user; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_quota_reservations
+    ADD CONSTRAINT fk_ai_quota_res_user FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: ai_reviews fk_ai_reviews_milestone; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_reviews
+    ADD CONSTRAINT fk_ai_reviews_milestone FOREIGN KEY (milestone_id) REFERENCES public.milestones(id) ON DELETE CASCADE;
+
+
+--
+-- Name: ai_reviews fk_ai_reviews_roadmap; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_reviews
+    ADD CONSTRAINT fk_ai_reviews_roadmap FOREIGN KEY (roadmap_id) REFERENCES public.roadmaps(id) ON DELETE CASCADE;
+
+
+--
+-- Name: ai_reviews fk_ai_reviews_user; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_reviews
+    ADD CONSTRAINT fk_ai_reviews_user FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: ai_usage_logs fk_ai_usage_logs_user; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_usage_logs
+    ADD CONSTRAINT fk_ai_usage_logs_user FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: calendar_connections fk_calendar_connections_user; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.calendar_connections
+    ADD CONSTRAINT fk_calendar_connections_user FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: concept_prerequisites fk_concept_prerequisites_prereq; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.concept_prerequisites
+    ADD CONSTRAINT fk_concept_prerequisites_prereq FOREIGN KEY (prerequisite_concept_id) REFERENCES public.learning_concepts(concept_id) ON DELETE CASCADE;
+
+
+--
+-- Name: concept_prerequisites fk_concept_prerequisites_source; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.concept_prerequisites
+    ADD CONSTRAINT fk_concept_prerequisites_source FOREIGN KEY (source_concept_id) REFERENCES public.learning_concepts(concept_id) ON DELETE CASCADE;
+
+
+--
+-- Name: goals fk_goals_user; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.goals
+    ADD CONSTRAINT fk_goals_user FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: learner_profiles fk_learner_profiles_user; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.learner_profiles
+    ADD CONSTRAINT fk_learner_profiles_user FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: milestones fk_milestones_roadmap; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.milestones
+    ADD CONSTRAINT fk_milestones_roadmap FOREIGN KEY (roadmap_id) REFERENCES public.roadmaps(id) ON DELETE CASCADE;
+
+
+--
+-- Name: official_schedules fk_official_schedules_roadmap; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.official_schedules
+    ADD CONSTRAINT fk_official_schedules_roadmap FOREIGN KEY (roadmap_id) REFERENCES public.roadmaps(id) ON DELETE CASCADE;
+
+
+--
+-- Name: pause_records fk_pause_records_roadmap; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pause_records
+    ADD CONSTRAINT fk_pause_records_roadmap FOREIGN KEY (roadmap_id) REFERENCES public.roadmaps(id) ON DELETE CASCADE;
+
+
+--
+-- Name: payment_transactions fk_payment_transactions_user; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.payment_transactions
+    ADD CONSTRAINT fk_payment_transactions_user FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: roadmaps fk_roadmaps_goal; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.roadmaps
+    ADD CONSTRAINT fk_roadmaps_goal FOREIGN KEY (goal_id) REFERENCES public.goals(id) ON DELETE CASCADE;
+
+
+--
+-- Name: roadmaps fk_roadmaps_user; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.roadmaps
+    ADD CONSTRAINT fk_roadmaps_user FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: schedule_change_logs fk_sched_change_logs_roadmap; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.schedule_change_logs
+    ADD CONSTRAINT fk_sched_change_logs_roadmap FOREIGN KEY (roadmap_id) REFERENCES public.roadmaps(id) ON DELETE CASCADE;
+
+
+--
+-- Name: schedule_change_logs fk_sched_change_logs_schedule; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.schedule_change_logs
+    ADD CONSTRAINT fk_sched_change_logs_schedule FOREIGN KEY (schedule_id) REFERENCES public.official_schedules(id) ON DELETE SET NULL;
+
+
+--
+-- Name: schedule_change_logs fk_sched_change_logs_task; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.schedule_change_logs
+    ADD CONSTRAINT fk_sched_change_logs_task FOREIGN KEY (task_id) REFERENCES public.tasks(id) ON DELETE SET NULL;
+
+
+--
+-- Name: schedule_blocks fk_schedule_blocks_roadmap; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.schedule_blocks
+    ADD CONSTRAINT fk_schedule_blocks_roadmap FOREIGN KEY (roadmap_id) REFERENCES public.roadmaps(id) ON DELETE CASCADE;
+
+
+--
+-- Name: schedule_blocks fk_schedule_blocks_schedule; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.schedule_blocks
+    ADD CONSTRAINT fk_schedule_blocks_schedule FOREIGN KEY (official_schedule_id) REFERENCES public.official_schedules(id) ON DELETE CASCADE;
+
+
+--
+-- Name: schedule_blocks fk_schedule_blocks_task; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.schedule_blocks
+    ADD CONSTRAINT fk_schedule_blocks_task FOREIGN KEY (task_id) REFERENCES public.tasks(id) ON DELETE CASCADE;
+
+
+--
+-- Name: schedule_proposals fk_schedule_proposals_roadmap; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.schedule_proposals
+    ADD CONSTRAINT fk_schedule_proposals_roadmap FOREIGN KEY (roadmap_id) REFERENCES public.roadmaps(id) ON DELETE CASCADE;
+
+
+--
+-- Name: schedule_proposals fk_schedule_proposals_user; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.schedule_proposals
+    ADD CONSTRAINT fk_schedule_proposals_user FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: session_tasks fk_session_tasks_session; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.session_tasks
+    ADD CONSTRAINT fk_session_tasks_session FOREIGN KEY (session_id) REFERENCES public.study_sessions(id) ON DELETE CASCADE;
+
+
+--
+-- Name: session_tasks fk_session_tasks_task; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.session_tasks
+    ADD CONSTRAINT fk_session_tasks_task FOREIGN KEY (task_id) REFERENCES public.tasks(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: study_notes fk_study_notes_session; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.study_notes
+    ADD CONSTRAINT fk_study_notes_session FOREIGN KEY (session_id) REFERENCES public.study_sessions(id) ON DELETE CASCADE;
+
+
+--
+-- Name: study_notes fk_study_notes_task; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.study_notes
+    ADD CONSTRAINT fk_study_notes_task FOREIGN KEY (task_id) REFERENCES public.tasks(id) ON DELETE SET NULL;
+
+
+--
+-- Name: study_notes fk_study_notes_user; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.study_notes
+    ADD CONSTRAINT fk_study_notes_user FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: study_sessions fk_study_sessions_roadmap; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.study_sessions
+    ADD CONSTRAINT fk_study_sessions_roadmap FOREIGN KEY (roadmap_id) REFERENCES public.roadmaps(id) ON DELETE CASCADE;
+
+
+--
+-- Name: study_sessions fk_study_sessions_user; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.study_sessions
+    ADD CONSTRAINT fk_study_sessions_user FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: task_dependencies fk_task_deps_pred; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.task_dependencies
+    ADD CONSTRAINT fk_task_deps_pred FOREIGN KEY (predecessor_id) REFERENCES public.tasks(id) ON DELETE CASCADE;
+
+
+--
+-- Name: task_dependencies fk_task_deps_roadmap; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.task_dependencies
+    ADD CONSTRAINT fk_task_deps_roadmap FOREIGN KEY (roadmap_id) REFERENCES public.roadmaps(id) ON DELETE CASCADE;
+
+
+--
+-- Name: task_dependencies fk_task_deps_succ; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.task_dependencies
+    ADD CONSTRAINT fk_task_deps_succ FOREIGN KEY (successor_id) REFERENCES public.tasks(id) ON DELETE CASCADE;
+
+
+--
+-- Name: tasks fk_tasks_concept; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tasks
+    ADD CONSTRAINT fk_tasks_concept FOREIGN KEY (concept_id) REFERENCES public.learning_concepts(concept_id) ON DELETE SET NULL;
+
+
+--
+-- Name: tasks fk_tasks_milestone; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tasks
+    ADD CONSTRAINT fk_tasks_milestone FOREIGN KEY (milestone_id) REFERENCES public.milestones(id) ON DELETE CASCADE;
+
+
+--
+-- Name: tasks fk_tasks_official_schedule; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tasks
+    ADD CONSTRAINT fk_tasks_official_schedule FOREIGN KEY (official_schedule_id) REFERENCES public.official_schedules(id) ON DELETE SET NULL;
+
+
+--
+-- Name: tasks fk_tasks_parent; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tasks
+    ADD CONSTRAINT fk_tasks_parent FOREIGN KEY (parent_task_id) REFERENCES public.tasks(id) ON DELETE SET NULL;
+
+
+--
+-- Name: tasks fk_tasks_roadmap; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tasks
+    ADD CONSTRAINT fk_tasks_roadmap FOREIGN KEY (roadmap_id) REFERENCES public.roadmaps(id) ON DELETE CASCADE;
+
+
+--
+-- Name: webcal_tokens fk_webcal_tokens_user; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.webcal_tokens
+    ADD CONSTRAINT fk_webcal_tokens_user FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: knowledge_chunks knowledge_chunks_goal_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.knowledge_chunks
+    ADD CONSTRAINT knowledge_chunks_goal_id_fkey FOREIGN KEY (goal_id) REFERENCES public.goals(id) ON DELETE CASCADE;
+
+
+--
+-- Name: knowledge_chunks knowledge_chunks_source_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.knowledge_chunks
+    ADD CONSTRAINT knowledge_chunks_source_id_fkey FOREIGN KEY (source_id) REFERENCES public.knowledge_sources(id) ON DELETE CASCADE;
+
+
+--
+-- Name: knowledge_sources knowledge_sources_goal_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.knowledge_sources
+    ADD CONSTRAINT knowledge_sources_goal_id_fkey FOREIGN KEY (goal_id) REFERENCES public.goals(id) ON DELETE CASCADE;
+
+
+--
+-- Name: knowledge_sources knowledge_sources_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.knowledge_sources
+    ADD CONSTRAINT knowledge_sources_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: learner_concept_masteries learner_concept_masteries_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.learner_concept_masteries
+    ADD CONSTRAINT learner_concept_masteries_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: learner_memory_items learner_memory_items_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.learner_memory_items
+    ADD CONSTRAINT learner_memory_items_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: milestone_proofs milestone_proofs_milestone_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.milestone_proofs
+    ADD CONSTRAINT milestone_proofs_milestone_id_fkey FOREIGN KEY (milestone_id) REFERENCES public.milestones(id) ON DELETE CASCADE;
+
+
+--
+-- Name: milestone_proofs milestone_proofs_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.milestone_proofs
+    ADD CONSTRAINT milestone_proofs_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: processed_events processed_events_event_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.processed_events
+    ADD CONSTRAINT processed_events_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.outbox_events(id) ON DELETE CASCADE;
+
+
+--
+-- Name: workflow_runs workflow_runs_goal_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.workflow_runs
+    ADD CONSTRAINT workflow_runs_goal_id_fkey FOREIGN KEY (goal_id) REFERENCES public.goals(id) ON DELETE CASCADE;
+
+
+--
+-- Name: workflow_runs workflow_runs_roadmap_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.workflow_runs
+    ADD CONSTRAINT workflow_runs_roadmap_id_fkey FOREIGN KEY (roadmap_id) REFERENCES public.roadmaps(id) ON DELETE CASCADE;
+
+
+--
+-- Name: workflow_runs workflow_runs_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.workflow_runs
+    ADD CONSTRAINT workflow_runs_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: workflow_step_executions workflow_step_executions_ai_usage_log_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.workflow_step_executions
+    ADD CONSTRAINT workflow_step_executions_ai_usage_log_id_fkey FOREIGN KEY (ai_usage_log_id) REFERENCES public.ai_usage_logs(id) ON DELETE SET NULL;
+
+
+--
+-- Name: workflow_step_executions workflow_step_executions_workflow_run_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.workflow_step_executions
+    ADD CONSTRAINT workflow_step_executions_workflow_run_id_fkey FOREIGN KEY (workflow_run_id) REFERENCES public.workflow_runs(id) ON DELETE CASCADE;
+
+
+--
+-- PostgreSQL database dump complete
+--
+
+\unrestrict ksecOrFoe4YIR9lYCw8RygNUJnINrwfLr6TAjvZMbPBevhAGy1DVOduAagc3Db9
 

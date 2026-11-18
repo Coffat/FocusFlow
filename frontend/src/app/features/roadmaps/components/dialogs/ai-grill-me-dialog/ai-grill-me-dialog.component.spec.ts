@@ -44,7 +44,7 @@ describe('AiGrillMeDialogComponent', () => {
     roadmapService.clarificationQuestions.set(STANDARD_PEDAGOGICAL_QUESTIONS);
     fixture.detectChanges();
 
-    expect(component.contextUnderstandingPercent()).toBe(40);
+    expect(component.answerProgressPercent()).toBe(0);
 
     const compiled = fixture.nativeElement as HTMLElement;
     const chip = compiled.querySelector('[data-testid="question-0-chip-0"]') as HTMLButtonElement;
@@ -52,7 +52,7 @@ describe('AiGrillMeDialogComponent', () => {
     fixture.detectChanges();
 
     expect(component.answeredCount()).toBe(1);
-    expect(component.contextUnderstandingPercent()).toBeGreaterThan(40);
+    expect(component.answerProgressPercent()).toBeGreaterThan(0);
 
     const submitSpy = vi.fn();
     component.submitAnswers.subscribe(submitSpy);
@@ -61,7 +61,8 @@ describe('AiGrillMeDialogComponent', () => {
     submitBtn.click();
 
     expect(submitSpy).toHaveBeenCalledTimes(1);
-    expect(submitSpy.mock.calls[0][0].length).toBe(3);
+    expect(submitSpy.mock.calls[0][0].length).toBe(1);
+    expect(submitSpy.mock.calls[0][0][0].question_id).toBe('q1');
   });
 
   it('phát sự kiện skipInterview khi bấm Bỏ qua phỏng vấn', () => {
@@ -73,5 +74,122 @@ describe('AiGrillMeDialogComponent', () => {
     skipBtn.click();
 
     expect(skipSpy).toHaveBeenCalled();
+  });
+
+  it('hiển thị màn hình loading tối giản chính giữa khi AI đang sinh câu hỏi', () => {
+    roadmapService.clarificationQuestions.set([]);
+    roadmapService.isGeneratingQuestions.set(true);
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    const loadingState = compiled.querySelector('[data-testid="grill-me-skeleton-loading"]');
+    expect(loadingState).toBeTruthy();
+    expect(loadingState?.textContent).toContain('Đang phân tích mục tiêu & chuẩn bị câu hỏi chẩn đoán...');
+    expect(loadingState?.textContent).toContain('Hệ thống đang chuẩn bị các câu hỏi phù hợp nhất cho bạn...');
+
+    // Đã loại bỏ các skeleton pulse lộn xộn
+    const pulseCards = loadingState?.querySelectorAll('.animate-pulse');
+    expect(pulseCards?.length).toBe(0);
+  });
+
+  it('hiển thị banner lỗi và nút Thử lại ngay khi có errorMessage và chưa có câu hỏi', () => {
+    roadmapService.clarificationQuestions.set([]);
+    roadmapService.isGeneratingQuestions.set(false);
+    roadmapService.errorMessage.set('Hệ thống AI hiện đang bận hoặc gặp sự cố kết nối. Vui lòng bấm \'Thử lại\' sau giây lát.');
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    const errorBanner = compiled.querySelector('[data-testid="grill-me-error-state"]');
+    expect(errorBanner).toBeTruthy();
+    expect(errorBanner?.textContent).toContain('Hệ thống AI hiện đang bận hoặc gặp sự cố kết nối');
+
+    const genSpy = vi.fn();
+    component.generateQuestions.subscribe(genSpy);
+
+    const retryBtn = compiled.querySelector('[data-testid="retry-generate-questions-btn"]') as HTMLButtonElement;
+    expect(retryBtn).toBeTruthy();
+    retryBtn.click();
+    expect(genSpy).toHaveBeenCalled();
+  });
+
+  it('hỗ trợ toggle nhiều options khi câu hỏi là multiple_choice', () => {
+    roadmapService.clarificationQuestions.set([
+      {
+        id: 'q1',
+        question_id: 'q1',
+        question: 'Chọn các công nghệ mong muốn',
+        text: 'Chọn các công nghệ mong muốn',
+        placeholder: 'Chọn...',
+        question_type: 'multiple_choice',
+        options: [
+          { id: 'fastapi', label: 'FastAPI' },
+          { id: 'docker', label: 'Docker' },
+          { id: 'postgresql', label: 'PostgreSQL' },
+          { id: 'other', label: 'Khác / Mục tiêu tự định nghĩa' },
+        ],
+        question_purpose: 'Xác định công nghệ',
+        expected_answer_format: 'Chọn nhiều',
+        diagnostic_dimension: 'TECH_STACK_DEPTH',
+      },
+    ]);
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    const chip0 = compiled.querySelector('[data-testid="question-0-chip-0"]') as HTMLButtonElement;
+    const chip1 = compiled.querySelector('[data-testid="question-0-chip-1"]') as HTMLButtonElement;
+
+    // Click FastAPI
+    chip0.click();
+    fixture.detectChanges();
+    expect(component.answersMap()['q1']).toBe('FastAPI');
+
+    // Click Docker -> joins as multiple choice
+    chip1.click();
+    fixture.detectChanges();
+    expect(component.answersMap()['q1']).toBe('FastAPI, Docker');
+
+    // Click FastAPI again -> untoggles FastAPI, leaves Docker
+    chip0.click();
+    fixture.detectChanges();
+    expect(component.answersMap()['q1']).toBe('Docker');
+  });
+
+  it('hiển thị Header Card nhỏ gọn với tên mục tiêu, trình độ và badge tiến độ', () => {
+    roadmapService.clarificationQuestions.set(STANDARD_PEDAGOGICAL_QUESTIONS);
+    fixture.componentRef.setInput('goalTitle', 'Chuyên gia Full-Stack Cloud Native');
+    fixture.componentRef.setInput('baselineLevel', 'ADVANCED');
+    fixture.componentRef.setInput('weeklyHours', 15);
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    const headerCard = compiled.querySelector('[data-testid="grill-me-header-card"]');
+    expect(headerCard).toBeTruthy();
+    expect(headerCard?.textContent).toContain('Chuyên gia Full-Stack Cloud Native');
+    expect(headerCard?.textContent).toContain('ADVANCED');
+    expect(headerCard?.textContent).toContain('Đã trả lời 0/3 câu hỏi');
+
+    // Bấm xem câu hỏi chuẩn từ footer
+    const previewBtn = compiled.querySelector('[data-testid="preview-standard-questions-btn"]') as HTMLButtonElement;
+    expect(previewBtn).toBeTruthy();
+  });
+
+  it('hiển thị badge/banner Vòng 2 và nhãn nút động khi WAITING_FOLLOW_UP (BUG-12)', () => {
+    roadmapService.clarificationRound.set(1);
+    roadmapService.clarificationStatus.set('WAITING_ANSWER');
+    roadmapService.clarificationQuestions.set(STANDARD_PEDAGOGICAL_QUESTIONS);
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    const submitBtn = compiled.querySelector('[data-testid="submit-interview-btn"]');
+    expect(submitBtn?.textContent).toContain('Gửi câu trả lời');
+    expect(compiled.querySelector('[data-testid="grill-me-round-2-banner"]')).toBeNull();
+
+    roadmapService.clarificationRound.set(2);
+    roadmapService.clarificationStatus.set('WAITING_FOLLOW_UP');
+    fixture.detectChanges();
+
+    expect(compiled.querySelector('[data-testid="grill-me-round-2-badge"]')?.textContent).toContain('Vòng 2');
+    expect(compiled.querySelector('[data-testid="grill-me-round-2-banner"]')?.textContent).toContain('Vòng 2');
+    expect(submitBtn?.textContent).toContain('Xác nhận & Hoàn tất chẩn đoán');
   });
 });

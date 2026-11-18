@@ -1,9 +1,9 @@
-<header class="app-navbar sticky top-3 sm:top-4 z-40 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full select-none">
+<header class="app-navbar sticky top-3 sm:top-4 z-40 max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 w-full select-none">
   <!-- Floating Rounded Card Container -->
-  <div class="bg-white/95 backdrop-blur-md border border-neutral-200/80 rounded-2xl sm:rounded-3xl shadow-[0_4px_20px_-4px_rgba(0,0,0,0.06)] px-4 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between">
+  <div class="bg-white/95 backdrop-blur-md border border-neutral-200/80 rounded-2xl sm:rounded-3xl shadow-[0_4px_20px_-4px_rgba(0,0,0,0.06)] px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between gap-2">
     <!-- Left: Brand Logo & Title -->
-    <div class="flex items-center gap-3 shrink-0">
-      <a routerLink="/dashboard" class="flex items-center gap-2.5 no-underline group" aria-label="FocusFlow Home">
+    <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+      <a routerLink="/dashboard" class="flex items-center gap-2 sm:gap-2.5 no-underline group min-w-0" aria-label="FocusFlow Home">
         <div class="bg-neutral-50/80 border border-neutral-200/60 rounded-xl p-1.5 flex items-center justify-center shrink-0 shadow-2xs group-hover:border-neutral-300 transition-colors">
           <img
             src="assets/logo.svg"
@@ -13,11 +13,11 @@
             class="w-6 h-6 sm:w-7 sm:h-7 shrink-0 transition-transform group-hover:scale-105"
           />
         </div>
-        <div>
+        <div class="min-w-0">
           <div class="flex items-center text-base sm:text-lg font-bold tracking-tight leading-none brand-title">
             <span class="text-neutral-900">Focus</span><span class="text-[#205C43]">Flow</span>
           </div>
-          <span class="text-[9px] text-neutral-400 font-medium tracking-widest uppercase leading-tight block mt-0.5">Plan Smarter • Do Better</span>
+          <span class="hidden sm:block text-[9px] text-neutral-400 font-medium tracking-widest uppercase leading-tight mt-0.5 truncate">Plan Smarter • Do Better</span>
         </div>
       </a>
     </div>
@@ -37,7 +37,7 @@
     </nav>
 
     <!-- Right: Utility Cluster -->
-    <div class="flex items-center gap-2 sm:gap-2.5 shrink-0">
+    <div class="flex items-center gap-1 sm:gap-2.5 shrink-0">
       <!-- Quick Action "Vào học" (Deep Moss Green Pill) -->
       <a
         routerLink="/workspace"

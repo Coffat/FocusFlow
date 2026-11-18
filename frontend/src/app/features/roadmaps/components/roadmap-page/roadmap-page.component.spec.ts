@@ -4,11 +4,16 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter, Router, ActivatedRoute } from '@angular/router';
 import { signal } from '@angular/core';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { RoadmapPageComponent } from './roadmap-page.component';
 import { RoadmapService } from '../../services/roadmap.service';
+import { AiSseService, AiStreamChunkEvent } from '../../../../core/services/ai-sse.service';
 import { API_ENDPOINTS } from '../../../../core/constants/api-endpoints';
-import { RoadmapDetailResponse, ScheduleProposalResponse } from '../../models/roadmap.model';
+import {
+  RoadmapDetailResponse,
+  ScheduleProposalResponse,
+  SseJobTicketResponse,
+} from '../../models/roadmap.model';
 import { createDefaultSchedule } from '../../../../core/services/availability.service';
 import { CalendarIntegrationService } from '../../../../core/services/calendar-integration.service';
 
@@ -57,6 +62,7 @@ describe('RoadmapPageComponent (WBS 6.3 3-Step AI Planning & Approval Workspace)
         sequence_order: 1,
         title: 'Chặng 1: Cổng kiểm định 3 tầng',
         description: 'Tier 1, Tier 2, Tier 3',
+        estimated_effort_minutes: 60,
         status: 'PENDING',
         created_at: '2026-10-30T08:00:00Z',
         updated_at: '2026-10-30T08:00:00Z',
@@ -191,7 +197,11 @@ describe('RoadmapPageComponent (WBS 6.3 3-Step AI Planning & Approval Workspace)
           question_id: 'q1',
           text: 'Mức độ nắm vững Pydantic v2 của bạn?',
           question_type: 'single_choice',
-          options: ['Chưa rõ', 'Cơ bản', 'Chuyên sâu'],
+          options: [
+            { id: 'unknown', label: 'Chưa rõ' },
+            { id: 'basic', label: 'Cơ bản' },
+            { id: 'deep', label: 'Chuyên sâu' },
+          ],
         },
       ],
     });
@@ -210,7 +220,11 @@ describe('RoadmapPageComponent (WBS 6.3 3-Step AI Planning & Approval Workspace)
         question: 'Bạn đã quen thuộc với Hexagonal Architecture chưa?',
         placeholder: 'Chọn một đáp án',
         question_type: 'single_choice',
-        options: ['Chưa từng', 'Đã biết khái niệm', 'Đã triển khai thực tế'],
+        options: [
+          { id: 'none', label: 'Chưa từng' },
+          { id: 'concept', label: 'Đã biết khái niệm' },
+          { id: 'production', label: 'Đã triển khai thực tế' },
+        ],
         question_purpose: 'Đánh giá kinh nghiệm kiến trúc',
         expected_answer_format: 'text',
         diagnostic_dimension: 'EXPERIENCE',
@@ -259,7 +273,10 @@ describe('RoadmapPageComponent (WBS 6.3 3-Step AI Planning & Approval Workspace)
         question: 'Câu hỏi tùy chọn?',
         placeholder: 'Chọn đáp án',
         question_type: 'single_choice',
-        options: ['A', 'B'],
+        options: [
+          { id: 'a', label: 'A' },
+          { id: 'b', label: 'B' },
+        ],
         question_purpose: 'Thăm dò sở thích',
         expected_answer_format: 'text',
         diagnostic_dimension: 'PREFERENCE',
@@ -279,6 +296,7 @@ describe('RoadmapPageComponent (WBS 6.3 3-Step AI Planning & Approval Workspace)
     );
     expect(skipReq.request.method).toBe('POST');
     expect(skipReq.request.body).toEqual({
+      session_id: null,
       skipped_question_ids: ['q-skip-1'],
     });
     skipReq.flush({
@@ -384,6 +402,12 @@ describe('RoadmapPageComponent (WBS 6.3 3-Step AI Planning & Approval Workspace)
       status: 'DRAFT',
       is_valid: true,
       has_soft_overflow: true,
+      judge_status: 'PASSED',
+      is_partial_schedule: false,
+      feasibility_verdict: 'VERIFIED_FEASIBLE',
+      schedule_completeness_status: 'FULL',
+      scheduled_tasks_count: 1,
+      unscheduled_tasks_count: 0,
       tasks: [
         {
           task_id: 'task-1',
@@ -763,6 +787,527 @@ describe('RoadmapPageComponent (WBS 6.3 3-Step AI Planning & Approval Workspace)
 
       expect(component.showOnboardingModal()).toBe(false);
       expect(component.showCreateForm()).toBe(true);
+    });
+  });
+
+  describe('FIT_CAPACITY & PRELIMINARY_UNSCHEDULABLE (DEF-05)', () => {
+    it('hiển thị FIT_CAPACITY scope panel khi 409 SCOPE_APPROVAL_REQUIRED -> xác nhận checkbox -> 200 OK -> mở khóa Bước 3 dù cột mốc hoãn vẫn PENDING', () => {
+      const twoMilestones = [
+        {
+          id: 'ms-1',
+          roadmap_id: mockDetail.id,
+          sequence_order: 1,
+          title: 'Chặng 1: Nền tảng cốt lõi',
+          description: 'Core',
+          estimated_effort_minutes: 180,
+          status: 'PENDING',
+          created_at: '2026-10-30T08:00:00Z',
+          updated_at: '2026-10-30T08:00:00Z',
+        },
+        {
+          id: 'ms-2',
+          roadmap_id: mockDetail.id,
+          sequence_order: 2,
+          title: 'Chặng 2: Mở rộng chuyên sâu',
+          description: 'Deferred',
+          estimated_effort_minutes: 240,
+          status: 'PENDING',
+          created_at: '2026-10-30T08:00:00Z',
+          updated_at: '2026-10-30T08:00:00Z',
+        },
+      ];
+      service.loadRoadmapDetail(mockDetail.id);
+      httpTesting.expectOne(API_ENDPOINTS.ROADMAPS.DETAIL(mockDetail.id)).flush({
+        ...mockDetail,
+        milestones: twoMilestones,
+      });
+      fixture.detectChanges();
+
+      expect(service.activeStep()).toBe(2);
+
+      const compiled = fixture.nativeElement as HTMLElement;
+      const approveBtn = compiled.querySelector('[data-testid="approve-milestones-btn"]') as HTMLButtonElement;
+      approveBtn.click();
+
+      const conflictPrelim = {
+        status: 'FIT_CAPACITY_REQUIRES_APPROVAL',
+        scope_proposal_version: 1,
+        scope_proposal_hash: 'hash-v1',
+        requires_learner_approval: true,
+        scope_approval_status: 'PENDING_LEARNER_APPROVAL',
+        hard_packable_capacity_minutes: 240,
+        estimated_total_minutes: 420,
+        normalized_planned_total_minutes: 180,
+        kept_scope: [
+          {
+            sequence_order: 1,
+            milestone_id: 'ms-1',
+            title: 'Chặng 1: Nền tảng cốt lõi',
+            estimated_effort_minutes: 180,
+            normalized_planned_effort_minutes: 180,
+          },
+        ],
+        deferred_scope: [
+          {
+            sequence_order: 2,
+            milestone_id: 'ms-2',
+            title: 'Chặng 2: Mở rộng chuyên sâu',
+            estimated_effort_minutes: 240,
+          },
+        ],
+        feasibility_reasons: [],
+      };
+
+      const firstReq = httpTesting.expectOne(API_ENDPOINTS.ROADMAPS.MILESTONES_APPROVE(mockDetail.id));
+      firstReq.flush(
+        {
+          code: 'SCOPE_APPROVAL_REQUIRED',
+          message: 'Cần xác nhận thu gọn phạm vi FIT_CAPACITY phiên bản v1.',
+          detail: 'Cần xác nhận thu gọn phạm vi FIT_CAPACITY phiên bản v1.',
+          scope_proposal_version: 1,
+          preliminary_feasibility: conflictPrelim,
+        },
+        { status: 409, statusText: 'Conflict' }
+      );
+      fixture.detectChanges();
+
+      // Still on Step 2, FIT_CAPACITY panel is rendered with kept/deferred/version
+      expect(service.activeStep()).toBe(2);
+      expect(compiled.querySelector('[data-testid="fit-capacity-scope-panel"]')).toBeTruthy();
+      expect(compiled.querySelector('[data-testid="scope-proposal-version-badge"]')?.textContent).toContain('v1');
+      expect(compiled.querySelector('[data-testid="kept-scope-list"]')?.textContent).toContain('Chặng 1: Nền tảng cốt lõi');
+      expect(compiled.querySelector('[data-testid="deferred-scope-list"]')?.textContent).toContain('Chặng 2: Mở rộng chuyên sâu');
+      expect(compiled.querySelector('[data-testid="milestone-scope-badge-0"]')?.textContent).toContain('Trong phạm vi giữ lại');
+      expect(compiled.querySelector('[data-testid="milestone-scope-badge-1"]')?.textContent).toContain('Hoãn lại (PENDING)');
+
+      const confirmApproveBtn = compiled.querySelector(
+        '[data-testid="confirm-fit-capacity-approve-btn"]'
+      ) as HTMLButtonElement;
+      expect(confirmApproveBtn.disabled).toBe(true);
+
+      const checkbox = compiled.querySelector('[data-testid="confirm-fit-capacity-checkbox"]') as HTMLInputElement;
+      checkbox.click();
+      fixture.detectChanges();
+      expect(confirmApproveBtn.disabled).toBe(false);
+
+      // Simulate stale version mismatch 409 bumping v1 -> v2
+      confirmApproveBtn.click();
+      const staleReq = httpTesting.expectOne(API_ENDPOINTS.ROADMAPS.MILESTONES_APPROVE(mockDetail.id));
+      staleReq.flush(
+        {
+          code: 'SCOPE_APPROVAL_REQUIRED',
+          message: 'Phiên bản phạm vi đã cập nhật lên v2.',
+          detail: 'Phiên bản phạm vi đã cập nhật lên v2.',
+          scope_proposal_version: 2,
+          preliminary_feasibility: {
+            ...conflictPrelim,
+            scope_proposal_version: 2,
+          },
+        },
+        { status: 409, statusText: 'Conflict' }
+      );
+      fixture.detectChanges();
+
+      expect(compiled.querySelector('[data-testid="scope-proposal-version-badge"]')?.textContent).toContain('v2');
+      const checkboxAfterStale = compiled.querySelector('[data-testid="confirm-fit-capacity-checkbox"]') as HTMLInputElement;
+      expect(checkboxAfterStale.checked).toBe(false);
+      expect(confirmApproveBtn.disabled).toBe(true);
+
+      // Re-confirm v2 and succeed 200 OK
+      checkboxAfterStale.click();
+      fixture.detectChanges();
+      confirmApproveBtn.click();
+
+      const okReq = httpTesting.expectOne(API_ENDPOINTS.ROADMAPS.MILESTONES_APPROVE(mockDetail.id));
+      expect(okReq.request.body).toEqual({
+        confirmed_scope_proposal_version: 2,
+        accept_fit_capacity: true,
+      });
+      okReq.flush({
+        roadmap_id: mockDetail.id,
+        milestones: [
+          { ...twoMilestones[0], status: 'APPROVED' },
+          { ...twoMilestones[1], status: 'PENDING' },
+        ],
+        preliminary_feasibility: {
+          ...conflictPrelim,
+          scope_proposal_version: 2,
+          scope_approval_status: 'APPROVED_BY_LEARNER',
+          approved_scope_version: 2,
+        },
+      });
+      fixture.detectChanges();
+
+      expect(service.areMilestonesApproved()).toBe(true);
+      expect(service.activeStep()).toBe(3);
+      expect(compiled.querySelector('[data-testid="step-3-panel"]')).toBeTruthy();
+      expect(compiled.querySelector('[data-testid="unapproved-milestones-guard"]')).toBeNull();
+    });
+
+    it('hiển thị PRELIMINARY_UNSCHEDULABLE alert với lý do & gợi ý điều chỉnh và khóa nút phê duyệt', () => {
+      service.setActiveStep(2);
+      fixture.detectChanges();
+
+      const compiled = fixture.nativeElement as HTMLElement;
+      const approveBtn = compiled.querySelector('[data-testid="approve-milestones-btn"]') as HTMLButtonElement;
+      approveBtn.click();
+
+      const req = httpTesting.expectOne(API_ENDPOINTS.ROADMAPS.MILESTONES_APPROVE(mockDetail.id));
+      req.flush(
+        {
+          code: 'PRELIMINARY_UNSCHEDULABLE',
+          message: 'Quỹ thời gian khả dụng không đủ cho cột mốc nền tảng đầu tiên.',
+          detail: 'Quỹ thời gian khả dụng không đủ cho cột mốc nền tảng đầu tiên.',
+          hard_packable_capacity_minutes: 60,
+          preliminary_feasibility: {
+            status: 'PRELIMINARY_UNSCHEDULABLE',
+            scope_proposal_version: 0,
+            requires_learner_approval: false,
+            scope_approval_status: 'NOT_REQUIRED',
+            hard_packable_capacity_minutes: 60,
+            kept_scope: [],
+            deferred_scope: [],
+            feasibility_reasons: [
+              {
+                code: 'PRELIMINARY_UNSCHEDULABLE',
+                message: 'Quỹ thời gian khả dụng (60 phút) không đủ cho cột mốc đầu tiên (180 phút).',
+              },
+            ],
+            adjustment_options: {
+              is_approximate: true,
+              estimated_earliest_target_date_range: { min_date: '2026-12-20', max_date: '2027-01-05' },
+              recommended_additional_weekly_minutes: 150,
+            },
+          },
+        },
+        { status: 409, statusText: 'Conflict' }
+      );
+      fixture.detectChanges();
+
+      const alert = compiled.querySelector('[data-testid="preliminary-unschedulable-alert"]');
+      expect(alert).toBeTruthy();
+      expect(alert?.textContent).toContain('Quỹ thời gian khả dụng (60 phút) không đủ');
+      expect(alert?.textContent).toContain('2026-12-20');
+      expect(approveBtn.disabled).toBe(true);
+    });
+  });
+
+  describe('PR-1: SSE Error UX, Retry/Resume CTA & Apply Checkboxes/Idempotency', () => {
+    it('hiển thị banner lỗi fallback tiếng Việt và nút Thử lại khi SSE failed gửi error rỗng "", bấm Thử lại kích hoạt sinh lại đúng stage', () => {
+      const aiSseService = TestBed.inject(AiSseService);
+      const stream$ = new Subject<AiStreamChunkEvent<unknown>>();
+      vi.spyOn(aiSseService, 'observeJobStream').mockReturnValue(stream$.asObservable());
+
+      service.setActiveStep(2);
+      fixture.detectChanges();
+
+      service.generateMilestonesWithAi(mockDetail.id);
+      httpTesting
+        .expectOne(API_ENDPOINTS.ROADMAPS.MILESTONES_GENERATE_JOBS(mockDetail.id))
+        .flush({
+          job_id: 'job-err-ui-1',
+          reservation_id: 'res-err-ui-1',
+          roadmap_id: mockDetail.id,
+          job_type: 'MILESTONE_GEN',
+          status: 'RESERVED',
+          stream_url: '/api/v1/roadmaps/jobs/job-err-ui-1/stream',
+          jobId: 'job-err-ui-1',
+          reservationId: 'res-err-ui-1',
+          streamUrl: '/api/v1/roadmaps/jobs/job-err-ui-1/stream',
+        } satisfies SseJobTicketResponse);
+
+      stream$.next({
+        eventType: 'failed',
+        stage: 'FAILED',
+        progress: 100,
+        code: 'AI_EXECUTION_ERROR',
+        error: '',
+        message: '',
+      });
+      stream$.complete();
+      fixture.detectChanges();
+
+      const compiled = fixture.nativeElement as HTMLElement;
+      const errorAlert = compiled.querySelector('[data-testid="roadmap-error-alert"]');
+      expect(errorAlert).toBeTruthy();
+      expect(errorAlert?.textContent).toContain('Tiến trình sinh lộ trình bằng AI thất bại');
+
+      const retryBtn = compiled.querySelector(
+        '[data-testid="roadmap-retry-ai-btn"]'
+      ) as HTMLButtonElement;
+      expect(retryBtn).toBeTruthy();
+      expect(retryBtn.textContent).toContain('Thử lại');
+
+      const generateSpy = vi.spyOn(service, 'generateMilestonesWithAi');
+      retryBtn.click();
+      fixture.detectChanges();
+
+      expect(generateSpy).toHaveBeenCalledWith(mockDetail.id);
+      httpTesting
+        .expectOne(API_ENDPOINTS.ROADMAPS.MILESTONES_GENERATE_JOBS(mockDetail.id))
+        .flush({
+          job_id: 'job-err-ui-2',
+          reservation_id: 'res-err-ui-2',
+          roadmap_id: mockDetail.id,
+          job_type: 'MILESTONE_GEN',
+          status: 'RESERVED',
+          stream_url: '/api/v1/roadmaps/jobs/job-err-ui-2/stream',
+          jobId: 'job-err-ui-2',
+          reservationId: 'res-err-ui-2',
+          streamUrl: '/api/v1/roadmaps/jobs/job-err-ui-2/stream',
+        } satisfies SseJobTicketResponse);
+      service.closeActiveStream();
+    });
+
+    it('hiển thị nút Thử lại trên Bước 3/4 khi sinh đề xuất lịch học SSE thất bại và kích hoạt generateScheduleProposalWithAi', () => {
+      const aiSseService = TestBed.inject(AiSseService);
+      const stream$ = new Subject<AiStreamChunkEvent<unknown>>();
+      vi.spyOn(aiSseService, 'observeJobStream').mockReturnValue(stream$.asObservable());
+
+      service.milestones.set([{ ...mockDetail.milestones![0], status: 'APPROVED' }]);
+      service.setActiveStep(3);
+      fixture.detectChanges();
+
+      service.generateScheduleProposalWithAi(mockDetail.id);
+      httpTesting
+        .expectOne(API_ENDPOINTS.ROADMAPS.PROPOSALS_GENERATE_JOBS(mockDetail.id))
+        .flush({
+          job_id: 'job-prop-err-1',
+          reservation_id: 'res-prop-err-1',
+          roadmap_id: mockDetail.id,
+          job_type: 'SCHEDULE_PROPOSAL_GEN',
+          status: 'RESERVED',
+          stream_url: '/api/v1/roadmaps/jobs/job-prop-err-1/stream',
+          jobId: 'job-prop-err-1',
+          reservationId: 'res-prop-err-1',
+          streamUrl: '/api/v1/roadmaps/jobs/job-prop-err-1/stream',
+        } satisfies SseJobTicketResponse);
+
+      stream$.next({
+        eventType: 'failed',
+        stage: 'FAILED',
+        progress: 100,
+        error: '',
+      });
+      stream$.complete();
+      fixture.detectChanges();
+
+      const compiled = fixture.nativeElement as HTMLElement;
+      expect(compiled.querySelector('[data-testid="roadmap-error-alert"]')?.textContent).toContain(
+        'Tiến trình sinh lộ trình bằng AI thất bại'
+      );
+      const retryBtn = compiled.querySelector(
+        '[data-testid="roadmap-retry-ai-btn"]'
+      ) as HTMLButtonElement;
+      expect(retryBtn).toBeTruthy();
+
+      const retrySpy = vi.spyOn(service, 'generateScheduleProposalWithAi');
+      retryBtn.click();
+      expect(retrySpy).toHaveBeenCalledWith(mockDetail.id);
+      httpTesting
+        .expectOne(API_ENDPOINTS.ROADMAPS.PROPOSALS_GENERATE_JOBS(mockDetail.id))
+        .flush({
+          job_id: 'job-prop-err-2',
+          reservation_id: 'res-prop-err-2',
+          roadmap_id: mockDetail.id,
+          job_type: 'SCHEDULE_PROPOSAL_GEN',
+          status: 'RESERVED',
+          stream_url: '/api/v1/roadmaps/jobs/job-prop-err-2/stream',
+          jobId: 'job-prop-err-2',
+          reservationId: 'res-prop-err-2',
+          streamUrl: '/api/v1/roadmaps/jobs/job-prop-err-2/stream',
+        } satisfies SseJobTicketResponse);
+      service.closeActiveStream();
+    });
+
+    it('hiển thị checkbox xác nhận Judge Review & Partial Schedule trên Bước 4 và đính kèm Idempotency-Key khi bấm Apply', () => {
+      const proposal: ScheduleProposalResponse = {
+        id: 'prop-confirm-1',
+        roadmap_id: mockDetail.id,
+        user_id: mockDetail.user_id,
+        status: 'DRAFT',
+        is_valid: true,
+        has_soft_overflow: false,
+        judge_status: 'NEEDS_REVIEW',
+        is_partial_schedule: true,
+        feasibility_verdict: 'PARTIAL_OVER_CAPACITY',
+        schedule_completeness_status: 'PARTIAL',
+        scheduled_tasks_count: 1,
+        unscheduled_tasks_count: 1,
+        unscheduled_tasks: [
+          {
+            task_id: 't-backlog-1',
+            title: 'Nhiệm vụ đưa vào Backlog',
+            task_type: 'PRACTICE',
+            estimated_minutes: 60,
+            unscheduled_reason: 'OVER_CAPACITY',
+          },
+        ],
+        tasks: [
+          {
+            task_id: 'task-1',
+            milestone_id: 'ms-1',
+            title: 'Nhiệm vụ chính',
+            estimated_minutes: 60,
+            scheduled_date: '2026-11-02',
+            scheduled_start: '19:30',
+            scheduled_end: '20:30',
+            task_type: 'PRACTICE',
+          },
+        ],
+        dependencies: [],
+        violations: [],
+        soft_overflow_warnings: [],
+        advisory_warnings: ['Cần xem lại mật độ học cuối tuần.'],
+        diff_summary: {},
+        proposal_data: {},
+        applied_at: null,
+        created_at: '2026-10-30T08:00:00Z',
+        updated_at: '2026-10-30T08:00:00Z',
+      };
+
+      service.milestones.set([{ ...mockDetail.milestones![0], status: 'APPROVED' }]);
+      service.currentProposal.set(proposal);
+      service.editableTasks.set([
+        {
+          task_id: 'task-1',
+          milestone_id: 'ms-1',
+          milestone_sequence_order: 1,
+          title: 'Nhiệm vụ chính',
+          task_type: 'PRACTICE',
+          estimated_minutes: 60,
+          scheduled_date: '2026-11-02',
+          scheduled_start: '19:30',
+          scheduled_end: '20:30',
+          learning_resources: [],
+          prerequisite_ids: [],
+        },
+      ]);
+      service.setActiveStep(4);
+      fixture.detectChanges();
+
+      const compiled = fixture.nativeElement as HTMLElement;
+      const applyBtn = compiled.querySelector('[data-testid="apply-proposal-btn"]') as HTMLButtonElement;
+      expect(applyBtn.disabled).toBe(true);
+
+      const judgeCheckbox = compiled.querySelector(
+        '[data-testid="confirm-warnings-checkbox"]'
+      ) as HTMLInputElement;
+      const partialCheckbox = compiled.querySelector(
+        '[data-testid="confirm-partial-schedule-checkbox"]'
+      ) as HTMLInputElement;
+      expect(judgeCheckbox).toBeTruthy();
+      expect(partialCheckbox).toBeTruthy();
+
+      judgeCheckbox.checked = true;
+      judgeCheckbox.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+      expect(applyBtn.disabled).toBe(true);
+
+      partialCheckbox.checked = true;
+      partialCheckbox.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+      expect(applyBtn.disabled).toBe(false);
+
+      applyBtn.click();
+
+      const applyReq = httpTesting.expectOne(
+        API_ENDPOINTS.ROADMAPS.PROPOSAL_APPLY(mockDetail.id, proposal.id)
+      );
+      expect(applyReq.request.headers.get('Idempotency-Key')).toBeTruthy();
+      expect(applyReq.request.body).toEqual({
+        confirm_soft_overflow: false,
+        confirm_warnings: true,
+        confirm_partial_schedule: true,
+      });
+      applyReq.flush({
+        roadmap_id: mockDetail.id,
+        roadmap_status: 'ACTIVE',
+        official_schedule_id: 'sched-1',
+        proposal_id: proposal.id,
+        proposal_status: 'APPLIED',
+        total_sessions: 1,
+        total_planned_minutes: 60,
+        preserved_completed_tasks_count: 0,
+        replaced_tasks_count: 0,
+        inserted_tasks_count: 1,
+        affected_tasks_count: 1,
+        total_shifted_minutes: 60,
+        trigger_type: 'INITIAL_APPLY',
+        calendar_sync_status: 'NOT_CONNECTED',
+        backlog_unscheduled_tasks_count: 1,
+        official_schedule: {
+          id: 'sched-1',
+          roadmap_id: mockDetail.id,
+          total_sessions: 1,
+          total_planned_minutes: 60,
+          buffer_minutes_per_week: 60,
+          recovery_window_days: 7,
+          daily_workload_cap_minutes: 180,
+          stability_weight: 0.8,
+          activated_at: '2026-10-30T10:00:00Z',
+          created_at: '2026-10-30T10:00:00Z',
+          updated_at: '2026-10-30T10:00:00Z',
+        },
+      });
+      httpTesting.expectOne(API_ENDPOINTS.ROADMAPS.DETAIL(mockDetail.id)).flush(mockDetail);
+      httpTesting.expectOne(API_ENDPOINTS.ROADMAPS.BASE).flush([mockDetail]);
+    });
+
+    it('hiển thị nhãn Gửi câu trả lời ở Vòng 1 và banner/nút Vòng 2 khi status là WAITING_FOLLOW_UP (BUG-12)', () => {
+      service.setActiveStep(1);
+      service.clarificationRound.set(1);
+      service.clarificationStatus.set('WAITING_ANSWER');
+      service.clarificationQuestions.set([
+        {
+          question_id: 'q-r1',
+          id: 'q-r1',
+          text: 'Mục tiêu chính của bạn?',
+          question: 'Mục tiêu chính của bạn?',
+          placeholder: '',
+          question_type: 'text',
+          options: [],
+          question_purpose: '',
+          expected_answer_format: 'text',
+          diagnostic_dimension: 'GOAL',
+        },
+      ]);
+      fixture.detectChanges();
+
+      const compiled = fixture.nativeElement as HTMLElement;
+      const submitBtn = compiled.querySelector('[data-testid="submit-clarification-btn"]');
+      expect(submitBtn?.textContent).toContain('Gửi câu trả lời');
+      expect(compiled.querySelector('[data-testid="clarification-round-2-banner"]')).toBeNull();
+
+      service.clarificationRound.set(2);
+      service.clarificationStatus.set('WAITING_FOLLOW_UP');
+      fixture.detectChanges();
+
+      expect(compiled.querySelector('[data-testid="clarification-round-2-badge"]')?.textContent).toContain('Vòng 2');
+      expect(compiled.querySelector('[data-testid="clarification-round-2-banner"]')?.textContent).toContain('Vòng 2');
+      expect(submitBtn?.textContent).toContain('Xác nhận & Hoàn tất chẩn đoán');
+    });
+
+    it('áp dụng đầy đủ cấu trúc chống tràn ngang 375px cho hero, portfolio-select và SSE pipeline steps (BUG-10)', () => {
+      service.sseProgress.set({
+        stage: 'STREAMING',
+        progress: 45,
+        message: 'Đang sinh lộ trình...',
+        retryCount: 0,
+        isStreaming: true,
+      });
+      fixture.detectChanges();
+
+      const compiled = fixture.nativeElement as HTMLElement;
+      expect(compiled.querySelector('.roadmap-workspace')).toBeTruthy();
+      expect(compiled.querySelector('.header-content')).toBeTruthy();
+      expect(compiled.querySelector('.header-toolbar')).toBeTruthy();
+      expect(compiled.querySelector('.portfolio-select')).toBeTruthy();
+
+      const pipeline = compiled.querySelector('.sse-pipeline-steps');
+      expect(pipeline).toBeTruthy();
+      const dividers = pipeline?.querySelectorAll('.hidden.sm\\:block');
+      expect(dividers?.length).toBe(3);
     });
   });
 });

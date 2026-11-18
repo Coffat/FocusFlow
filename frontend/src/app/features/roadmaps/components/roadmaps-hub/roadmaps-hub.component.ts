@@ -13,7 +13,7 @@ import { ConfirmationService, MessageService } from 'primeng/api';
 import { RoadmapService } from '../../services/roadmap.service';
 import { AuthService } from '../../../../core/services/auth.service';
 import { AvailabilityService } from '../../../../core/services/availability.service';
-import { PriorKnowledgeLevel, RoadmapResponse } from '../../models/roadmap.model';
+import { PlanningStep, PriorKnowledgeLevel, RoadmapResponse } from '../../models/roadmap.model';
 import { KpiCardComponent } from '../../../../shared/components/kpi-card/kpi-card.component';
 import { RoadmapCardComponent } from '../../../../shared/components/roadmap-card/roadmap-card.component';
 import {
@@ -64,9 +64,9 @@ export class RoadmapsHubComponent implements OnInit {
   // Prerequisite Availability Dialog State
   readonly prerequisiteDialogOpen = signal<boolean>(false);
 
-  // 4-Step Wizard Dialog State
+  // 5-Step Wizard Dialog State
   readonly wizardOpen = signal<boolean>(false);
-  readonly wizardStep = signal<1 | 2 | 3 | 4>(1);
+  readonly wizardStep = signal<PlanningStep>(1);
   readonly wizardInitialTitle = signal<string>('');
   readonly wizardInitialLevel = signal<PriorKnowledgeLevel>('BEGINNER');
   readonly wizardInitialWeeklyHours = signal<number>(12);
@@ -185,7 +185,7 @@ export class RoadmapsHubComponent implements OnInit {
     return ['Lộ trình', 'Tự học', 'AI Powered'];
   }
 
-  openCreateWizard(step: 1 | 2 | 3 | 4 = 1): void {
+  openCreateWizard(step: PlanningStep = 1): void {
     this.checkAvailabilityAndProceed(() => {
       this.wizardInitialTitle.set('');
       this.wizardInitialLevel.set('BEGINNER');

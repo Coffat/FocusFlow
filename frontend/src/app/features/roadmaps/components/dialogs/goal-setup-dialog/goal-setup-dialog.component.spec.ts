@@ -58,6 +58,26 @@ describe('GoalSetupDialogComponent', () => {
     const payload = submitSpy.mock.calls[0][0];
     expect(payload.title).toBe('Luyện thi IELTS 7.5 Academic');
     expect(payload.prior_knowledge_level).toBe('INTERMEDIATE');
+    expect(payload.weekly_commitment_hours).toBe(15);
+    expect(payload.input_provenance).toEqual({
+      target_date: 'USER_CONFIRMED',
+      prior_knowledge_level: 'USER_EXPLICIT',
+      weekly_commitment_hours: 'USER_EXPLICIT',
+    });
+  });
+
+  it('phân biệt xác nhận lại giá trị gợi ý với giá trị mặc định chưa chạm', () => {
+    const submitSpy = vi.fn();
+    component.submitGoal.subscribe(submitSpy);
+    component.selectSuggestion('Chứng chỉ AWS Solutions Architect');
+    component.onDeadlineChange(component.targetDeadline());
+    component.selectLevel(component.currentLevel());
+    component.onSubmit();
+
+    const payload = submitSpy.mock.calls[0][0];
+    expect(payload.input_provenance.target_date).toBe('USER_CONFIRMED');
+    expect(payload.input_provenance.prior_knowledge_level).toBe('USER_CONFIRMED');
+    expect(payload.input_provenance.weekly_commitment_hours).toBe('USER_CONFIRMED');
   });
 
   it('cho phép đính kèm đường dẫn URL hợp lệ và tệp .pdf hợp lệ, đồng thời hiển thị chip tài liệu', () => {

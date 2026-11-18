@@ -15,11 +15,11 @@ import {
   CreateRoadmapRequest,
   DraftKnowledgeAttachment,
   MilestoneUpsertItemSchema,
+  PlanningStep,
   PriorKnowledgeLevel,
 } from '../../../models/roadmap.model';
 import {
   WizardDialogShellComponent,
-  WizardSseProgressBannerState,
 } from '../../../../../shared/components/wizard-dialog-shell/wizard-dialog-shell.component';
 import { GoalSetupDialogComponent } from '../goal-setup-dialog/goal-setup-dialog.component';
 import { AiGrillMeDialogComponent } from '../ai-grill-me-dialog/ai-grill-me-dialog.component';
@@ -45,7 +45,7 @@ export class RoadmapWizardHostComponent {
   readonly roadmapService = inject(RoadmapService);
 
   readonly open = input<boolean>(false);
-  readonly initialStep = input<1 | 2 | 3 | 4>(1);
+  readonly initialStep = input<PlanningStep>(1);
   readonly initialTitle = input<string>('');
   readonly initialLevel = input<PriorKnowledgeLevel>('BEGINNER');
   readonly initialWeeklyHours = input<number>(12);
@@ -53,15 +53,15 @@ export class RoadmapWizardHostComponent {
   readonly closeWizard = output<void>();
   readonly roadmapApplied = output<string>();
 
-  readonly currentStep = signal<1 | 2 | 3 | 4>(1);
+  readonly currentStep = signal<PlanningStep>(1);
   readonly draftTitle = signal<string>('');
   readonly draftLevel = signal<PriorKnowledgeLevel>('BEGINNER');
   readonly draftWeeklyHours = signal<number>(12);
   readonly draftDeadline = signal<string>('');
+  private readonly resumedClarificationGoalId = signal<string | null>(null);
+  private lastSeenProposalCompletedCount = 0;
 
-  readonly shellMaxWidthClass = computed<string>(() => {
-    return 'max-w-[1040px]';
-  });
+  readonly shellMaxWidthClass = computed<string>(() => 'max-w-[1040px]');
 
   readonly shellErrorMessage = computed<string | null>(() => {
     return typeof this.roadmapService.errorMessage === 'function'
@@ -73,22 +73,6 @@ export class RoadmapWizardHostComponent {
     return typeof this.roadmapService.saving === 'function'
       ? this.roadmapService.saving()
       : false;
-  });
-
-  readonly shellSseProgress = computed<WizardSseProgressBannerState | null>(() => {
-    if (typeof this.roadmapService.sseProgress !== 'function') {
-      return null;
-    }
-    const sse = this.roadmapService.sseProgress();
-    if (!sse || !sse.isStreaming) {
-      return null;
-    }
-    return {
-      status: 'PROCESSING',
-      progressPercent: sse.progress,
-      message: sse.message,
-      stage: sse.stage,
-    };
   });
 
   constructor() {
@@ -106,20 +90,35 @@ export class RoadmapWizardHostComponent {
         this.roadmapService.clearMessages?.();
       }
     });
+    effect(() => {
+      if (!this.open() || this.initialStep() !== 2) return;
+      const goalId =
+        typeof this.roadmapService.selectedRoadmapDetail === 'function'
+          ? this.roadmapService.selectedRoadmapDetail()?.goal_id
+          : null;
+      if (goalId && this.resumedClarificationGoalId() !== goalId) {
+        this.resumedClarificationGoalId.set(goalId);
+        this.roadmapService.resumeClarification?.(goalId);
+      }
+    });
+    effect(() => {
+      const count =
+        typeof this.roadmapService.proposalCompletedCount === 'function'
+          ? this.roadmapService.proposalCompletedCount()
+          : 0;
+      if (count > this.lastSeenProposalCompletedCount) {
+        this.lastSeenProposalCompletedCount = count;
+        this.currentStep.set(4);
+      }
+    });
   }
 
-  onStepChange(step: 1 | 2 | 3 | 4): void {
+  onStepChange(step: PlanningStep): void {
     this.roadmapService.clearMessages?.();
     this.currentStep.set(step);
   }
 
   onClose(): void {
-    this.roadmapService.closeActiveStream?.();
-    this.roadmapService.clearMessages?.();
-    this.closeWizard.emit();
-  }
-
-  onSaveDraftAndExit(): void {
     this.roadmapService.closeActiveStream?.();
     this.roadmapService.clearMessages?.();
     this.closeWizard.emit();
@@ -188,15 +187,26 @@ export class RoadmapWizardHostComponent {
       );
       return;
     }
-    this.roadmapService.submitClarificationAnswers(goalId, answers, () => {
+    this.roadmapService.submitClarificationAnswers(goalId, answers, res => {
+      if (res.status === 'WAITING_FOLLOW_UP') {
+        this.currentStep.set(2);
+        return;
+      }
       this.currentStep.set(3);
+      this.onGenerateMilestones();
     });
+  }
+
+  onClarificationReady(): void {
+    this.currentStep.set(3);
+    this.onGenerateMilestones();
   }
 
   onSkipInterview(): void {
     const goalId = this.roadmapService.selectedRoadmapDetail()?.goal_id;
     this.roadmapService.skipClarification(goalId, () => {
       this.currentStep.set(3);
+      this.onGenerateMilestones();
     });
   }
 
@@ -235,11 +245,33 @@ export class RoadmapWizardHostComponent {
     }
     this.roadmapService.approveMilestones(roadmapId, () => {
       this.currentStep.set(4);
+      this.onGenerateProposal();
     });
   }
 
+  onApproveFitCapacity(confirmedVersion: number): void {
+    const roadmapId = this.roadmapService.selectedRoadmapDetail()?.id;
+    if (!roadmapId) {
+      this.roadmapService.errorMessage.set(
+        'Chưa tìm thấy lộ trình học tập (Roadmap ID) trên máy chủ. Vui lòng hoàn tất Bước 1 trước.'
+      );
+      return;
+    }
+    this.roadmapService.approveMilestones(
+      roadmapId,
+      () => {
+        this.currentStep.set(4);
+        this.onGenerateProposal();
+      },
+      {
+        confirmedScopeProposalVersion: confirmedVersion,
+        acceptFitCapacity: true,
+      }
+    );
+  }
+
   // =========================================================================
-  // Step 4 -> Official Schedule (Generate / Update / Apply Proposal)
+  // Step 4: Official Schedule Proposal (Generate / Update / Apply / Manual)
   // =========================================================================
   onGenerateProposal(): void {
     const roadmapId = this.roadmapService.selectedRoadmapDetail()?.id;
@@ -249,7 +281,30 @@ export class RoadmapWizardHostComponent {
       );
       return;
     }
-    this.roadmapService.generateScheduleProposalWithAi(roadmapId);
+    this.currentStep.set(4);
+    this.roadmapService.generateScheduleProposalWithAi(roadmapId, () => {
+      this.currentStep.set(4);
+    });
+  }
+
+  onRegenerateRoadmapFitCapacity(): void {
+    const roadmapId = this.roadmapService.selectedRoadmapDetail()?.id;
+    if (!roadmapId) {
+      this.roadmapService.errorMessage.set('Không tìm thấy Roadmap để tạo lại theo quỹ giờ.');
+      return;
+    }
+    this.currentStep.set(3);
+    this.roadmapService.generateMilestonesWithAi(
+      roadmapId,
+      'Thu hẹp phạm vi theo quỹ giờ hiện tại và liệt kê rõ nội dung bị hoãn.',
+      'FIT_CAPACITY'
+    );
+  }
+
+  onManualScheduleFallback(): void {
+    this.roadmapService.clearMessages?.();
+    this.roadmapService.enableManualPlanningMode?.();
+    this.currentStep.set(4);
   }
 
   onUpdateProposal(): void {

@@ -8,6 +8,7 @@ from src.account.application.dtos.calendar import (
     InitiateCalendarAuthRequestDTO,
     InitiateCalendarAuthResponseDTO,
 )
+from src.account.domain.ports.calendar_provider_port import CalendarAuthError
 from src.shared_kernel.config import Settings, get_settings
 
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
@@ -32,6 +33,14 @@ class InitiateGoogleCalendarAuthUseCase:
         user_id: UUID,
         request: InitiateCalendarAuthRequestDTO,
     ) -> InitiateCalendarAuthResponseDTO:
+        provider_name = self._settings.calendar_provider.strip().lower()
+        if provider_name not in ("google", "google_calendar"):
+            raise CalendarAuthError(
+                f"CALENDAR_PROVIDER_NOT_CONFIGURED: Unsupported calendar_provider={self._settings.calendar_provider!r}."
+            )
+        if not self._settings.google_client_id.strip():
+            raise CalendarAuthError("CALENDAR_OAUTH_NOT_CONFIGURED: Missing GOOGLE_CLIENT_ID.")
+
         sync_type = request.sync_type.lower()
         scopes = TWO_WAY_SCOPES if sync_type == "two_way" else INBOUND_SCOPES
 
