@@ -1,7 +1,11 @@
 <!-- Tab Switcher -->
-<div class="flex flex-wrap items-center justify-center gap-2.5 mb-8">
+<div class="flex flex-wrap items-center justify-center gap-2.5 mb-8" role="tablist" aria-label="Chọn kịch bản lộ trình mẫu">
   <button
     type="button"
+    role="tab"
+    id="scenario-tab-thesis"
+    aria-controls="scenario-tabpanel"
+    [attr.aria-selected]="activeScenario() === 'thesis'"
     (click)="setScenario('thesis')"
     [class]="activeScenario() === 'thesis'
       ? 'px-4.5 py-2 rounded-full bg-on-surface text-white text-xs font-semibold shadow-md transition-all duration-200 scale-[1.02] cursor-pointer'
@@ -11,6 +15,10 @@
   </button>
   <button
     type="button"
+    role="tab"
+    id="scenario-tab-aws"
+    aria-controls="scenario-tabpanel"
+    [attr.aria-selected]="activeScenario() === 'aws'"
     (click)="setScenario('aws')"
     [class]="activeScenario() === 'aws'
       ? 'px-4.5 py-2 rounded-full bg-on-surface text-white text-xs font-semibold shadow-md transition-all duration-200 scale-[1.02] cursor-pointer'
@@ -20,6 +28,10 @@
   </button>
   <button
     type="button"
+    role="tab"
+    id="scenario-tab-ai"
+    aria-controls="scenario-tabpanel"
+    [attr.aria-selected]="activeScenario() === 'ai'"
     (click)="setScenario('ai')"
     [class]="activeScenario() === 'ai'
       ? 'px-4.5 py-2 rounded-full bg-on-surface text-white text-xs font-semibold shadow-md transition-all duration-200 scale-[1.02] cursor-pointer'
@@ -30,52 +42,136 @@
 </div>
 
 <!-- Roadmap Timeline Card -->
-<div class="hairline-card rounded-xl p-6 md:p-8 bg-white border border-outline-variant/60 shadow-sm animate-scenario-crossfade">
-  <div class="flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-outline-variant/30">
+<div
+  role="tabpanel"
+  id="scenario-tabpanel"
+  [attr.aria-labelledby]="'scenario-tab-' + activeScenario()"
+  class="hairline-card rounded-xl p-5 sm:p-6 md:p-8 bg-white border border-outline-variant/60 shadow-sm animate-scenario-crossfade text-left"
+>
+  <!-- Scenario Header -->
+  <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-5 border-b border-outline-variant/30">
     <div>
       <h3 class="text-base font-semibold text-on-surface font-sans">{{ currentScenario().title }}</h3>
-      <p class="text-xs text-on-surface-variant mt-0.5 font-sans">{{ currentScenario().objective }}</p>
+      <p class="text-xs text-on-surface-variant mt-1 font-sans">{{ currentScenario().objective }}</p>
     </div>
-    <span class="text-xs font-mono px-3 py-1 rounded bg-secondary-container/30 text-primary font-semibold border border-primary/20">
-      {{ currentScenario().durationBadge }}
-    </span>
+    <div class="flex flex-wrap items-center gap-2 shrink-0">
+      <span class="text-xs font-mono px-3 py-1 rounded bg-secondary-container/30 text-primary font-semibold border border-primary/20">
+        {{ currentScenario().durationBadge }}
+      </span>
+      <span class="text-xs font-mono px-3 py-1 rounded bg-primary/10 text-primary font-semibold border border-primary/20">
+        {{ currentScenario().feasibilityStatus }}
+      </span>
+    </div>
+  </div>
+
+  <!-- Domain Metadata Bar: Mode A/B, Effort, RAG Sources -->
+  <div class="mt-4 p-3.5 rounded-lg bg-surface-container-low/60 border border-outline-variant/40 grid grid-cols-1 md:grid-cols-12 gap-3 items-start md:items-center text-xs">
+    <div class="md:col-span-5 flex items-start gap-2">
+      <span class="material-symbols-outlined text-[16px] text-primary shrink-0 mt-0.5" aria-hidden="true">schedule</span>
+      <div>
+        <span class="text-[10px] uppercase tracking-wider font-mono text-on-surface-variant block">Quỹ giờ rảnh</span>
+        <span class="font-medium text-on-surface font-sans">{{ currentScenario().availabilityMode }}</span>
+      </div>
+    </div>
+
+    <div class="md:col-span-3 flex items-start gap-2">
+      <span class="material-symbols-outlined text-[16px] text-primary shrink-0 mt-0.5" aria-hidden="true">hourglass_bottom</span>
+      <div>
+        <span class="text-[10px] uppercase tracking-wider font-mono text-on-surface-variant block">Tổng Effort (Roadmap)</span>
+        <span class="font-mono font-semibold text-on-surface">{{ currentScenario().totalEffortHours }}</span>
+      </div>
+    </div>
+
+    <div class="md:col-span-4 flex items-start gap-2">
+      <span class="material-symbols-outlined text-[16px] text-primary shrink-0 mt-0.5" aria-hidden="true">library_books</span>
+      <div class="min-w-0">
+        <span class="text-[10px] uppercase tracking-wider font-mono text-on-surface-variant block mb-1">Nguồn RAG Grounding</span>
+        <div class="flex flex-wrap gap-1.5">
+          @for (source of currentScenario().ragSources; track source) {
+            <span class="text-[11px] font-mono px-2 py-0.5 rounded bg-white border border-outline-variant/50 text-on-surface-variant">
+              {{ source }}
+            </span>
+          }
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Milestones Steps -->
-  <div class="mt-8 relative">
+  <div class="mt-6 relative">
     <div class="hidden md:block absolute top-1/2 left-0 right-0 h-0.5 bg-outline-variant/30 -translate-y-1/2 z-0" aria-hidden="true"></div>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-5 relative z-10">
       @for (milestone of currentScenario().milestones; track milestone.timeframe) {
         <div
           [class]="milestone.statusType === 'in-progress'
             ? 'p-5 rounded-lg border-2 border-primary/40 bg-white shadow-md flex flex-col justify-between ring-2 ring-primary/10 transition-all duration-250 hover:-translate-y-0.5'
             : milestone.statusType === 'completed'
               ? 'p-5 rounded-lg border border-outline-variant/50 bg-white shadow-sm flex flex-col justify-between transition-all duration-200 hover:-translate-y-0.5'
-              : 'p-5 rounded-lg border border-outline-variant/40 bg-surface-container-low/40 flex flex-col justify-between opacity-80 transition-all duration-200'"
+              : 'p-5 rounded-lg border border-outline-variant/40 bg-surface-container-low/40 flex flex-col justify-between opacity-90 transition-all duration-200'"
         >
           <div>
-            <div class="flex items-center justify-between mb-3">
-              <span class="text-xs font-mono font-semibold" [class.text-primary]="milestone.statusType !== 'upcoming'" [class.text-on-surface-variant]="milestone.statusType === 'upcoming'">
-                {{ milestone.timeframe }}
-              </span>
+            <!-- Timeframe & Effort -->
+            <div class="flex items-center justify-between gap-2 mb-3">
+              <div class="flex flex-wrap items-center gap-2">
+                <span
+                  class="text-xs font-mono font-semibold"
+                  [class.text-primary]="milestone.statusType !== 'upcoming'"
+                  [class.text-on-surface-variant]="milestone.statusType === 'upcoming'"
+                >
+                  {{ milestone.timeframe }}
+                </span>
+                <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-surface-container text-on-surface-variant border border-outline-variant/40">
+                  {{ milestone.effortLabel }}
+                </span>
+              </div>
               @if (milestone.statusType === 'completed') {
-                <span class="material-symbols-outlined text-primary text-[18px]">task_alt</span>
+                <span class="material-symbols-outlined text-primary text-[18px] shrink-0" aria-hidden="true">task_alt</span>
               } @else if (milestone.statusType === 'in-progress') {
-                <span class="w-3 h-3 rounded-full bg-primary-container active-pulse-glow inline-block ring-2 ring-primary-fixed"></span>
+                <span class="w-3 h-3 rounded-full bg-primary-container active-pulse-glow inline-block ring-2 ring-primary-fixed shrink-0" aria-hidden="true"></span>
               } @else {
-                <span class="material-symbols-outlined text-on-surface-variant text-[18px]">schedule</span>
+                <span class="material-symbols-outlined text-on-surface-variant text-[18px] shrink-0" aria-hidden="true">schedule</span>
               }
             </div>
-            <h4 class="text-sm font-semibold text-on-surface mb-1 font-sans">{{ milestone.title }}</h4>
-            <p class="text-xs text-on-surface-variant font-sans leading-relaxed">{{ milestone.description }}</p>
+
+            <!-- Milestone Title & Description -->
+            <h4 class="text-sm font-semibold text-on-surface mb-1.5 font-sans">{{ milestone.title }}</h4>
+            <p class="text-xs text-on-surface-variant font-sans leading-relaxed mb-4">{{ milestone.description }}</p>
+
+            <!-- Sample Tasks (30-120m DAG nodes) -->
+            <div class="space-y-2 mb-4">
+              @for (task of milestone.sampleTasks; track task.title) {
+                <div class="p-2.5 rounded-md bg-surface-container-low/70 border border-outline-variant/40 text-[11px]">
+                  <div class="flex items-start justify-between gap-2">
+                    <span class="text-on-surface font-medium leading-snug font-sans">{{ task.title }}</span>
+                    <span class="font-mono text-[10px] px-1.5 py-0.5 rounded bg-white border border-outline-variant/50 text-primary shrink-0">
+                      {{ task.duration }}
+                    </span>
+                  </div>
+                  @if (task.dependency) {
+                    <span class="inline-flex items-center gap-1 mt-1 text-[10px] font-mono text-on-surface-variant">
+                      <span class="material-symbols-outlined text-[12px]" aria-hidden="true">account_tree</span>
+                      {{ task.dependency }}
+                    </span>
+                  }
+                </div>
+              }
+            </div>
           </div>
-          <div
-            class="mt-4 pt-3 border-t border-outline-variant/30 text-xs font-mono"
-            [class.text-primary]="milestone.statusType !== 'upcoming'"
-            [class.font-semibold]="milestone.statusType !== 'upcoming'"
-            [class.text-on-surface-variant]="milestone.statusType === 'upcoming'"
-          >
-            {{ milestone.status }}
+
+          <!-- Deliverable & Status Footer -->
+          <div class="pt-3 border-t border-outline-variant/30 space-y-1.5">
+            <div class="flex items-center gap-1.5 text-[11px] font-sans text-on-surface">
+              <span class="material-symbols-outlined text-[14px] text-primary shrink-0" aria-hidden="true">verified</span>
+              <span class="font-medium truncate" [title]="milestone.deliverable">{{ milestone.deliverable }}</span>
+            </div>
+            <div
+              class="text-xs font-mono"
+              [class.text-primary]="milestone.statusType !== 'upcoming'"
+              [class.font-semibold]="milestone.statusType !== 'upcoming'"
+              [class.text-on-surface-variant]="milestone.statusType === 'upcoming'"
+            >
+              {{ milestone.status }}
+            </div>
           </div>
         </div>
       }

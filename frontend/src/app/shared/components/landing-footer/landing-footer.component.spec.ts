@@ -15,13 +15,17 @@ describe('LandingFooterComponent', () => {
     fixture.detectChanges();
   });
 
-  it('should render default brand, copyright and status pill', () => {
+  it('should render default brand, copyright, status pill, and anchor links', () => {
     expect(component).toBeTruthy();
     const el = fixture.nativeElement as HTMLElement;
     expect(el.textContent).toContain('FocusFlow');
-    expect(el.textContent).toContain('© 2025 FocusFlow Systems Inc');
-    expect(el.textContent).toContain('Động cơ Thích ứng: 99.99%');
-    expect(el.textContent).toContain('Trạng thái Hệ thống');
+    expect(el.textContent).toContain(
+      '© 2026 FocusFlow — Hệ thống Điều phối Lộ trình Tự học Thích ứng (SRL Learning Harness).'
+    );
+    expect(el.textContent).toContain('3-Tier Validation Gate • 2-Stage SSE');
+
+    const anchorHrefs = Array.from(el.querySelectorAll('a')).map((a) => a.getAttribute('href'));
+    expect(anchorHrefs).toEqual(['#capabilities', '#methodology', '#scenarios', '#testimonials']);
   });
 
   it('should accept custom links and statusText', () => {
@@ -32,5 +36,7 @@ describe('LandingFooterComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
     expect(el.textContent).toContain('Hệ thống hoạt động bình thường');
     expect(el.textContent).toContain('Liên hệ');
+    const link = el.querySelector('a');
+    expect(link?.getAttribute('href')).toBe('/contact');
   });
 });

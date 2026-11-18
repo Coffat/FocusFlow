@@ -46,13 +46,14 @@ export interface FooterLink {
 })
 export class LandingFooterComponent {
   readonly brandName = input<string>('FocusFlow');
-  readonly copyrightText = input<string>('© 2025 FocusFlow Systems Inc. Architectural precision for autonomous intellect.');
-  readonly statusText = input<string>('Động cơ Thích ứng: 99.99%');
+  readonly copyrightText = input<string>(
+    '© 2026 FocusFlow — Hệ thống Điều phối Lộ trình Tự học Thích ứng (SRL Learning Harness).'
+  );
+  readonly statusText = input<string>('3-Tier Validation Gate • 2-Stage SSE');
   readonly links = input<FooterLink[]>([
-    { label: 'Trạng thái Hệ thống', href: '#' },
-    { label: 'Khung Phương pháp', href: '#' },
-    { label: 'Chính sách Quyền riêng tư', href: '#' },
-    { label: 'Bảo mật Dữ liệu', href: '#' },
-    { label: 'Nhật ký Thay đổi', href: '#' },
+    { label: 'Tính năng', href: '#capabilities' },
+    { label: 'Phương pháp', href: '#methodology' },
+    { label: 'Kịch bản mẫu', href: '#scenarios' },
+    { label: 'Trải nghiệm', href: '#testimonials' },
   ]);
 }
