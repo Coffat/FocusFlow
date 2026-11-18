@@ -45,6 +45,7 @@ from src.planning.infrastructure.orm.planning_orm import (
 from src.planning.public_api import (
     ExecutionWeekScheduleBlockDTO,
     ManualSlotValidationResultDTO,
+    MilestoneExecutionContextDTO,
     PlanningExecutionBridgePort,
     RoadmapExecutionContextDTO,
     register_planning_execution_bridge_factory,
@@ -138,6 +139,26 @@ class PlanningExecutionBridgeAdapter(PlanningExecutionBridgePort):
         )
         rows = (await self._session.execute(stmt)).fetchall()
         return {row[0]: int(row[1]) for row in rows}
+
+    async def get_milestones_context(
+        self,
+        roadmap_ids: Sequence[UUID],
+    ) -> dict[UUID, MilestoneExecutionContextDTO]:
+        if not roadmap_ids:
+            return {}
+        stmt = select(MilestoneORM).where(MilestoneORM.roadmap_id.in_(list(roadmap_ids)))
+        rows = list((await self._session.execute(stmt)).scalars().all())
+        return {
+            m.id: MilestoneExecutionContextDTO(
+                milestone_id=m.id,
+                roadmap_id=m.roadmap_id,
+                sequence_order=int(m.sequence_order),
+                title=m.title,
+                learning_outcomes=tuple(str(item) for item in (m.learning_outcomes or [])),
+                completion_criteria=m.completion_criteria,
+            )
+            for m in rows
+        }
 
     async def verify_milestone_in_roadmap(
         self,

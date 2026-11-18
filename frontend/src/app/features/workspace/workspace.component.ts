@@ -4,930 +4,884 @@ import {
   DestroyRef,
   OnInit,
   computed,
+  effect,
   inject,
   signal,
+  untracked,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
+import { Title } from '@angular/platform-browser';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { finalize } from 'rxjs';
 import {
   AlertTriangle,
-  BookOpen,
   CheckCircle2,
-  Clock,
   LUCIDE_ICONS,
   LucideAngularModule,
   LucideIconProvider,
-  Pause,
-  Play,
+  PanelLeftOpen,
   RefreshCw,
-  Sparkles,
-  Square,
-  WifiOff,
-  X,
+  ShieldAlert,
+  StickyNote,
 } from 'lucide-angular';
-import {
-  TimeSufficiency,
-  WorkspaceSessionService,
-  evaluateTakeawayCheck,
-} from '../../core/services/workspace-session.service';
-import { SessionMode, TaskResponse } from './models/workspace.model';
+import { WorkspaceSessionService } from '../../core/services/workspace-session.service';
 import { ButtonDirective } from '../../shared/ui/button/button.directive';
-import { BadgeDirective } from '../../shared/ui/badge/badge.directive';
+import { AmbientAudioService } from './data/ambient-audio.service';
+import { WorkspaceStudioStore } from './data/workspace-studio.store';
+import {
+  BreakType,
+  FinalizeSessionRequest,
+  SessionMode,
+  StickyNoteColor,
+  TaskResponse,
+  TimerTabMode,
+} from './models/workspace.model';
+import { WorkspaceClockComponent } from './ui/workspace-clock.component';
+import { WorkspaceFinalizeModalComponent } from './ui/workspace-finalize-modal.component';
+import { WorkspaceLeftPanelComponent } from './ui/workspace-left-panel.component';
+import { WorkspaceSceneBackdropComponent } from './ui/workspace-scene-backdrop.component';
+import { WorkspaceStickyNoteCardComponent } from './ui/workspace-sticky-note-card.component';
+import { WorkspaceStickyNotesPanelComponent } from './ui/workspace-sticky-notes-panel.component';
+import { WorkspaceToolPanelComponent } from './ui/workspace-tool-panel.component';
 
 @Component({
   selector: 'app-workspace',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, FormsModule, RouterLink, LucideAngularModule, ButtonDirective, BadgeDirective],
+  styleUrl: './workspace.component.scss',
+  imports: [
+    RouterLink,
+    LucideAngularModule,
+    ButtonDirective,
+    WorkspaceSceneBackdropComponent,
+    WorkspaceLeftPanelComponent,
+    WorkspaceToolPanelComponent,
+    WorkspaceClockComponent,
+    WorkspaceStickyNoteCardComponent,
+    WorkspaceStickyNotesPanelComponent,
+    WorkspaceFinalizeModalComponent,
+  ],
   providers: [
     {
       provide: LUCIDE_ICONS,
       multi: true,
       useValue: new LucideIconProvider({
         AlertTriangle,
-        BookOpen,
         CheckCircle2,
-        Clock,
-        Pause,
-        Play,
+        PanelLeftOpen,
         RefreshCw,
-        Sparkles,
-        Square,
-        WifiOff,
-        X,
+        ShieldAlert,
+        StickyNote,
       }),
     },
   ],
-  host: {
-    '(document:keydown.escape)': 'onEscape()',
-  },
   template: `
-    <div class="max-w-5xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
-      <!-- Header -->
-      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <span class="text-[11px] uppercase tracking-wider font-semibold text-[var(--muted-foreground)]">
-            Study Workspace (Pomodoro &amp; MVS)
-          </span>
-          <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--foreground)]">
-            Phiên Học Tập Trung
-          </h1>
-          <p class="text-xs sm:text-sm text-[var(--muted-foreground)] mt-0.5">
-            Thực thi nhiệm vụ học tập với nhịp tim đồng bộ 60 giây và lưu giữ Key Takeaway
-          </p>
-        </div>
+    <div
+      class="workspace-studio relative min-h-[calc(100vh-115px)] w-full overflow-x-clip flex flex-col justify-center transition-colors duration-300"
+      [attr.data-ws-contrast]="studioStore.isDarkSurface() ? 'dark' : 'light'"
+      [class.text-white]="isDarkScene()"
+    >
+      <ff-workspace-scene-backdrop
+        [scene]="studioStore.scene()"
+        [zenDimmed]="studioStore.shieldConfig().zenLockEnabled && sessionService.isRunning()"
+      />
 
-        <div class="flex items-center gap-2 self-start sm:self-auto">
-          @if (sessionService.todayFocus(); as tf) {
-            @if (tf.overdue_tasks_count > 0) {
-              <a
-                routerLink="/tasks"
-                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30 no-underline hover:opacity-90"
-              >
-                <lucide-icon name="alert-triangle" [size]="14" aria-hidden="true"></lucide-icon>
-                <span>{{ tf.overdue_tasks_count }} việc quá hạn</span>
-              </a>
-            }
-          }
+      <!-- Top-Left Pill to Reopen Left Panel on Desktop (when collapsed & not in Focus Mode) -->
+      @if (!studioStore.focusMode()) {
+        @if (studioStore.leftPanelCollapsed()) {
           <button
             type="button"
-            appButton
-            variant="outline"
-            size="sm"
-            [disabled]="sessionService.isLoading()"
-            (click)="refreshWorkspace()"
-            aria-label="Làm mới không gian học tập"
+            data-testid="open-left-panel-btn"
+            (click)="openLeftPanel()"
+            aria-label="Mở bảng điều khiển"
+            class="hidden lg:inline-flex absolute top-4 left-4 z-20 items-center gap-1.5 h-8 px-3 rounded-full border text-xs font-medium transition-colors cursor-pointer backdrop-blur-sm"
+            [class]="studioBarBtnClass(false)"
           >
-            <lucide-icon name="refresh-cw" [size]="14" aria-hidden="true"></lucide-icon>
-            <span>Làm mới</span>
+            <lucide-icon name="panel-left-open" [size]="14" aria-hidden="true"></lucide-icon>
+            <span>Mở bảng điều khiển</span>
           </button>
-        </div>
-      </div>
+        }
 
-      <!-- Global Error Banner -->
-      @if (sessionService.errorState(); as err) {
+        <!-- Mobile/Tablet (< lg) Compact Top Bar -->
         <div
-          role="alert"
-          data-testid="workspace-error-banner"
-          class="p-4 rounded-xl border border-red-500/40 bg-red-500/10 text-red-900 dark:text-red-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+          class="relative z-20 flex lg:hidden items-center justify-between gap-2 px-3 pt-3 w-full"
         >
-          <div class="space-y-0.5">
-            <div class="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
-              <lucide-icon name="alert-triangle" [size]="14" aria-hidden="true"></lucide-icon>
-              <span>{{ err.isOffline ? 'Mất kết nối mạng' : 'Không thể thực hiện thao tác' }}</span>
-              @if (err.code) {
-                <span class="font-mono px-1.5 py-0.5 rounded bg-red-500/15 text-[11px]">{{ err.code }}</span>
-              }
-            </div>
-            <p class="text-xs sm:text-sm">{{ err.message }}</p>
-          </div>
-          <div class="flex items-center gap-2 shrink-0">
-            <button type="button" appButton variant="outline" size="sm" (click)="refreshWorkspace()">
-              Thử lại
-            </button>
-            <button type="button" appButton variant="ghost" size="sm" (click)="sessionService.clearError()">
-              Đóng
-            </button>
-          </div>
+          <button
+            type="button"
+            data-testid="mobile-open-left-panel-btn"
+            (click)="openLeftPanel()"
+            aria-label="Mở bảng nhiệm vụ"
+            class="inline-flex items-center gap-1.5 h-9 px-3 rounded-full border text-xs font-medium transition-colors cursor-pointer backdrop-blur-sm"
+            [class]="studioBarBtnClass(mobileLeftOpen())"
+          >
+            <lucide-icon name="panel-left-open" [size]="14" aria-hidden="true"></lucide-icon>
+            <span>Bảng nhiệm vụ</span>
+          </button>
+
+          <button
+            type="button"
+            data-testid="mobile-open-notes-btn"
+            (click)="studioStore.toggleNotesPanel()"
+            aria-label="Mở ghi chú"
+            [attr.aria-pressed]="studioStore.notesPanelOpen()"
+            class="inline-flex items-center gap-1.5 h-9 px-3 rounded-full border text-xs font-medium transition-colors cursor-pointer backdrop-blur-sm"
+            [class]="studioBarBtnClass(studioStore.notesPanelOpen())"
+          >
+            <lucide-icon name="sticky-note" [size]="14" aria-hidden="true"></lucide-icon>
+            <span>Ghi chú</span>
+            @if (studioStore.notes().length > 0) {
+              <span class="font-mono text-[11px] opacity-80">({{ studioStore.notes().length }})</span>
+            }
+          </button>
         </div>
       }
 
-      <!-- Session Finalized Success Banner -->
-      @if (sessionService.lastFinalizedSession(); as finished) {
-        <div
-          role="status"
-          data-testid="session-finalized-banner"
-          class="p-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-900 dark:text-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-        >
-          <div class="flex items-start gap-2.5">
-            <lucide-icon name="check-circle-2" [size]="18" class="text-emerald-600 shrink-0 mt-0.5" aria-hidden="true"></lucide-icon>
-            <div class="space-y-0.5">
-              <div class="text-sm font-semibold">Đã hoàn tất phiên học ({{ finished.actual_minutes }} phút)</div>
-              @if (finished.takeaway_content) {
-                <p class="text-xs opacity-90 line-clamp-2">Takeaway: "{{ finished.takeaway_content }}"</p>
-              }
+      <!-- Subtle Top-Center Floating Alert Banners -->
+      @if (
+        sessionService.errorState() ||
+        sessionService.lastFinalizedSession() ||
+        studioStore.showReturnBanner() ||
+        switchTaskWarning() ||
+        (sessionService.todayFocus()?.overdue_tasks_count ?? 0) > 0
+      ) {
+        <div class="relative z-20 w-full max-w-xl mx-auto px-3 pt-4 flex flex-col gap-2">
+          @if (sessionService.todayFocus(); as tf) {
+            @if (tf.overdue_tasks_count > 0) {
+              <div class="flex justify-center">
+                <a
+                  routerLink="/tasks"
+                  class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold no-underline transition-opacity hover:opacity-90 border"
+                  [class]="
+                    isDarkScene()
+                      ? 'bg-amber-500/20 text-amber-200 border-amber-400/40'
+                      : 'bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-500/30'
+                  "
+                >
+                  <lucide-icon name="alert-triangle" [size]="13" aria-hidden="true"></lucide-icon>
+                  <span>{{ tf.overdue_tasks_count }} việc quá hạn</span>
+                </a>
+              </div>
+            }
+          }
+
+          <!-- Global Error Banner -->
+          @if (sessionService.errorState(); as err) {
+            <div
+              role="alert"
+              data-testid="workspace-error-banner"
+              class="p-3.5 rounded-xl border border-red-500/40 bg-red-500/10 text-red-900 dark:text-red-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+              [class.bg-red-950/75]="isDarkScene()"
+              [class.text-red-100]="isDarkScene()"
+            >
+              <div class="space-y-0.5">
+                <div class="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                  <lucide-icon name="alert-triangle" [size]="14" aria-hidden="true"></lucide-icon>
+                  <span>{{ err.isOffline ? 'Mất kết nối mạng' : 'Không thể thực hiện thao tác' }}</span>
+                  @if (err.code) {
+                    <span class="font-mono px-1.5 py-0.5 rounded bg-red-500/15 text-[11px]">{{ err.code }}</span>
+                  }
+                </div>
+                <p class="text-xs sm:text-sm m-0">{{ err.message }}</p>
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                <button type="button" appButton variant="outline" size="sm" (click)="refreshWorkspace()">
+                  Thử lại
+                </button>
+                <button type="button" appButton variant="ghost" size="sm" (click)="sessionService.clearError()">
+                  Đóng
+                </button>
+              </div>
             </div>
-          </div>
-          <div class="flex items-center gap-2 shrink-0">
-            <a routerLink="/analytics" appButton variant="outline" size="sm">Xem Phân tích</a>
-            <button type="button" appButton variant="ghost" size="sm" (click)="sessionService.clearFinalizedBanner()">
-              Đóng
-            </button>
-          </div>
+          }
+
+          <!-- Session Finalized Success Banner -->
+          @if (sessionService.lastFinalizedSession(); as finished) {
+            <div
+              role="status"
+              data-testid="session-finalized-banner"
+              class="p-3.5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-900 dark:text-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+              [class.bg-emerald-950/75]="isDarkScene()"
+              [class.text-emerald-100]="isDarkScene()"
+            >
+              <div class="flex items-start gap-2.5">
+                <lucide-icon name="check-circle-2" [size]="18" class="text-emerald-600 shrink-0 mt-0.5" aria-hidden="true"></lucide-icon>
+                <div class="space-y-0.5">
+                  <div class="text-sm font-semibold">Đã hoàn tất phiên học ({{ finished.actual_minutes }} phút)</div>
+                  @if (finished.takeaway_content) {
+                    <p class="text-xs opacity-90 line-clamp-2 m-0">Takeaway: "{{ finished.takeaway_content }}"</p>
+                  }
+                </div>
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                <a routerLink="/analytics" appButton variant="outline" size="sm">Xem Phân tích</a>
+                <button type="button" appButton variant="ghost" size="sm" (click)="sessionService.clearFinalizedBanner()">
+                  Đóng
+                </button>
+              </div>
+            </div>
+          }
+
+          <!-- Focus Shield Return Banner -->
+          @if (studioStore.showReturnBanner()) {
+            <div
+              role="status"
+              data-testid="focus-return-banner"
+              class="p-3 rounded-xl border border-amber-500/40 bg-amber-500/15 text-amber-950 dark:text-amber-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+              [class.bg-amber-950/80]="isDarkScene()"
+              [class.text-amber-100]="isDarkScene()"
+            >
+              <div class="flex items-center gap-2 text-xs sm:text-sm">
+                <lucide-icon name="shield-alert" [size]="16" class="shrink-0" aria-hidden="true"></lucide-icon>
+                <span>
+                  Bạn vừa rời khỏi tab học tập (tổng {{ studioStore.distractionCount() }} lần sao nhãng trong phiên).
+                </span>
+              </div>
+              <button
+                type="button"
+                appButton
+                variant="outline"
+                size="sm"
+                data-testid="dismiss-return-banner-btn"
+                (click)="studioStore.dismissReturnBanner()"
+              >
+                Tôi đã quay lại tập trung
+              </button>
+            </div>
+          }
+
+          <!-- Switch Outside Task Warning Banner -->
+          @if (switchTaskWarning(); as warningMsg) {
+            <div
+              role="status"
+              data-testid="switch-task-warning-banner"
+              class="p-3 rounded-xl border border-amber-500/40 bg-amber-500/15 text-amber-950 dark:text-amber-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+              [class.bg-amber-950/80]="isDarkScene()"
+              [class.text-amber-100]="isDarkScene()"
+            >
+              <div class="flex items-center gap-2 text-xs sm:text-sm">
+                <lucide-icon name="alert-triangle" [size]="16" class="shrink-0" aria-hidden="true"></lucide-icon>
+                <span>{{ warningMsg }}</span>
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  appButton
+                  variant="outline"
+                  size="sm"
+                  data-testid="switch-task-end-session-btn"
+                  (click)="onEndSessionFromWarning()"
+                >
+                  Kết thúc phiên
+                </button>
+                <button
+                  type="button"
+                  appButton
+                  variant="ghost"
+                  size="sm"
+                  (click)="dismissSwitchTaskWarning()"
+                >
+                  Đóng
+                </button>
+              </div>
+            </div>
+          }
         </div>
       }
 
       <!-- Loading State -->
       @if (sessionService.isLoading() && !sessionService.todayFocus()) {
-        <div class="p-8 rounded-2xl border border-[var(--border)] bg-[var(--card)] flex flex-col items-center justify-center gap-3 text-center">
-          <lucide-icon name="refresh-cw" [size]="24" class="animate-spin text-[var(--primary)]" aria-hidden="true"></lucide-icon>
-          <p class="text-sm text-[var(--muted-foreground)]">Đang đồng bộ phiên học và hàng đợi hôm nay...</p>
-        </div>
-      } @else {
-        <!-- FR-SESSION-001: Takeaway Debt Resolution Banner/Form -->
-        @if (sessionService.pendingTakeawaySession(); as debt) {
-          <section
-            aria-labelledby="takeaway-debt-heading"
-            data-testid="pending-takeaway-card"
-            class="rounded-2xl border-2 border-amber-500/60 bg-amber-50/70 dark:bg-amber-950/20 p-5 sm:p-6 space-y-4 shadow-xs"
-          >
-            <div class="flex items-start gap-3">
-              <div class="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-800 dark:text-amber-300 flex items-center justify-center shrink-0">
-                <lucide-icon name="alert-triangle" [size]="20" aria-hidden="true"></lucide-icon>
-              </div>
-              <div class="space-y-1">
-                <div class="flex flex-wrap items-center gap-2">
-                  <h2 id="takeaway-debt-heading" class="text-base sm:text-lg font-bold text-[var(--foreground)]">
-                    Bạn có phiên học chưa hoàn tất Key Takeaway
-                  </h2>
-                  <span appBadge variant="outline" class="border-amber-500/50 text-amber-800 dark:text-amber-300">
-                    FR-SESSION-001
-                  </span>
-                </div>
-                <p class="text-xs sm:text-sm text-[var(--muted-foreground)]">
-                  Phiên học ({{ debt.session_mode }} &bull; {{ debt.actual_minutes }}/{{ debt.planned_minutes }} phút) đã tự động đóng trước đó.
-                  Vui lòng tóm tắt kiến thức cốt lõi (tối thiểu 30 ký tự &amp; 6 từ phân biệt) trước khi bắt đầu phiên học mới.
-                </p>
-              </div>
-            </div>
-
-            <div class="space-y-3 bg-[var(--card)] border border-[var(--border)] rounded-xl p-4">
-              <div class="space-y-1.5">
-                <label for="debt-takeaway-input" class="block text-xs font-semibold text-[var(--foreground)]">
-                  Key Takeaway bắt buộc *
-                </label>
-                <textarea
-                  id="debt-takeaway-input"
-                  data-testid="debt-takeaway-textarea"
-                  rows="3"
-                  [ngModel]="debtTakeaway()"
-                  (ngModelChange)="debtTakeaway.set($event)"
-                  placeholder="Ví dụ: Em đã nắm được cách tách interface Port ở Application layer và Adapter ở Infrastructure layer..."
-                  class="w-full rounded-lg border border-[var(--input)] bg-[var(--background)] p-3 text-sm text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
-                ></textarea>
-                <div class="flex flex-wrap items-center justify-between gap-2 text-[11px]">
-                  <span
-                    [class.text-emerald-700]="debtTakeawayCheck().isValid"
-                    [class.dark:text-emerald-400]="debtTakeawayCheck().isValid"
-                    [class.text-[var(--muted-foreground)]]="!debtTakeawayCheck().isValid"
-                  >
-                    {{ debtTakeawayCheck().charCount }}/30 ký tự &bull; {{ debtTakeawayCheck().distinctWordCount }}/6 từ riêng biệt
-                  </span>
-                  @if (!debtTakeawayCheck().hasNoRepeatedChars) {
-                    <span class="text-red-600 font-medium">Tránh lặp ký tự vô nghĩa quá 5 lần.</span>
-                  }
-                </div>
-              </div>
-
-              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
-                <div class="space-y-1">
-                  <span class="block text-xs font-semibold text-[var(--foreground)]">Mức độ tự tin (1–5)</span>
-                  <div class="flex items-center gap-1.5">
-                    @for (score of confidenceScores; track score) {
-                      <button
-                        type="button"
-                        (click)="debtConfidence.set(score)"
-                        [attr.aria-pressed]="debtConfidence() === score"
-                        class="w-8 h-8 rounded-lg text-xs font-bold border transition-colors cursor-pointer"
-                        [class]="debtConfidence() === score
-                          ? 'bg-[var(--primary)] text-[var(--primary-foreground)] border-[var(--primary)]'
-                          : 'bg-[var(--background)] text-[var(--foreground)] border-[var(--border)] hover:bg-[var(--muted)]'"
-                      >
-                        {{ score }}
-                      </button>
-                    }
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  appButton
-                  variant="default"
-                  data-testid="resolve-takeaway-btn"
-                  [disabled]="sessionService.isSubmitting() || !debtTakeawayCheck().isValid"
-                  (click)="submitPendingTakeaway(debt.id)"
-                >
-                  {{ sessionService.isSubmitting() ? 'Đang lưu...' : 'Xác nhận Takeaway & Mở khóa' }}
-                </button>
-              </div>
-            </div>
-          </section>
-        }
-
-        <!-- ACTIVE SESSION VIEW -->
-        @if (sessionService.activeSession(); as active) {
-          <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            <!-- Left: Pomodoro Clock & Controls -->
-            <div class="lg:col-span-7 bg-[var(--card)] border border-[var(--border)] rounded-2xl p-6 sm:p-8 flex flex-col items-center gap-6 shadow-xs">
-              <div class="w-full flex items-center justify-between gap-2">
-                <span appBadge variant="default">
-                  {{ active.session_mode === 'MVS' ? 'Chế độ MVS (Tối thiểu)' : 'Phiên Tiêu chuẩn' }}
-                </span>
-
-                <!-- Heartbeat Status Pill -->
-                <div
-                  class="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border border-[var(--border)] bg-[var(--background)]"
-                  aria-live="polite"
-                >
-                  @switch (sessionService.heartbeatStatus()) {
-                    @case ('offline') {
-                      <lucide-icon name="wifi-off" [size]="13" class="text-red-600" aria-hidden="true"></lucide-icon>
-                      <span class="text-red-700 dark:text-red-300 font-medium">Ngoại tuyến</span>
-                      <button
-                        type="button"
-                        (click)="retryHeartbeat()"
-                        class="ml-1 underline font-semibold text-[var(--primary)] cursor-pointer"
-                      >
-                        Thử lại
-                      </button>
-                    }
-                    @case ('error') {
-                      <lucide-icon name="alert-triangle" [size]="13" class="text-amber-600" aria-hidden="true"></lucide-icon>
-                      <span class="text-amber-700 dark:text-amber-300 font-medium">Lỗi đồng bộ</span>
-                      <button
-                        type="button"
-                        (click)="retryHeartbeat()"
-                        class="ml-1 underline font-semibold text-[var(--primary)] cursor-pointer"
-                      >
-                        Thử lại
-                      </button>
-                    }
-                    @case ('syncing') {
-                      <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
-                      <span class="text-[var(--muted-foreground)]">Đang đồng bộ...</span>
-                    }
-                    @default {
-                      <span
-                        class="w-2 h-2 rounded-full"
-                        [class.bg-emerald-500]="sessionService.isRunning()"
-                        [class.bg-amber-500]="!sessionService.isRunning()"
-                      ></span>
-                      <span class="text-[var(--muted-foreground)]">
-                        {{ sessionService.isRunning() ? 'Heartbeat 60s đang bật' : 'Đã tạm dừng' }}
-                      </span>
-                    }
-                  }
-                </div>
-              </div>
-
-              <!-- Progress Bar -->
-              <div class="w-full bg-[var(--muted)] h-2.5 rounded-full overflow-hidden">
-                <div
-                  class="bg-[var(--primary)] h-full transition-all duration-300"
-                  [style.width.%]="sessionService.progressPercentage()"
-                ></div>
-              </div>
-
-              <!-- Clock Face -->
-              <div class="text-center space-y-1">
-                <div
-                  class="text-6xl sm:text-7xl font-mono font-bold tracking-tighter text-[var(--foreground)] select-none"
-                  aria-live="polite"
-                  data-testid="workspace-timer-display"
-                >
-                  {{ sessionService.formattedTime() }}
-                </div>
-                <div class="text-xs text-[var(--muted-foreground)]">
-                  Đã học {{ sessionService.elapsedMinutes() }} / {{ sessionService.durationMinutes() }} phút
-                  @if (sessionService.lastHeartbeatAt(); as hb) {
-                    <span>&bull; Đồng bộ lúc {{ formatLocalTime(hb) }}</span>
-                  }
-                </div>
-              </div>
-
-              <!-- Timer Controls -->
-              <div class="flex flex-wrap items-center justify-center gap-3 w-full">
-                @if (!sessionService.isRunning()) {
-                  <button
-                    type="button"
-                    appButton
-                    variant="default"
-                    data-testid="resume-session-btn"
-                    (click)="sessionService.resumeSession()"
-                  >
-                    <lucide-icon name="play" [size]="15" aria-hidden="true"></lucide-icon>
-                    <span>Tiếp tục</span>
-                  </button>
-                } @else {
-                  <button
-                    type="button"
-                    appButton
-                    variant="outline"
-                    data-testid="pause-session-btn"
-                    (click)="sessionService.pauseSession()"
-                  >
-                    <lucide-icon name="pause" [size]="15" aria-hidden="true"></lucide-icon>
-                    <span>Tạm dừng</span>
-                  </button>
-                }
-
-                <button
-                  type="button"
-                  appButton
-                  variant="default"
-                  data-testid="open-finalize-btn"
-                  (click)="openFinalizeModal(false)"
-                >
-                  <lucide-icon name="check-circle-2" [size]="15" aria-hidden="true"></lucide-icon>
-                  <span>Hoàn thành phiên</span>
-                </button>
-
-                <button
-                  type="button"
-                  appButton
-                  variant="outline"
-                  data-testid="open-early-stop-btn"
-                  (click)="openFinalizeModal(true)"
-                >
-                  <lucide-icon name="square" [size]="14" aria-hidden="true"></lucide-icon>
-                  <span>Kết thúc sớm</span>
-                </button>
-              </div>
-
-              <!-- Active Session Tasks -->
-              <div class="w-full pt-4 border-t border-[var(--border)] space-y-2.5">
-                <div class="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
-                  Nhiệm vụ trong phiên ({{ sessionService.activeSessionTasks().length || active.session_tasks?.length || 0 }})
-                </div>
-                @for (t of sessionService.activeSessionTasks(); track t.id) {
-                  <div class="p-3 rounded-xl border border-[var(--border)] bg-[var(--background)] space-y-1.5">
-                    <div class="flex items-center justify-between gap-2">
-                      <span class="text-sm font-semibold text-[var(--foreground)]">{{ t.title }}</span>
-                      <span class="text-xs font-mono text-[var(--muted-foreground)]">{{ t.estimated_minutes }}p</span>
-                    </div>
-                    @if (t.description) {
-                      <p class="text-xs text-[var(--muted-foreground)]">{{ t.description }}</p>
-                    }
-                    @if (getTaskResources(t).length > 0) {
-                      <div class="flex flex-wrap gap-1.5 pt-1">
-                        @for (res of getTaskResources(t); track $index) {
-                          @if (res.url) {
-                            <a
-                              [href]="res.url"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] bg-[var(--muted)] text-[var(--primary)] hover:underline"
-                            >
-                              <lucide-icon name="book-open" [size]="11" aria-hidden="true"></lucide-icon>
-                              <span>{{ res.label }}</span>
-                            </a>
-                          } @else {
-                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] bg-[var(--muted)] text-[var(--foreground)]">
-                              <lucide-icon name="book-open" [size]="11" aria-hidden="true"></lucide-icon>
-                              <span>{{ res.label }}</span>
-                            </span>
-                          }
-                        }
-                      </div>
-                    }
-                  </div>
-                }
-              </div>
-            </div>
-
-            <!-- Right: Scratchpad -->
-            <div class="lg:col-span-5 bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5 sm:p-6 space-y-3 shadow-xs">
-              <div class="flex items-center justify-between gap-2">
-                <label for="workspace-scratchpad" class="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
-                  Ghi chú nháp (Scratchpad)
-                </label>
-                <span class="text-[11px] text-[var(--muted-foreground)]">Tự đồng bộ sau 1.5s</span>
-              </div>
-              <textarea
-                id="workspace-scratchpad"
-                data-testid="scratchpad-textarea"
-                [ngModel]="sessionService.scratchpadNote()"
-                (ngModelChange)="sessionService.setScratchpadNote($event)"
-                placeholder="Ghi nhanh suy nghĩ, thắc mắc hoặc ý chính khi đang học..."
-                rows="10"
-                class="w-full bg-[var(--background)] border border-[var(--input)] rounded-xl p-3.5 text-sm text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)] resize-y"
-              ></textarea>
-              <div class="flex items-center justify-between text-[11px] text-[var(--muted-foreground)]">
-                <span>Dữ liệu được lưu vào phiên học hiện tại.</span>
-                <button
-                  type="button"
-                  (click)="retryHeartbeat()"
-                  class="font-medium text-[var(--primary)] hover:underline cursor-pointer"
-                >
-                  Lưu ngay
-                </button>
-              </div>
-            </div>
+        <div class="relative z-10 w-full max-w-md mx-auto px-4 py-8">
+          <div class="p-8 rounded-2xl border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] flex flex-col items-center justify-center gap-3 text-center">
+            <lucide-icon name="refresh-cw" [size]="24" class="animate-spin text-[var(--primary)]" aria-hidden="true"></lucide-icon>
+            <p class="text-sm text-[var(--muted-foreground)] m-0">Đang đồng bộ phiên học và hàng đợi hôm nay...</p>
           </div>
-        } @else {
-          <!-- NO ACTIVE SESSION: Empty State OR Session Setup -->
-          @if (sessionService.availableTasks().length === 0) {
+        </div>
+      } @else if (studioStore.focusMode()) {
+        <!-- Focus Mode: ONLY Ring Timer + Active Task Context + Exit Button -->
+        <main
+          data-testid="workspace-focus-mode-region"
+          class="relative z-10 flex-1 flex items-center justify-center px-4 py-8"
+        >
+          <div class="w-full max-w-2xl">
+            <ff-workspace-clock
+              [activeTabMode]="activeTabMode()"
+              [clockStyle]="studioStore.clockStyle()"
+              [clockSize]="studioStore.clockSize()"
+              [showSeconds]="studioStore.showSeconds()"
+              [activeSession]="sessionService.activeSession()"
+              [isRunning]="sessionService.isRunning()"
+              [isSubmitting]="sessionService.isSubmitting()"
+              [plannedMinutes]="plannedMinutes()"
+              [elapsedSeconds]="sessionService.elapsedSeconds()"
+              [remainingSeconds]="sessionService.remainingSeconds()"
+              [progressPercentage]="sessionService.progressPercentage()"
+              [heartbeatStatus]="sessionService.heartbeatStatus()"
+              [activeBreakType]="sessionService.activeBreakType()"
+              [breakDurationMinutes]="sessionService.breakDurationMinutes()"
+              [breakRemainingSeconds]="sessionService.breakRemainingSeconds()"
+              [isBreakRunning]="sessionService.isBreakRunning()"
+              [breakProgressPercentage]="sessionService.breakProgressPercentage()"
+              [canStartSession]="canStartSession()"
+              [selectedTaskCount]="selectedTaskIds().length"
+              [hasPendingTakeaway]="sessionService.pendingTakeawaySession() !== null"
+              [focusScore]="studioStore.focusScore()"
+              [activeTask]="activeTask()"
+              [milestoneContext]="milestoneContext()"
+              [completedPomodorosToday]="sessionService.completedPomodorosToday()"
+              [focusMode]="true"
+              (selectTabMode)="selectTabMode($event)"
+              (selectDuration)="onPlannedMinutesChange($event)"
+              (startSession)="startStudySession()"
+              (pauseSession)="sessionService.pauseSession()"
+              (resumeSession)="sessionService.resumeSession()"
+              (openFinalize)="openFinalizeModal($event)"
+              (startBreak)="onStartBreak($event)"
+              (pauseBreak)="sessionService.pauseBreak()"
+              (resumeBreak)="sessionService.resumeBreak()"
+              (stopBreak)="sessionService.stopBreak()"
+              (exitFocusMode)="studioStore.setFocusMode(false)"
+            />
+          </div>
+        </main>
+      } @else if (studioStore.leftPanelCollapsed()) {
+        <!-- Collapsed Layout: Centered Clock + Optional Right Notes Region -->
+        <main class="relative z-10 flex-1 flex items-center justify-center px-4 py-8">
+          <div class="w-full max-w-2xl">
+            <ff-workspace-clock
+              [activeTabMode]="activeTabMode()"
+              [clockStyle]="studioStore.clockStyle()"
+              [clockSize]="studioStore.clockSize()"
+              [showSeconds]="studioStore.showSeconds()"
+              [activeSession]="sessionService.activeSession()"
+              [isRunning]="sessionService.isRunning()"
+              [isSubmitting]="sessionService.isSubmitting()"
+              [plannedMinutes]="plannedMinutes()"
+              [elapsedSeconds]="sessionService.elapsedSeconds()"
+              [remainingSeconds]="sessionService.remainingSeconds()"
+              [progressPercentage]="sessionService.progressPercentage()"
+              [heartbeatStatus]="sessionService.heartbeatStatus()"
+              [activeBreakType]="sessionService.activeBreakType()"
+              [breakDurationMinutes]="sessionService.breakDurationMinutes()"
+              [breakRemainingSeconds]="sessionService.breakRemainingSeconds()"
+              [isBreakRunning]="sessionService.isBreakRunning()"
+              [breakProgressPercentage]="sessionService.breakProgressPercentage()"
+              [canStartSession]="canStartSession()"
+              [selectedTaskCount]="selectedTaskIds().length"
+              [hasPendingTakeaway]="sessionService.pendingTakeawaySession() !== null"
+              [focusScore]="studioStore.focusScore()"
+              [activeTask]="activeTask()"
+              [milestoneContext]="milestoneContext()"
+              [completedPomodorosToday]="sessionService.completedPomodorosToday()"
+              [focusMode]="false"
+              (selectTabMode)="selectTabMode($event)"
+              (selectDuration)="onPlannedMinutesChange($event)"
+              (startSession)="startStudySession()"
+              (pauseSession)="sessionService.pauseSession()"
+              (resumeSession)="sessionService.resumeSession()"
+              (openFinalize)="openFinalizeModal($event)"
+              (startBreak)="onStartBreak($event)"
+              (pauseBreak)="sessionService.pauseBreak()"
+              (resumeBreak)="sessionService.resumeBreak()"
+              (stopBreak)="sessionService.stopBreak()"
+              (exitFocusMode)="studioStore.setFocusMode(false)"
+            />
+          </div>
+        </main>
+
+        @if (showNotesRegion()) {
+          @if (studioStore.notesPanelOpen()) {
             <div
-              data-testid="workspace-empty-state"
-              class="p-10 sm:p-12 text-center flex flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--border)] bg-[var(--card)]"
+              class="fixed inset-0 z-30 bg-black/35 lg:hidden"
+              (click)="studioStore.setNotesPanelOpen(false)"
+              aria-hidden="true"
+            ></div>
+          }
+          <div
+            [class]="
+              studioStore.notesPanelOpen()
+                ? 'fixed inset-y-0 right-0 z-40 w-[330px] max-w-[92vw] p-3 bg-[var(--surface)] shadow-xl overflow-y-auto lg:fixed lg:inset-y-auto lg:top-16 lg:right-6 lg:z-30 lg:w-[320px] lg:max-w-none lg:p-0 lg:bg-transparent lg:shadow-none'
+                : 'hidden lg:block lg:fixed lg:top-16 lg:right-6 lg:z-20 lg:w-[320px]'
+            "
+          >
+            <ff-workspace-sticky-notes-panel
+              [composerOpen]="studioStore.notesPanelOpen()"
+              [visiblePinnedNotes]="studioStore.visiblePinnedNotes()"
+              [collectionNotes]="studioStore.collectionNotes()"
+              [hasActiveSession]="sessionService.activeSession() !== null"
+              [heartbeatStatus]="sessionService.heartbeatStatus()"
+              [serializedLength]="studioStore.serializedNotesLength()"
+              [isOverLimit]="studioStore.isScratchpadOverLimit()"
+              [undoNotice]="studioStore.undoNotice()"
+              (closeComposer)="studioStore.setNotesPanelOpen(false)"
+              (pinNewNote)="onPinNewNote($event)"
+              (updateNote)="studioStore.updateNote($event.id, { title: $event.title, content: $event.content })"
+              (unpinNote)="studioStore.unpinNote($event)"
+              (pinNote)="studioStore.togglePin($event)"
+              (changeColor)="studioStore.updateNote($event.id, { color: $event.color })"
+              (deleteNote)="studioStore.deleteNote($event)"
+              (copyToTakeaway)="openFinalizeModal(false)"
+              (undoAction)="studioStore.undoLastNoteAction()"
+            />
+          </div>
+        }
+      } @else {
+        <!-- Symmetric 3-Column Desktop Grid -->
+        <div
+          class="relative z-10 w-full max-w-[1520px] mx-auto px-3 sm:px-6 py-4 grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)_320px] items-center gap-6 min-h-[calc(100vh-115px)]"
+        >
+          <!-- Left Column: Consolidated Left Panel + Inline Tool Panel -->
+          @if (mobileLeftOpen()) {
+            <div
+              class="fixed inset-0 z-30 bg-black/40 lg:hidden"
+              (click)="mobileLeftOpen.set(false)"
+              aria-hidden="true"
+            ></div>
+          }
+          <div
+            data-testid="workspace-left-region"
+            [class]="
+              mobileLeftOpen()
+                ? 'fixed inset-y-0 left-0 z-40 w-[320px] max-w-[88vw] p-3 bg-[var(--surface)] shadow-xl overflow-y-auto lg:static lg:z-auto lg:w-full lg:max-w-none lg:p-0 lg:bg-transparent lg:shadow-none lg:overflow-visible lg:self-center'
+                : 'hidden lg:block lg:self-center'
+            "
+          >
+            <ff-workspace-left-panel
+              [progress]="sessionService.todayProgress()"
+              [completedPomodorosToday]="sessionService.completedPomodorosToday()"
+              [localDate]="sessionService.todayFocus()?.local_date ?? ''"
+              [tasks]="sessionService.availableTasks()"
+              [activeSession]="sessionService.activeSession()"
+              [activeSessionTasks]="sessionService.activeSessionTasks()"
+              [pendingTakeawaySession]="sessionService.pendingTakeawaySession()"
+              [selectedTaskIds]="selectedTaskIds()"
+              [isSubmitting]="sessionService.isSubmitting()"
+              [togglingTaskId]="togglingTaskId()"
+              [isLoading]="sessionService.isLoading()"
+              [isFullscreen]="studioStore.isFullscreen()"
+              [focusMode]="studioStore.focusMode()"
+              [activeFocusTaskId]="sessionService.activeFocusTaskId()"
+              [activeTool]="studioStore.activeToolPopover()"
+              [isAnySoundPlaying]="audioService.isAnySoundPlaying()"
+              [isMuted]="audioService.isMuted()"
+              [tabGuardEnabled]="studioStore.shieldConfig().tabGuardEnabled"
+              [focusScore]="studioStore.focusScore()"
+              [notesPanelOpen]="studioStore.notesPanelOpen()"
+              [notesCount]="studioStore.notes().length"
+              (toggleSelectTask)="toggleTaskSelection($event)"
+              (toggleTaskComplete)="onToggleTaskComplete($event)"
+              (resolveDebt)="onResolveDebt($event)"
+              (collapsePanel)="onLeftPanelCollapse()"
+              (refreshWorkspace)="refreshWorkspace()"
+              (toggleFullscreen)="toggleFullscreen()"
+              (toggleFocusMode)="studioStore.toggleFocusMode()"
+              (selectFocusTask)="sessionService.setActiveFocusTask($event)"
+              (attemptSwitchOutsideTask)="onAttemptSwitchOutsideTask($event)"
+              (toggleTool)="studioStore.toggleToolPopover($event)"
+              (toggleNotesPanel)="studioStore.toggleNotesPanel()"
             >
-              <div class="w-12 h-12 rounded-2xl bg-[var(--muted)] text-[var(--muted-foreground)] flex items-center justify-center mb-3">
-                <lucide-icon name="clock" [size]="24" aria-hidden="true"></lucide-icon>
-              </div>
-              <h2 class="text-lg font-bold text-[var(--foreground)] mb-1">
-                Chưa có nhiệm vụ nào cho hôm nay
-              </h2>
-              <p class="text-xs sm:text-sm text-[var(--muted-foreground)] max-w-md mb-5 leading-relaxed">
-                Hàng đợi hôm nay đang trống. Bạn có thể chọn một nhiệm vụ từ danh sách Công việc hoặc mở Lộ trình học tập để xếp lịch.
-              </p>
-              <div class="flex flex-wrap items-center justify-center gap-3">
-                <a routerLink="/tasks" appButton variant="default" size="sm">
-                  Chọn việc từ Danh sách Nhiệm vụ
-                </a>
-                <a routerLink="/roadmaps" appButton variant="outline" size="sm">
-                  Xem Lộ trình học tập
-                </a>
-              </div>
+              <ff-workspace-tool-panel
+                left-tool-panel
+                [activeTool]="studioStore.activeToolPopover()"
+                [scene]="studioStore.scene()"
+                [clockStyle]="studioStore.clockStyle()"
+                [clockSize]="studioStore.clockSize()"
+                [showSeconds]="studioStore.showSeconds()"
+                [showInTabTitle]="studioStore.showInTabTitle()"
+                [masterVolume]="audioService.masterVolume()"
+                [isMuted]="audioService.isMuted()"
+                [chimeEnabled]="audioService.chimeEnabled()"
+                [channels]="audioService.channels()"
+                [embedProvider]="audioService.embedProvider()"
+                [safeEmbedUrl]="audioService.safeEmbedResourceUrl()"
+                [embedRawInput]="audioService.embedRawInput()"
+                [embedError]="audioService.embedError()"
+                [shieldConfig]="studioStore.shieldConfig()"
+                [distractionCount]="studioStore.distractionCount()"
+                [focusScore]="studioStore.focusScore()"
+                [isFullscreen]="studioStore.isFullscreen()"
+                (closePanel)="studioStore.closeToolPopover()"
+                (selectScene)="studioStore.setScene($event)"
+                (selectClockStyle)="studioStore.setClockStyle($event)"
+                (selectClockSize)="studioStore.setClockSize($event)"
+                (toggleShowSeconds)="studioStore.toggleShowSeconds()"
+                (toggleShowInTabTitle)="studioStore.toggleShowInTabTitle()"
+                (toggleChannel)="audioService.toggleChannel($event)"
+                (changeChannelVolume)="audioService.setChannelVolume($event.id, $event.volume)"
+                (changeMasterVolume)="audioService.setMasterVolume($event)"
+                (toggleMute)="audioService.toggleMute()"
+                (toggleChime)="audioService.toggleChime()"
+                (applySceneAudio)="audioService.applyScenePreset(studioStore.scene())"
+                (applyMediaEmbed)="audioService.setMediaEmbed($event)"
+                (clearMediaEmbed)="audioService.clearMediaEmbed()"
+                (toggleTabGuard)="studioStore.setTabGuardEnabled($event)"
+                (toggleZenLock)="studioStore.setZenLockEnabled($event)"
+                (toggleFullscreen)="toggleFullscreen()"
+                (addBlockedSite)="studioStore.addBlockedSite($event)"
+                (removeBlockedSite)="studioStore.removeBlockedSite($event)"
+                (addParkingThought)="studioStore.addThought($event)"
+                (toggleParkingThought)="studioStore.toggleThought($event)"
+                (removeParkingThought)="studioStore.removeThought($event)"
+              />
+            </ff-workspace-left-panel>
+          </div>
+
+          <!-- Center Column: Dead-Center Minimalist Clock -->
+          <main class="flex flex-col items-center justify-center min-w-0">
+            <div class="w-full max-w-2xl">
+              <ff-workspace-clock
+                [activeTabMode]="activeTabMode()"
+                [clockStyle]="studioStore.clockStyle()"
+                [clockSize]="studioStore.clockSize()"
+                [showSeconds]="studioStore.showSeconds()"
+                [activeSession]="sessionService.activeSession()"
+                [isRunning]="sessionService.isRunning()"
+                [isSubmitting]="sessionService.isSubmitting()"
+                [plannedMinutes]="plannedMinutes()"
+                [elapsedSeconds]="sessionService.elapsedSeconds()"
+                [remainingSeconds]="sessionService.remainingSeconds()"
+                [progressPercentage]="sessionService.progressPercentage()"
+                [heartbeatStatus]="sessionService.heartbeatStatus()"
+                [activeBreakType]="sessionService.activeBreakType()"
+                [breakDurationMinutes]="sessionService.breakDurationMinutes()"
+                [breakRemainingSeconds]="sessionService.breakRemainingSeconds()"
+                [isBreakRunning]="sessionService.isBreakRunning()"
+                [breakProgressPercentage]="sessionService.breakProgressPercentage()"
+                [canStartSession]="canStartSession()"
+                [selectedTaskCount]="selectedTaskIds().length"
+                [hasPendingTakeaway]="sessionService.pendingTakeawaySession() !== null"
+                [focusScore]="studioStore.focusScore()"
+                [activeTask]="activeTask()"
+                [milestoneContext]="milestoneContext()"
+                [completedPomodorosToday]="sessionService.completedPomodorosToday()"
+                [focusMode]="false"
+                (selectTabMode)="selectTabMode($event)"
+                (selectDuration)="onPlannedMinutesChange($event)"
+                (startSession)="startStudySession()"
+                (pauseSession)="sessionService.pauseSession()"
+                (resumeSession)="sessionService.resumeSession()"
+                (openFinalize)="openFinalizeModal($event)"
+                (startBreak)="onStartBreak($event)"
+                (pauseBreak)="sessionService.pauseBreak()"
+                (resumeBreak)="sessionService.resumeBreak()"
+                (stopBreak)="sessionService.stopBreak()"
+                (exitFocusMode)="studioStore.setFocusMode(false)"
+              />
+            </div>
+          </main>
+
+          <!-- Right Column: Sticky Notes Panel or Symmetric Spacer -->
+          @if (showNotesRegion()) {
+            @if (studioStore.notesPanelOpen()) {
+              <div
+                class="fixed inset-0 z-30 bg-black/35 lg:hidden"
+                (click)="studioStore.setNotesPanelOpen(false)"
+                aria-hidden="true"
+              ></div>
+            }
+            <div
+              [class]="
+                studioStore.notesPanelOpen()
+                  ? 'fixed inset-y-0 right-0 z-40 w-[330px] max-w-[92vw] p-3 bg-[var(--surface)] shadow-xl overflow-y-auto lg:static lg:z-30 lg:w-[320px] lg:max-w-none lg:p-0 lg:bg-transparent lg:shadow-none lg:overflow-visible lg:self-center shrink-0'
+                  : 'hidden lg:block lg:w-[320px] lg:self-center shrink-0'
+              "
+            >
+              <ff-workspace-sticky-notes-panel
+                [composerOpen]="studioStore.notesPanelOpen()"
+                [visiblePinnedNotes]="studioStore.visiblePinnedNotes()"
+                [collectionNotes]="studioStore.collectionNotes()"
+                [hasActiveSession]="sessionService.activeSession() !== null"
+                [heartbeatStatus]="sessionService.heartbeatStatus()"
+                [serializedLength]="studioStore.serializedNotesLength()"
+                [isOverLimit]="studioStore.isScratchpadOverLimit()"
+                [undoNotice]="studioStore.undoNotice()"
+                (closeComposer)="studioStore.setNotesPanelOpen(false)"
+                (pinNewNote)="onPinNewNote($event)"
+                (updateNote)="studioStore.updateNote($event.id, { title: $event.title, content: $event.content })"
+                (unpinNote)="studioStore.unpinNote($event)"
+                (pinNote)="studioStore.togglePin($event)"
+                (changeColor)="studioStore.updateNote($event.id, { color: $event.color })"
+                (deleteNote)="studioStore.deleteNote($event)"
+                (copyToTakeaway)="openFinalizeModal(false)"
+                (undoAction)="studioStore.undoLastNoteAction()"
+              />
             </div>
           } @else {
-            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              <!-- Task Selection -->
-              <div class="lg:col-span-7 bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5 sm:p-6 space-y-4 shadow-xs">
-                <div class="flex items-center justify-between gap-2">
-                  <div>
-                    <h2 class="text-base font-bold text-[var(--foreground)]">Chọn nhiệm vụ cho phiên học</h2>
-                    <p class="text-xs text-[var(--muted-foreground)]">
-                      Chọn một hoặc nhiều nhiệm vụ để tập trung thực thi
-                    </p>
-                  </div>
-                  <span appBadge variant="outline">{{ sessionService.availableTasks().length }} khả dụng</span>
-                </div>
-
-                <div class="space-y-2.5">
-                  @for (task of sessionService.availableTasks(); track task.id) {
-                    <label
-                      class="flex items-start gap-3 p-3.5 rounded-xl border transition-colors cursor-pointer"
-                      [class]="isTaskSelected(task.id)
-                        ? 'border-[var(--primary)] bg-[var(--primary)]/5'
-                        : 'border-[var(--border)] bg-[var(--background)] hover:bg-[var(--muted)]/50'"
-                    >
-                      <input
-                        type="checkbox"
-                        [checked]="isTaskSelected(task.id)"
-                        (change)="toggleTaskSelection(task.id)"
-                        class="mt-1 h-4 w-4 accent-[var(--primary)]"
-                      />
-                      <div class="min-w-0 flex-1 space-y-1">
-                        <div class="flex flex-wrap items-center gap-2">
-                          <span class="text-sm font-semibold text-[var(--foreground)]">{{ task.title }}</span>
-                          @if (task.is_overdue) {
-                            <span appBadge variant="destructive" class="text-[10px]">Quá hạn</span>
-                          }
-                          @if (task.is_blocked) {
-                            <span appBadge variant="outline" class="text-[10px] border-amber-500 text-amber-700 dark:text-amber-300">
-                              Bị chặn
-                            </span>
-                          }
-                          @if (task.is_stalled) {
-                            <span appBadge variant="outline" class="text-[10px] border-purple-500 text-purple-700 dark:text-purple-300">
-                              Đình trệ
-                            </span>
-                          }
-                        </div>
-                        <div class="flex flex-wrap items-center gap-2 text-xs text-[var(--muted-foreground)]">
-                          @if (task.roadmap_title) {
-                            <span>{{ task.roadmap_title }}</span>
-                            <span>&bull;</span>
-                          }
-                          <span class="font-mono">{{ task.estimated_minutes }} phút</span>
-                          @if (task.scheduled_date) {
-                            <span>&bull;</span>
-                            <span>Ngày {{ task.scheduled_date }}</span>
-                          }
-                        </div>
-                      </div>
-                    </label>
-                  }
-                </div>
-              </div>
-
-              <!-- Session Configuration & Start -->
-              <div class="lg:col-span-5 bg-[var(--card)] border border-[var(--border)] rounded-2xl p-5 sm:p-6 space-y-5 shadow-xs">
-                <div>
-                  <h2 class="text-base font-bold text-[var(--foreground)]">Thiết lập phiên học</h2>
-                  <p class="text-xs text-[var(--muted-foreground)]">
-                    Chọn chế độ Tiêu chuẩn hoặc MVS (Minimum Viable Session) khi bạn bận rộn
-                  </p>
-                </div>
-
-                <!-- Session Mode -->
-                <div class="space-y-2" role="radiogroup" aria-label="Chế độ phiên học">
-                  <span class="block text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
-                    Chế độ
-                  </span>
-                  <div class="grid grid-cols-2 gap-2.5">
-                    <button
-                      type="button"
-                      data-testid="mode-standard-btn"
-                      [attr.aria-pressed]="selectedMode() === 'STANDARD'"
-                      (click)="selectMode('STANDARD')"
-                      class="p-3 rounded-xl border text-left transition-colors cursor-pointer"
-                      [class]="selectedMode() === 'STANDARD'
-                        ? 'border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--foreground)]'
-                        : 'border-[var(--border)] bg-[var(--background)] text-[var(--muted-foreground)]'"
-                    >
-                      <div class="text-sm font-bold text-[var(--foreground)]">Tiêu chuẩn</div>
-                      <div class="text-[11px] mt-0.5">Deep Work (25–90 phút)</div>
-                    </button>
-
-                    <button
-                      type="button"
-                      data-testid="mode-mvs-btn"
-                      [attr.aria-pressed]="selectedMode() === 'MVS'"
-                      (click)="selectMode('MVS')"
-                      class="p-3 rounded-xl border text-left transition-colors cursor-pointer"
-                      [class]="selectedMode() === 'MVS'
-                        ? 'border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--foreground)]'
-                        : 'border-[var(--border)] bg-[var(--background)] text-[var(--muted-foreground)]'"
-                    >
-                      <div class="text-sm font-bold text-[var(--foreground)] flex items-center gap-1">
-                        <lucide-icon name="sparkles" [size]="13" aria-hidden="true"></lucide-icon>
-                        <span>MVS</span>
-                      </div>
-                      <div class="text-[11px] mt-0.5">Phiên tối thiểu (10–15 phút)</div>
-                    </button>
-                  </div>
-                </div>
-
-                <!-- Planned Minutes -->
-                <div class="space-y-2">
-                  <label for="planned-minutes-input" class="block text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
-                    Thời lượng dự kiến (phút)
-                  </label>
-                  <div class="flex flex-wrap gap-2">
-                    @for (preset of minutePresets(); track preset) {
-                      <button
-                        type="button"
-                        (click)="plannedMinutes.set(preset)"
-                        class="px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors cursor-pointer"
-                        [class]="plannedMinutes() === preset
-                          ? 'bg-[var(--primary)] text-[var(--primary-foreground)] border-[var(--primary)]'
-                          : 'bg-[var(--background)] text-[var(--foreground)] border-[var(--border)] hover:bg-[var(--muted)]'"
-                      >
-                        {{ preset }} phút
-                      </button>
-                    }
-                  </div>
-                  <input
-                    id="planned-minutes-input"
-                    type="number"
-                    min="5"
-                    max="180"
-                    [ngModel]="plannedMinutes()"
-                    (ngModelChange)="onPlannedMinutesChange($event)"
-                    class="w-full h-9 rounded-lg border border-[var(--input)] bg-[var(--background)] px-3 text-sm text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
-                  />
-                </div>
-
-                <button
-                  type="button"
-                  appButton
-                  variant="default"
-                  data-testid="start-session-btn"
-                  class="w-full"
-                  [disabled]="
-                    sessionService.isSubmitting() ||
-                    selectedTaskIds().length === 0 ||
-                    sessionService.pendingTakeawaySession() !== null
-                  "
-                  (click)="startStudySession()"
-                >
-                  <lucide-icon name="play" [size]="15" aria-hidden="true"></lucide-icon>
-                  <span>
-                    {{ sessionService.isSubmitting() ? 'Đang khởi tạo...' : 'Bắt đầu phiên học' }}
-                  </span>
-                </button>
-
-                @if (sessionService.pendingTakeawaySession() !== null) {
-                  <p class="text-[11px] text-amber-700 dark:text-amber-300">
-                    Cần hoàn tất Key Takeaway của phiên trước đó ở phía trên trước khi bắt đầu phiên mới.
-                  </p>
-                }
-              </div>
-            </div>
+            <div class="hidden lg:block" aria-hidden="true"></div>
           }
-        }
-      }
-    </div>
-
-    <!-- Finalize / Early Stop Modal -->
-    @if (finalizeModalOpen()) {
-      <div
-        class="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4"
-        (click)="closeFinalizeModal()"
-        aria-hidden="true"
-      ></div>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="finalize-dialog-title"
-        data-testid="finalize-session-dialog"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
-      >
-        <div
-          class="pointer-events-auto w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] shadow-2xl p-5 sm:p-6 space-y-5"
-          (click)="$event.stopPropagation()"
-        >
-          <div class="flex items-start justify-between gap-3 border-b border-[var(--border)] pb-3">
-            <div>
-              <h2 id="finalize-dialog-title" class="text-lg font-bold">
-                {{ isEarlyStop() ? 'Xác nhận Kết thúc sớm phiên học' : 'Hoàn tất phiên học &amp; Ghi nhận' }}
-              </h2>
-              <p class="text-xs text-[var(--muted-foreground)] mt-0.5">
-                Thời gian thực tế: {{ sessionService.elapsedMinutes() }} phút
-              </p>
-            </div>
-            <button
-              type="button"
-              appButton
-              variant="ghost"
-              size="icon"
-              (click)="closeFinalizeModal()"
-              aria-label="Đóng hộp thoại hoàn tất phiên học"
-            >
-              <lucide-icon name="x" [size]="18" aria-hidden="true"></lucide-icon>
-            </button>
-          </div>
-
-          @if (isEarlyStop()) {
-            <div class="p-3 rounded-xl border border-amber-500/40 bg-amber-500/10 text-xs text-amber-900 dark:text-amber-200 space-y-2">
-              <div class="font-semibold flex items-center gap-1.5">
-                <lucide-icon name="alert-triangle" [size]="14" aria-hidden="true"></lucide-icon>
-                <span>Bạn đang dừng trước thời lượng dự kiến ({{ sessionService.durationMinutes() }} phút).</span>
-              </div>
-              <label class="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  data-testid="confirm-early-stop-checkbox"
-                  [checked]="earlyStopConfirmed()"
-                  (change)="earlyStopConfirmed.set($any($event.target).checked)"
-                  class="h-4 w-4 accent-[var(--primary)]"
-                />
-                <span>Tôi xác nhận muốn kết thúc sớm và lưu lại tiến độ hiện tại.</span>
-              </label>
-            </div>
-          }
-
-          @if (finalizeError(); as fErr) {
-            <div
-              role="alert"
-              data-testid="finalize-error-alert"
-              class="p-3 rounded-xl border border-red-500/40 bg-red-500/10 text-xs text-red-900 dark:text-red-200 space-y-0.5"
-            >
-              @if (fErr.code) {
-                <div class="font-mono font-bold">{{ fErr.code }}</div>
-              }
-              <div>{{ fErr.message }}</div>
-            </div>
-          }
-
-          <!-- Completed Task Checkboxes -->
-          @if (sessionService.activeSessionTasks().length > 0) {
-            <div class="space-y-2">
-              <span class="block text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
-                Đánh dấu nhiệm vụ đã hoàn thành
-              </span>
-              <div class="space-y-1.5">
-                @for (task of sessionService.activeSessionTasks(); track task.id) {
-                  <label class="flex items-center gap-2.5 p-2.5 rounded-lg border border-[var(--border)] bg-[var(--background)] cursor-pointer text-sm">
-                    <input
-                      type="checkbox"
-                      [checked]="completedTaskIds().includes(task.id)"
-                      (change)="toggleCompletedTask(task.id)"
-                      class="h-4 w-4 accent-[var(--primary)]"
-                    />
-                    <span class="flex-1 truncate">{{ task.title }}</span>
-                  </label>
-                }
-              </div>
-            </div>
-          }
-
-          <!-- Key Takeaway -->
-          <div class="space-y-1.5">
-            <label for="finalize-takeaway-input" class="block text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
-              Key Takeaway (Tóm tắt điều bạn rút ra) *
-            </label>
-            <textarea
-              id="finalize-takeaway-input"
-              data-testid="finalize-takeaway-textarea"
-              rows="3"
-              [ngModel]="finalizeTakeaway()"
-              (ngModelChange)="finalizeTakeaway.set($event)"
-              placeholder="Ví dụ: Đã hiểu rõ cơ chế Outbox Pattern đảm bảo nhất quán sự kiện giữa PostgreSQL và Redis..."
-              class="w-full rounded-xl border border-[var(--input)] bg-[var(--background)] p-3 text-sm text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--ring)]"
-            ></textarea>
-            <div class="flex flex-wrap items-center justify-between gap-2 text-[11px]">
-              <span
-                [class.text-emerald-700]="finalizeTakeawayCheck().isValid"
-                [class.dark:text-emerald-400]="finalizeTakeawayCheck().isValid"
-                [class.text-[var(--muted-foreground)]]="!finalizeTakeawayCheck().isValid"
-              >
-                {{ finalizeTakeawayCheck().charCount }}/30 ký tự &bull; {{ finalizeTakeawayCheck().distinctWordCount }}/6 từ phân biệt
-              </span>
-              @if (!finalizeTakeawayCheck().hasAlpha && finalizeTakeaway().length > 0) {
-                <span class="text-red-600">Cần chứa từ ngữ có nghĩa.</span>
-              }
-            </div>
-          </div>
-
-          <!-- Self Confidence (1..5) -->
-          <div class="space-y-1.5">
-            <span class="block text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
-              Mức độ tự tin nắm bài (1–5)
-            </span>
-            <div class="flex items-center gap-2">
-              @for (score of confidenceScores; track score) {
-                <button
-                  type="button"
-                  (click)="finalizeConfidence.set(score)"
-                  [attr.aria-pressed]="finalizeConfidence() === score"
-                  class="flex-1 h-9 rounded-lg text-xs font-bold border transition-colors cursor-pointer"
-                  [class]="finalizeConfidence() === score
-                    ? 'bg-[var(--primary)] text-[var(--primary-foreground)] border-[var(--primary)]'
-                    : 'bg-[var(--background)] text-[var(--foreground)] border-[var(--border)] hover:bg-[var(--muted)]'"
-                >
-                  {{ score }}
-                </button>
-              }
-            </div>
-          </div>
-
-          <!-- Daily Learning Check-in -->
-          <div class="space-y-3 pt-2 border-t border-[var(--border)]">
-            <span class="block text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
-              Daily Learning Check-in
-            </span>
-
-            <div class="space-y-1.5">
-              <span class="block text-xs font-medium text-[var(--foreground)]">Thời lượng phiên học vừa qua:</span>
-              <div class="grid grid-cols-3 gap-2">
-                @for (opt of timeSufficiencyOptions; track opt.value) {
-                  <button
-                    type="button"
-                    (click)="checkinTimeSufficiency.set(opt.value)"
-                    [attr.aria-pressed]="checkinTimeSufficiency() === opt.value"
-                    class="py-2 px-2 rounded-lg text-xs font-medium border transition-colors cursor-pointer"
-                    [class]="checkinTimeSufficiency() === opt.value
-                      ? 'bg-[var(--primary)] text-[var(--primary-foreground)] border-[var(--primary)]'
-                      : 'bg-[var(--background)] text-[var(--foreground)] border-[var(--border)] hover:bg-[var(--muted)]'"
-                  >
-                    {{ opt.label }}
-                  </button>
-                }
-              </div>
-            </div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div class="space-y-1">
-                <span class="block text-xs font-medium text-[var(--foreground)]">Độ khó cảm nhận (1–5)</span>
-                <div class="flex items-center gap-1.5">
-                  @for (lvl of confidenceScores; track lvl) {
-                    <button
-                      type="button"
-                      (click)="checkinDifficulty.set(lvl)"
-                      [attr.aria-pressed]="checkinDifficulty() === lvl"
-                      class="flex-1 h-8 rounded-lg text-xs font-semibold border transition-colors cursor-pointer"
-                      [class]="checkinDifficulty() === lvl
-                        ? 'bg-[var(--primary)] text-[var(--primary-foreground)] border-[var(--primary)]'
-                        : 'bg-[var(--background)] text-[var(--foreground)] border-[var(--border)] hover:bg-[var(--muted)]'"
-                    >
-                      {{ lvl }}
-                    </button>
-                  }
-                </div>
-              </div>
-
-              <div class="space-y-1">
-                <span class="block text-xs font-medium text-[var(--foreground)]">Mức độ tập trung (1–5)</span>
-                <div class="flex items-center gap-1.5">
-                  @for (lvl of confidenceScores; track lvl) {
-                    <button
-                      type="button"
-                      (click)="checkinFocusLevel.set(lvl)"
-                      [attr.aria-pressed]="checkinFocusLevel() === lvl"
-                      class="flex-1 h-8 rounded-lg text-xs font-semibold border transition-colors cursor-pointer"
-                      [class]="checkinFocusLevel() === lvl
-                        ? 'bg-[var(--primary)] text-[var(--primary-foreground)] border-[var(--primary)]'
-                        : 'bg-[var(--background)] text-[var(--foreground)] border-[var(--border)] hover:bg-[var(--muted)]'"
-                    >
-                      {{ lvl }}
-                    </button>
-                  }
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="flex items-center justify-end gap-2.5 pt-2 border-t border-[var(--border)]">
-            <button type="button" appButton variant="outline" (click)="closeFinalizeModal()">
-              Hủy
-            </button>
-            <button
-              type="button"
-              appButton
-              variant="default"
-              data-testid="submit-finalize-btn"
-              [disabled]="
-                sessionService.isSubmitting() ||
-                (isEarlyStop() && !earlyStopConfirmed()) ||
-                !finalizeTakeawayCheck().isValid
-              "
-              (click)="submitFinalize()"
-            >
-              {{ sessionService.isSubmitting() ? 'Đang lưu...' : 'Xác nhận hoàn tất' }}
-            </button>
-          </div>
         </div>
-      </div>
-    }
+      }
+
+      <!-- Desktop Floating Pinned Notes Overlay (>= lg) -->
+      @if (!studioStore.focusMode() && studioStore.visiblePinnedNotes().length > 0) {
+        <div
+          data-testid="desktop-floating-notes-layer"
+          aria-label="Ghi chú đã ghim trên Studio"
+          class="hidden lg:block pointer-events-none absolute inset-0 z-20 overflow-hidden"
+        >
+          @for (note of studioStore.visiblePinnedNotes(); track note.id; let idx = $index) {
+            <ff-workspace-sticky-note-card
+              [note]="note"
+              [index]="idx"
+              [isEditing]="floatingEditingNoteId() === note.id"
+              [hasActiveSession]="sessionService.activeSession() !== null"
+              [draggableMode]="true"
+              (unpin)="studioStore.unpinNote($event)"
+              (updateNote)="studioStore.updateNote($event.id, { title: $event.title, content: $event.content })"
+              (changeColor)="studioStore.updateNote($event.id, { color: $event.color })"
+              (deleteNote)="studioStore.deleteNote($event)"
+              (copyToTakeaway)="openFinalizeModal(false)"
+              (startEdit)="floatingEditingNoteId.set($event)"
+              (stopEdit)="floatingEditingNoteId.set(null)"
+              (bringToFront)="studioStore.bringNoteToFront($event)"
+              (moveNote)="studioStore.updateNotePosition($event.id, $event.posX, $event.posY)"
+            />
+          }
+        </div>
+      }
+
+      <!-- Finalize / Early Stop Modal -->
+      <ff-workspace-finalize-modal
+        [isOpen]="finalizeModalOpen()"
+        [earlyStop]="isEarlyStop()"
+        [activeSessionTasks]="sessionService.activeSessionTasks()"
+        [stickyNotes]="studioStore.sortedNotes()"
+        [elapsedMinutes]="sessionService.elapsedMinutes()"
+        [focusScore]="studioStore.focusScore()"
+        [isSubmitting]="sessionService.isSubmitting()"
+        [errorMessage]="finalizeErrorMessage()"
+        (closeModal)="closeFinalizeModal()"
+        (submitFinalize)="onSubmitFinalize($event)"
+      />
+    </div>
   `,
 })
 export class WorkspaceComponent implements OnInit {
   readonly sessionService = inject(WorkspaceSessionService);
+  readonly studioStore = inject(WorkspaceStudioStore);
+  readonly audioService = inject(AmbientAudioService);
+
   private readonly route = inject(ActivatedRoute);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly titleService = inject(Title);
 
-  readonly confidenceScores = [1, 2, 3, 4, 5] as const;
-  readonly timeSufficiencyOptions: ReadonlyArray<{ value: TimeSufficiency; label: string }> = [
-    { value: 'TOO_SHORT', label: 'Quá ngắn' },
-    { value: 'JUST_RIGHT', label: 'Vừa đủ' },
-    { value: 'TOO_LONG', label: 'Quá dài' },
-  ];
+  private readonly originalTitle = this.titleService.getTitle();
+  private lastChimeTick = this.sessionService.timerCompletedTick();
+  private lastHydratedSessionId: string | null = null;
 
-  // Setup state
+  // Setup & UI state
   readonly preferredTaskId = signal<string | null>(null);
   readonly selectedTaskIds = signal<string[]>([]);
-  readonly selectedMode = signal<SessionMode>('STANDARD');
-  readonly plannedMinutes = signal<number>(25);
+  readonly activeTabMode = signal<TimerTabMode>('pomodoro');
+  readonly plannedMinutes = signal<number>(this.studioStore.defaultPomodoroMinutes() || 25);
+  readonly mobileLeftOpen = signal<boolean>(false);
+  readonly togglingTaskId = signal<string | null>(null);
+  readonly switchTaskWarning = signal<string | null>(null);
+  readonly floatingEditingNoteId = signal<string | null>(null);
 
-  readonly minutePresets = computed(() =>
-    this.selectedMode() === 'MVS' ? [10, 15] : [25, 45, 60, 90]
-  );
-
-  // Takeaway debt form state
-  readonly debtTakeaway = signal<string>('');
-  readonly debtConfidence = signal<number>(3);
-  readonly debtTakeawayCheck = computed(() => evaluateTakeawayCheck(this.debtTakeaway()));
+  readonly activeTask = this.sessionService.activeFocusTask;
+  readonly milestoneContext = this.sessionService.milestoneContext;
 
   // Finalize modal state
   readonly finalizeModalOpen = signal<boolean>(false);
   readonly isEarlyStop = signal<boolean>(false);
-  readonly earlyStopConfirmed = signal<boolean>(false);
-  readonly completedTaskIds = signal<string[]>([]);
-  readonly finalizeTakeaway = signal<string>('');
-  readonly finalizeConfidence = signal<number>(4);
-  readonly checkinTimeSufficiency = signal<TimeSufficiency>('JUST_RIGHT');
-  readonly checkinDifficulty = signal<number>(3);
-  readonly checkinFocusLevel = signal<number>(4);
-  readonly finalizeTakeawayCheck = computed(() => evaluateTakeawayCheck(this.finalizeTakeaway()));
-  readonly finalizeError = computed(() =>
-    this.finalizeModalOpen() ? this.sessionService.errorState() : null
+
+  readonly isDarkScene = computed<boolean>(() => {
+    return this.studioStore.isDarkSurface();
+  });
+
+  readonly showNotesRegion = computed<boolean>(
+    () =>
+      !this.studioStore.focusMode() &&
+      (this.studioStore.notesPanelOpen() ||
+        this.studioStore.undoNotice() !== null ||
+        this.studioStore.isScratchpadOverLimit())
   );
 
+  readonly canStartSession = computed<boolean>(
+    () =>
+      this.selectedTaskIds().length > 0 &&
+      this.sessionService.pendingTakeawaySession() === null
+  );
+
+  readonly finalizeErrorMessage = computed<string | null>(() =>
+    this.finalizeModalOpen() ? (this.sessionService.errorState()?.message ?? null) : null
+  );
+
+  constructor() {
+    // 1. Tab Title Timer
+    effect(() => {
+      const show = this.studioStore.showInTabTitle();
+      const running = this.sessionService.isRunning();
+      const breakRunning = this.sessionService.isBreakRunning();
+      const sessionTime = this.sessionService.formattedTime();
+      const breakTime = this.sessionService.breakFormattedTime();
+
+      if (show && breakRunning) {
+        this.titleService.setTitle(`${breakTime} (Nghỉ) • FocusFlow`);
+      } else if (show && running) {
+        this.titleService.setTitle(`${sessionTime} • FocusFlow`);
+      } else {
+        this.titleService.setTitle(this.originalTitle);
+      }
+    });
+
+    // 2. Completion Chime
+    effect(() => {
+      const tick = this.sessionService.timerCompletedTick();
+      if (tick > this.lastChimeTick) {
+        this.lastChimeTick = tick;
+        if (this.audioService.chimeEnabled()) {
+          this.audioService.playCompletionChime();
+        }
+      }
+    });
+
+    // 3. Scratchpad Sync Bridge (Server -> Local Sticky Notes)
+    effect(() => {
+      const active = this.sessionService.activeSession();
+      if (!active) {
+        this.lastHydratedSessionId = null;
+        return;
+      }
+
+      const raw = active.scratchpad_content;
+      if (
+        raw &&
+        raw.trim().length > 0 &&
+        this.lastHydratedSessionId !== active.id
+      ) {
+        this.lastHydratedSessionId = active.id;
+        const currentSerialized = untracked(() =>
+          this.studioStore.serializeNotesForScratchpad()
+        );
+        if (currentSerialized !== raw) {
+          untracked(() => this.studioStore.hydrateNotesFromScratchpad(raw));
+        }
+      }
+    });
+
+    // 4. Scratchpad Sync Bridge (Local Sticky Notes -> Session Heartbeat)
+    effect(() => {
+      this.studioStore.notes();
+      const activeSessionId = this.sessionService.sessionId();
+      if (!activeSessionId) {
+        return;
+      }
+
+      const serialized = this.studioStore.serializeNotesForScratchpad();
+      const currentScratchpad = untracked(() => this.sessionService.scratchpadNote());
+      if (serialized !== currentScratchpad) {
+        untracked(() => this.sessionService.setScratchpadNote(serialized));
+      }
+    });
+
+    // 4b. Derive inline milestone context from TaskResponse, or fetch roadmap detail if absent
+    effect(() => {
+      const task = this.sessionService.activeFocusTask();
+      const active = this.sessionService.activeSession();
+      if (!task?.roadmap_id || !task?.milestone_id) {
+        untracked(() => this.sessionService.milestoneContext.set(null));
+        return;
+      }
+      if (untracked(() => this.sessionService.applyInlineMilestoneContext(task))) {
+        return;
+      }
+      if (active?.status === 'IN_PROGRESS') {
+        untracked(() =>
+          this.sessionService.loadMilestoneContext(task.roadmap_id, task.milestone_id)
+        );
+      } else {
+        untracked(() => this.sessionService.milestoneContext.set(null));
+      }
+    });
+
+    // 5. Focus Shield & Global Keyboard Listeners
+    const onVisibilityChange = (): void => {
+      if (
+        typeof document !== 'undefined' &&
+        document.hidden &&
+        this.sessionService.isRunning() &&
+        this.studioStore.shieldConfig().tabGuardEnabled
+      ) {
+        this.studioStore.recordDistraction();
+      }
+    };
+
+    const onBeforeUnload = (event: BeforeUnloadEvent): void => {
+      if (
+        this.sessionService.isRunning() &&
+        this.studioStore.shieldConfig().zenLockEnabled
+      ) {
+        event.preventDefault();
+      }
+    };
+
+    const onFullscreenChange = (): void => {
+      if (typeof document !== 'undefined') {
+        this.studioStore.setFullscreen(Boolean(document.fullscreenElement));
+      }
+    };
+
+    const onKeyDown = (event: KeyboardEvent): void => {
+      const target = event.target as HTMLElement | null;
+      const tagName = target?.tagName?.toUpperCase() ?? '';
+      const isEditable =
+        tagName === 'INPUT' ||
+        tagName === 'TEXTAREA' ||
+        tagName === 'SELECT' ||
+        Boolean(target?.isContentEditable);
+
+      if (isEditable) {
+        return;
+      }
+
+      if (event.key === 'Escape') {
+        if (this.finalizeModalOpen()) {
+          this.closeFinalizeModal();
+        } else if (this.studioStore.activeToolPopover() !== null) {
+          this.studioStore.closeToolPopover();
+        } else if (this.mobileLeftOpen()) {
+          this.mobileLeftOpen.set(false);
+        } else if (this.studioStore.focusMode()) {
+          this.studioStore.setFocusMode(false);
+        }
+        return;
+      }
+
+      if (
+        (event.key === 'n' || event.key === 'N') &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey
+      ) {
+        this.studioStore.toggleNotesPanel();
+      }
+    };
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', onVisibilityChange);
+      document.addEventListener('fullscreenchange', onFullscreenChange);
+      document.addEventListener('keydown', onKeyDown);
+    }
+    if (typeof window !== 'undefined') {
+      window.addEventListener('beforeunload', onBeforeUnload);
+    }
+
+    this.destroyRef.onDestroy(() => {
+      this.titleService.setTitle(this.originalTitle);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', onVisibilityChange);
+        document.removeEventListener('fullscreenchange', onFullscreenChange);
+        document.removeEventListener('keydown', onKeyDown);
+      }
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('beforeunload', onBeforeUnload);
+      }
+    });
+  }
+
   ngOnInit(): void {
+    this.studioStore.syncFromServer();
     this.route.queryParamMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
       const taskId = params.get('taskId');
       this.preferredTaskId.set(taskId);
@@ -939,41 +893,22 @@ export class WorkspaceComponent implements OnInit {
     this.loadInitialWorkspace(this.preferredTaskId());
   }
 
-  private loadInitialWorkspace(taskId: string | null): void {
-    this.sessionService
-      .loadWorkspace(taskId)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((focus) => {
-        const available = this.sessionService.availableTasks();
-        if (taskId && available.some((t) => t.id === taskId)) {
-          this.selectedTaskIds.set([taskId]);
-          const matched = available.find((t) => t.id === taskId);
-          if (matched && this.selectedMode() === 'STANDARD') {
-            this.plannedMinutes.set(Math.min(180, Math.max(15, matched.estimated_minutes || 25)));
-          }
-        } else if (focus?.focus_task) {
-          this.selectedTaskIds.set([focus.focus_task.id]);
-          if (this.selectedMode() === 'STANDARD') {
-            this.plannedMinutes.set(
-              Math.min(180, Math.max(15, focus.focus_task.estimated_minutes || 25))
-            );
-          }
-        } else if (available.length > 0 && this.selectedTaskIds().length === 0) {
-          this.selectedTaskIds.set([available[0].id]);
-        }
-      });
-  }
-
   selectMode(mode: SessionMode): void {
-    this.selectedMode.set(mode);
     if (mode === 'MVS') {
+      this.activeTabMode.set('mvs');
       this.plannedMinutes.set(15);
     } else {
-      const firstId = this.selectedTaskIds()[0];
-      const matched = this.sessionService.availableTasks().find((t) => t.id === firstId);
-      this.plannedMinutes.set(
-        matched ? Math.min(180, Math.max(15, matched.estimated_minutes || 25)) : 25
-      );
+      this.activeTabMode.set('pomodoro');
+      this.plannedMinutes.set(this.studioStore.defaultPomodoroMinutes() || 25);
+    }
+  }
+
+  selectTabMode(tab: TimerTabMode): void {
+    this.activeTabMode.set(tab);
+    if (tab === 'mvs') {
+      this.plannedMinutes.set(15);
+    } else if (tab === 'pomodoro') {
+      this.plannedMinutes.set(this.studioStore.defaultPomodoroMinutes() || 25);
     }
   }
 
@@ -982,10 +917,6 @@ export class WorkspaceComponent implements OnInit {
     if (!Number.isNaN(parsed)) {
       this.plannedMinutes.set(Math.min(180, Math.max(5, Math.round(parsed))));
     }
-  }
-
-  isTaskSelected(taskId: string): boolean {
-    return this.selectedTaskIds().includes(taskId);
   }
 
   toggleTaskSelection(taskId: string): void {
@@ -998,16 +929,27 @@ export class WorkspaceComponent implements OnInit {
     const ids = this.selectedTaskIds();
     if (ids.length === 0) return;
 
+    const tab = this.activeTabMode();
+    const sessionMode: SessionMode = tab === 'mvs' ? 'MVS' : 'STANDARD';
+    this.sessionService.mode.set(tab === 'stopwatch' ? 'stopwatch' : 'pomodoro');
+    this.studioStore.resetSessionDistractions();
+
+    const serializedNotes = this.studioStore.serializeNotesForScratchpad();
+
     this.sessionService
       .beginSession({
         task_ids: ids,
-        session_mode: this.selectedMode(),
+        session_mode: sessionMode,
         planned_minutes: this.plannedMinutes(),
       })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
+        next: () => {
+          if (serializedNotes.length > 0) {
+            this.sessionService.setScratchpadNote(serializedNotes);
+          }
+        },
         error: () => {
-          // If 409 due to pending takeaway or active session, reload state to reflect server truth
           if (
             this.sessionService.errorState()?.code === 'PENDING_TAKEAWAY_REQUIRED' ||
             this.sessionService.errorState()?.code === 'ACTIVE_SESSION_EXISTS'
@@ -1018,41 +960,9 @@ export class WorkspaceComponent implements OnInit {
       });
   }
 
-  retryHeartbeat(): void {
-    this.sessionService
-      .sendHeartbeat()
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe();
-  }
-
-  submitPendingTakeaway(sessionId: string): void {
-    const check = this.debtTakeawayCheck();
-    if (!check.isValid) return;
-
-    this.sessionService
-      .resolvePendingTakeaway(sessionId, {
-        takeaway: this.debtTakeaway().trim(),
-        self_confidence: this.debtConfidence(),
-      })
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: () => {
-          this.debtTakeaway.set('');
-          this.refreshWorkspace();
-        },
-      });
-  }
-
   openFinalizeModal(earlyStop: boolean): void {
     this.sessionService.clearError();
     this.isEarlyStop.set(earlyStop);
-    this.earlyStopConfirmed.set(!earlyStop);
-    this.completedTaskIds.set(earlyStop ? [] : [...this.sessionService.activeTaskIds()]);
-    this.finalizeTakeaway.set('');
-    this.finalizeConfidence.set(4);
-    this.checkinTimeSufficiency.set('JUST_RIGHT');
-    this.checkinDifficulty.set(3);
-    this.checkinFocusLevel.set(4);
     this.finalizeModalOpen.set(true);
   }
 
@@ -1061,63 +971,139 @@ export class WorkspaceComponent implements OnInit {
     this.sessionService.clearError();
   }
 
-  onEscape(): void {
-    if (this.finalizeModalOpen()) {
-      this.closeFinalizeModal();
-    }
-  }
-
-  toggleCompletedTask(taskId: string): void {
-    this.completedTaskIds.update((ids) =>
-      ids.includes(taskId) ? ids.filter((id) => id !== taskId) : [...ids, taskId]
-    );
-  }
-
-  submitFinalize(): void {
-    if (this.isEarlyStop() && !this.earlyStopConfirmed()) return;
-    if (!this.finalizeTakeawayCheck().isValid) return;
-
+  onSubmitFinalize(request: FinalizeSessionRequest): void {
     this.sessionService
       .finalizeSession({
-        early_stop: this.isEarlyStop(),
-        completed_task_ids: this.completedTaskIds(),
-        takeaway: this.finalizeTakeaway().trim(),
-        self_confidence: this.finalizeConfidence(),
+        ...request,
         scratchpad_content: this.sessionService.scratchpadNote(),
-        actual_minutes: Math.max(1, this.sessionService.elapsedMinutes()),
-        checkin_time_sufficiency: this.checkinTimeSufficiency(),
-        checkin_perceived_difficulty: this.checkinDifficulty(),
-        checkin_focus_level: this.checkinFocusLevel(),
       })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
           this.finalizeModalOpen.set(false);
+          this.switchTaskWarning.set(null);
           this.refreshWorkspace();
         },
       });
   }
 
-  getTaskResources(task: TaskResponse): Array<{ label: string; url: string | null }> {
-    const items = task.learning_resources ?? [];
-    return items.map((raw, idx) => {
-      const labelCandidate = raw['title'] ?? raw['name'] ?? raw['label'] ?? raw['url'];
-      const label =
-        typeof labelCandidate === 'string' && labelCandidate.trim().length > 0
-          ? labelCandidate.trim()
-          : `Tài liệu #${idx + 1}`;
-      const urlCandidate = raw['url'] ?? raw['href'];
-      const url =
-        typeof urlCandidate === 'string' && /^https?:\/\//i.test(urlCandidate.trim())
-          ? urlCandidate.trim()
-          : null;
-      return { label, url };
-    });
+  onAttemptSwitchOutsideTask(_task: TaskResponse): void {
+    this.switchTaskWarning.set(
+      'Cần hoàn tất hoặc dừng sớm phiên hiện tại trước khi chuyển sang nhiệm vụ khác'
+    );
   }
 
-  formatLocalTime(iso: string): string {
-    const dt = new Date(iso);
-    if (Number.isNaN(dt.getTime())) return iso;
-    return dt.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+  dismissSwitchTaskWarning(): void {
+    this.switchTaskWarning.set(null);
+  }
+
+  onEndSessionFromWarning(): void {
+    this.switchTaskWarning.set(null);
+    this.openFinalizeModal(true);
+  }
+
+  onPinNewNote(payload: { title: string; content: string; color: StickyNoteColor }): void {
+    this.studioStore.pinNewNoteFromComposer(
+      payload.content,
+      payload.color,
+      this.sessionService.sessionId(),
+      this.sessionService.activeFocusTaskId(),
+      payload.title
+    );
+  }
+
+  onToggleTaskComplete(task: TaskResponse): void {
+    this.togglingTaskId.set(task.id);
+    this.sessionService
+      .toggleTaskCompletion(task)
+      .pipe(
+        finalize(() => this.togglingTaskId.set(null)),
+        takeUntilDestroyed(this.destroyRef)
+      )
+      .subscribe();
+  }
+
+  onResolveDebt(payload: { sessionId: string; takeaway: string; selfConfidence: number }): void {
+    this.sessionService
+      .resolvePendingTakeaway(payload.sessionId, {
+        takeaway: payload.takeaway,
+        self_confidence: payload.selfConfidence,
+      })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.refreshWorkspace();
+        },
+      });
+  }
+
+  onStartBreak(payload: { type: BreakType; minutes: number }): void {
+    this.sessionService.startBreak(payload.type, payload.minutes);
+  }
+
+  openLeftPanel(): void {
+    this.studioStore.setLeftPanelCollapsed(false);
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+      this.mobileLeftOpen.set(true);
+    }
+  }
+
+  onLeftPanelCollapse(): void {
+    if (this.mobileLeftOpen()) {
+      this.mobileLeftOpen.set(false);
+    } else {
+      this.studioStore.setLeftPanelCollapsed(true);
+    }
+  }
+
+  toggleFullscreen(): void {
+    if (typeof document === 'undefined') return;
+    if (document.fullscreenElement) {
+      void document.exitFullscreen?.();
+    } else {
+      void document.documentElement.requestFullscreen?.();
+    }
+  }
+
+  protected studioBarBtnClass(active: boolean): string {
+    if (this.isDarkScene()) {
+      return active
+        ? 'border-white/50 bg-white/25 text-white'
+        : 'border-white/25 bg-white/10 text-white/95 hover:bg-white/20';
+    }
+    return active
+      ? 'border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)]'
+      : 'border-[var(--outline-variant)] bg-[var(--surface-container-lowest)] text-[var(--on-surface)] hover:bg-[var(--surface-container-low)]';
+  }
+
+  private loadInitialWorkspace(taskId: string | null): void {
+    this.sessionService
+      .loadWorkspace(taskId)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((focus) => {
+        const active = this.sessionService.activeSession();
+        if (active) {
+          this.activeTabMode.set(active.session_mode === 'MVS' ? 'mvs' : 'pomodoro');
+          this.sessionService.mode.set('pomodoro');
+        }
+
+        const available = this.sessionService.availableTasks();
+        if (taskId && available.some((t) => t.id === taskId)) {
+          this.selectedTaskIds.set([taskId]);
+          const matched = available.find((t) => t.id === taskId);
+          if (matched && this.activeTabMode() === 'pomodoro') {
+            this.plannedMinutes.set(Math.min(180, Math.max(15, matched.estimated_minutes || 25)));
+          }
+        } else if (focus?.focus_task) {
+          this.selectedTaskIds.set([focus.focus_task.id]);
+          if (this.activeTabMode() === 'pomodoro') {
+            this.plannedMinutes.set(
+              Math.min(180, Math.max(15, focus.focus_task.estimated_minutes || 25))
+            );
+          }
+        } else if (available.length > 0 && this.selectedTaskIds().length === 0) {
+          this.selectedTaskIds.set([available[0].id]);
+        }
+      });
   }
 }

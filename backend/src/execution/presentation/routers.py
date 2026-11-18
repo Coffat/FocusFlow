@@ -6,6 +6,8 @@ from fastapi import APIRouter, Body, Query, status
 from fastapi.responses import JSONResponse
 
 from src.execution.application.dtos.execution_dtos import (
+    StickyNoteViewDTO,
+    StudioConfigViewDTO,
     StudySessionViewDTO,
     TaskViewDTO,
 )
@@ -15,40 +17,52 @@ from src.execution.presentation.deps import (
     AddTaskDependencyUseCaseDep,
     CompleteTaskUseCaseDep,
     CreateManualTaskUseCaseDep,
+    CreateStickyNoteUseCaseDep,
     CurrentExecutionLearnerIdDep,
+    DeleteStickyNoteUseCaseDep,
     DeleteTaskDependencyUseCaseDep,
     DeleteTaskUseCaseDep,
     FinalizeStudySessionUseCaseDep,
     GetActiveSessionUseCaseDep,
     GetBacklogTasksUseCaseDep,
+    GetStudioConfigUseCaseDep,
     GetTodayFocusUseCaseDep,
     GetWeeklyScheduleUseCaseDep,
     HeartbeatStudySessionUseCaseDep,
+    ListStickyNotesUseCaseDep,
     ListTasksUseCaseDep,
     ReopenTaskUseCaseDep,
     RescheduleTaskUseCaseDep,
     ResolvePendingTakeawayUseCaseDep,
     StartStudySessionUseCaseDep,
+    UpdateStickyNoteUseCaseDep,
     UpdateTaskUseCaseDep,
+    UpsertStudioConfigUseCaseDep,
 )
 from src.execution.presentation.schemas.execution_schemas import (
     AddTaskDependencyRequest,
     CompleteTaskRequest,
+    CreateStickyNoteRequest,
     CreateTaskRequest,
     FinalizeSessionRequest,
     HeartbeatSessionRequest,
+    ParkingThoughtSchema,
     RescheduleTaskRequest,
     ResolveTakeawayRequest,
     SessionTaskResponse,
     StartSessionRequest,
+    StickyNoteResponse,
     StudyNoteResponse,
     StudySessionResponse,
     TaskDependencyResponse,
     TaskResponse,
     TodayFocusResponse,
+    UpdateStickyNoteRequest,
     UpdateTaskRequest,
+    UpdateWorkspaceStudioConfigRequest,
     WeeklyScheduleItemResponse,
     WeeklyScheduleResponse,
+    WorkspaceStudioConfigResponse,
 )
 from src.shared_kernel.domain.exceptions import DomainError
 
@@ -56,7 +70,9 @@ router = APIRouter(prefix="/api/v1/execution", tags=["Execution & Workspace"])
 tasks_router = APIRouter(prefix="/api/v1/tasks", tags=["Execution Tasks"])
 sessions_router = APIRouter(prefix="/api/v1/sessions", tags=["Study Sessions"])
 
-_NOT_FOUND_CODES = frozenset({"TASK_NOT_FOUND", "SESSION_NOT_FOUND", "ROADMAP_NOT_FOUND"})
+_NOT_FOUND_CODES = frozenset(
+    {"TASK_NOT_FOUND", "SESSION_NOT_FOUND", "ROADMAP_NOT_FOUND", "NOTE_NOT_FOUND"}
+)
 _CONFLICT_CODES = frozenset(
     {
         "TASK_BLOCKED",
@@ -120,6 +136,9 @@ def _to_task_response(view: TaskViewDTO) -> TaskResponse:
         priority_rank=view.priority_rank,
         out_degree=view.out_degree,
         milestone_sequence=view.milestone_sequence,
+        milestone_title=view.milestone_title,
+        learning_outcomes=list(view.learning_outcomes),
+        completion_criteria=view.completion_criteria,
         created_at=t.created_at,
         updated_at=t.updated_at,
     )
@@ -500,7 +519,194 @@ async def get_today_focus(
             focus_task=_to_task_response(dto.focus_task) if dto.focus_task is not None else None,
             today_queue=[_to_task_response(v) for v in dto.today_queue],
             overdue_tasks_count=dto.overdue_tasks_count,
+            completed_sessions_today=dto.completed_sessions_today,
+            studied_minutes_today=dto.studied_minutes_today,
         )
+    except DomainError as exc:
+        return _handle_execution_error(exc)
+
+
+def _to_sticky_note_response(dto: StickyNoteViewDTO) -> StickyNoteResponse:
+    return StickyNoteResponse(
+        id=dto.id,
+        task_id=dto.task_id,
+        title=dto.title,
+        body=dto.body,
+        color=dto.color,
+        pinned=dto.pinned,
+        pos_x=dto.pos_x,
+        pos_y=dto.pos_y,
+        z_index=dto.z_index,
+        origin_session_id=dto.origin_session_id,
+        created_at=dto.created_at,
+        updated_at=dto.updated_at,
+    )
+
+
+def _to_studio_config_response(dto: StudioConfigViewDTO) -> WorkspaceStudioConfigResponse:
+    parking_items: list[ParkingThoughtSchema] = []
+    for item in dto.parking_lot:
+        raw_text = str(item.get("text", "")).strip()
+        if not raw_text:
+            continue
+        parking_items.append(
+            ParkingThoughtSchema(
+                id=str(item.get("id", "")),
+                text=raw_text[:500],
+                created_at=(
+                    str(item["created_at"]) if item.get("created_at") is not None else None
+                ),
+            )
+        )
+    return WorkspaceStudioConfigResponse(
+        scene=dto.scene,
+        clock_style=dto.clock_style,
+        clock_size=dto.clock_size,
+        show_seconds=dto.show_seconds,
+        show_in_tab_title=dto.show_in_tab_title,
+        tab_guard_enabled=dto.tab_guard_enabled,
+        zen_lock_enabled=dto.zen_lock_enabled,
+        blocklist=list(dto.blocklist),
+        parking_lot=parking_items,
+        updated_at=dto.updated_at,
+    )
+
+
+@sessions_router.get(
+    "/notes",
+    response_model=list[StickyNoteResponse],
+    status_code=status.HTTP_200_OK,
+    summary="List learner workspace sticky notes",
+)
+async def list_sticky_notes(
+    user_id: CurrentExecutionLearnerIdDep,
+    use_case: ListStickyNotesUseCaseDep,
+) -> list[StickyNoteResponse] | JSONResponse:
+    try:
+        items = await use_case.execute(user_id=user_id)
+        return [_to_sticky_note_response(item) for item in items]
+    except DomainError as exc:
+        return _handle_execution_error(exc)
+
+
+@sessions_router.post(
+    "/notes",
+    response_model=StickyNoteResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a workspace sticky note",
+)
+async def create_sticky_note(
+    request: CreateStickyNoteRequest,
+    user_id: CurrentExecutionLearnerIdDep,
+    use_case: CreateStickyNoteUseCaseDep,
+) -> StickyNoteResponse | JSONResponse:
+    try:
+        item = await use_case.execute(
+            user_id=user_id,
+            title=request.title,
+            body=request.body,
+            color=request.color,
+            pinned=request.pinned,
+            pos_x=request.pos_x,
+            pos_y=request.pos_y,
+            z_index=request.z_index,
+            origin_session_id=request.origin_session_id,
+            task_id=request.task_id,
+        )
+        return _to_sticky_note_response(item)
+    except DomainError as exc:
+        return _handle_execution_error(exc)
+
+
+@sessions_router.patch(
+    "/notes/{note_id}",
+    response_model=StickyNoteResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Update an owned workspace sticky note",
+)
+async def update_sticky_note(
+    note_id: UUID,
+    request: UpdateStickyNoteRequest,
+    user_id: CurrentExecutionLearnerIdDep,
+    use_case: UpdateStickyNoteUseCaseDep,
+) -> StickyNoteResponse | JSONResponse:
+    try:
+        item = await use_case.execute(
+            user_id=user_id,
+            note_id=note_id,
+            title=request.title,
+            body=request.body,
+            color=request.color,
+            pinned=request.pinned,
+            pos_x=request.pos_x,
+            pos_y=request.pos_y,
+            z_index=request.z_index,
+        )
+        return _to_sticky_note_response(item)
+    except DomainError as exc:
+        return _handle_execution_error(exc)
+
+
+@sessions_router.delete(
+    "/notes/{note_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
+    summary="Delete an owned workspace sticky note",
+)
+async def delete_sticky_note(
+    note_id: UUID,
+    user_id: CurrentExecutionLearnerIdDep,
+    use_case: DeleteStickyNoteUseCaseDep,
+) -> JSONResponse | None:
+    try:
+        await use_case.execute(user_id=user_id, note_id=note_id)
+        return None
+    except DomainError as exc:
+        return _handle_execution_error(exc)
+
+
+@sessions_router.get(
+    "/studio-config",
+    response_model=WorkspaceStudioConfigResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get learner workspace studio configuration",
+)
+async def get_studio_config(
+    user_id: CurrentExecutionLearnerIdDep,
+    use_case: GetStudioConfigUseCaseDep,
+) -> WorkspaceStudioConfigResponse | JSONResponse:
+    try:
+        dto = await use_case.execute(user_id=user_id)
+        return _to_studio_config_response(dto)
+    except DomainError as exc:
+        return _handle_execution_error(exc)
+
+
+@sessions_router.put(
+    "/studio-config",
+    response_model=WorkspaceStudioConfigResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Create or update learner workspace studio configuration",
+)
+async def upsert_studio_config(
+    request: UpdateWorkspaceStudioConfigRequest,
+    user_id: CurrentExecutionLearnerIdDep,
+    use_case: UpsertStudioConfigUseCaseDep,
+) -> WorkspaceStudioConfigResponse | JSONResponse:
+    try:
+        dto = await use_case.execute(
+            user_id=user_id,
+            scene=request.scene,
+            clock_style=request.clock_style,
+            clock_size=request.clock_size,
+            show_seconds=request.show_seconds,
+            show_in_tab_title=request.show_in_tab_title,
+            tab_guard_enabled=request.tab_guard_enabled,
+            zen_lock_enabled=request.zen_lock_enabled,
+            blocklist=request.blocklist,
+            parking_lot=[item.model_dump() for item in request.parking_lot],
+        )
+        return _to_studio_config_response(dto)
     except DomainError as exc:
         return _handle_execution_error(exc)
 

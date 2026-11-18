@@ -9,7 +9,7 @@ from uuid6 import uuid7
 from src.evaluation.presentation.tasks import (
     sweep_overdue_tasks_and_anti_loop as evaluation_sweep_overdue_tasks,
 )
-from src.execution.infrastructure.orm.session_orm import StudySessionORM
+from src.execution.infrastructure.orm.session_orm import SessionTaskORM, StudySessionORM
 from src.execution.infrastructure.orm.task_orm import TaskORM
 from src.execution.presentation.tasks import (
     DefaultNotificationService,
@@ -54,11 +54,13 @@ class MockAsyncSession:
     def __init__(
         self,
         study_sessions: list[StudySessionORM] | None = None,
+        session_tasks: list[SessionTaskORM] | None = None,
         tasks: list[TaskORM] | None = None,
         roadmaps: list[Any] | None = None,
         users: list[Any] | None = None,
     ) -> None:
         self.study_sessions = study_sessions or []
+        self.session_tasks = session_tasks or []
         self.tasks = tasks or []
         self.roadmaps = {r.id: r for r in (roadmaps or [])}
         self.users = {u.id: u for u in (users or [])}
@@ -90,10 +92,31 @@ class MockAsyncSession:
 
         # 2. session_tasks check
         if "SESSION_TASKS" in stmt_str:
-            return MockQueryResult([])
+            compiled_params = stmt.compile().params if hasattr(stmt, "compile") else {}
+            sid_filter = next(
+                (v for k, v in compiled_params.items() if "session_id" in k),
+                None,
+            )
+            if sid_filter is not None:
+                return MockQueryResult(
+                    [st for st in self.session_tasks if st.session_id == sid_filter]
+                )
+            return MockQueryResult(self.session_tasks)
 
         # 3. TaskORM query
         if "TASKS" in stmt_str and "SELECT" in stmt_str:
+            compiled_params = stmt.compile().params if hasattr(stmt, "compile") else {}
+            id_filter = next(
+                (
+                    v
+                    for k, v in compiled_params.items()
+                    if "id" in k and isinstance(v, (list, tuple, set))
+                ),
+                None,
+            )
+            if id_filter is not None:
+                id_set = set(id_filter)
+                return MockQueryResult([t for t in self.tasks if t.id in id_set])
             return MockQueryResult(self.tasks)
 
         # 4. Roadmaps select
@@ -229,12 +252,110 @@ async def test_sweep_abandoned_study_sessions_standard_partial_and_cancelled() -
     assert s4.status == "CANCELLED"
     assert s4.ended_at == s4.last_heartbeat_at
 
-    # Assert outbox events were emitted
+    # Assert outbox events were emitted and pending_takeaway is set
+    assert s1.pending_takeaway is True
+    assert s2.pending_takeaway is True
+    assert s3.pending_takeaway is True
+    assert s4.pending_takeaway is True
     outbox_events = [obj for obj in session.added if isinstance(obj, OutboxEventORM)]
     assert len(outbox_events) == 4
     for ev in outbox_events:
         assert ev.event_type == "StudySessionAbandonedEvent"
         assert "recovered_duration_seconds" in ev.payload
+
+
+@pytest.mark.asyncio
+async def test_sweep_abandoned_session_sets_pending_takeaway_and_returns_incomplete_tasks_to_backlog() -> (
+    None
+):
+    now = datetime(2026, 11, 18, 12, 0, 0, tzinfo=UTC)
+    user_id = uuid7()
+    roadmap_id = uuid7()
+    milestone_id = uuid7()
+    schedule_id = uuid7()
+    session_id = uuid7()
+
+    abandoned = StudySessionORM(
+        id=session_id,
+        user_id=user_id,
+        roadmap_id=roadmap_id,
+        status="IN_PROGRESS",
+        session_mode="STANDARD",
+        planned_minutes=60,
+        actual_minutes=15,
+        started_at=now - timedelta(minutes=30),
+        last_heartbeat_at=now - timedelta(minutes=10),
+        pending_takeaway=False,
+    )
+
+    t_incomplete = TaskORM(
+        id=uuid7(),
+        roadmap_id=roadmap_id,
+        milestone_id=milestone_id,
+        official_schedule_id=schedule_id,
+        title="Incomplete Task",
+        estimated_minutes=30,
+        scheduled_date=now.date(),
+        scheduled_start=now - timedelta(minutes=30),
+        scheduled_end=now,
+        status="IN_PROGRESS",
+        reschedule_count=0,
+    )
+    t_completed = TaskORM(
+        id=uuid7(),
+        roadmap_id=roadmap_id,
+        milestone_id=milestone_id,
+        official_schedule_id=schedule_id,
+        title="Completed Task",
+        estimated_minutes=30,
+        scheduled_date=now.date(),
+        scheduled_start=now - timedelta(minutes=60),
+        scheduled_end=now - timedelta(minutes=30),
+        status="COMPLETED",
+        completed_at=now - timedelta(minutes=20),
+        reschedule_count=0,
+    )
+
+    st_incomplete = SessionTaskORM(
+        id=uuid7(),
+        session_id=session_id,
+        task_id=t_incomplete.id,
+        allocated_minutes=30,
+        actual_minutes=15,
+        status_after_session="IN_PROGRESS",
+    )
+    st_completed = SessionTaskORM(
+        id=uuid7(),
+        session_id=session_id,
+        task_id=t_completed.id,
+        allocated_minutes=30,
+        actual_minutes=30,
+        status_after_session="COMPLETED",
+    )
+
+    mock_db = MockAsyncSession(
+        study_sessions=[abandoned],
+        session_tasks=[st_incomplete, st_completed],
+        tasks=[t_incomplete, t_completed],
+    )
+
+    swept = await sweep_abandoned_study_sessions(session_factory=lambda: mock_db, now=now)
+    assert swept == 1
+    assert abandoned.status == "PARTIAL_COMPLETED"  # has_completed_task=True
+    assert abandoned.pending_takeaway is True
+
+    assert st_incomplete.status_after_session == "TODO"
+    assert st_completed.status_after_session == "COMPLETED"
+
+    assert t_incomplete.status == "TODO"
+    assert t_incomplete.scheduled_date is None
+    assert t_incomplete.scheduled_start is None
+    assert t_incomplete.scheduled_end is None
+    assert t_incomplete.official_schedule_id is None
+
+    assert t_completed.status == "COMPLETED"
+    assert t_completed.scheduled_date == now.date()
+    assert t_completed.official_schedule_id == schedule_id
 
 
 @pytest.mark.asyncio

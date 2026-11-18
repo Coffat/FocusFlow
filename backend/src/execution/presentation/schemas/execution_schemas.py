@@ -2,7 +2,7 @@ from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class TaskResponse(BaseModel):
@@ -30,6 +30,9 @@ class TaskResponse(BaseModel):
     priority_rank: int | None = None
     out_degree: int | None = None
     milestone_sequence: int | None = None
+    milestone_title: str | None = None
+    learning_outcomes: list[str] = Field(default_factory=list)
+    completion_criteria: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -188,3 +191,79 @@ class TodayFocusResponse(BaseModel):
     focus_task: TaskResponse | None = None
     today_queue: list[TaskResponse] = Field(default_factory=list)
     overdue_tasks_count: int = 0
+    completed_sessions_today: int = 0
+    studied_minutes_today: int = 0
+
+
+class StickyNoteResponse(BaseModel):
+    id: UUID
+    task_id: UUID | None = None
+    title: str = ""
+    body: str = ""
+    color: str = "cream"
+    pinned: bool = True
+    pos_x: float | None = None
+    pos_y: float | None = None
+    z_index: int | None = None
+    origin_session_id: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class CreateStickyNoteRequest(BaseModel):
+    title: str = Field(default="", max_length=200)
+    body: str = Field(default="", max_length=5000)
+    color: Literal["cream", "pink", "sage", "blue", "amber", "lavender"] = "cream"
+    pinned: bool = True
+    pos_x: float | None = None
+    pos_y: float | None = None
+    z_index: int | None = None
+    origin_session_id: str | None = None
+    task_id: UUID | None = None
+
+
+class UpdateStickyNoteRequest(BaseModel):
+    title: str | None = Field(default=None, max_length=200)
+    body: str | None = Field(default=None, max_length=5000)
+    color: Literal["cream", "pink", "sage", "blue", "amber", "lavender"] | None = None
+    pinned: bool | None = None
+    pos_x: float | None = None
+    pos_y: float | None = None
+    z_index: int | None = None
+
+
+class ParkingThoughtSchema(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    id: str
+    text: str = Field(..., min_length=1, max_length=500)
+    created_at: str | None = None
+
+
+class WorkspaceStudioConfigResponse(BaseModel):
+    scene: str = "lofi-night"
+    clock_style: str = "ring"
+    clock_size: str = "lg"
+    show_seconds: bool = True
+    show_in_tab_title: bool = True
+    tab_guard_enabled: bool = True
+    zen_lock_enabled: bool = False
+    blocklist: list[str] = Field(
+        default_factory=lambda: ["facebook.com", "youtube.com", "tiktok.com"]
+    )
+    parking_lot: list[ParkingThoughtSchema] = Field(default_factory=list)
+    updated_at: datetime | None = None
+
+
+class UpdateWorkspaceStudioConfigRequest(BaseModel):
+    scene: Literal["architectural", "lofi-night", "rain", "cafe", "library"] = "lofi-night"
+    clock_style: Literal["editorial", "ring", "flip", "minimal"] = "ring"
+    clock_size: Literal["md", "lg"] = "lg"
+    show_seconds: bool = True
+    show_in_tab_title: bool = True
+    tab_guard_enabled: bool = True
+    zen_lock_enabled: bool = False
+    blocklist: list[str] = Field(
+        default_factory=lambda: ["facebook.com", "youtube.com", "tiktok.com"]
+    )
+    parking_lot: list[ParkingThoughtSchema] = Field(default_factory=list)

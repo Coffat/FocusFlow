@@ -63,6 +63,9 @@ export const API_ENDPOINTS = {
     HEARTBEAT: (id: string) => `/api/v1/sessions/${id}/heartbeat`,
     FINALIZE: (id: string) => `/api/v1/sessions/${id}/finalize`,
     RESOLVE_TAKEAWAY: (id: string) => `/api/v1/sessions/${id}/resolve-takeaway`,
+    NOTES: '/api/v1/sessions/notes',
+    NOTE_DETAIL: (id: string) => `/api/v1/sessions/notes/${id}`,
+    STUDIO_CONFIG: '/api/v1/sessions/studio-config',
   },
   CALENDAR: {
     GOOGLE_AUTHORIZE: '/api/v1/account/calendar/google/authorize',

@@ -9,18 +9,28 @@ from uuid import UUID
 import pytest
 from uuid6 import uuid7
 
+from src.account.public_api import UserSnapshotDTO
 from src.evaluation.public_api import ScheduleChangeLogEntryDTO
 from src.execution.application.use_cases.session_use_cases import (
+    CreateStickyNoteUseCase,
+    DeleteStickyNoteUseCase,
     FinalizeStudySessionUseCase,
+    GetStudioConfigUseCase,
+    GetTodayFocusUseCase,
+    ListStickyNotesUseCase,
     StartStudySessionUseCase,
+    UpdateStickyNoteUseCase,
+    UpsertStudioConfigUseCase,
 )
 from src.execution.application.use_cases.task_use_cases import (
     CompleteTaskUseCase,
     DeleteTaskUseCase,
+    ListTasksUseCase,
     RescheduleTaskUseCase,
 )
 from src.execution.domain.exceptions.execution_exceptions import (
     ActiveSessionExistsError,
+    ExecutionDomainError,
     PendingTakeawayRequiredError,
     ScheduleSlotConflictError,
     TaskBlockedError,
@@ -36,9 +46,11 @@ from src.execution.domain.models.study_session import (
     StudySession,
 )
 from src.execution.domain.models.task import Task, TaskDependency, TaskStatus
+from src.execution.presentation.routers import _handle_execution_error
 from src.planning.public_api import (
     ExecutionWeekScheduleBlockDTO,
     ManualSlotValidationResultDTO,
+    MilestoneExecutionContextDTO,
     RoadmapExecutionContextDTO,
 )
 from src.shared_kernel.domain.base import AggregateRoot
@@ -153,6 +165,7 @@ class FakeSessionRepo:
         self.sessions: dict[UUID, StudySession] = {s.id: s for s in (sessions or [])}
         self.session_tasks: dict[UUID, list[SessionTask]] = {}
         self.notes: dict[UUID, list[StudyNote]] = {}
+        self.general_notes: dict[UUID, StudyNote] = {}
 
     async def get_by_id(self, session_id: UUID) -> StudySession | None:
         return self.sessions.get(session_id)
@@ -189,7 +202,9 @@ class FakeSessionRepo:
         return list(self.session_tasks.get(session_id, []))
 
     async def upsert_study_note(self, study_note: StudyNote) -> StudyNote:
-        assert study_note.session_id is not None
+        if study_note.session_id is None:
+            self.general_notes[study_note.id] = study_note
+            return study_note
         lst = self.notes.setdefault(study_note.session_id, [])
         for idx, existing in enumerate(lst):
             if existing.note_type == study_note.note_type:
@@ -209,12 +224,63 @@ class FakeSessionRepo:
     async def list_study_notes_for_session(self, session_id: UUID) -> list[StudyNote]:
         return list(self.notes.get(session_id, []))
 
+    async def list_completed_for_user_between(
+        self, user_id: UUID, start_utc: datetime, end_utc: datetime
+    ) -> list[StudySession]:
+        result: list[StudySession] = []
+        for s in self.sessions.values():
+            if (
+                s.user_id == user_id
+                and s.status in (SessionStatus.COMPLETED, SessionStatus.PARTIAL_COMPLETED)
+                and s.ended_at is not None
+                and start_utc <= s.ended_at < end_utc
+            ):
+                result.append(s)
+        return result
+
+    async def list_general_notes_for_user(self, user_id: UUID) -> list[StudyNote]:
+        matched = [
+            n
+            for n in self.general_notes.values()
+            if n.user_id == user_id and n.note_type == NoteType.GENERAL
+        ]
+        matched.sort(key=lambda n: (n.updated_at, n.created_at), reverse=True)
+        return matched
+
+    async def get_study_note_by_id(self, note_id: UUID) -> StudyNote | None:
+        return self.general_notes.get(note_id)
+
+    async def delete_study_note(self, note_id: UUID) -> None:
+        self.general_notes.pop(note_id, None)
+
+
+class FakeUserQueryPort:
+    def __init__(self, users: dict[UUID, UserSnapshotDTO] | None = None) -> None:
+        self.users = users or {}
+
+    async def get_user_by_id(self, user_id: UUID) -> UserSnapshotDTO | None:
+        return self.users.get(user_id)
+
+    async def get_user_by_email(self, email: str) -> UserSnapshotDTO | None:
+        for u in self.users.values():
+            if u.email == email:
+                return u
+        return None
+
 
 class FakePlanningBridge:
-    def __init__(self, *, user_id: UUID, roadmap_id: UUID, slot_valid: bool = True) -> None:
+    def __init__(
+        self,
+        *,
+        user_id: UUID,
+        roadmap_id: UUID,
+        slot_valid: bool = True,
+        milestones: dict[UUID, MilestoneExecutionContextDTO] | None = None,
+    ) -> None:
         self.user_id = user_id
         self.roadmap_id = roadmap_id
         self.slot_valid = slot_valid
+        self.milestones = milestones or {}
         self.synced_calls: list[dict[str, Any]] = []
         self.deducted_count = 0
         self.completed_roadmap = False
@@ -239,7 +305,13 @@ class FakePlanningBridge:
         ]
 
     async def get_milestone_sequences(self, roadmap_ids: Sequence[UUID]) -> dict[UUID, int]:
-        return {}
+        return {mid: ctx.sequence_order for mid, ctx in self.milestones.items()}
+
+    async def get_milestones_context(
+        self, roadmap_ids: Sequence[UUID]
+    ) -> dict[UUID, MilestoneExecutionContextDTO]:
+        rset = set(roadmap_ids)
+        return {mid: ctx for mid, ctx in self.milestones.items() if ctx.roadmap_id in rset}
 
     async def verify_milestone_in_roadmap(
         self, user_id: UUID, roadmap_id: UUID, milestone_id: UUID
@@ -476,3 +548,215 @@ async def test_session_guards_and_early_stop_backlog_return() -> None:
     assert task_repo.tasks[t1.id].status == TaskStatus.TODO
     assert task_repo.tasks[t1.id].scheduled_date is None
     assert len(uow_fin.events) == 1
+
+
+@pytest.mark.asyncio
+async def test_today_focus_and_list_tasks_include_milestone_context_and_today_stats() -> None:
+    # 2026-11-18 18:00 UTC == 2026-11-19 01:00 Asia/Ho_Chi_Minh
+    now_utc = datetime(2026, 11, 18, 18, 0, tzinfo=UTC)
+    uid, rid, mid = uuid7(), uuid7(), uuid7()
+
+    user_port = FakeUserQueryPort(
+        {
+            uid: UserSnapshotDTO(
+                id=uid,
+                email="learner@focusflow.test",
+                full_name="Learner",
+                role="LEARNER",
+                tier="FREE",
+                is_locked=False,
+                timezone="Asia/Ho_Chi_Minh",
+            )
+        }
+    )
+    ms_ctx = MilestoneExecutionContextDTO(
+        milestone_id=mid,
+        roadmap_id=rid,
+        sequence_order=2,
+        title="Milestone 2: Async Workers",
+        learning_outcomes=("Hiểu Redis Streams", "Triển khai Sweeper"),
+        completion_criteria="Chạy được test integration",
+    )
+    bridge = FakePlanningBridge(user_id=uid, roadmap_id=rid, milestones={mid: ms_ctx})
+
+    t_today = Task(
+        id=uuid7(),
+        roadmap_id=rid,
+        milestone_id=mid,
+        title="Task Hôm Nay",
+        estimated_minutes=45,
+        scheduled_date=date(2026, 11, 19),
+        created_at=now_utc,
+        updated_at=now_utc,
+    )
+    task_repo = FakeTaskRepo([t_today])
+
+    # Local day in Asia/Ho_Chi_Minh is 2026-11-19 -> [2026-11-18 17:00 UTC, 2026-11-19 17:00 UTC)
+    s_completed = StudySession(
+        id=uuid7(),
+        user_id=uid,
+        roadmap_id=rid,
+        started_at=datetime(2026, 11, 18, 17, 10, tzinfo=UTC),
+        ended_at=datetime(2026, 11, 18, 17, 45, tzinfo=UTC),
+        planned_minutes=45,
+        actual_minutes=35,
+        status=SessionStatus.COMPLETED,
+        last_heartbeat_at=datetime(2026, 11, 18, 17, 45, tzinfo=UTC),
+        created_at=now_utc,
+        updated_at=now_utc,
+    )
+    s_partial = StudySession(
+        id=uuid7(),
+        user_id=uid,
+        roadmap_id=rid,
+        started_at=datetime(2026, 11, 18, 17, 50, tzinfo=UTC),
+        ended_at=datetime(2026, 11, 18, 17, 59, tzinfo=UTC),
+        planned_minutes=20,
+        actual_minutes=12,
+        status=SessionStatus.PARTIAL_COMPLETED,
+        last_heartbeat_at=datetime(2026, 11, 18, 17, 59, tzinfo=UTC),
+        created_at=now_utc,
+        updated_at=now_utc,
+    )
+    # Earlier local day (2026-11-18 23:30 ICT = 16:30 UTC) -> excluded from 2026-11-19
+    s_yesterday = StudySession(
+        id=uuid7(),
+        user_id=uid,
+        roadmap_id=rid,
+        started_at=datetime(2026, 11, 18, 16, 0, tzinfo=UTC),
+        ended_at=datetime(2026, 11, 18, 16, 30, tzinfo=UTC),
+        planned_minutes=30,
+        actual_minutes=30,
+        status=SessionStatus.COMPLETED,
+        last_heartbeat_at=datetime(2026, 11, 18, 16, 30, tzinfo=UTC),
+        created_at=now_utc,
+        updated_at=now_utc,
+    )
+    # Cancelled today -> excluded
+    s_cancelled = StudySession(
+        id=uuid7(),
+        user_id=uid,
+        roadmap_id=rid,
+        started_at=datetime(2026, 11, 18, 17, 1, tzinfo=UTC),
+        ended_at=datetime(2026, 11, 18, 17, 4, tzinfo=UTC),
+        planned_minutes=30,
+        actual_minutes=3,
+        status=SessionStatus.CANCELLED,
+        last_heartbeat_at=datetime(2026, 11, 18, 17, 4, tzinfo=UTC),
+        created_at=now_utc,
+        updated_at=now_utc,
+    )
+
+    sess_repo = FakeSessionRepo([s_completed, s_partial, s_yesterday, s_cancelled])
+
+    focus_uc = GetTodayFocusUseCase(
+        session_repo=sess_repo,
+        task_repo=task_repo,
+        planning_bridge=bridge,
+        user_query_port=user_port,
+    )
+    focus = await focus_uc.execute(user_id=uid, now=now_utc)
+    assert focus.local_date == date(2026, 11, 19)
+    assert focus.completed_sessions_today == 2
+    assert focus.studied_minutes_today == 47
+    assert focus.focus_task is not None
+    assert focus.focus_task.milestone_sequence == 2
+    assert focus.focus_task.milestone_title == "Milestone 2: Async Workers"
+    assert focus.focus_task.learning_outcomes == ("Hiểu Redis Streams", "Triển khai Sweeper")
+    assert focus.focus_task.completion_criteria == "Chạy được test integration"
+
+    list_uc = ListTasksUseCase(
+        task_repo=task_repo,
+        planning_bridge=bridge,
+        user_query_port=user_port,
+    )
+    listed = await list_uc.execute(user_id=uid, roadmap_id=rid, now=now_utc)
+    assert len(listed) == 1
+    assert listed[0].milestone_title == "Milestone 2: Async Workers"
+
+
+@pytest.mark.asyncio
+async def test_sticky_notes_crud_idor_404_and_studio_config() -> None:
+    now = datetime(2026, 11, 18, 10, 0, tzinfo=UTC)
+    owner_id, other_id = uuid7(), uuid7()
+    sess_repo = FakeSessionRepo()
+
+    get_cfg_uc = GetStudioConfigUseCase(session_repo=sess_repo)
+    default_cfg = await get_cfg_uc.execute(user_id=owner_id)
+    assert default_cfg.scene == "lofi-night"
+    assert default_cfg.updated_at is None
+
+    upsert_cfg_uc = UpsertStudioConfigUseCase(session_repo=sess_repo, uow=FakeUow())
+    saved_cfg = await upsert_cfg_uc.execute(
+        user_id=owner_id,
+        scene="library",
+        clock_style="editorial",
+        clock_size="md",
+        show_seconds=False,
+        show_in_tab_title=True,
+        tab_guard_enabled=True,
+        zen_lock_enabled=True,
+        blocklist=["youtube.com"],
+        parking_lot=[{"id": "p1", "text": "Đọc tài liệu ADR-006", "created_at": now.isoformat()}],
+        now=now,
+    )
+    assert saved_cfg.scene == "library"
+    assert saved_cfg.clock_style == "editorial"
+    assert saved_cfg.updated_at == now
+
+    loaded_cfg = await get_cfg_uc.execute(user_id=owner_id)
+    assert loaded_cfg.scene == "library"
+    assert loaded_cfg.parking_lot[0]["text"] == "Đọc tài liệu ADR-006"
+
+    # Sentinel studio config must NOT leak into sticky notes list
+    list_notes_uc = ListStickyNotesUseCase(session_repo=sess_repo)
+    assert await list_notes_uc.execute(user_id=owner_id) == []
+
+    # Create, list, update, delete sticky note
+    create_note_uc = CreateStickyNoteUseCase(session_repo=sess_repo, uow=FakeUow())
+    created = await create_note_uc.execute(
+        user_id=owner_id,
+        title="Công thức Pomodoro",
+        body="25 phút học + 5 phút nghỉ",
+        color="amber",
+        pos_x=10.0,
+        pos_y=20.0,
+        z_index=2,
+        now=now,
+    )
+    assert created.title == "Công thức Pomodoro"
+    assert created.color == "amber"
+
+    listed_notes = await list_notes_uc.execute(user_id=owner_id)
+    assert len(listed_notes) == 1
+    assert listed_notes[0].id == created.id
+
+    update_note_uc = UpdateStickyNoteUseCase(session_repo=sess_repo, uow=FakeUow())
+    updated = await update_note_uc.execute(
+        user_id=owner_id,
+        note_id=created.id,
+        body="50 phút học + 10 phút nghỉ",
+        pinned=False,
+        now=now + timedelta(minutes=5),
+    )
+    assert updated.body == "50 phút học + 10 phút nghỉ"
+    assert updated.pinned is False
+    assert updated.title == "Công thức Pomodoro"
+
+    # IDOR check: another user gets NOTE_NOT_FOUND -> mapped to 404
+    with pytest.raises(ExecutionDomainError) as exc_idor_upd:
+        await update_note_uc.execute(user_id=other_id, note_id=created.id, title="Hacked")
+    assert exc_idor_upd.value.code == "NOTE_NOT_FOUND"
+    assert _handle_execution_error(exc_idor_upd.value).status_code == 404
+
+    delete_note_uc = DeleteStickyNoteUseCase(session_repo=sess_repo, uow=FakeUow())
+    with pytest.raises(ExecutionDomainError) as exc_idor_del:
+        await delete_note_uc.execute(user_id=other_id, note_id=created.id)
+    assert exc_idor_del.value.code == "NOTE_NOT_FOUND"
+    assert _handle_execution_error(exc_idor_del.value).status_code == 404
+
+    await delete_note_uc.execute(user_id=owner_id, note_id=created.id)
+    assert await list_notes_uc.execute(user_id=owner_id) == []
+
+    # Studio config still intact after sticky note deletion
+    assert (await get_cfg_uc.execute(user_id=owner_id)).scene == "library"

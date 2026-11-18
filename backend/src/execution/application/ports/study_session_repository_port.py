@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
@@ -35,3 +36,16 @@ class StudySessionRepositoryPort(Protocol):
     ) -> StudyNote | None: ...
 
     async def list_study_notes_for_session(self, session_id: UUID) -> list[StudyNote]: ...
+
+    async def list_completed_for_user_between(
+        self,
+        user_id: UUID,
+        start_utc: datetime,
+        end_utc: datetime,
+    ) -> list[StudySession]: ...
+
+    async def list_general_notes_for_user(self, user_id: UUID) -> list[StudyNote]: ...
+
+    async def get_study_note_by_id(self, note_id: UUID) -> StudyNote | None: ...
+
+    async def delete_study_note(self, note_id: UUID) -> None: ...
