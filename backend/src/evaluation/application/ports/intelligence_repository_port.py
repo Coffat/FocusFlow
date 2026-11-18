@@ -5,6 +5,19 @@ from uuid import UUID
 from src.evaluation.domain.models.intelligence import MilestoneProof, WeeklyReview
 
 
+class DuplicateWeeklyReviewConflictError(Exception):
+    """Raised when a weekly review for `(roadmap_id, period_start, period_end)` already exists."""
+
+    def __init__(
+        self,
+        message: str = "Weekly review for this roadmap and period already exists.",
+        *,
+        existing_review: WeeklyReview | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.existing_review = existing_review
+
+
 class EvaluationIntelligenceRepositoryPort(Protocol):
     async def create_proof(
         self, *, milestone_id: UUID, user_id: UUID, questions: list[dict[str, Any]]
@@ -37,5 +50,12 @@ class EvaluationIntelligenceRepositoryPort(Protocol):
         *,
         model_used: str = "deterministic-fallback",
     ) -> None: ...
+
+    async def get_weekly_review_for_period(
+        self,
+        roadmap_id: UUID,
+        period_start: date,
+        period_end: date,
+    ) -> WeeklyReview | None: ...
 
     async def latest_weekly_review(self, user_id: UUID) -> WeeklyReview | None: ...

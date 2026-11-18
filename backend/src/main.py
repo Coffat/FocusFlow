@@ -17,8 +17,19 @@ from src.account.presentation.routers import (
     router as account_router,
 )
 from src.account.presentation.webhook_router import router as webhook_router
-from src.evaluation.presentation.routers import router as evaluation_router
-from src.execution.presentation.routers import router as execution_router
+from src.evaluation.presentation.routers import (
+    analytics_router,
+)
+from src.evaluation.presentation.routers import (
+    router as evaluation_router,
+)
+from src.execution.presentation.routers import (
+    router as execution_router,
+)
+from src.execution.presentation.routers import (
+    sessions_router,
+    tasks_router,
+)
 from src.planning.presentation.routers import (
     roadmaps_router,
 )
@@ -75,8 +86,8 @@ def create_app() -> FastAPI:
             "(Context-First Modular Monolith + Hexagonal Architecture)"
         ),
         version="2.0.0",
-        docs_url="/docs",
-        redoc_url="/redoc",
+        docs_url="/docs" if settings.debug else None,
+        redoc_url="/redoc" if settings.debug else None,
         lifespan=lifespan,
     )
 
@@ -119,15 +130,27 @@ def create_app() -> FastAPI:
     app.include_router(planning_router)
     app.include_router(roadmaps_router)
     app.include_router(execution_router)
+    app.include_router(tasks_router)
+    app.include_router(sessions_router)
     app.include_router(evaluation_router)
+    app.include_router(analytics_router)
 
     @app.get("/api/health", tags=["System"])
     async def health_check(probe_ai: bool = False) -> dict[str, Any]:
+        current_settings = get_settings()
+        readiness = (
+            current_settings.staging_readiness_summary()
+            if hasattr(current_settings, "staging_readiness_summary")
+            else settings.staging_readiness_summary()
+        )
         payload: dict[str, Any] = {
             "status": "healthy",
             "service": "FocusFlow Backend API",
             "version": "2.0.0",
             "architecture": "Context-First Modular Monolith + Hexagonal (Ports & Adapters)",
+            "environment": getattr(current_settings, "environment", settings.environment),
+            "debug": getattr(current_settings, "debug", settings.debug),
+            "readiness": readiness,
         }
         if probe_ai:
             try:

@@ -1,3 +1,4 @@
+import inspect
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from uuid import UUID
@@ -16,6 +17,10 @@ from src.account.public_api import (
 )
 from src.evaluation.application.ports.intelligence_repository_port import (
     EvaluationIntelligenceRepositoryPort,
+)
+from src.evaluation.application.use_cases.analytics import (
+    GetAnalyticsSummaryUseCase,
+    GetWeeklyAnalyticsUseCase,
 )
 from src.evaluation.application.use_cases.dashboard_summary import (
     GetDashboardSummaryUseCase,
@@ -125,6 +130,19 @@ async def get_current_evaluation_learner_id(
     bearer: HTTPAuthorizationCredentials | None = Depends(security_bearer),
     users: UserQueryPort = Depends(get_evaluation_user_query_port),
 ) -> UUID:
+    overrides = getattr(request.app, "dependency_overrides", {})
+    for dep_fn, override_fn in overrides.items():
+        if getattr(dep_fn, "__name__", "") in (
+            "get_current_learner_id",
+            "get_current_evaluation_learner_id",
+        ):
+            res = override_fn()
+            if inspect.isawaitable(res):
+                res = await res
+            if isinstance(res, UUID):
+                return res
+            return UUID(str(res))
+
     token = bearer.credentials if bearer else request.cookies.get("access_token")
     if not token:
         raise HTTPException(
@@ -230,4 +248,32 @@ def get_dashboard_summary_use_case(
         execution_port,
         intelligence_repo,
         user_query_port=user_query_port,
+    )
+
+
+def get_analytics_summary_use_case(
+    execution_port: ExecutionDashboardQueryPort = Depends(get_execution_dashboard_port),
+    user_query_port: UserQueryPort = Depends(get_evaluation_user_query_port),
+    weekly_metrics_port: WeeklyExecutionMetricsQueryPort = Depends(
+        get_weekly_execution_metrics_port
+    ),
+) -> GetAnalyticsSummaryUseCase:
+    return GetAnalyticsSummaryUseCase(
+        execution_dashboard_port=execution_port,
+        user_query_port=user_query_port,
+        weekly_metrics_port=weekly_metrics_port,
+    )
+
+
+def get_weekly_analytics_use_case(
+    execution_port: ExecutionDashboardQueryPort = Depends(get_execution_dashboard_port),
+    user_query_port: UserQueryPort = Depends(get_evaluation_user_query_port),
+    weekly_metrics_port: WeeklyExecutionMetricsQueryPort = Depends(
+        get_weekly_execution_metrics_port
+    ),
+) -> GetWeeklyAnalyticsUseCase:
+    return GetWeeklyAnalyticsUseCase(
+        execution_dashboard_port=execution_port,
+        user_query_port=user_query_port,
+        weekly_metrics_port=weekly_metrics_port,
     )

@@ -6,9 +6,12 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.account.public_api import create_user_query_port
-from src.execution.infrastructure.orm.session_orm import StudySessionORM
+from src.execution.infrastructure.orm.session_orm import SessionTaskORM, StudySessionORM
 from src.execution.infrastructure.orm.task_orm import TaskORM
 from src.execution.public_api import (
+    AnalyticsDailyMetricDTO,
+    AnalyticsSummaryQueryDTO,
+    AnalyticsWeeklyQueryDTO,
     ExecutionDashboardQueryPort,
     ExecutionDayStudyDTO,
     ExecutionKpiStatsDTO,
@@ -83,7 +86,7 @@ class ExecutionDashboardAdapter(ExecutionDashboardQueryPort):
         user_timezone: str | None = None,
         now: datetime | None = None,
     ) -> list[ExecutionTodayTaskDTO]:
-        _, effective_today = await self._resolve_user_context(
+        user_tz, effective_today = await self._resolve_user_context(
             user_id,
             today,
             user_timezone=user_timezone,
@@ -115,9 +118,19 @@ class ExecutionDashboardAdapter(ExecutionDashboardQueryPort):
             roadmap_title = roadmap_map.get(task.roadmap_id, "Lộ trình học tập")
 
             if task.scheduled_start and task.scheduled_end:
+                start_aware = (
+                    task.scheduled_start
+                    if task.scheduled_start.tzinfo is not None
+                    else task.scheduled_start.replace(tzinfo=UTC)
+                )
+                end_aware = (
+                    task.scheduled_end
+                    if task.scheduled_end.tzinfo is not None
+                    else task.scheduled_end.replace(tzinfo=UTC)
+                )
                 scheduled_time = (
-                    f"{task.scheduled_start.strftime('%H:%M')} - "
-                    f"{task.scheduled_end.strftime('%H:%M')}"
+                    f"{start_aware.astimezone(user_tz).strftime('%H:%M')} - "
+                    f"{end_aware.astimezone(user_tz).strftime('%H:%M')}"
                 )
             else:
                 scheduled_time = f"Dự kiến {task.estimated_minutes}p"
@@ -335,6 +348,271 @@ class ExecutionDashboardAdapter(ExecutionDashboardQueryPort):
             adherence_rate_pct=adherence_rate_pct,
             adherence_delta_pct=0.0,
             overdue_tasks_count=overdue_tasks_count,
+        )
+
+    async def _get_non_paused_user_roadmap_ids(self, user_id: UUID) -> list[UUID]:
+        stmt = text(
+            "SELECT id FROM roadmaps WHERE user_id = :u_id AND status != 'PAUSED' AND status != 'ARCHIVED'"
+        )
+        res = await self._session.execute(stmt, {"u_id": user_id})
+        return [row.id for row in res.fetchall()]
+
+    async def _compute_wrls_for_sessions(
+        self,
+        sessions: list[StudySessionORM],
+        user_tz: ZoneInfo,
+    ) -> int:
+        if not sessions:
+            return 0
+        sess_ids = [s.id for s in sessions]
+        st_stmt = (
+            select(
+                SessionTaskORM.session_id,
+                TaskORM.reschedule_count,
+                TaskORM.parent_task_id,
+            )
+            .join(TaskORM, TaskORM.id == SessionTaskORM.task_id)
+            .where(SessionTaskORM.session_id.in_(sess_ids))
+        )
+        st_rows = (await self._session.execute(st_stmt)).all()
+        recovered_by_task_sessions: set[UUID] = set()
+        for sid, resched_cnt, parent_tid in st_rows:
+            if int(resched_cnt or 0) > 0 or parent_tid is not None:
+                recovered_by_task_sessions.add(sid)
+
+        wrls = 0
+        mvs_dates_counted: set[date] = set()
+        for s in sessions:
+            local_d = _to_user_date(s.started_at, user_tz)
+            if s.session_mode == "MVS":
+                # BR-SESS-04: max 1 MVS session per day counts toward WRLS
+                if local_d not in mvs_dates_counted:
+                    mvs_dates_counted.add(local_d)
+                    wrls += 1
+            elif s.status == "PARTIAL_COMPLETED" or s.id in recovered_by_task_sessions:
+                wrls += 1
+        return wrls
+
+    async def get_weekly_analytics(
+        self,
+        user_id: UUID,
+        *,
+        week_start: date | None = None,
+        user_timezone: str | None = None,
+        now: datetime | None = None,
+    ) -> AnalyticsWeeklyQueryDTO:
+        user_tz, effective_today = await self._resolve_user_context(
+            user_id,
+            None,
+            user_timezone=user_timezone,
+            now=now,
+        )
+        monday = (
+            week_start
+            if week_start is not None
+            else (effective_today - timedelta(days=effective_today.weekday()))
+        )
+        sunday = monday + timedelta(days=6)
+        week_start_utc = datetime.combine(monday, time.min, tzinfo=user_tz).astimezone(UTC)
+        week_end_utc = (
+            datetime.combine(monday, time.min, tzinfo=user_tz) + timedelta(days=7)
+        ).astimezone(UTC)
+
+        sess_stmt = (
+            select(StudySessionORM)
+            .where(
+                StudySessionORM.user_id == user_id,
+                StudySessionORM.started_at >= week_start_utc,
+                StudySessionORM.started_at < week_end_utc,
+                StudySessionORM.status.in_(("COMPLETED", "PARTIAL_COMPLETED")),
+            )
+            .order_by(StudySessionORM.started_at.asc())
+        )
+        sessions = list((await self._session.execute(sess_stmt)).scalars().all())
+
+        daily_minutes: dict[date, int] = {monday + timedelta(days=i): 0 for i in range(7)}
+        daily_sessions: dict[date, int] = {monday + timedelta(days=i): 0 for i in range(7)}
+        attended_dates: set[date] = set()
+
+        for s in sessions:
+            s_date = _to_user_date(s.started_at, user_tz)
+            attended_dates.add(s_date)
+            if s_date in daily_minutes:
+                daily_minutes[s_date] += int(s.actual_minutes)
+                daily_sessions[s_date] += 1
+
+        daily_breakdown: list[AnalyticsDailyMetricDTO] = []
+        for i in range(7):
+            day_d = monday + timedelta(days=i)
+            mins = daily_minutes[day_d]
+            sess_cnt = daily_sessions[day_d]
+            daily_breakdown.append(
+                AnalyticsDailyMetricDTO(
+                    date=day_d,
+                    day_label=_WEEKDAY_LABELS[i],
+                    minutes_studied=mins,
+                    pomodoros_completed=(mins // 25)
+                    if mins >= 25
+                    else (1 if sess_cnt > 0 and mins > 0 else 0),
+                    sessions_count=sess_cnt,
+                    is_today=(day_d == effective_today),
+                )
+            )
+
+        total_week_minutes = sum(int(s.actual_minutes) for s in sessions)
+        total_focused_hours = round(total_week_minutes / 60.0, 2)
+        wrls = await self._compute_wrls_for_sessions(sessions, user_tz)
+
+        roadmap_ids = await self._get_non_paused_user_roadmap_ids(user_id)
+        completed_tasks_count = 0
+        total_scheduled_tasks_count = 0
+        scheduled_dates_in_week: set[date] = set()
+        if roadmap_ids:
+            t_stmt = select(TaskORM.status, TaskORM.scheduled_date).where(
+                TaskORM.roadmap_id.in_(roadmap_ids),
+                TaskORM.status != "CANCELLED",
+                TaskORM.scheduled_date.is_not(None),
+                TaskORM.scheduled_date >= monday,
+                TaskORM.scheduled_date <= sunday,
+            )
+            t_rows = (await self._session.execute(t_stmt)).all()
+            total_scheduled_tasks_count = len(t_rows)
+            for st_val, task_sched_date in t_rows:
+                if st_val == "COMPLETED":
+                    completed_tasks_count += 1
+                if task_sched_date is not None and task_sched_date <= effective_today:
+                    scheduled_dates_in_week.add(task_sched_date)
+
+        task_completion_rate = (
+            round((completed_tasks_count / total_scheduled_tasks_count) * 100.0, 1)
+            if total_scheduled_tasks_count > 0
+            else 0.0
+        )
+        if scheduled_dates_in_week:
+            adherence = round(
+                (len(scheduled_dates_in_week & attended_dates) / len(scheduled_dates_in_week))
+                * 100.0,
+                1,
+            )
+        elif total_scheduled_tasks_count > 0:
+            adherence = task_completion_rate
+        elif sessions:
+            adherence = 100.0
+        else:
+            adherence = 0.0
+
+        return AnalyticsWeeklyQueryDTO(
+            week_start=monday,
+            week_end=sunday,
+            total_focused_hours=total_focused_hours,
+            completed_sessions_count=len(sessions),
+            completed_tasks_count=completed_tasks_count,
+            total_scheduled_tasks_count=total_scheduled_tasks_count,
+            task_completion_rate=task_completion_rate,
+            plan_adherence_rate=adherence,
+            weekly_recovered_learning_sessions=wrls,
+            daily_breakdown=tuple(daily_breakdown),
+        )
+
+    async def get_analytics_summary(
+        self,
+        user_id: UUID,
+        *,
+        user_timezone: str | None = None,
+        now: datetime | None = None,
+    ) -> AnalyticsSummaryQueryDTO:
+        user_tz, effective_today = await self._resolve_user_context(
+            user_id,
+            None,
+            user_timezone=user_timezone,
+            now=now,
+        )
+        kpis = await self.get_execution_kpis(
+            user_id,
+            effective_today,
+            user_timezone=user_tz.key,
+            now=now,
+        )
+        weekly = await self.get_weekly_analytics(
+            user_id,
+            user_timezone=user_tz.key,
+            now=now,
+        )
+
+        # Total focused hours across all completed / partial_completed sessions
+        all_sess_stmt = select(
+            StudySessionORM.actual_minutes,
+            StudySessionORM.checkin_focus_level,
+            StudySessionORM.started_at,
+        ).where(
+            StudySessionORM.user_id == user_id,
+            StudySessionORM.status.in_(("COMPLETED", "PARTIAL_COMPLETED")),
+        )
+        all_sess_rows = (await self._session.execute(all_sess_stmt)).all()
+        total_focused_minutes = sum(int(row[0] or 0) for row in all_sess_rows)
+        total_focused_hours = round(total_focused_minutes / 60.0, 2)
+        focus_scores = [int(row[1]) for row in all_sess_rows if row[1] is not None]
+        average_focus_score = (
+            round((sum(focus_scores) / len(focus_scores)) * 20.0, 1) if focus_scores else 0.0
+        )
+        attended_dates = {
+            _to_user_date(row[2], user_tz) for row in all_sess_rows if row[2] is not None
+        }
+
+        all_roadmap_ids = await self._get_all_user_roadmap_ids(user_id)
+        completed_tasks_count = 0
+        total_tasks_count = 0
+        if all_roadmap_ids:
+            all_t_stmt = select(TaskORM.status).where(
+                TaskORM.roadmap_id.in_(all_roadmap_ids),
+                TaskORM.status != "CANCELLED",
+            )
+            all_t_rows = (await self._session.execute(all_t_stmt)).scalars().all()
+            total_tasks_count = len(all_t_rows)
+            completed_tasks_count = sum(1 for st in all_t_rows if st == "COMPLETED")
+
+        task_completion_rate = (
+            round((completed_tasks_count / total_tasks_count) * 100.0, 1)
+            if total_tasks_count > 0
+            else 0.0
+        )
+
+        # Overall Plan Adherence Rate across non-paused roadmaps (FR-REPORT-001)
+        non_paused_ids = await self._get_non_paused_user_roadmap_ids(user_id)
+        scheduled_dates_to_date: set[date] = set()
+        if non_paused_ids:
+            sched_d_stmt = select(TaskORM.scheduled_date).where(
+                TaskORM.roadmap_id.in_(non_paused_ids),
+                TaskORM.status != "CANCELLED",
+                TaskORM.scheduled_date.is_not(None),
+                TaskORM.scheduled_date <= effective_today,
+            )
+            for row_d in (await self._session.execute(sched_d_stmt)).scalars().all():
+                if row_d is not None:
+                    scheduled_dates_to_date.add(row_d)
+
+        if scheduled_dates_to_date:
+            plan_adherence_rate = round(
+                (len(scheduled_dates_to_date & attended_dates) / len(scheduled_dates_to_date))
+                * 100.0,
+                1,
+            )
+        elif all_sess_rows:
+            plan_adherence_rate = 100.0
+        else:
+            plan_adherence_rate = 0.0
+
+        return AnalyticsSummaryQueryDTO(
+            total_focused_hours=total_focused_hours,
+            weekly_study_hours=weekly.total_focused_hours,
+            task_completion_rate=task_completion_rate,
+            plan_adherence_rate=plan_adherence_rate,
+            weekly_recovered_learning_sessions=weekly.weekly_recovered_learning_sessions,
+            completed_tasks_count=completed_tasks_count,
+            total_tasks_count=total_tasks_count,
+            active_streak_days=kpis.streak_days,
+            average_focus_score=average_focus_score,
+            daily_metrics=weekly.daily_breakdown,
         )
 
 

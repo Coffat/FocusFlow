@@ -72,7 +72,10 @@ class GetDashboardSummaryUseCase:
         active_roadmaps_raw = await self._planning_port.get_active_roadmaps_for_user(user_id)
         target_hours = await self._planning_port.get_monthly_target_hours(user_id)
         schedule_blocks_raw = await self._planning_port.get_week_schedule_blocks(
-            user_id, start_of_week, end_of_week
+            user_id,
+            start_of_week,
+            end_of_week,
+            user_timezone=effective_tz_name,
         )
 
         today_queue_raw = await self._execution_port.get_today_queue(
