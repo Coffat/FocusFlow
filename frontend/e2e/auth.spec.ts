@@ -72,7 +72,7 @@ test.describe('FocusFlow Authentication E2E Suite (Duẩn UI + Mailpit + Argon2i
   }) => {
     // 1. Vào trang đăng ký
     await page.goto('/sign-up');
-    await expect(page.locator('.brand-logo')).toBeVisible();
+    await expect(page.locator('img[alt="FocusFlow"]')).toBeVisible();
 
     // 2. Điền thông tin form đăng ký (chuẩn Duẩn)
     await page.locator('input[formControlName="fullName"]').fill(testUser.fullName);
@@ -81,31 +81,26 @@ test.describe('FocusFlow Authentication E2E Suite (Duẩn UI + Mailpit + Argon2i
     await page.locator('input[formControlName="confirmPassword"]').fill(testUser.password);
 
     // 3. Bấm Submit để yêu cầu mã OTP
-    const submitBtn = page.locator('button.submit-button');
+    const submitBtn = page.locator('button[type="submit"]');
     await expect(submitBtn).toBeEnabled();
     await submitBtn.click();
 
     // 4. Kiểm tra chuyển hướng sang trang /verify-otp
     await page.waitForURL(/\/verify-otp/, { timeout: 15000 });
-    await expect(page.locator('.email-highlight')).toContainText(testUser.email);
+    await expect(page.locator('app-otp-validation strong')).toContainText(testUser.email);
 
     // 5. Lấy mã OTP thực tế từ container Mailpit
     const otpCode = await getLatestOtpFromMailpit(testUser.email);
     expect(otpCode).toMatch(/^\d{6}$/);
 
-    // 6. Nhập 6 chữ số vào 6 ô input OTP
-    const cells = page.locator('input.otp-cell');
+    // 6. Nhập 6 chữ số vào 6 ô input OTP (ô thứ 6 tự động kích hoạt verifyOtp)
+    const cells = page.locator('app-otp-input input[inputmode="numeric"]');
     await expect(cells).toHaveCount(6);
     for (let i = 0; i < 6; i++) {
       await cells.nth(i).pressSequentially(otpCode[i]);
     }
 
-    // 7. Bấm nút Xác nhận OTP
-    const verifyBtn = page.locator('button.submit-button');
-    await expect(verifyBtn).toBeEnabled();
-    await verifyBtn.click();
-
-    // 8. Đăng ký & xác thực thành công chuyển hướng sang /dashboard
+    // 7. Đăng ký & xác thực thành công chuyển hướng sang /dashboard
     await page.waitForURL(/\/dashboard/, { timeout: 15000 });
     expect(page.url()).toContain('/dashboard');
   });
@@ -114,14 +109,14 @@ test.describe('FocusFlow Authentication E2E Suite (Duẩn UI + Mailpit + Argon2i
     page
   }) => {
     await page.goto('/sign-in');
-    await expect(page.locator('.headline-title')).toBeVisible();
+    await expect(page.locator('app-auth-header h1')).toBeVisible();
 
     // Điền thông tin tài khoản đã đăng ký ở kịch bản 1
     await page.locator('input[formControlName="email"]').fill(testUser.email);
     await page.locator('input[formControlName="password"]').fill(testUser.password);
 
     // Bấm Đăng nhập
-    const submitBtn = page.locator('button.submit-button');
+    const submitBtn = page.locator('button[type="submit"]');
     await expect(submitBtn).toBeEnabled();
     await submitBtn.click();
 
@@ -138,10 +133,10 @@ test.describe('FocusFlow Authentication E2E Suite (Duẩn UI + Mailpit + Argon2i
     await page.locator('input[formControlName="password"]').fill('WrongPassword999!');
 
     // Bấm Đăng nhập
-    await page.locator('button.submit-button').click();
+    await page.locator('button[type="submit"]').click();
 
     // Kiểm tra xuất hiện banner thông báo lỗi
-    const errorBanner = page.locator('.error-banner');
+    const errorBanner = page.locator('app-auth-notice-banner[type="error"] [role="alert"]');
     await expect(errorBanner).toBeVisible({ timeout: 10000 });
     expect(page.url()).toContain('/sign-in');
   });
@@ -170,22 +165,23 @@ test.describe('FocusFlow Authentication E2E Suite (Duẩn UI + Mailpit + Argon2i
 
     // 1. Bấm link quên mật khẩu từ trang Sign-in
     await page.goto('/sign-in');
-    await page.locator('a[routerLink="/forgot-password"]').click();
+    await page.locator('a[href="/forgot-password"]').click();
     await page.waitForURL(/\/forgot-password/);
 
     // 2. Bước 1: Nhập email yêu cầu OTP đặt lại mật khẩu
     await page.locator('input[formControlName="email"]').fill(resetUser.email);
-    await page.locator('button.submit-button').click();
+    await page.locator('button[type="submit"]').click();
 
     // 3. Bước 2: Chờ Mailpit nhận email và bóc tách OTP mới
     const resetOtp = await getLatestOtpFromMailpit(resetUser.email);
     expect(resetOtp).toMatch(/^\d{6}$/);
 
-    // Điền OTP vào form bước 2
-    const otpInput = page.locator('input[formControlName="otpCode"]');
-    await expect(otpInput).toBeVisible({ timeout: 10000 });
-    await otpInput.fill(resetOtp);
-    await page.locator('button.submit-button').click();
+    // Điền 6 chữ số OTP vào app-otp-input bước 2 (tự động verifyOtp khi đủ 6 số)
+    const otpCells = page.locator('app-otp-input input[inputmode="numeric"]');
+    await expect(otpCells).toHaveCount(6, { timeout: 10000 });
+    for (let i = 0; i < 6; i++) {
+      await otpCells.nth(i).pressSequentially(resetOtp[i]);
+    }
 
     // 4. Bước 3: Điền mật khẩu mới và xác nhận mật khẩu
     const newPassInput = page.locator('input[formControlName="newPassword"]');
@@ -194,17 +190,17 @@ test.describe('FocusFlow Authentication E2E Suite (Duẩn UI + Mailpit + Argon2i
     await page.locator('input[formControlName="confirmPassword"]').fill(resetUser.newPassword);
 
     // Bấm xác nhận đổi mật khẩu
-    await page.locator('button.submit-button').click();
+    await page.locator('button[type="submit"]').click();
 
     // 5. Kiểm tra thông báo thành công
-    const successBanner = page.locator('.success-banner');
+    const successBanner = page.locator('app-auth-notice-banner[type="success"] [role="status"]');
     await expect(successBanner).toBeVisible({ timeout: 10000 });
 
     // 6. Đăng nhập lại với mật khẩu mới
     await page.goto('/sign-in');
     await page.locator('input[formControlName="email"]').fill(resetUser.email);
     await page.locator('input[formControlName="password"]').fill(resetUser.newPassword);
-    await page.locator('button.submit-button').click();
+    await page.locator('button[type="submit"]').click();
 
     // Thành công vào Dashboard với mật khẩu mới
     await page.waitForURL(/\/dashboard/, { timeout: 15000 });
@@ -236,21 +232,19 @@ test.describe('FocusFlow Authentication E2E Suite (Duẩn UI + Mailpit + Argon2i
     await page.locator('input[formControlName="email"]').fill(freshEmail);
     await page.locator('input[formControlName="password"]').fill('Password123!');
     await page.locator('input[formControlName="confirmPassword"]').fill('Password123!');
-    await page.locator('button.submit-button').click();
+    await page.locator('button[type="submit"]').click();
 
     await page.waitForURL(/\/verify-otp/, { timeout: 15000 });
 
-    // Cố tình nhập mã OTP sai 000000
-    const cells = page.locator('input.otp-cell');
+    // Cố tình nhập mã OTP sai 000000 (ô thứ 6 tự động kích hoạt verifyOtp)
+    const cells = page.locator('app-otp-input input[inputmode="numeric"]');
     await expect(cells).toHaveCount(6);
     for (let i = 0; i < 6; i++) {
       await cells.nth(i).pressSequentially('0');
     }
 
-    await page.locator('button.submit-button').click();
-
     // Banner lỗi phải hiển thị thông báo
-    const errorBanner = page.locator('.error-banner');
+    const errorBanner = page.locator('app-auth-notice-banner[type="error"] [role="alert"]');
     await expect(errorBanner).toBeVisible({ timeout: 10000 });
   });
 
@@ -277,10 +271,10 @@ test.describe('FocusFlow Authentication E2E Suite (Duẩn UI + Mailpit + Argon2i
 
     // 2. Mở trang verify-otp cho email này
     await page.goto(`/verify-otp?email=${encodeURIComponent(resendEmail)}&flow=register`);
-    await expect(page.locator('.email-highlight')).toContainText(resendEmail);
+    await expect(page.locator('app-otp-validation strong')).toContainText(resendEmail);
 
     // Kiểm tra đồng hồ đếm ngược cooldown hiển thị
-    const timer = page.locator('.timer-countdown');
+    const timer = page.locator('app-otp-input span.font-mono').filter({ hasText: /\d{2}:\d{2}/ });
     await expect(timer).toBeVisible();
 
     // 3. Kiểm tra gọi trực tiếp API resend-otp để kiểm tra Backend Anti-Replay

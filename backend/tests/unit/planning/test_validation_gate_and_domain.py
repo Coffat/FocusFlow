@@ -34,7 +34,7 @@ from src.planning.domain.models import (
     validate_milestone_sequence,
 )
 from src.shared_kernel.application.llm_port import LLMProviderPort
-from src.shared_kernel.infrastructure.external_ai.litellm_adapter import MockLLMAdapter
+from tests.helpers.llm_stubs import StubLLMAdapter
 
 
 def test_planning_domain_models_and_roadmap_state_machine() -> None:
@@ -336,8 +336,18 @@ class _SlowTimeoutLLM(LLMProviderPort):
         *,
         user_prompt: str | None = None,
         temperature: float = 0.2,
+        timeout_seconds: float | None = None,
+        tool_call_timeout_seconds: float | None = None,
     ) -> tuple[dict[str, Any], int, int]:
-        _ = (prompt, system_prompt, response_schema, user_prompt, temperature)
+        _ = (
+            prompt,
+            system_prompt,
+            response_schema,
+            user_prompt,
+            temperature,
+            timeout_seconds,
+            tool_call_timeout_seconds,
+        )
         await asyncio.sleep(0.25)
         return {"score": 0.9, "advisory_warnings": []}, 10, 10
 
@@ -433,7 +443,7 @@ async def test_self_correction_retry_loop_recovers_on_attempt_2() -> None:
         ],
     }
 
-    mock_llm = MockLLMAdapter(canned_responses=[bad_attempt_1, good_attempt_2])
+    mock_llm = StubLLMAdapter(canned_responses=[bad_attempt_1, good_attempt_2])
     gate = ProposalValidationGateOrchestrator(llm_provider=mock_llm)
 
     retry_callbacks: list[tuple[int, int]] = []
@@ -456,7 +466,7 @@ async def test_self_correction_retry_loop_recovers_on_attempt_2() -> None:
     assert retry_callbacks == [(1, 2)]
 
     # When all 3 attempts fail, raises ProposalValidationGateError
-    failing_llm = MockLLMAdapter(canned_responses=[bad_attempt_1, bad_attempt_1, bad_attempt_1])
+    failing_llm = StubLLMAdapter(canned_responses=[bad_attempt_1, bad_attempt_1, bad_attempt_1])
     failing_gate = ProposalValidationGateOrchestrator(llm_provider=failing_llm)
     with pytest.raises(ProposalValidationGateError) as exc_info:
         await failing_gate.generate_and_validate_proposal_with_retry(

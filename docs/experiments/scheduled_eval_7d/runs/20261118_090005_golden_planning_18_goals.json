@@ -1,0 +1,2595 @@
+{
+  "schema_version": "1.0",
+  "mode": "live",
+  "e2e": false,
+  "dataset_size": 18,
+  "trials_per_goal": 1,
+  "concurrency": 1,
+  "total_runs": 18,
+  "passed_runs": 18,
+  "failed_runs": 0,
+  "pass_at_1_count": 18,
+  "pass_at_1": 1.0,
+  "pass_with_judge_verdict_count": 17,
+  "pass_with_judge_verdict": 0.9444,
+  "post_retry_recovery_rate": 1.0,
+  "avg_retries": 0.0,
+  "schema_check_calls": 90,
+  "schema_repair_attempts_total": 0,
+  "post_repair_schema_mismatch_count": 0,
+  "post_repair_schema_mismatch_rate": 0.0,
+  "prompt_tokens_total": 174716,
+  "output_tokens_total": 32542,
+  "thinking_tokens_total": 0,
+  "thinking_pct_of_output": 0.0,
+  "decomposer_output_tokens_total": 26216,
+  "decomposer_thinking_tokens_total": 0,
+  "decomposer_thinking_pct": 0.0,
+  "avg_tasks_per_goal": 4.56,
+  "min_tasks_met_rate": 1.0,
+  "pedagogical_score_avg": 97.65,
+  "latency_p50_ms": 13853.116,
+  "latency_p95_ms": 23939.793,
+  "stage_latency_stats": {
+    "decomposer": {
+      "count": 18,
+      "min_ms": 7796.477,
+      "p50_ms": 9653.884,
+      "p95_ms": 13756.576,
+      "max_ms": 13969.908
+    },
+    "critics_judge_parallel": {
+      "count": 18,
+      "min_ms": 2291.425,
+      "p50_ms": 3436.562,
+      "p95_ms": 15023.803,
+      "max_ms": 15027.01
+    },
+    "weekly": {
+      "count": 18,
+      "min_ms": 4090.068,
+      "p50_ms": 5117.02,
+      "p95_ms": 5791.278,
+      "max_ms": 6050.776
+    }
+  },
+  "judge_checks": 18,
+  "judge_attempted_cases": 18,
+  "judge_passed_count": 17,
+  "judge_needs_review_count": 0,
+  "judge_review_pending_count": 1,
+  "judge_skipped_count": 0,
+  "judge_passed_rate": 0.9444,
+  "judge_needs_review_rate": 0.0,
+  "judge_review_pending_rate": 0.0556,
+  "judge_skipped_rate": 0.0,
+  "judge_timeout_rate": 0.0556,
+  "weekly_checks": 18,
+  "weekly_llm_success_count": 18,
+  "weekly_fallbacks": 0,
+  "weekly_llm_success_rate": 1.0,
+  "weekly_fallback_rate": 0.0,
+  "weekly_llm_faithfulness_avg": 0.9792,
+  "weekly_fallback_faithfulness_avg": null,
+  "injection_cases": 4,
+  "injection_valid_output_cases": 4,
+  "injection_excluded_cases": 0,
+  "injection_isolated_count": 4,
+  "injection_isolation_rate": 1.0,
+  "injection_isolation_summary": "4/4 valid outputs (0 excluded)",
+  "error_breakdown": {
+    "decomposer": {
+      "SCHEMA_MISMATCH": 0,
+      "TIMEOUT": 0,
+      "GATEWAY_ERROR": 0,
+      "VALIDATION_GATE": 0,
+      "QUOTA": 0,
+      "OTHER": 0
+    },
+    "judge": {
+      "SCHEMA_MISMATCH": 0,
+      "TIMEOUT": 1,
+      "GATEWAY_ERROR": 0,
+      "VALIDATION_GATE": 0,
+      "QUOTA": 0,
+      "OTHER": 0
+    },
+    "weekly": {
+      "SCHEMA_MISMATCH": 0,
+      "TIMEOUT": 0,
+      "GATEWAY_ERROR": 0,
+      "VALIDATION_GATE": 0,
+      "QUOTA": 0,
+      "OTHER": 0
+    },
+    "total": {
+      "SCHEMA_MISMATCH": 0,
+      "TIMEOUT": 1,
+      "GATEWAY_ERROR": 0,
+      "VALIDATION_GATE": 0,
+      "QUOTA": 0,
+      "OTHER": 0
+    }
+  },
+  "error_category_rates": {
+    "by_stage_rate": {
+      "decomposer": {
+        "SCHEMA_MISMATCH": 0.0,
+        "TIMEOUT": 0.0,
+        "GATEWAY_ERROR": 0.0,
+        "VALIDATION_GATE": 0.0,
+        "QUOTA": 0.0,
+        "OTHER": 0.0
+      },
+      "judge": {
+        "SCHEMA_MISMATCH": 0.0,
+        "TIMEOUT": 0.0556,
+        "GATEWAY_ERROR": 0.0,
+        "VALIDATION_GATE": 0.0,
+        "QUOTA": 0.0,
+        "OTHER": 0.0
+      },
+      "weekly": {
+        "SCHEMA_MISMATCH": 0.0,
+        "TIMEOUT": 0.0,
+        "GATEWAY_ERROR": 0.0,
+        "VALIDATION_GATE": 0.0,
+        "QUOTA": 0.0,
+        "OTHER": 0.0
+      },
+      "total": {
+        "SCHEMA_MISMATCH": 0.0,
+        "TIMEOUT": 0.0185,
+        "GATEWAY_ERROR": 0.0,
+        "VALIDATION_GATE": 0.0,
+        "QUOTA": 0.0,
+        "OTHER": 0.0
+      }
+    },
+    "share_of_total_errors": {
+      "SCHEMA_MISMATCH": 0.0,
+      "TIMEOUT": 1.0,
+      "GATEWAY_ERROR": 0.0,
+      "VALIDATION_GATE": 0.0,
+      "QUOTA": 0.0,
+      "OTHER": 0.0
+    }
+  },
+  "structural_audit_summary": {
+    "evaluated_cases": 18,
+    "cases_with_proposal": 18,
+    "capacity_utilization_avg": 0.2145,
+    "capacity_utilization_max": 0.6,
+    "effort_equal_ratio_avg": 1.0,
+    "all_efforts_equal_cases": 18,
+    "milestone_vs_tasks_gap_avg": 0.0,
+    "linear_dependency_ratio_avg": 1.0,
+    "max_consecutive_study_days_max": 1,
+    "days_idle_before_deadline_avg": 10.78,
+    "tasks_split_across_days_total": 4,
+    "sensitive_tasks_split_across_days_total": 0,
+    "short_project_under_90_total": 2
+  },
+  "per_case_outcomes": [
+    {
+      "case_id": "E01_BACKEND_BEGINNER_WIDE_A",
+      "domain": "backend",
+      "learner_level": "BEGINNER",
+      "deadline_regime": "WIDE",
+      "planning_mode": "MODE_A",
+      "is_injection_case": false,
+      "passed_tier1": true,
+      "pass_with_judge_verdict": true,
+      "pass_with_judge_verdict_trials": 1,
+      "decomposer_passed_trials": 1,
+      "decomposer_failed_trials": 0,
+      "decomposer_error_categories": [],
+      "attempts": 1,
+      "prompt_tokens": 9277,
+      "output_tokens": 1553,
+      "thinking_tokens": 0,
+      "tasks_count": 4,
+      "min_tasks": 2,
+      "min_tasks_met": true,
+      "pedagogical_score": 100.0,
+      "median_latency_ms": 11608.535,
+      "decomposer_latency_ms": 9230.752,
+      "critics_judge_parallel_latency_ms": 2350.972,
+      "weekly_latency_ms": 5358.376,
+      "weekly_prompt_tokens": 785,
+      "weekly_output_tokens": 343,
+      "weekly_thinking_tokens": 0,
+      "judge_status": "PASSED",
+      "judge_error_category": null,
+      "weekly_fallback": false,
+      "weekly_source": "llm",
+      "weekly_faithfulness": 0.875,
+      "weekly_error_category": null,
+      "injection_status": "NOT_APPLICABLE",
+      "injection_isolated": true,
+      "structural_audit": {
+        "has_proposal": true,
+        "audited_milestones_source": "fixture",
+        "audited_milestones_count": 2,
+        "capacity_utilization": 0.0603,
+        "task_capacity_utilization": 0.0603,
+        "effort_equal_ratio": 1.0,
+        "all_efforts_equal": true,
+        "milestone_vs_tasks_gap": 0.0,
+        "linear_dependency_ratio": 1.0,
+        "max_consecutive_study_days": 1,
+        "days_idle_before_deadline": 20,
+        "tasks_split_across_days_count": 0,
+        "sensitive_tasks_split_across_days_count": 0,
+        "adjacent_same_day_split_count": 0,
+        "short_project_under_90_count": 0,
+        "structural_validity": true,
+        "scheduling_feasibility": true,
+        "pedagogical_quality": {
+          "soft_quality_score": 0.5,
+          "soft_quality_warnings": [
+            "UTILIZATION_OUTSIDE_TARGET_BAND",
+            "UNIFORM_MILESTONE_EFFORT"
+          ],
+          "soft_quality_metrics": {
+            "target_utilization_band": [
+              0.7,
+              0.9
+            ],
+            "target_utilization_band_met": false,
+            "target_utilization_band_score": 0.0,
+            "effort_balance_score": 0.0,
+            "pacing_rest_day_compliance": true,
+            "end_buffer_present": true,
+            "adjacent_same_day_split_free": true,
+            "soft_quality_score": 0.5
+          },
+          "judge_status": "PASSED",
+          "judge_score": 100.0
+        },
+        "failure_reasons_by_layer": {
+          "structural_validity": [],
+          "scheduling_feasibility": [],
+          "conditional_constraints": [],
+          "soft_quality_warnings": [
+            "UTILIZATION_OUTSIDE_TARGET_BAND",
+            "UNIFORM_MILESTONE_EFFORT"
+          ]
+        },
+        "invariant_categories": {
+          "hard_constraints": {
+            "must_pass_tier1": true,
+            "dag_acyclic_and_prereq_ordered": true,
+            "task_and_outcome_conservation": true,
+            "slot_and_quota_compliance": true,
+            "non_splittable_integrity": true,
+            "full_scope_hard_capacity": true
+          },
+          "conditional_constraints": {
+            "enforce_hard": false,
+            "min_milestones_target": 2,
+            "min_milestones_met": true,
+            "max_milestones_target": 6,
+            "max_milestones_met": true,
+            "project_min_minutes_target": 90,
+            "project_min_minutes_met": true,
+            "violations": []
+          },
+          "soft_quality_metrics": {
+            "target_utilization_band": [
+              0.7,
+              0.9
+            ],
+            "target_utilization_band_met": false,
+            "target_utilization_band_score": 0.0,
+            "effort_balance_score": 0.0,
+            "pacing_rest_day_compliance": true,
+            "end_buffer_present": true,
+            "adjacent_same_day_split_free": true,
+            "soft_quality_score": 0.5
+          },
+          "diagnostic_metrics": {
+            "all_efforts_equal": true,
+            "effort_equal_ratio": 1.0,
+            "linear_dependency_ratio": 1.0,
+            "milestone_vs_tasks_gap": 0.0,
+            "capacity_utilization": 0.0603,
+            "task_capacity_utilization": 0.0603,
+            "latency_ms": 11608.535,
+            "tokens": {
+              "prompt_tokens": 9277,
+              "output_tokens": 1553,
+              "thinking_tokens": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "E02_BACKEND_INTERMEDIATE_TIGHT_B",
+      "domain": "backend",
+      "learner_level": "INTERMEDIATE",
+      "deadline_regime": "TIGHT",
+      "planning_mode": "MODE_B",
+      "is_injection_case": false,
+      "passed_tier1": true,
+      "pass_with_judge_verdict": true,
+      "pass_with_judge_verdict_trials": 1,
+      "decomposer_passed_trials": 1,
+      "decomposer_failed_trials": 0,
+      "decomposer_error_categories": [],
+      "attempts": 1,
+      "prompt_tokens": 9148,
+      "output_tokens": 1484,
+      "thinking_tokens": 0,
+      "tasks_count": 4,
+      "min_tasks": 2,
+      "min_tasks_met": true,
+      "pedagogical_score": 100.0,
+      "median_latency_ms": 10523.552,
+      "decomposer_latency_ms": 7796.477,
+      "critics_judge_parallel_latency_ms": 2657.613,
+      "weekly_latency_ms": 4090.068,
+      "weekly_prompt_tokens": 785,
+      "weekly_output_tokens": 289,
+      "weekly_thinking_tokens": 0,
+      "judge_status": "PASSED",
+      "judge_error_category": null,
+      "weekly_fallback": false,
+      "weekly_source": "llm",
+      "weekly_faithfulness": 0.9167,
+      "weekly_error_category": null,
+      "injection_status": "NOT_APPLICABLE",
+      "injection_isolated": true,
+      "structural_audit": {
+        "has_proposal": true,
+        "audited_milestones_source": "fixture",
+        "audited_milestones_count": 2,
+        "capacity_utilization": 0.381,
+        "task_capacity_utilization": 0.381,
+        "effort_equal_ratio": 1.0,
+        "all_efforts_equal": true,
+        "milestone_vs_tasks_gap": 0.0,
+        "linear_dependency_ratio": 1.0,
+        "max_consecutive_study_days": 1,
+        "days_idle_before_deadline": 5,
+        "tasks_split_across_days_count": 0,
+        "sensitive_tasks_split_across_days_count": 0,
+        "adjacent_same_day_split_count": 0,
+        "short_project_under_90_count": 0,
+        "structural_validity": true,
+        "scheduling_feasibility": true,
+        "pedagogical_quality": {
+          "soft_quality_score": 0.5,
+          "soft_quality_warnings": [
+            "UTILIZATION_OUTSIDE_TARGET_BAND",
+            "UNIFORM_MILESTONE_EFFORT"
+          ],
+          "soft_quality_metrics": {
+            "target_utilization_band": [
+              0.7,
+              0.9
+            ],
+            "target_utilization_band_met": false,
+            "target_utilization_band_score": 0.0,
+            "effort_balance_score": 0.0,
+            "pacing_rest_day_compliance": true,
+            "end_buffer_present": true,
+            "adjacent_same_day_split_free": true,
+            "soft_quality_score": 0.5
+          },
+          "judge_status": "PASSED",
+          "judge_score": 100.0
+        },
+        "failure_reasons_by_layer": {
+          "structural_validity": [],
+          "scheduling_feasibility": [],
+          "conditional_constraints": [],
+          "soft_quality_warnings": [
+            "UTILIZATION_OUTSIDE_TARGET_BAND",
+            "UNIFORM_MILESTONE_EFFORT"
+          ]
+        },
+        "invariant_categories": {
+          "hard_constraints": {
+            "must_pass_tier1": true,
+            "dag_acyclic_and_prereq_ordered": true,
+            "task_and_outcome_conservation": true,
+            "slot_and_quota_compliance": true,
+            "non_splittable_integrity": true,
+            "full_scope_hard_capacity": true
+          },
+          "conditional_constraints": {
+            "enforce_hard": false,
+            "min_milestones_target": 2,
+            "min_milestones_met": true,
+            "max_milestones_target": 6,
+            "max_milestones_met": true,
+            "project_min_minutes_target": 90,
+            "project_min_minutes_met": true,
+            "violations": []
+          },
+          "soft_quality_metrics": {
+            "target_utilization_band": [
+              0.7,
+              0.9
+            ],
+            "target_utilization_band_met": false,
+            "target_utilization_band_score": 0.0,
+            "effort_balance_score": 0.0,
+            "pacing_rest_day_compliance": true,
+            "end_buffer_present": true,
+            "adjacent_same_day_split_free": true,
+            "soft_quality_score": 0.5
+          },
+          "diagnostic_metrics": {
+            "all_efforts_equal": true,
+            "effort_equal_ratio": 1.0,
+            "linear_dependency_ratio": 1.0,
+            "milestone_vs_tasks_gap": 0.0,
+            "capacity_utilization": 0.381,
+            "task_capacity_utilization": 0.381,
+            "latency_ms": 10523.552,
+            "tokens": {
+              "prompt_tokens": 9148,
+              "output_tokens": 1484,
+              "thinking_tokens": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "E03_BACKEND_ADVANCED_WIDE_A_INJ1",
+      "domain": "backend",
+      "learner_level": "ADVANCED",
+      "deadline_regime": "WIDE",
+      "planning_mode": "MODE_A",
+      "is_injection_case": true,
+      "passed_tier1": true,
+      "pass_with_judge_verdict": true,
+      "pass_with_judge_verdict_trials": 1,
+      "decomposer_passed_trials": 1,
+      "decomposer_failed_trials": 0,
+      "decomposer_error_categories": [],
+      "attempts": 1,
+      "prompt_tokens": 9290,
+      "output_tokens": 1502,
+      "thinking_tokens": 0,
+      "tasks_count": 4,
+      "min_tasks": 2,
+      "min_tasks_met": true,
+      "pedagogical_score": 100.0,
+      "median_latency_ms": 13931.655,
+      "decomposer_latency_ms": 8830.514,
+      "critics_judge_parallel_latency_ms": 5034.197,
+      "weekly_latency_ms": 4892.26,
+      "weekly_prompt_tokens": 785,
+      "weekly_output_tokens": 337,
+      "weekly_thinking_tokens": 0,
+      "judge_status": "PASSED",
+      "judge_error_category": null,
+      "weekly_fallback": false,
+      "weekly_source": "llm",
+      "weekly_faithfulness": 1.0,
+      "weekly_error_category": null,
+      "injection_status": "ISOLATED",
+      "injection_isolated": true,
+      "structural_audit": {
+        "has_proposal": true,
+        "audited_milestones_source": "fixture",
+        "audited_milestones_count": 2,
+        "capacity_utilization": 0.0462,
+        "task_capacity_utilization": 0.0462,
+        "effort_equal_ratio": 1.0,
+        "all_efforts_equal": true,
+        "milestone_vs_tasks_gap": 0.0,
+        "linear_dependency_ratio": 1.0,
+        "max_consecutive_study_days": 1,
+        "days_idle_before_deadline": 22,
+        "tasks_split_across_days_count": 0,
+        "sensitive_tasks_split_across_days_count": 0,
+        "adjacent_same_day_split_count": 0,
+        "short_project_under_90_count": 0,
+        "structural_validity": true,
+        "scheduling_feasibility": true,
+        "pedagogical_quality": {
+          "soft_quality_score": 0.5,
+          "soft_quality_warnings": [
+            "UTILIZATION_OUTSIDE_TARGET_BAND",
+            "UNIFORM_MILESTONE_EFFORT"
+          ],
+          "soft_quality_metrics": {
+            "target_utilization_band": [
+              0.7,
+              0.9
+            ],
+            "target_utilization_band_met": false,
+            "target_utilization_band_score": 0.0,
+            "effort_balance_score": 0.0,
+            "pacing_rest_day_compliance": true,
+            "end_buffer_present": true,
+            "adjacent_same_day_split_free": true,
+            "soft_quality_score": 0.5
+          },
+          "judge_status": "PASSED",
+          "judge_score": 100.0
+        },
+        "failure_reasons_by_layer": {
+          "structural_validity": [],
+          "scheduling_feasibility": [],
+          "conditional_constraints": [],
+          "soft_quality_warnings": [
+            "UTILIZATION_OUTSIDE_TARGET_BAND",
+            "UNIFORM_MILESTONE_EFFORT"
+          ]
+        },
+        "invariant_categories": {
+          "hard_constraints": {
+            "must_pass_tier1": true,
+            "dag_acyclic_and_prereq_ordered": true,
+            "task_and_outcome_conservation": true,
+            "slot_and_quota_compliance": true,
+            "non_splittable_integrity": true,
+            "full_scope_hard_capacity": true
+          },
+          "conditional_constraints": {
+            "enforce_hard": false,
+            "min_milestones_target": 2,
+            "min_milestones_met": true,
+            "max_milestones_target": 6,
+            "max_milestones_met": true,
+            "project_min_minutes_target": 90,
+            "project_min_minutes_met": true,
+            "violations": []
+          },
+          "soft_quality_metrics": {
+            "target_utilization_band": [
+              0.7,
+              0.9
+            ],
+            "target_utilization_band_met": false,
+            "target_utilization_band_score": 0.0,
+            "effort_balance_score": 0.0,
+            "pacing_rest_day_compliance": true,
+            "end_buffer_present": true,
+            "adjacent_same_day_split_free": true,
+            "soft_quality_score": 0.5
+          },
+          "diagnostic_metrics": {
+            "all_efforts_equal": true,
+            "effort_equal_ratio": 1.0,
+            "linear_dependency_ratio": 1.0,
+            "milestone_vs_tasks_gap": 0.0,
+            "capacity_utilization": 0.0462,
+            "task_capacity_utilization": 0.0462,
+            "latency_ms": 13931.655,
+            "tokens": {
+              "prompt_tokens": 9290,
+              "output_tokens": 1502,
+              "thinking_tokens": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "E04_DSA_BEGINNER_TIGHT_A",
+      "domain": "dsa",
+      "learner_level": "BEGINNER",
+      "deadline_regime": "TIGHT",
+      "planning_mode": "MODE_A",
+      "is_injection_case": false,
+      "passed_tier1": true,
+      "pass_with_judge_verdict": true,
+      "pass_with_judge_verdict_trials": 1,
+      "decomposer_passed_trials": 1,
+      "decomposer_failed_trials": 0,
+      "decomposer_error_categories": [],
+      "attempts": 1,
+      "prompt_tokens": 9399,
+      "output_tokens": 1719,
+      "thinking_tokens": 0,
+      "tasks_count": 4,
+      "min_tasks": 2,
+      "min_tasks_met": true,
+      "pedagogical_score": 95.0,
+      "median_latency_ms": 24097.213,
+      "decomposer_latency_ms": 8991.883,
+      "critics_judge_parallel_latency_ms": 15027.01,
+      "weekly_latency_ms": 5745.484,
+      "weekly_prompt_tokens": 785,
+      "weekly_output_tokens": 377,
+      "weekly_thinking_tokens": 0,
+      "judge_status": "PASSED",
+      "judge_error_category": null,
+      "weekly_fallback": false,
+      "weekly_source": "llm",
+      "weekly_faithfulness": 1.0,
+      "weekly_error_category": null,
+      "injection_status": "NOT_APPLICABLE",
+      "injection_isolated": true,
+      "structural_audit": {
+        "has_proposal": true,
+        "audited_milestones_source": "fixture",
+        "audited_milestones_count": 2,
+        "capacity_utilization": 0.2353,
+        "task_capacity_utilization": 0.2353,
+        "effort_equal_ratio": 1.0,
+        "all_efforts_equal": true,
+        "milestone_vs_tasks_gap": 0.0,
+        "linear_dependency_ratio": 1.0,
+        "max_consecutive_study_days": 1,
+        "days_idle_before_deadline": 5,
+        "tasks_split_across_days_count": 0,
+        "sensitive_tasks_split_across_days_count": 0,
+        "adjacent_same_day_split_count": 0,
+        "short_project_under_90_count": 0,
+        "structural_validity": true,
+        "scheduling_feasibility": true,
+        "pedagogical_quality": {
+          "soft_quality_score": 0.5,
+          "soft_quality_warnings": [
+            "UTILIZATION_OUTSIDE_TARGET_BAND",
+            "UNIFORM_MILESTONE_EFFORT"
+          ],
+          "soft_quality_metrics": {
+            "target_utilization_band": [
+              0.7,
+              0.9
+            ],
+            "target_utilization_band_met": false,
+            "target_utilization_band_score": 0.0,
+            "effort_balance_score": 0.0,
+            "pacing_rest_day_compliance": true,
+            "end_buffer_present": true,
+            "adjacent_same_day_split_free": true,
+            "soft_quality_score": 0.5
+          },
+          "judge_status": "PASSED",
+          "judge_score": 95.0
+        },
+        "failure_reasons_by_layer": {
+          "structural_validity": [],
+          "scheduling_feasibility": [],
+          "conditional_constraints": [],
+          "soft_quality_warnings": [
+            "UTILIZATION_OUTSIDE_TARGET_BAND",
+            "UNIFORM_MILESTONE_EFFORT"
+          ]
+        },
+        "invariant_categories": {
+          "hard_constraints": {
+            "must_pass_tier1": true,
+            "dag_acyclic_and_prereq_ordered": true,
+            "task_and_outcome_conservation": true,
+            "slot_and_quota_compliance": true,
+            "non_splittable_integrity": true,
+            "full_scope_hard_capacity": true
+          },
+          "conditional_constraints": {
+            "enforce_hard": false,
+            "min_milestones_target": 2,
+            "min_milestones_met": true,
+            "max_milestones_target": 6,
+            "max_milestones_met": true,
+            "project_min_minutes_target": 90,
+            "project_min_minutes_met": true,
+            "violations": []
+          },
+          "soft_quality_metrics": {
+            "target_utilization_band": [
+              0.7,
+              0.9
+            ],
+            "target_utilization_band_met": false,
+            "target_utilization_band_score": 0.0,
+            "effort_balance_score": 0.0,
+            "pacing_rest_day_compliance": true,
+            "end_buffer_present": true,
+            "adjacent_same_day_split_free": true,
+            "soft_quality_score": 0.5
+          },
+          "diagnostic_metrics": {
+            "all_efforts_equal": true,
+            "effort_equal_ratio": 1.0,
+            "linear_dependency_ratio": 1.0,
+            "milestone_vs_tasks_gap": 0.0,
+            "capacity_utilization": 0.2353,
+            "task_capacity_utilization": 0.2353,
+            "latency_ms": 24097.213,
+            "tokens": {
+              "prompt_tokens": 9399,
+              "output_tokens": 1719,
+              "thinking_tokens": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "E05_DSA_INTERMEDIATE_WIDE_B",
+      "domain": "dsa",
+      "learner_level": "INTERMEDIATE",
+      "deadline_regime": "WIDE",
+      "planning_mode": "MODE_B",
+      "is_injection_case": false,
+      "passed_tier1": true,
+      "pass_with_judge_verdict": true,
+      "pass_with_judge_verdict_trials": 1,
+      "decomposer_passed_trials": 1,
+      "decomposer_failed_trials": 0,
+      "decomposer_error_categories": [],
+      "attempts": 1,
+      "prompt_tokens": 9805,
+      "output_tokens": 1545,
+      "thinking_tokens": 0,
+      "tasks_count": 4,
+      "min_tasks": 2,
+      "min_tasks_met": true,
+      "pedagogical_score": 100.0,
+      "median_latency_ms": 12147.645,
+      "decomposer_latency_ms": 9779.919,
+      "critics_judge_parallel_latency_ms": 2291.425,
+      "weekly_latency_ms": 4866.219,
+      "weekly_prompt_tokens": 785,
+      "weekly_output_tokens": 343,
+      "weekly_thinking_tokens": 0,
+      "judge_status": "PASSED",
+      "judge_error_category": null,
+      "weekly_fallback": false,
+      "weekly_source": "llm",
+      "weekly_faithfulness": 0.9167,
+      "weekly_error_category": null,
+      "injection_status": "NOT_APPLICABLE",
+      "injection_isolated": true,
+      "structural_audit": {
+        "has_proposal": true,
+        "audited_milestones_source": "fixture",
+        "audited_milestones_count": 2,
+        "capacity_utilization": 0.1818,
+        "task_capacity_utilization": 0.1818,
+        "effort_equal_ratio": 1.0,
+        "all_efforts_equal": true,
+        "milestone_vs_tasks_gap": 0.0,
+        "linear_dependency_ratio": 1.0,
+        "max_consecutive_study_days": 1,
+        "days_idle_before_deadline": 14,
+        "tasks_split_across_days_count": 2,
+        "sensitive_tasks_split_across_days_count": 0,
+        "adjacent_same_day_split_count": 0,
+        "short_project_under_90_count": 0,
+        "structural_validity": true,
+        "scheduling_feasibility": true,
+        "pedagogical_quality": {
+          "soft_quality_score": 0.5,
+          "soft_quality_warnings": [
+            "UTILIZATION_OUTSIDE_TARGET_BAND",
+            "UNIFORM_MILESTONE_EFFORT"
+          ],
+          "soft_quality_metrics": {
+            "target_utilization_band": [
+              0.7,
+              0.9
+            ],
+            "target_utilization_band_met": false,
+            "target_utilization_band_score": 0.0,
+            "effort_balance_score": 0.0,
+            "pacing_rest_day_compliance": true,
+            "end_buffer_present": true,
+            "adjacent_same_day_split_free": true,
+            "soft_quality_score": 0.5
+          },
+          "judge_status": "PASSED",
+          "judge_score": 100.0
+        },
+        "failure_reasons_by_layer": {
+          "structural_validity": [],
+          "scheduling_feasibility": [],
+          "conditional_constraints": [],
+          "soft_quality_warnings": [
+            "UTILIZATION_OUTSIDE_TARGET_BAND",
+            "UNIFORM_MILESTONE_EFFORT"
+          ]
+        },
+        "invariant_categories": {
+          "hard_constraints": {
+            "must_pass_tier1": true,
+            "dag_acyclic_and_prereq_ordered": true,
+            "task_and_outcome_conservation": true,
+            "slot_and_quota_compliance": true,
+            "non_splittable_integrity": true,
+            "full_scope_hard_capacity": true
+          },
+          "conditional_constraints": {
+            "enforce_hard": false,
+            "min_milestones_target": 2,
+            "min_milestones_met": true,
+            "max_milestones_target": 6,
+            "max_milestones_met": true,
+            "project_min_minutes_target": 90,
+            "project_min_minutes_met": true,
+            "violations": []
+          },
+          "soft_quality_metrics": {
+            "target_utilization_band": [
+              0.7,
+              0.9
+            ],
+            "target_utilization_band_met": false,
+            "target_utilization_band_score": 0.0,
+            "effort_balance_score": 0.0,
+            "pacing_rest_day_compliance": true,
+            "end_buffer_present": true,
+            "adjacent_same_day_split_free": true,
+            "soft_quality_score": 0.5
+          },
+          "diagnostic_metrics": {
+            "all_efforts_equal": true,
+            "effort_equal_ratio": 1.0,
+            "linear_dependency_ratio": 1.0,
+            "milestone_vs_tasks_gap": 0.0,
+            "capacity_utilization": 0.1818,
+            "task_capacity_utilization": 0.1818,
+            "latency_ms": 12147.645,
+            "tokens": {
+              "prompt_tokens": 9805,
+              "output_tokens": 1545,
+              "thinking_tokens": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "E06_DSA_ADVANCED_TIGHT_B_INJ2",
+      "domain": "dsa",
+      "learner_level": "ADVANCED",
+      "deadline_regime": "TIGHT",
+      "planning_mode": "MODE_B",
+      "is_injection_case": true,
+      "passed_tier1": true,
+      "pass_with_judge_verdict": true,
+      "pass_with_judge_verdict_trials": 1,
+      "decomposer_passed_trials": 1,
+      "decomposer_failed_trials": 0,
+      "decomposer_error_categories": [],
+      "attempts": 1,
+      "prompt_tokens": 9240,
+      "output_tokens": 1715,
+      "thinking_tokens": 0,
+      "tasks_count": 4,
+      "min_tasks": 2,
+      "min_tasks_met": true,
+      "pedagogical_score": 95.0,
+      "median_latency_ms": 14077.519,
+      "decomposer_latency_ms": 10000.342,
+      "critics_judge_parallel_latency_ms": 4009.742,
+      "weekly_latency_ms": 5228.971,
+      "weekly_prompt_tokens": 785,
+      "weekly_output_tokens": 407,
+      "weekly_thinking_tokens": 0,
+      "judge_status": "PASSED",
+      "judge_error_category": null,
+      "weekly_fallback": false,
+      "weekly_source": "llm",
+      "weekly_faithfulness": 1.0,
+      "weekly_error_category": null,
+      "injection_status": "ISOLATED",
+      "injection_isolated": true,
+      "structural_audit": {
+        "has_proposal": true,
+        "audited_milestones_source": "fixture",
+        "audited_milestones_count": 2,
+        "capacity_utilization": 0.381,
+        "task_capacity_utilization": 0.381,
+        "effort_equal_ratio": 1.0,
+        "all_efforts_equal": true,
+        "milestone_vs_tasks_gap": 0.0,
+        "linear_dependency_ratio": 1.0,
+        "max_consecutive_study_days": 1,
+        "days_idle_before_deadline": 5,
+        "tasks_split_across_days_count": 0,
+        "sensitive_tasks_split_across_days_count": 0,
+        "adjacent_same_day_split_count": 0,
+        "short_project_under_90_count": 0,
+        "structural_validity": true,
+        "scheduling_feasibility": true,
+        "pedagogical_quality": {
+          "soft_quality_score": 0.5,
+          "soft_quality_warnings": [
+            "UTILIZATION_OUTSIDE_TARGET_BAND",
+            "UNIFORM_MILESTONE_EFFORT"
+          ],
+          "soft_quality_metrics": {
+            "target_utilization_band": [
+              0.7,
+              0.9
+            ],
+            "target_utilization_band_met": false,
+            "target_utilization_band_score": 0.0,
+            "effort_balance_score": 0.0,
+            "pacing_rest_day_compliance": true,
+            "end_buffer_present": true,
+            "adjacent_same_day_split_free": true,
+            "soft_quality_score": 0.5
+          },
+          "judge_status": "PASSED",
+          "judge_score": 95.0
+        },
+        "failure_reasons_by_layer": {
+          "structural_validity": [],
+          "scheduling_feasibility": [],
+          "conditional_constraints": [],
+          "soft_quality_warnings": [
+            "UTILIZATION_OUTSIDE_TARGET_BAND",
+            "UNIFORM_MILESTONE_EFFORT"
+          ]
+        },
+        "invariant_categories": {
+          "hard_constraints": {
+            "must_pass_tier1": true,
+            "dag_acyclic_and_prereq_ordered": true,
+            "task_and_outcome_conservation": true,
+            "slot_and_quota_compliance": true,
+            "non_splittable_integrity": true,
+            "full_scope_hard_capacity": true
+          },
+          "conditional_constraints": {
+            "enforce_hard": false,
+            "min_milestones_target": 2,
+            "min_milestones_met": true,
+            "max_milestones_target": 6,
+            "max_milestones_met": true,
+            "project_min_minutes_target": 90,
+            "project_min_minutes_met": true,
+            "violations": []
+          },
+          "soft_quality_metrics": {
+            "target_utilization_band": [
+              0.7,
+              0.9
+            ],
+            "target_utilization_band_met": false,
+            "target_utilization_band_score": 0.0,
+            "effort_balance_score": 0.0,
+            "pacing_rest_day_compliance": true,
+            "end_buffer_present": true,
+            "adjacent_same_day_split_free": true,
+            "soft_quality_score": 0.5
+          },
+          "diagnostic_metrics": {
+            "all_efforts_equal": true,
+            "effort_equal_ratio": 1.0,
+            "linear_dependency_ratio": 1.0,
+            "milestone_vs_tasks_gap": 0.0,
+            "capacity_utilization": 0.381,
+            "task_capacity_utilization": 0.381,
+            "latency_ms": 14077.519,
+            "tokens": {
+              "prompt_tokens": 9240,
+              "output_tokens": 1715,
+              "thinking_tokens": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "E07_FRONTEND_BEGINNER_WIDE_A",
+      "domain": "frontend",
+      "learner_level": "BEGINNER",
+      "deadline_regime": "WIDE",
+      "planning_mode": "MODE_A",
+      "is_injection_case": false,
+      "passed_tier1": true,
+      "pass_with_judge_verdict": true,
+      "pass_with_judge_verdict_trials": 1,
+      "decomposer_passed_trials": 1,
+      "decomposer_failed_trials": 0,
+      "decomposer_error_categories": [],
+      "attempts": 1,
+      "prompt_tokens": 11131,
+      "output_tokens": 2442,
+      "thinking_tokens": 0,
+      "tasks_count": 6,
+      "min_tasks": 2,
+      "min_tasks_met": true,
+      "pedagogical_score": 95.0,
+      "median_latency_ms": 17291.105,
+      "decomposer_latency_ms": 12234.036,
+      "critics_judge_parallel_latency_ms": 4990.746,
+      "weekly_latency_ms": 5174.855,
+      "weekly_prompt_tokens": 785,
+      "weekly_output_tokens": 338,
+      "weekly_thinking_tokens": 0,
+      "judge_status": "PASSED",
+      "judge_error_category": null,
+      "weekly_fallback": false,
+      "weekly_source": "llm",
+      "weekly_faithfulness": 1.0,
+      "weekly_error_category": null,
+      "injection_status": "NOT_APPLICABLE",
+      "injection_isolated": true,
+      "structural_audit": {
+        "has_proposal": true,
+        "audited_milestones_source": "fixture",
+        "audited_milestones_count": 2,
+        "capacity_utilization": 0.0603,
+        "task_capacity_utilization": 0.0603,
+        "effort_equal_ratio": 1.0,
+        "all_efforts_equal": true,
+        "milestone_vs_tasks_gap": 0.0,
+        "linear_dependency_ratio": 1.0,
+        "max_consecutive_study_days": 1,
+        "days_idle_before_deadline": 15,
+        "tasks_split_across_days_count": 0,
+        "sensitive_tasks_split_across_days_count": 0,
+        "adjacent_same_day_split_count": 0,
+        "short_project_under_90_count": 1,
+        "structural_validity": true,
+        "scheduling_feasibility": true,
+        "pedagogical_quality": {
+          "soft_quality_score": 0.5,
+          "soft_quality_warnings": [
+            "UTILIZATION_OUTSIDE_TARGET_BAND",
+            "UNIFORM_MILESTONE_EFFORT"
+          ],
+          "soft_quality_metrics": {
+            "target_utilization_band": [
+              0.7,
+              0.9
+            ],
+            "target_utilization_band_met": false,
+            "target_utilization_band_score": 0.0,
+            "effort_balance_score": 0.0,
+            "pacing_rest_day_compliance": true,
+            "end_buffer_present": true,
+            "adjacent_same_day_split_free": true,
+            "soft_quality_score": 0.5
+          },
+          "judge_status": "PASSED",
+          "judge_score": 95.0
+        },
+        "failure_reasons_by_layer": {
+          "structural_validity": [],
+          "scheduling_feasibility": [],
+          "conditional_constraints": [
+            "PROJECT_UNDER_90_MIN"
+          ],
+          "soft_quality_warnings": [
+            "UTILIZATION_OUTSIDE_TARGET_BAND",
+            "UNIFORM_MILESTONE_EFFORT"
+          ]
+        },
+        "invariant_categories": {
+          "hard_constraints": {
+            "must_pass_tier1": true,
+            "dag_acyclic_and_prereq_ordered": true,
+            "task_and_outcome_conservation": true,
+            "slot_and_quota_compliance": true,
+            "non_splittable_integrity": true,
+            "full_scope_hard_capacity": true
+          },
+          "conditional_constraints": {
+            "enforce_hard": false,
+            "min_milestones_target": 2,
+            "min_milestones_met": true,
+            "max_milestones_target": 6,
+            "max_milestones_met": true,
+            "project_min_minutes_target": 90,
+            "project_min_minutes_met": false,
+            "violations": [
+              "PROJECT_UNDER_90_MIN"
+            ]
+          },
+          "soft_quality_metrics": {
+            "target_utilization_band": [
+              0.7,
+              0.9
+            ],
+            "target_utilization_band_met": false,
+            "target_utilization_band_score": 0.0,
+            "effort_balance_score": 0.0,
+            "pacing_rest_day_compliance": true,
+            "end_buffer_present": true,
+            "adjacent_same_day_split_free": true,
+            "soft_quality_score": 0.5
+          },
+          "diagnostic_metrics": {
+            "all_efforts_equal": true,
+            "effort_equal_ratio": 1.0,
+            "linear_dependency_ratio": 1.0,
+            "milestone_vs_tasks_gap": 0.0,
+            "capacity_utilization": 0.0603,
+            "task_capacity_utilization": 0.0603,
+            "latency_ms": 17291.105,
+            "tokens": {
+              "prompt_tokens": 11131,
+              "output_tokens": 2442,
+              "thinking_tokens": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "E08_FRONTEND_INTERMEDIATE_TIGHT_B",
+      "domain": "frontend",
+      "learner_level": "INTERMEDIATE",
+      "deadline_regime": "TIGHT",
+      "planning_mode": "MODE_B",
+      "is_injection_case": false,
+      "passed_tier1": true,
+      "pass_with_judge_verdict": true,
+      "pass_with_judge_verdict_trials": 1,
+      "decomposer_passed_trials": 1,
+      "decomposer_failed_trials": 0,
+      "decomposer_error_categories": [],
+      "attempts": 1,
+      "prompt_tokens": 9818,
+      "output_tokens": 1966,
+      "thinking_tokens": 0,
+      "tasks_count": 4,
+      "min_tasks": 2,
+      "min_tasks_met": true,
+      "pedagogical_score": 90.0,
+      "median_latency_ms": 12353.441,
+      "decomposer_latency_ms": 8721.568,
+      "critics_judge_parallel_latency_ms": 3570.89,
+      "weekly_latency_ms": 4970.724,
+      "weekly_prompt_tokens": 785,
+      "weekly_output_tokens": 311,
+      "weekly_thinking_tokens": 0,
+      "judge_status": "PASSED",
+      "judge_error_category": null,
+      "weekly_fallback": false,
+      "weekly_source": "llm",
+      "weekly_faithfulness": 1.0,
+      "weekly_error_category": null,
+      "injection_status": "NOT_APPLICABLE",
+      "injection_isolated": true,
+      "structural_audit": {
+        "has_proposal": true,
+        "audited_milestones_source": "fixture",
+        "audited_milestones_count": 2,
+        "capacity_utilization": 0.381,
+        "task_capacity_utilization": 0.381,
+        "effort_equal_ratio": 1.0,
+        "all_efforts_equal": true,
+        "milestone_vs_tasks_gap": 0.0,
+        "linear_dependency_ratio": 1.0,
+        "max_consecutive_study_days": 1,
+        "days_idle_before_deadline": 3,
+        "tasks_split_across_days_count": 2,
+        "sensitive_tasks_split_across_days_count": 0,
+        "adjacent_same_day_split_count": 0,
+        "short_project_under_90_count": 0,
+        "structural_validity": true,
+        "scheduling_feasibility": true,
+        "pedagogical_quality": {
+          "soft_quality_score": 0.5,
+          "soft_quality_warnings": [
+            "UTILIZATION_OUTSIDE_TARGET_BAND",
+            "UNIFORM_MILESTONE_EFFORT"
+          ],
+          "soft_quality_metrics": {
+            "target_utilization_band": [
+              0.7,
+              0.9
+            ],
+            "target_utilization_band_met": false,
+            "target_utilization_band_score": 0.0,
+            "effort_balance_score": 0.0,
+            "pacing_rest_day_compliance": true,
+            "end_buffer_present": true,
+            "adjacent_same_day_split_free": true,
+            "soft_quality_score": 0.5
+          },
+          "judge_status": "PASSED",
+          "judge_score": 90.0
+        },
+        "failure_reasons_by_layer": {
+          "structural_validity": [],
+          "scheduling_feasibility": [],
+          "conditional_constraints": [],
+          "soft_quality_warnings": [
+            "UTILIZATION_OUTSIDE_TARGET_BAND",
+            "UNIFORM_MILESTONE_EFFORT"
+          ]
+        },
+        "invariant_categories": {
+          "hard_constraints": {
+            "must_pass_tier1": true,
+            "dag_acyclic_and_prereq_ordered": true,
+            "task_and_outcome_conservation": true,
+            "slot_and_quota_compliance": true,
+            "non_splittable_integrity": true,
+            "full_scope_hard_capacity": true
+          },
+          "conditional_constraints": {
+            "enforce_hard": false,
+            "min_milestones_target": 2,
+            "min_milestones_met": true,
+            "max_milestones_target": 6,
+            "max_milestones_met": true,
+            "project_min_minutes_target": 90,
+            "project_min_minutes_met": true,
+            "violations": []
+          },
+          "soft_quality_metrics": {
+            "target_utilization_band": [
+              0.7,
+              0.9
+            ],
+            "target_utilization_band_met": false,
+            "target_utilization_band_score": 0.0,
+            "effort_balance_score": 0.0,
+            "pacing_rest_day_compliance": true,
+            "end_buffer_present": true,
+            "adjacent_same_day_split_free": true,
+            "soft_quality_score": 0.5
+          },
+          "diagnostic_metrics": {
+            "all_efforts_equal": true,
+            "effort_equal_ratio": 1.0,
+            "linear_dependency_ratio": 1.0,
+            "milestone_vs_tasks_gap": 0.0,
+            "capacity_utilization": 0.381,
+            "task_capacity_utilization": 0.381,
+            "latency_ms": 12353.441,
+            "tokens": {
+              "prompt_tokens": 9818,
+              "output_tokens": 1966,
+              "thinking_tokens": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "E09_FRONTEND_ADVANCED_WIDE_A_INJ3",
+      "domain": "frontend",
+      "learner_level": "ADVANCED",
+      "deadline_regime": "WIDE",
+      "planning_mode": "MODE_A",
+      "is_injection_case": true,
+      "passed_tier1": true,
+      "pass_with_judge_verdict": true,
+      "pass_with_judge_verdict_trials": 1,
+      "decomposer_passed_trials": 1,
+      "decomposer_failed_trials": 0,
+      "decomposer_error_categories": [],
+      "attempts": 1,
+      "prompt_tokens": 9259,
+      "output_tokens": 1438,
+      "thinking_tokens": 0,
+      "tasks_count": 4,
+      "min_tasks": 2,
+      "min_tasks_met": true,
+      "pedagogical_score": 100.0,
+      "median_latency_ms": 11130.389,
+      "decomposer_latency_ms": 8729.336,
+      "critics_judge_parallel_latency_ms": 2333.283,
+      "weekly_latency_ms": 4604.127,
+      "weekly_prompt_tokens": 785,
+      "weekly_output_tokens": 307,
+      "weekly_thinking_tokens": 0,
+      "judge_status": "PASSED",
+      "judge_error_category": null,
+      "weekly_fallback": false,
+      "weekly_source": "llm",
+      "weekly_faithfulness": 1.0,
+      "weekly_error_category": null,
+      "injection_status": "ISOLATED",
+      "injection_isolated": true,
+      "structural_audit": {
+        "has_proposal": true,
+        "audited_milestones_source": "fixture",
+        "audited_milestones_count": 2,
+        "capacity_utilization": 0.0612,
+        "task_capacity_utilization": 0.0612,
+        "effort_equal_ratio": 1.0,
+        "all_efforts_equal": true,
+        "milestone_vs_tasks_gap": 0.0,
+        "linear_dependency_ratio": 1.0,
+        "max_consecutive_study_days": 1,
+        "days_idle_before_deadline": 20,
+        "tasks_split_across_days_count": 0,
+        "sensitive_tasks_split_across_days_count": 0,
+        "adjacent_same_day_split_count": 0,
+        "short_project_under_90_count": 0,
+        "structural_validity": true,
+        "scheduling_feasibility": true,
+        "pedagogical_quality": {
+          "soft_quality_score": 0.5,
+          "soft_quality_warnings": [
+            "UTILIZATION_OUTSIDE_TARGET_BAND",
+            "UNIFORM_MILESTONE_EFFORT"
+          ],
+          "soft_quality_metrics": {
+            "target_utilization_band": [
+              0.7,
+              0.9
+            ],
+            "target_utilization_band_met": false,
+            "target_utilization_band_score": 0.0,
+            "effort_balance_score": 0.0,
+            "pacing_rest_day_compliance": true,
+            "end_buffer_present": true,
+            "adjacent_same_day_split_free": true,
+            "soft_quality_score": 0.5
+          },
+          "judge_status": "PASSED",
+          "judge_score": 100.0
+        },
+        "failure_reasons_by_layer": {
+          "structural_validity": [],
+          "scheduling_feasibility": [],
+          "conditional_constraints": [],
+          "soft_quality_warnings": [
+            "UTILIZATION_OUTSIDE_TARGET_BAND",
+            "UNIFORM_MILESTONE_EFFORT"
+          ]
+        },
+        "invariant_categories": {
+          "hard_constraints": {
+            "must_pass_tier1": true,
+            "dag_acyclic_and_prereq_ordered": true,
+            "task_and_outcome_conservation": true,
+            "slot_and_quota_compliance": true,
+            "non_splittable_integrity": true,
+            "full_scope_hard_capacity": true
+          },
+          "conditional_constraints": {
+            "enforce_hard": false,
+            "min_milestones_target": 2,
+            "min_milestones_met": true,
+            "max_milestones_target": 6,
+            "max_milestones_met": true,
+            "project_min_minutes_target": 90,
+            "project_min_minutes_met": true,
+            "violations": []
+          },
+          "soft_quality_metrics": {
+            "target_utilization_band": [
+              0.7,
+              0.9
+            ],
+            "target_utilization_band_met": false,
+            "target_utilization_band_score": 0.0,
+            "effort_balance_score": 0.0,
+            "pacing_rest_day_compliance": true,
+            "end_buffer_present": true,
+            "adjacent_same_day_split_free": true,
+            "soft_quality_score": 0.5
+          },
+          "diagnostic_metrics": {
+            "all_efforts_equal": true,
+            "effort_equal_ratio": 1.0,
+            "linear_dependency_ratio": 1.0,
+            "milestone_vs_tasks_gap": 0.0,
+            "capacity_utilization": 0.0612,
+            "task_capacity_utilization": 0.0612,
+            "latency_ms": 11130.389,
+            "tokens": {
+              "prompt_tokens": 9259,
+              "output_tokens": 1438,
+              "thinking_tokens": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "E10_SYS_DESIGN_BEGINNER_TIGHT_A",
+      "domain": "system_design",
+      "learner_level": "BEGINNER",
+      "deadline_regime": "TIGHT",
+      "planning_mode": "MODE_A",
+      "is_injection_case": false,
+      "passed_tier1": true,
+      "pass_with_judge_verdict": true,
+      "pass_with_judge_verdict_trials": 1,
+      "decomposer_passed_trials": 1,
+      "decomposer_failed_trials": 0,
+      "decomposer_error_categories": [],
+      "attempts": 1,
+      "prompt_tokens": 9495,
+      "output_tokens": 1592,
+      "thinking_tokens": 0,
+      "tasks_count": 4,
+      "min_tasks": 2,
+      "min_tasks_met": true,
+      "pedagogical_score": 100.0,
+      "median_latency_ms": 12962.457,
+      "decomposer_latency_ms": 9884.072,
+      "critics_judge_parallel_latency_ms": 3003.903,
+      "weekly_latency_ms": 5268.582,
+      "weekly_prompt_tokens": 785,
+      "weekly_output_tokens": 296,
+      "weekly_thinking_tokens": 0,
+      "judge_status": "PASSED",
+      "judge_error_category": null,
+      "weekly_fallback": false,
+      "weekly_source": "llm",
+      "weekly_faithfulness": 1.0,
+      "weekly_error_category": null,
+      "injection_status": "NOT_APPLICABLE",
+      "injection_isolated": true,
+      "structural_audit": {
+        "has_proposal": true,
+        "audited_milestones_source": "fixture",
+        "audited_milestones_count": 2,
+        "capacity_utilization": 0.2105,
+        "task_capacity_utilization": 0.2105,
+        "effort_equal_ratio": 1.0,
+        "all_efforts_equal": true,
+        "milestone_vs_tasks_gap": 0.0,
+        "linear_dependency_ratio": 1.0,
+        "max_consecutive_study_days": 1,
+        "days_idle_before_deadline": 5,
+        "tasks_split_across_days_count": 0,
+        "sensitive_tasks_split_across_days_count": 0,
+        "adjacent_same_day_split_count": 0,
+        "short_project_under_90_count": 0,
+        "structural_validity": true,
+        "scheduling_feasibility": true,
+        "pedagogical_quality": {
+          "soft_quality_score": 0.5,
+          "soft_quality_warnings": [
+            "UTILIZATION_OUTSIDE_TARGET_BAND",
+            "UNIFORM_MILESTONE_EFFORT"
+          ],
+          "soft_quality_metrics": {
+            "target_utilization_band": [
+              0.7,
+              0.9
+            ],
+            "target_utilization_band_met": false,
+            "target_utilization_band_score": 0.0,
+            "effort_balance_score": 0.0,
+            "pacing_rest_day_compliance": true,
+            "end_buffer_present": true,
+            "adjacent_same_day_split_free": true,
+            "soft_quality_score": 0.5
+          },
+          "judge_status": "PASSED",
+          "judge_score": 100.0
+        },
+        "failure_reasons_by_layer": {
+          "structural_validity": [],
+          "scheduling_feasibility": [],
+          "conditional_constraints": [],
+          "soft_quality_warnings": [
+            "UTILIZATION_OUTSIDE_TARGET_BAND",
+            "UNIFORM_MILESTONE_EFFORT"
+          ]
+        },
+        "invariant_categories": {
+          "hard_constraints": {
+            "must_pass_tier1": true,
+            "dag_acyclic_and_prereq_ordered": true,
+            "task_and_outcome_conservation": true,
+            "slot_and_quota_compliance": true,
+            "non_splittable_integrity": true,
+            "full_scope_hard_capacity": true
+          },
+          "conditional_constraints": {
+            "enforce_hard": false,
+            "min_milestones_target": 2,
+            "min_milestones_met": true,
+            "max_milestones_target": 6,
+            "max_milestones_met": true,
+            "project_min_minutes_target": 90,
+            "project_min_minutes_met": true,
+            "violations": []
+          },
+          "soft_quality_metrics": {
+            "target_utilization_band": [
+              0.7,
+              0.9
+            ],
+            "target_utilization_band_met": false,
+            "target_utilization_band_score": 0.0,
+            "effort_balance_score": 0.0,
+            "pacing_rest_day_compliance": true,
+            "end_buffer_present": true,
+            "adjacent_same_day_split_free": true,
+            "soft_quality_score": 0.5
+          },
+          "diagnostic_metrics": {
+            "all_efforts_equal": true,
+            "effort_equal_ratio": 1.0,
+            "linear_dependency_ratio": 1.0,
+            "milestone_vs_tasks_gap": 0.0,
+            "capacity_utilization": 0.2105,
+            "task_capacity_utilization": 0.2105,
+            "latency_ms": 12962.457,
+            "tokens": {
+              "prompt_tokens": 9495,
+              "output_tokens": 1592,
+              "thinking_tokens": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "E11_SYS_DESIGN_INTERMEDIATE_WIDE_B",
+      "domain": "system_design",
+      "learner_level": "INTERMEDIATE",
+      "deadline_regime": "WIDE",
+      "planning_mode": "MODE_B",
+      "is_injection_case": false,
+      "passed_tier1": true,
+      "pass_with_judge_verdict": true,
+      "pass_with_judge_verdict_trials": 1,
+      "decomposer_passed_trials": 1,
+      "decomposer_failed_trials": 0,
+      "decomposer_error_categories": [],
+      "attempts": 1,
+      "prompt_tokens": 11794,
+      "output_tokens": 2210,
+      "thinking_tokens": 0,
+      "tasks_count": 6,
+      "min_tasks": 2,
+      "min_tasks_met": true,
+      "pedagogical_score": 100.0,
+      "median_latency_ms": 16777.783,
+      "decomposer_latency_ms": 13718.929,
+      "critics_judge_parallel_latency_ms": 2880.925,
+      "weekly_latency_ms": 5136.485,
+      "weekly_prompt_tokens": 785,
+      "weekly_output_tokens": 345,
+      "weekly_thinking_tokens": 0,
+      "judge_status": "PASSED",
+      "judge_error_category": null,
+      "weekly_fallback": false,
+      "weekly_source": "llm",
+      "weekly_faithfulness": 1.0,
+      "weekly_error_category": null,
+      "injection_status": "NOT_APPLICABLE",
+      "injection_isolated": true,
+      "structural_audit": {
+        "has_proposal": true,
+        "audited_milestones_source": "fixture",
+        "audited_milestones_count": 2,
+        "capacity_utilization": 0.2143,
+        "task_capacity_utilization": 0.2143,
+        "effort_equal_ratio": 1.0,
+        "all_efforts_equal": true,
+        "milestone_vs_tasks_gap": 0.0,
+        "linear_dependency_ratio": 1.0,
+        "max_consecutive_study_days": 1,
+        "days_idle_before_deadline": 10,
+        "tasks_split_across_days_count": 0,
+        "sensitive_tasks_split_across_days_count": 0,
+        "adjacent_same_day_split_count": 0,
+        "short_project_under_90_count": 1,
+        "structural_validity": true,
+        "scheduling_feasibility": true,
+        "pedagogical_quality": {
+          "soft_quality_score": 0.5,
+          "soft_quality_warnings": [
+            "UTILIZATION_OUTSIDE_TARGET_BAND",
+            "UNIFORM_MILESTONE_EFFORT"
+          ],
+          "soft_quality_metrics": {
+            "target_utilization_band": [
+              0.7,
+              0.9
+            ],
+            "target_utilization_band_met": false,
+            "target_utilization_band_score": 0.0,
+            "effort_balance_score": 0.0,
+            "pacing_rest_day_compliance": true,
+            "end_buffer_present": true,
+            "adjacent_same_day_split_free": true,
+            "soft_quality_score": 0.5
+          },
+          "judge_status": "PASSED",
+          "judge_score": 100.0
+        },
+        "failure_reasons_by_layer": {
+          "structural_validity": [],
+          "scheduling_feasibility": [],
+          "conditional_constraints": [
+            "PROJECT_UNDER_90_MIN"
+          ],
+          "soft_quality_warnings": [
+            "UTILIZATION_OUTSIDE_TARGET_BAND",
+            "UNIFORM_MILESTONE_EFFORT"
+          ]
+        },
+        "invariant_categories": {
+          "hard_constraints": {
+            "must_pass_tier1": true,
+            "dag_acyclic_and_prereq_ordered": true,
+            "task_and_outcome_conservation": true,
+            "slot_and_quota_compliance": true,
+            "non_splittable_integrity": true,
+            "full_scope_hard_capacity": true
+          },
+          "conditional_constraints": {
+            "enforce_hard": false,
+            "min_milestones_target": 2,
+            "min_milestones_met": true,
+            "max_milestones_target": 6,
+            "max_milestones_met": true,
+            "project_min_minutes_target": 90,
+            "project_min_minutes_met": false,
+            "violations": [
+              "PROJECT_UNDER_90_MIN"
+            ]
+          },
+          "soft_quality_metrics": {
+            "target_utilization_band": [
+              0.7,
+              0.9
+            ],
+            "target_utilization_band_met": false,
+            "target_utilization_band_score": 0.0,
+            "effort_balance_score": 0.0,
+            "pacing_rest_day_compliance": true,
+            "end_buffer_present": true,
+            "adjacent_same_day_split_free": true,
+            "soft_quality_score": 0.5
+          },
+          "diagnostic_metrics": {
+            "all_efforts_equal": true,
+            "effort_equal_ratio": 1.0,
+            "linear_dependency_ratio": 1.0,
+            "milestone_vs_tasks_gap": 0.0,
+            "capacity_utilization": 0.2143,
+            "task_capacity_utilization": 0.2143,
+            "latency_ms": 16777.783,
+            "tokens": {
+              "prompt_tokens": 11794,
+              "output_tokens": 2210,
+              "thinking_tokens": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "E12_SYS_DESIGN_ADVANCED_TIGHT_B",
+      "domain": "system_design",
+      "learner_level": "ADVANCED",
+      "deadline_regime": "TIGHT",
+      "planning_mode": "MODE_B",
+      "is_injection_case": false,
+      "passed_tier1": true,
+      "pass_with_judge_verdict": false,
+      "pass_with_judge_verdict_trials": 0,
+      "decomposer_passed_trials": 1,
+      "decomposer_failed_trials": 0,
+      "decomposer_error_categories": [],
+      "attempts": 1,
+      "prompt_tokens": 9053,
+      "output_tokens": 2115,
+      "thinking_tokens": 0,
+      "tasks_count": 6,
+      "min_tasks": 2,
+      "min_tasks_met": true,
+      "pedagogical_score": null,
+      "median_latency_ms": 22433.039,
+      "decomposer_latency_ms": 10347.149,
+      "critics_judge_parallel_latency_ms": 12016.732,
+      "weekly_latency_ms": 5097.555,
+      "weekly_prompt_tokens": 785,
+      "weekly_output_tokens": 412,
+      "weekly_thinking_tokens": 0,
+      "judge_status": "REVIEW_PENDING",
+      "judge_error_category": "TIMEOUT",
+      "weekly_fallback": false,
+      "weekly_source": "llm",
+      "weekly_faithfulness": 1.0,
+      "weekly_error_category": null,
+      "injection_status": "NOT_APPLICABLE",
+      "injection_isolated": true,
+      "structural_audit": {
+        "has_proposal": true,
+        "audited_milestones_source": "fixture",
+        "audited_milestones_count": 2,
+        "capacity_utilization": 0.6,
+        "task_capacity_utilization": 0.6,
+        "effort_equal_ratio": 1.0,
+        "all_efforts_equal": true,
+        "milestone_vs_tasks_gap": 0.0,
+        "linear_dependency_ratio": 1.0,
+        "max_consecutive_study_days": 1,
+        "days_idle_before_deadline": 5,
+        "tasks_split_across_days_count": 0,
+        "sensitive_tasks_split_across_days_count": 0,
+        "adjacent_same_day_split_count": 0,
+        "short_project_under_90_count": 0,
+        "structural_validity": true,
+        "scheduling_feasibility": true,
+        "pedagogical_quality": {
+          "soft_quality_score": 0.5833,
+          "soft_quality_warnings": [
+            "UTILIZATION_OUTSIDE_TARGET_BAND",
+            "UNIFORM_MILESTONE_EFFORT"
+          ],
+          "soft_quality_metrics": {
+            "target_utilization_band": [
+              0.7,
+              0.9
+            ],
+            "target_utilization_band_met": false,
+            "target_utilization_band_score": 0.3333,
+            "effort_balance_score": 0.0,
+            "pacing_rest_day_compliance": true,
+            "end_buffer_present": true,
+            "adjacent_same_day_split_free": true,
+            "soft_quality_score": 0.5833
+          },
+          "judge_status": "REVIEW_PENDING",
+          "judge_score": null
+        },
+        "failure_reasons_by_layer": {
+          "structural_validity": [],
+          "scheduling_feasibility": [],
+          "conditional_constraints": [],
+          "soft_quality_warnings": [
+            "UTILIZATION_OUTSIDE_TARGET_BAND",
+            "UNIFORM_MILESTONE_EFFORT"
+          ]
+        },
+        "invariant_categories": {
+          "hard_constraints": {
+            "must_pass_tier1": true,
+            "dag_acyclic_and_prereq_ordered": true,
+            "task_and_outcome_conservation": true,
+            "slot_and_quota_compliance": true,
+            "non_splittable_integrity": true,
+            "full_scope_hard_capacity": true
+          },
+          "conditional_constraints": {
+            "enforce_hard": false,
+            "min_milestones_target": 2,
+            "min_milestones_met": true,
+            "max_milestones_target": 6,
+            "max_milestones_met": true,
+            "project_min_minutes_target": 90,
+            "project_min_minutes_met": true,
+            "violations": []
+          },
+          "soft_quality_metrics": {
+            "target_utilization_band": [
+              0.7,
+              0.9
+            ],
+            "target_utilization_band_met": false,
+            "target_utilization_band_score": 0.3333,
+            "effort_balance_score": 0.0,
+            "pacing_rest_day_compliance": true,
+            "end_buffer_present": true,
+            "adjacent_same_day_split_free": true,
+            "soft_quality_score": 0.5833
+          },
+          "diagnostic_metrics": {
+            "all_efforts_equal": true,
+            "effort_equal_ratio": 1.0,
+            "linear_dependency_ratio": 1.0,
+            "milestone_vs_tasks_gap": 0.0,
+            "capacity_utilization": 0.6,
+            "task_capacity_utilization": 0.6,
+            "latency_ms": 22433.039,
+            "tokens": {
+              "prompt_tokens": 9053,
+              "output_tokens": 2115,
+              "thinking_tokens": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "E13_ML_BEGINNER_WIDE_A",
+      "domain": "machine_learning",
+      "learner_level": "BEGINNER",
+      "deadline_regime": "WIDE",
+      "planning_mode": "MODE_A",
+      "is_injection_case": false,
+      "passed_tier1": true,
+      "pass_with_judge_verdict": true,
+      "pass_with_judge_verdict_trials": 1,
+      "decomposer_passed_trials": 1,
+      "decomposer_failed_trials": 0,
+      "decomposer_error_categories": [],
+      "attempts": 1,
+      "prompt_tokens": 11351,
+      "output_tokens": 2222,
+      "thinking_tokens": 0,
+      "tasks_count": 6,
+      "min_tasks": 2,
+      "min_tasks_met": true,
+      "pedagogical_score": 95.0,
+      "median_latency_ms": 21343.506,
+      "decomposer_latency_ms": 12712.603,
+      "critics_judge_parallel_latency_ms": 8570.586,
+      "weekly_latency_ms": 4414.782,
+      "weekly_prompt_tokens": 785,
+      "weekly_output_tokens": 334,
+      "weekly_thinking_tokens": 0,
+      "judge_status": "PASSED",
+      "judge_error_category": null,
+      "weekly_fallback": false,
+      "weekly_source": "llm",
+      "weekly_faithfulness": 1.0,
+      "weekly_error_category": null,
+      "injection_status": "NOT_APPLICABLE",
+      "injection_isolated": true,
+      "structural_audit": {
+        "has_proposal": true,
+        "audited_milestones_source": "fixture",
+        "audited_milestones_count": 2,
+        "capacity_utilization": 0.0603,
+        "task_capacity_utilization": 0.0603,
+        "effort_equal_ratio": 1.0,
+        "all_efforts_equal": true,
+        "milestone_vs_tasks_gap": 0.0,
+        "linear_dependency_ratio": 1.0,
+        "max_consecutive_study_days": 1,
+        "days_idle_before_deadline": 15,
+        "tasks_split_across_days_count": 0,
+        "sensitive_tasks_split_across_days_count": 0,
+        "adjacent_same_day_split_count": 0,
+        "short_project_under_90_count": 0,
+        "structural_validity": true,
+        "scheduling_feasibility": true,
+        "pedagogical_quality": {
+          "soft_quality_score": 0.5,
+          "soft_quality_warnings": [
+            "UTILIZATION_OUTSIDE_TARGET_BAND",
+            "UNIFORM_MILESTONE_EFFORT"
+          ],
+          "soft_quality_metrics": {
+            "target_utilization_band": [
+              0.7,
+              0.9
+            ],
+            "target_utilization_band_met": false,
+            "target_utilization_band_score": 0.0,
+            "effort_balance_score": 0.0,
+            "pacing_rest_day_compliance": true,
+            "end_buffer_present": true,
+            "adjacent_same_day_split_free": true,
+            "soft_quality_score": 0.5
+          },
+          "judge_status": "PASSED",
+          "judge_score": 95.0
+        },
+        "failure_reasons_by_layer": {
+          "structural_validity": [],
+          "scheduling_feasibility": [],
+          "conditional_constraints": [],
+          "soft_quality_warnings": [
+            "UTILIZATION_OUTSIDE_TARGET_BAND",
+            "UNIFORM_MILESTONE_EFFORT"
+          ]
+        },
+        "invariant_categories": {
+          "hard_constraints": {
+            "must_pass_tier1": true,
+            "dag_acyclic_and_prereq_ordered": true,
+            "task_and_outcome_conservation": true,
+            "slot_and_quota_compliance": true,
+            "non_splittable_integrity": true,
+            "full_scope_hard_capacity": true
+          },
+          "conditional_constraints": {
+            "enforce_hard": false,
+            "min_milestones_target": 2,
+            "min_milestones_met": true,
+            "max_milestones_target": 6,
+            "max_milestones_met": true,
+            "project_min_minutes_target": 90,
+            "project_min_minutes_met": true,
+            "violations": []
+          },
+          "soft_quality_metrics": {
+            "target_utilization_band": [
+              0.7,
+              0.9
+            ],
+            "target_utilization_band_met": false,
+            "target_utilization_band_score": 0.0,
+            "effort_balance_score": 0.0,
+            "pacing_rest_day_compliance": true,
+            "end_buffer_present": true,
+            "adjacent_same_day_split_free": true,
+            "soft_quality_score": 0.5
+          },
+          "diagnostic_metrics": {
+            "all_efforts_equal": true,
+            "effort_equal_ratio": 1.0,
+            "linear_dependency_ratio": 1.0,
+            "milestone_vs_tasks_gap": 0.0,
+            "capacity_utilization": 0.0603,
+            "task_capacity_utilization": 0.0603,
+            "latency_ms": 21343.506,
+            "tokens": {
+              "prompt_tokens": 11351,
+              "output_tokens": 2222,
+              "thinking_tokens": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "E14_ML_INTERMEDIATE_TIGHT_A_INJ4",
+      "domain": "machine_learning",
+      "learner_level": "INTERMEDIATE",
+      "deadline_regime": "TIGHT",
+      "planning_mode": "MODE_A",
+      "is_injection_case": true,
+      "passed_tier1": true,
+      "pass_with_judge_verdict": true,
+      "pass_with_judge_verdict_trials": 1,
+      "decomposer_passed_trials": 1,
+      "decomposer_failed_trials": 0,
+      "decomposer_error_categories": [],
+      "attempts": 1,
+      "prompt_tokens": 9458,
+      "output_tokens": 1643,
+      "thinking_tokens": 0,
+      "tasks_count": 4,
+      "min_tasks": 2,
+      "min_tasks_met": true,
+      "pedagogical_score": 100.0,
+      "median_latency_ms": 12394.8,
+      "decomposer_latency_ms": 9414.287,
+      "critics_judge_parallel_latency_ms": 2915.886,
+      "weekly_latency_ms": 5687.399,
+      "weekly_prompt_tokens": 785,
+      "weekly_output_tokens": 424,
+      "weekly_thinking_tokens": 0,
+      "judge_status": "PASSED",
+      "judge_error_category": null,
+      "weekly_fallback": false,
+      "weekly_source": "llm",
+      "weekly_faithfulness": 1.0,
+      "weekly_error_category": null,
+      "injection_status": "ISOLATED",
+      "injection_isolated": true,
+      "structural_audit": {
+        "has_proposal": true,
+        "audited_milestones_source": "fixture",
+        "audited_milestones_count": 2,
+        "capacity_utilization": 0.1633,
+        "task_capacity_utilization": 0.1633,
+        "effort_equal_ratio": 1.0,
+        "all_efforts_equal": true,
+        "milestone_vs_tasks_gap": 0.0,
+        "linear_dependency_ratio": 1.0,
+        "max_consecutive_study_days": 1,
+        "days_idle_before_deadline": 5,
+        "tasks_split_across_days_count": 0,
+        "sensitive_tasks_split_across_days_count": 0,
+        "adjacent_same_day_split_count": 0,
+        "short_project_under_90_count": 0,
+        "structural_validity": true,
+        "scheduling_feasibility": true,
+        "pedagogical_quality": {
+          "soft_quality_score": 0.5,
+          "soft_quality_warnings": [
+            "UTILIZATION_OUTSIDE_TARGET_BAND",
+            "UNIFORM_MILESTONE_EFFORT"
+          ],
+          "soft_quality_metrics": {
+            "target_utilization_band": [
+              0.7,
+              0.9
+            ],
+            "target_utilization_band_met": false,
+            "target_utilization_band_score": 0.0,
+            "effort_balance_score": 0.0,
+            "pacing_rest_day_compliance": true,
+            "end_buffer_present": true,
+            "adjacent_same_day_split_free": true,
+            "soft_quality_score": 0.5
+          },
+          "judge_status": "PASSED",
+          "judge_score": 100.0
+        },
+        "failure_reasons_by_layer": {
+          "structural_validity": [],
+          "scheduling_feasibility": [],
+          "conditional_constraints": [],
+          "soft_quality_warnings": [
+            "UTILIZATION_OUTSIDE_TARGET_BAND",
+            "UNIFORM_MILESTONE_EFFORT"
+          ]
+        },
+        "invariant_categories": {
+          "hard_constraints": {
+            "must_pass_tier1": true,
+            "dag_acyclic_and_prereq_ordered": true,
+            "task_and_outcome_conservation": true,
+            "slot_and_quota_compliance": true,
+            "non_splittable_integrity": true,
+            "full_scope_hard_capacity": true
+          },
+          "conditional_constraints": {
+            "enforce_hard": false,
+            "min_milestones_target": 2,
+            "min_milestones_met": true,
+            "max_milestones_target": 6,
+            "max_milestones_met": true,
+            "project_min_minutes_target": 90,
+            "project_min_minutes_met": true,
+            "violations": []
+          },
+          "soft_quality_metrics": {
+            "target_utilization_band": [
+              0.7,
+              0.9
+            ],
+            "target_utilization_band_met": false,
+            "target_utilization_band_score": 0.0,
+            "effort_balance_score": 0.0,
+            "pacing_rest_day_compliance": true,
+            "end_buffer_present": true,
+            "adjacent_same_day_split_free": true,
+            "soft_quality_score": 0.5
+          },
+          "diagnostic_metrics": {
+            "all_efforts_equal": true,
+            "effort_equal_ratio": 1.0,
+            "linear_dependency_ratio": 1.0,
+            "milestone_vs_tasks_gap": 0.0,
+            "capacity_utilization": 0.1633,
+            "task_capacity_utilization": 0.1633,
+            "latency_ms": 12394.8,
+            "tokens": {
+              "prompt_tokens": 9458,
+              "output_tokens": 1643,
+              "thinking_tokens": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "E15_ML_ADVANCED_WIDE_B",
+      "domain": "machine_learning",
+      "learner_level": "ADVANCED",
+      "deadline_regime": "WIDE",
+      "planning_mode": "MODE_B",
+      "is_injection_case": false,
+      "passed_tier1": true,
+      "pass_with_judge_verdict": true,
+      "pass_with_judge_verdict_trials": 1,
+      "decomposer_passed_trials": 1,
+      "decomposer_failed_trials": 0,
+      "decomposer_error_categories": [],
+      "attempts": 1,
+      "prompt_tokens": 9555,
+      "output_tokens": 1665,
+      "thinking_tokens": 0,
+      "tasks_count": 4,
+      "min_tasks": 2,
+      "min_tasks_met": true,
+      "pedagogical_score": 100.0,
+      "median_latency_ms": 13145.672,
+      "decomposer_latency_ms": 9783.395,
+      "critics_judge_parallel_latency_ms": 3302.235,
+      "weekly_latency_ms": 5381.858,
+      "weekly_prompt_tokens": 785,
+      "weekly_output_tokens": 387,
+      "weekly_thinking_tokens": 0,
+      "judge_status": "PASSED",
+      "judge_error_category": null,
+      "weekly_fallback": false,
+      "weekly_source": "llm",
+      "weekly_faithfulness": 1.0,
+      "weekly_error_category": null,
+      "injection_status": "NOT_APPLICABLE",
+      "injection_isolated": true,
+      "structural_audit": {
+        "has_proposal": true,
+        "audited_milestones_source": "fixture",
+        "audited_milestones_count": 2,
+        "capacity_utilization": 0.15,
+        "task_capacity_utilization": 0.15,
+        "effort_equal_ratio": 1.0,
+        "all_efforts_equal": true,
+        "milestone_vs_tasks_gap": 0.0,
+        "linear_dependency_ratio": 1.0,
+        "max_consecutive_study_days": 1,
+        "days_idle_before_deadline": 23,
+        "tasks_split_across_days_count": 0,
+        "sensitive_tasks_split_across_days_count": 0,
+        "adjacent_same_day_split_count": 0,
+        "short_project_under_90_count": 0,
+        "structural_validity": true,
+        "scheduling_feasibility": true,
+        "pedagogical_quality": {
+          "soft_quality_score": 0.5,
+          "soft_quality_warnings": [
+            "UTILIZATION_OUTSIDE_TARGET_BAND",
+            "UNIFORM_MILESTONE_EFFORT"
+          ],
+          "soft_quality_metrics": {
+            "target_utilization_band": [
+              0.7,
+              0.9
+            ],
+            "target_utilization_band_met": false,
+            "target_utilization_band_score": 0.0,
+            "effort_balance_score": 0.0,
+            "pacing_rest_day_compliance": true,
+            "end_buffer_present": true,
+            "adjacent_same_day_split_free": true,
+            "soft_quality_score": 0.5
+          },
+          "judge_status": "PASSED",
+          "judge_score": 100.0
+        },
+        "failure_reasons_by_layer": {
+          "structural_validity": [],
+          "scheduling_feasibility": [],
+          "conditional_constraints": [],
+          "soft_quality_warnings": [
+            "UTILIZATION_OUTSIDE_TARGET_BAND",
+            "UNIFORM_MILESTONE_EFFORT"
+          ]
+        },
+        "invariant_categories": {
+          "hard_constraints": {
+            "must_pass_tier1": true,
+            "dag_acyclic_and_prereq_ordered": true,
+            "task_and_outcome_conservation": true,
+            "slot_and_quota_compliance": true,
+            "non_splittable_integrity": true,
+            "full_scope_hard_capacity": true
+          },
+          "conditional_constraints": {
+            "enforce_hard": false,
+            "min_milestones_target": 2,
+            "min_milestones_met": true,
+            "max_milestones_target": 6,
+            "max_milestones_met": true,
+            "project_min_minutes_target": 90,
+            "project_min_minutes_met": true,
+            "violations": []
+          },
+          "soft_quality_metrics": {
+            "target_utilization_band": [
+              0.7,
+              0.9
+            ],
+            "target_utilization_band_met": false,
+            "target_utilization_band_score": 0.0,
+            "effort_balance_score": 0.0,
+            "pacing_rest_day_compliance": true,
+            "end_buffer_present": true,
+            "adjacent_same_day_split_free": true,
+            "soft_quality_score": 0.5
+          },
+          "diagnostic_metrics": {
+            "all_efforts_equal": true,
+            "effort_equal_ratio": 1.0,
+            "linear_dependency_ratio": 1.0,
+            "milestone_vs_tasks_gap": 0.0,
+            "capacity_utilization": 0.15,
+            "task_capacity_utilization": 0.15,
+            "latency_ms": 13145.672,
+            "tokens": {
+              "prompt_tokens": 9555,
+              "output_tokens": 1665,
+              "thinking_tokens": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "E16_DB_DEVOPS_BEGINNER_TIGHT_B",
+      "domain": "database_devops",
+      "learner_level": "BEGINNER",
+      "deadline_regime": "TIGHT",
+      "planning_mode": "MODE_B",
+      "is_injection_case": false,
+      "passed_tier1": true,
+      "pass_with_judge_verdict": true,
+      "pass_with_judge_verdict_trials": 1,
+      "decomposer_passed_trials": 1,
+      "decomposer_failed_trials": 0,
+      "decomposer_error_categories": [],
+      "attempts": 1,
+      "prompt_tokens": 9308,
+      "output_tokens": 1754,
+      "thinking_tokens": 0,
+      "tasks_count": 4,
+      "min_tasks": 2,
+      "min_tasks_met": true,
+      "pedagogical_score": 100.0,
+      "median_latency_ms": 13774.577,
+      "decomposer_latency_ms": 9527.849,
+      "critics_judge_parallel_latency_ms": 4185.83,
+      "weekly_latency_ms": 6050.776,
+      "weekly_prompt_tokens": 785,
+      "weekly_output_tokens": 358,
+      "weekly_thinking_tokens": 0,
+      "judge_status": "PASSED",
+      "judge_error_category": null,
+      "weekly_fallback": false,
+      "weekly_source": "llm",
+      "weekly_faithfulness": 1.0,
+      "weekly_error_category": null,
+      "injection_status": "NOT_APPLICABLE",
+      "injection_isolated": true,
+      "structural_audit": {
+        "has_proposal": true,
+        "audited_milestones_source": "fixture",
+        "audited_milestones_count": 2,
+        "capacity_utilization": 0.4444,
+        "task_capacity_utilization": 0.4444,
+        "effort_equal_ratio": 1.0,
+        "all_efforts_equal": true,
+        "milestone_vs_tasks_gap": 0.0,
+        "linear_dependency_ratio": 1.0,
+        "max_consecutive_study_days": 1,
+        "days_idle_before_deadline": 6,
+        "tasks_split_across_days_count": 0,
+        "sensitive_tasks_split_across_days_count": 0,
+        "adjacent_same_day_split_count": 0,
+        "short_project_under_90_count": 0,
+        "structural_validity": true,
+        "scheduling_feasibility": true,
+        "pedagogical_quality": {
+          "soft_quality_score": 0.5,
+          "soft_quality_warnings": [
+            "UTILIZATION_OUTSIDE_TARGET_BAND",
+            "UNIFORM_MILESTONE_EFFORT"
+          ],
+          "soft_quality_metrics": {
+            "target_utilization_band": [
+              0.7,
+              0.9
+            ],
+            "target_utilization_band_met": false,
+            "target_utilization_band_score": 0.0,
+            "effort_balance_score": 0.0,
+            "pacing_rest_day_compliance": true,
+            "end_buffer_present": true,
+            "adjacent_same_day_split_free": true,
+            "soft_quality_score": 0.5
+          },
+          "judge_status": "PASSED",
+          "judge_score": 100.0
+        },
+        "failure_reasons_by_layer": {
+          "structural_validity": [],
+          "scheduling_feasibility": [],
+          "conditional_constraints": [],
+          "soft_quality_warnings": [
+            "UTILIZATION_OUTSIDE_TARGET_BAND",
+            "UNIFORM_MILESTONE_EFFORT"
+          ]
+        },
+        "invariant_categories": {
+          "hard_constraints": {
+            "must_pass_tier1": true,
+            "dag_acyclic_and_prereq_ordered": true,
+            "task_and_outcome_conservation": true,
+            "slot_and_quota_compliance": true,
+            "non_splittable_integrity": true,
+            "full_scope_hard_capacity": true
+          },
+          "conditional_constraints": {
+            "enforce_hard": false,
+            "min_milestones_target": 2,
+            "min_milestones_met": true,
+            "max_milestones_target": 6,
+            "max_milestones_met": true,
+            "project_min_minutes_target": 90,
+            "project_min_minutes_met": true,
+            "violations": []
+          },
+          "soft_quality_metrics": {
+            "target_utilization_band": [
+              0.7,
+              0.9
+            ],
+            "target_utilization_band_met": false,
+            "target_utilization_band_score": 0.0,
+            "effort_balance_score": 0.0,
+            "pacing_rest_day_compliance": true,
+            "end_buffer_present": true,
+            "adjacent_same_day_split_free": true,
+            "soft_quality_score": 0.5
+          },
+          "diagnostic_metrics": {
+            "all_efforts_equal": true,
+            "effort_equal_ratio": 1.0,
+            "linear_dependency_ratio": 1.0,
+            "milestone_vs_tasks_gap": 0.0,
+            "capacity_utilization": 0.4444,
+            "task_capacity_utilization": 0.4444,
+            "latency_ms": 13774.577,
+            "tokens": {
+              "prompt_tokens": 9308,
+              "output_tokens": 1754,
+              "thinking_tokens": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "E17_DB_DEVOPS_INTERMEDIATE_WIDE_A",
+      "domain": "database_devops",
+      "learner_level": "INTERMEDIATE",
+      "deadline_regime": "WIDE",
+      "planning_mode": "MODE_A",
+      "is_injection_case": false,
+      "passed_tier1": true,
+      "pass_with_judge_verdict": true,
+      "pass_with_judge_verdict_trials": 1,
+      "decomposer_passed_trials": 1,
+      "decomposer_failed_trials": 0,
+      "decomposer_error_categories": [],
+      "attempts": 1,
+      "prompt_tokens": 11538,
+      "output_tokens": 2367,
+      "thinking_tokens": 0,
+      "tasks_count": 6,
+      "min_tasks": 2,
+      "min_tasks_met": true,
+      "pedagogical_score": 95.0,
+      "median_latency_ms": 16819.596,
+      "decomposer_latency_ms": 13969.908,
+      "critics_judge_parallel_latency_ms": 2780.043,
+      "weekly_latency_ms": 4981.878,
+      "weekly_prompt_tokens": 785,
+      "weekly_output_tokens": 388,
+      "weekly_thinking_tokens": 0,
+      "judge_status": "PASSED",
+      "judge_error_category": null,
+      "weekly_fallback": false,
+      "weekly_source": "llm",
+      "weekly_faithfulness": 0.9167,
+      "weekly_error_category": null,
+      "injection_status": "NOT_APPLICABLE",
+      "injection_isolated": true,
+      "structural_audit": {
+        "has_proposal": true,
+        "audited_milestones_source": "fixture",
+        "audited_milestones_count": 2,
+        "capacity_utilization": 0.08,
+        "task_capacity_utilization": 0.08,
+        "effort_equal_ratio": 1.0,
+        "all_efforts_equal": true,
+        "milestone_vs_tasks_gap": 0.0,
+        "linear_dependency_ratio": 1.0,
+        "max_consecutive_study_days": 1,
+        "days_idle_before_deadline": 11,
+        "tasks_split_across_days_count": 0,
+        "sensitive_tasks_split_across_days_count": 0,
+        "adjacent_same_day_split_count": 0,
+        "short_project_under_90_count": 0,
+        "structural_validity": true,
+        "scheduling_feasibility": true,
+        "pedagogical_quality": {
+          "soft_quality_score": 0.5,
+          "soft_quality_warnings": [
+            "UTILIZATION_OUTSIDE_TARGET_BAND",
+            "UNIFORM_MILESTONE_EFFORT"
+          ],
+          "soft_quality_metrics": {
+            "target_utilization_band": [
+              0.7,
+              0.9
+            ],
+            "target_utilization_band_met": false,
+            "target_utilization_band_score": 0.0,
+            "effort_balance_score": 0.0,
+            "pacing_rest_day_compliance": true,
+            "end_buffer_present": true,
+            "adjacent_same_day_split_free": true,
+            "soft_quality_score": 0.5
+          },
+          "judge_status": "PASSED",
+          "judge_score": 95.0
+        },
+        "failure_reasons_by_layer": {
+          "structural_validity": [],
+          "scheduling_feasibility": [],
+          "conditional_constraints": [],
+          "soft_quality_warnings": [
+            "UTILIZATION_OUTSIDE_TARGET_BAND",
+            "UNIFORM_MILESTONE_EFFORT"
+          ]
+        },
+        "invariant_categories": {
+          "hard_constraints": {
+            "must_pass_tier1": true,
+            "dag_acyclic_and_prereq_ordered": true,
+            "task_and_outcome_conservation": true,
+            "slot_and_quota_compliance": true,
+            "non_splittable_integrity": true,
+            "full_scope_hard_capacity": true
+          },
+          "conditional_constraints": {
+            "enforce_hard": false,
+            "min_milestones_target": 2,
+            "min_milestones_met": true,
+            "max_milestones_target": 6,
+            "max_milestones_met": true,
+            "project_min_minutes_target": 90,
+            "project_min_minutes_met": true,
+            "violations": []
+          },
+          "soft_quality_metrics": {
+            "target_utilization_band": [
+              0.7,
+              0.9
+            ],
+            "target_utilization_band_met": false,
+            "target_utilization_band_score": 0.0,
+            "effort_balance_score": 0.0,
+            "pacing_rest_day_compliance": true,
+            "end_buffer_present": true,
+            "adjacent_same_day_split_free": true,
+            "soft_quality_score": 0.5
+          },
+          "diagnostic_metrics": {
+            "all_efforts_equal": true,
+            "effort_equal_ratio": 1.0,
+            "linear_dependency_ratio": 1.0,
+            "milestone_vs_tasks_gap": 0.0,
+            "capacity_utilization": 0.08,
+            "task_capacity_utilization": 0.08,
+            "latency_ms": 16819.596,
+            "tokens": {
+              "prompt_tokens": 11538,
+              "output_tokens": 2367,
+              "thinking_tokens": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "case_id": "E18_DB_DEVOPS_ADVANCED_TIGHT_A",
+      "domain": "database_devops",
+      "learner_level": "ADVANCED",
+      "deadline_regime": "TIGHT",
+      "planning_mode": "MODE_A",
+      "is_injection_case": false,
+      "passed_tier1": true,
+      "pass_with_judge_verdict": true,
+      "pass_with_judge_verdict_trials": 1,
+      "decomposer_passed_trials": 1,
+      "decomposer_failed_trials": 0,
+      "decomposer_error_categories": [],
+      "attempts": 1,
+      "prompt_tokens": 6797,
+      "output_tokens": 1610,
+      "thinking_tokens": 0,
+      "tasks_count": 4,
+      "min_tasks": 2,
+      "min_tasks_met": true,
+      "pedagogical_score": 95.0,
+      "median_latency_ms": 23912.013,
+      "decomposer_latency_ms": 8821.156,
+      "critics_judge_parallel_latency_ms": 15023.237,
+      "weekly_latency_ms": 4646.95,
+      "weekly_prompt_tokens": 785,
+      "weekly_output_tokens": 330,
+      "weekly_thinking_tokens": 0,
+      "judge_status": "PASSED",
+      "judge_error_category": null,
+      "weekly_fallback": false,
+      "weekly_source": "llm",
+      "weekly_faithfulness": 1.0,
+      "weekly_error_category": null,
+      "injection_status": "NOT_APPLICABLE",
+      "injection_isolated": true,
+      "structural_audit": {
+        "has_proposal": true,
+        "audited_milestones_source": "fixture",
+        "audited_milestones_count": 2,
+        "capacity_utilization": 0.1509,
+        "task_capacity_utilization": 0.1509,
+        "effort_equal_ratio": 1.0,
+        "all_efforts_equal": true,
+        "milestone_vs_tasks_gap": 0.0,
+        "linear_dependency_ratio": 1.0,
+        "max_consecutive_study_days": 1,
+        "days_idle_before_deadline": 5,
+        "tasks_split_across_days_count": 0,
+        "sensitive_tasks_split_across_days_count": 0,
+        "adjacent_same_day_split_count": 0,
+        "short_project_under_90_count": 0,
+        "structural_validity": true,
+        "scheduling_feasibility": true,
+        "pedagogical_quality": {
+          "soft_quality_score": 0.5,
+          "soft_quality_warnings": [
+            "UTILIZATION_OUTSIDE_TARGET_BAND",
+            "UNIFORM_MILESTONE_EFFORT"
+          ],
+          "soft_quality_metrics": {
+            "target_utilization_band": [
+              0.7,
+              0.9
+            ],
+            "target_utilization_band_met": false,
+            "target_utilization_band_score": 0.0,
+            "effort_balance_score": 0.0,
+            "pacing_rest_day_compliance": true,
+            "end_buffer_present": true,
+            "adjacent_same_day_split_free": true,
+            "soft_quality_score": 0.5
+          },
+          "judge_status": "PASSED",
+          "judge_score": 95.0
+        },
+        "failure_reasons_by_layer": {
+          "structural_validity": [],
+          "scheduling_feasibility": [],
+          "conditional_constraints": [],
+          "soft_quality_warnings": [
+            "UTILIZATION_OUTSIDE_TARGET_BAND",
+            "UNIFORM_MILESTONE_EFFORT"
+          ]
+        },
+        "invariant_categories": {
+          "hard_constraints": {
+            "must_pass_tier1": true,
+            "dag_acyclic_and_prereq_ordered": true,
+            "task_and_outcome_conservation": true,
+            "slot_and_quota_compliance": true,
+            "non_splittable_integrity": true,
+            "full_scope_hard_capacity": true
+          },
+          "conditional_constraints": {
+            "enforce_hard": false,
+            "min_milestones_target": 2,
+            "min_milestones_met": true,
+            "max_milestones_target": 6,
+            "max_milestones_met": true,
+            "project_min_minutes_target": 90,
+            "project_min_minutes_met": true,
+            "violations": []
+          },
+          "soft_quality_metrics": {
+            "target_utilization_band": [
+              0.7,
+              0.9
+            ],
+            "target_utilization_band_met": false,
+            "target_utilization_band_score": 0.0,
+            "effort_balance_score": 0.0,
+            "pacing_rest_day_compliance": true,
+            "end_buffer_present": true,
+            "adjacent_same_day_split_free": true,
+            "soft_quality_score": 0.5
+          },
+          "diagnostic_metrics": {
+            "all_efforts_equal": true,
+            "effort_equal_ratio": 1.0,
+            "linear_dependency_ratio": 1.0,
+            "milestone_vs_tasks_gap": 0.0,
+            "capacity_utilization": 0.1509,
+            "task_capacity_utilization": 0.1509,
+            "latency_ms": 23912.013,
+            "tokens": {
+              "prompt_tokens": 6797,
+              "output_tokens": 1610,
+              "thinking_tokens": 0
+            }
+          }
+        }
+      }
+    }
+  ]
+}

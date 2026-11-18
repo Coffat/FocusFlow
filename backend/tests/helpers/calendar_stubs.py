@@ -1,3 +1,7 @@
+"""Deterministic in-memory CalendarProviderPort test double for pure unit tests."""
+
+from __future__ import annotations
+
 import copy
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -16,8 +20,8 @@ from src.account.domain.ports.calendar_provider_port import (
 )
 
 
-class MockCalendarAdapter(CalendarProviderPort):
-    """In-memory mock adapter for Google Calendar API v3 with fault injection and pagination."""
+class InMemoryCalendarAdapter(CalendarProviderPort):
+    """In-memory stub adapter for Google Calendar API v3 with fault injection and pagination."""
 
     def __init__(self, page_size: int = 10) -> None:
         self.page_size = page_size
@@ -50,6 +54,7 @@ class MockCalendarAdapter(CalendarProviderPort):
         time_min: datetime,
         time_max: datetime,
     ) -> list[CalendarTimeInterval]:
+        del refresh_token
         if self.inject_fault_429:
             raise CalendarRateLimitError()
 
@@ -59,7 +64,6 @@ class MockCalendarAdapter(CalendarProviderPort):
             for event in cal_events.values():
                 if event.status == "cancelled":
                     continue
-                # Overlap check: start < time_max and end > time_min
                 if event.start_time < time_max and event.end_time > time_min:
                     interval_start = max(event.start_time, time_min)
                     interval_end = min(event.end_time, time_max)
@@ -76,6 +80,7 @@ class MockCalendarAdapter(CalendarProviderPort):
         refresh_token: str,
         title: str = "FocusFlow",
     ) -> str:
+        del refresh_token
         if self.inject_fault_429:
             raise CalendarRateLimitError()
 
@@ -93,6 +98,7 @@ class MockCalendarAdapter(CalendarProviderPort):
         time_min: datetime | None = None,
         time_max: datetime | None = None,
     ) -> CalendarSyncEventsResultDTO:
+        del refresh_token
         if self.inject_fault_429:
             raise CalendarRateLimitError()
 
@@ -106,7 +112,6 @@ class MockCalendarAdapter(CalendarProviderPort):
 
         cal_events = list(self._events.get(calendar_id, {}).values())
 
-        # Filter by time bounds if requested
         filtered_events: list[CalendarEventDTO] = []
         for ev in cal_events:
             if time_min and ev.end_time <= time_min:
@@ -117,7 +122,6 @@ class MockCalendarAdapter(CalendarProviderPort):
 
         filtered_events.sort(key=lambda x: x.start_time)
 
-        # Pagination logic
         offset = 0
         if page_token and page_token.startswith("offset_"):
             try:
@@ -129,8 +133,8 @@ class MockCalendarAdapter(CalendarProviderPort):
         has_more = (offset + self.page_size) < len(filtered_events)
 
         if has_more:
-            next_page = f"offset_{offset + self.page_size}"
-            next_sync = None
+            next_page: str | None = f"offset_{offset + self.page_size}"
+            next_sync: str | None = None
         else:
             next_page = None
             next_sync = f"sync_token_{len(filtered_events)}_{int(datetime.now(UTC).timestamp())}"
@@ -148,6 +152,7 @@ class MockCalendarAdapter(CalendarProviderPort):
         calendar_id: str,
         event_id: str,
     ) -> CalendarEventDTO | None:
+        del refresh_token
         if self.inject_fault_429:
             raise CalendarRateLimitError()
         cal = self._events.get(calendar_id, {})
@@ -160,6 +165,7 @@ class MockCalendarAdapter(CalendarProviderPort):
         calendar_id: str,
         event: CalendarEventDTO,
     ) -> CalendarEventDTO:
+        del refresh_token
         if self.inject_fault_429:
             raise CalendarRateLimitError()
         if self.inject_fault_409:
@@ -200,7 +206,6 @@ class MockCalendarAdapter(CalendarProviderPort):
         cal = self._events.get(calendar_id, {})
         existing = cal.get(event.id)
         if not existing:
-            # If doesn't exist, create it
             return await self.create_event(refresh_token, calendar_id, event)
 
         if event.etag and existing.etag and event.etag != existing.etag:
@@ -218,6 +223,7 @@ class MockCalendarAdapter(CalendarProviderPort):
         event_id: str,
         etag: str | None = None,
     ) -> bool:
+        del refresh_token
         if self.inject_fault_429:
             raise CalendarRateLimitError()
         if self.inject_fault_412:
@@ -242,6 +248,7 @@ class MockCalendarAdapter(CalendarProviderPort):
         webhook_url: str,
         channel_token: str | None = None,
     ) -> CalendarWatchResultDTO:
+        del refresh_token
         if self.inject_fault_429:
             raise CalendarRateLimitError()
 
@@ -267,6 +274,7 @@ class MockCalendarAdapter(CalendarProviderPort):
         channel_id: str,
         resource_id: str,
     ) -> bool:
+        del refresh_token, resource_id
         if self.inject_fault_429:
             raise CalendarRateLimitError()
 

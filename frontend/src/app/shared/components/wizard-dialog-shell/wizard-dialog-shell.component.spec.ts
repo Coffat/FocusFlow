@@ -29,11 +29,19 @@ describe('WizardDialogShellComponent', () => {
     component.stepChange.subscribe(stepSpy);
 
     const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.textContent).toContain('Tạo lộ trình học tập');
+    expect(compiled.querySelector('[data-testid="wizard-step-btn-5"]')).toBeNull();
+
     const step3Btn = compiled.querySelector('[data-testid="wizard-step-btn-3"]') as HTMLButtonElement;
     expect(step3Btn).toBeTruthy();
     step3Btn.click();
-
     expect(stepSpy).toHaveBeenCalledWith(3);
+
+    const step4Btn = compiled.querySelector('[data-testid="wizard-step-btn-4"]') as HTMLButtonElement;
+    expect(step4Btn).toBeTruthy();
+    expect(step4Btn.textContent).toContain('4. Lịch học');
+    step4Btn.click();
+    expect(stepSpy).toHaveBeenCalledWith(4);
   });
 
   it('hiển thị banner lỗi role="alert" khi có errorMessage', () => {
@@ -46,27 +54,21 @@ describe('WizardDialogShellComponent', () => {
     expect(alertBox?.textContent).toContain('Không thể kết nối tới máy chủ AI.');
   });
 
-  it('hiển thị 2-Stage SSE Telemetry banner khi sseProgress đang PROCESSING', () => {
-    fixture.componentRef.setInput('sseProgress', {
-      status: 'PROCESSING',
-      progressPercent: 68,
-      message: 'Đang phân rã cột mốc kiến thức...',
-      stage: 'STREAMING',
-    });
-    fixture.detectChanges();
-
+  it('chỉ hiển thị nút đóng và phát sự kiện closeDialog khi bấm nút đóng hoặc Escape', () => {
     const compiled = fixture.nativeElement as HTMLElement;
-    const sseBanner = compiled.querySelector('[data-testid="wizard-sse-banner"]');
-    expect(sseBanner).toBeTruthy();
-    expect(sseBanner?.textContent).toContain('68%');
-    expect(sseBanner?.textContent).toContain('Đang phân rã cột mốc kiến thức...');
-  });
+    expect(compiled.querySelector('[data-testid="wizard-sse-banner"]')).toBeNull();
+    expect(compiled.querySelector('[data-testid="wizard-save-draft-btn"]')).toBeNull();
 
-  it('phát sự kiện closeDialog khi bấm phím Escape', () => {
+    const closeBtn = compiled.querySelector('[data-testid="wizard-close-btn"]') as HTMLButtonElement;
+    expect(closeBtn).toBeTruthy();
+
     const closeSpy = vi.fn();
     component.closeDialog.subscribe(closeSpy);
 
+    closeBtn.click();
+    expect(closeSpy).toHaveBeenCalledTimes(1);
+
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-    expect(closeSpy).toHaveBeenCalled();
+    expect(closeSpy).toHaveBeenCalledTimes(2);
   });
 });

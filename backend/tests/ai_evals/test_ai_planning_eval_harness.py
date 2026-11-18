@@ -56,11 +56,9 @@ from src.planning.domain.services.validation_types import (
 )
 from src.shared_kernel.application.llm_port import LLMProviderPort
 from src.shared_kernel.domain.events import DomainEvent
-from src.shared_kernel.infrastructure.external_ai.litellm_adapter import (
-    LiteLLMAdapter,
-    MockLLMAdapter,
-)
+from src.shared_kernel.infrastructure.external_ai.litellm_adapter import LiteLLMAdapter
 from src.shared_kernel.infrastructure.sse.job_store import InMemorySseJobStore
+from tests.helpers.llm_stubs import StubLLMAdapter
 
 DATASET_PATH = Path(__file__).parent / "datasets" / "golden_planning_5_scenarios.jsonl"
 
@@ -157,21 +155,56 @@ class _RecordingSelfCorrectionLLM(LLMProviderPort):
 
     async def generate_structured(
         self,
-        prompt: str | None = None,
-        system_prompt: str = "",
-        response_schema: dict[str, Any] | type[Any] | None = None,
         *,
-        user_prompt: str | None = None,
-        temperature: float = 0.2,
+        system_prompt: str,
+        user_prompt: str,
+        response_schema: dict[str, Any] | type[Any] | None = None,
+        tools: list[Any] | None = None,
+        tool_executor: Any = None,
+        max_tool_calls: int = 2,
+        thinking_level: str | None = None,
+        timeout_seconds: float | None = None,
+        tool_call_timeout_seconds: float | None = None,
     ) -> tuple[dict[str, Any], int, int]:
-        _ = (system_prompt, response_schema, temperature)
-        effective_prompt = user_prompt if user_prompt is not None else (prompt or "")
+        _ = (
+            system_prompt,
+            response_schema,
+            tools,
+            tool_executor,
+            max_tool_calls,
+            thinking_level,
+            timeout_seconds,
+            tool_call_timeout_seconds,
+        )
+        effective_prompt = user_prompt
+        if "[INDEPENDENT_CRITIC:" in effective_prompt:
+            return {"status": "PASS", "score": 100, "issues": []}, 25, 10
+        if (
+            "pedagogical-quality-judge" in system_prompt
+            or "pedagogical-quality-judge" in effective_prompt
+        ):
+            return {"score": 90, "overall_status": "PASS", "issues": []}, 40, 15
         self.received_prompts.append(effective_prompt)
         if not self._responses:
             raise RuntimeError(
                 "No more scripted responses available in _RecordingSelfCorrectionLLM"
             )
         payload = self._responses.pop(0)
+        if isinstance(payload.get("tasks"), list):
+            payload = {
+                **payload,
+                "tasks": [
+                    {
+                        **task,
+                        "learning_objective": task.get("learning_objective")
+                        or "Vận dụng nội dung học tập vào bài thực hành.",
+                        "completion_criteria": task.get("completion_criteria")
+                        or "Hoàn thành bài thực hành đạt yêu cầu.",
+                    }
+                    for task in payload["tasks"]
+                    if isinstance(task, dict)
+                ],
+            }
         return payload, 150, 220
 
     async def stream_structured(
@@ -179,9 +212,8 @@ class _RecordingSelfCorrectionLLM(LLMProviderPort):
         *,
         system_prompt: str,
         user_prompt: str,
-        temperature: float = 0.2,
     ) -> AsyncIterator[str]:
-        _ = (system_prompt, user_prompt, temperature)
+        _ = (system_prompt, user_prompt)
         yield "{}"
 
 
@@ -194,17 +226,31 @@ class _SlowOrFailingJudgeLLM(LLMProviderPort):
 
     async def generate_structured(
         self,
-        prompt: str | None = None,
-        system_prompt: str = "",
-        response_schema: dict[str, Any] | type[Any] | None = None,
         *,
-        user_prompt: str | None = None,
-        temperature: float = 0.2,
+        system_prompt: str,
+        user_prompt: str,
+        response_schema: dict[str, Any] | type[Any] | None = None,
+        tools: list[Any] | None = None,
+        tool_executor: Any = None,
+        max_tool_calls: int = 2,
+        thinking_level: str | None = None,
+        timeout_seconds: float | None = None,
+        tool_call_timeout_seconds: float | None = None,
     ) -> tuple[dict[str, Any], int, int]:
-        _ = (prompt, system_prompt, response_schema, user_prompt, temperature)
+        _ = (
+            system_prompt,
+            response_schema,
+            user_prompt,
+            tools,
+            tool_executor,
+            max_tool_calls,
+            thinking_level,
+            timeout_seconds,
+            tool_call_timeout_seconds,
+        )
         if self._mode == "timeout":
             await asyncio.sleep(self._sleep_seconds)
-            return {"score": 0.9, "advisory_warnings": []}, 50, 50
+            return {"score": 90, "issues": []}, 50, 50
         raise ConnectionError("Simulated LLM Judge network outage")
 
     async def stream_structured(
@@ -212,9 +258,8 @@ class _SlowOrFailingJudgeLLM(LLMProviderPort):
         *,
         system_prompt: str,
         user_prompt: str,
-        temperature: float = 0.2,
     ) -> AsyncIterator[str]:
-        _ = (system_prompt, user_prompt, temperature)
+        _ = (system_prompt, user_prompt)
         yield "{}"
 
 
@@ -276,7 +321,7 @@ class _FakeQuotaFacade:
         reservation_id: UUID,
         prompt_tokens: int = 0,
         completion_tokens: int = 0,
-        model_name: str = "gemini-2.5-flash",
+        model_name: str = "gemini-3.8-flash",
     ) -> None:
         _ = model_name
         self.committed.append((reservation_id, prompt_tokens, completion_tokens))
@@ -863,11 +908,15 @@ async def test_metric2_self_correction_post_retry_recovery_and_single_quota_comm
 
     assert saved_proposal.status == ScheduleProposalStatus.DRAFT
     assert saved_proposal.proposal_data["attempts_used"] == 2
-    # Quota committed exactly ONCE across 2 LLM attempts, 0 releases
+    assert saved_proposal.proposal_data["judge_status"] == "PASSED"
+    assert saved_proposal.proposal_data["judge_skipped"] is False
+    # Quota committed exactly ONCE across 2 LLM attempts, 0 releases:
+    # Attempt 1 fails Tier 1/2 before Critics/Judge (150 prompt, 220 completion);
+    # Attempt 2 runs Decomposer (150, 220) + 2 Critics (25*2, 10*2) + parallel Judge (40, 15).
     assert len(quota_facade.committed) == 1
     assert quota_facade.committed[0][0] == reservation_id
-    assert quota_facade.committed[0][1] == 300  # 150 * 2 prompt tokens
-    assert quota_facade.committed[0][2] == 440  # 220 * 2 completion tokens
+    assert quota_facade.committed[0][1] == 390
+    assert quota_facade.committed[0][2] == 475
     assert len(quota_facade.released) == 0
 
     # Verify SSE stream emitted `validation_retry` followed by `completed`
@@ -1045,11 +1094,23 @@ async def test_metric3_soft_overflow_detection_and_apply_confirmation_gate_g4() 
         )
         for m in g4["milestones"]
     ]
+    proposal_data = dict(gate_res.validated_proposal_data)
+    proposal_data["tasks"] = [
+        {
+            **task,
+            "learning_objective": task.get("learning_objective")
+            or "Vận dụng nội dung học tập vào bài thực hành.",
+            "completion_criteria": task.get("completion_criteria")
+            or "Hoàn thành bài thực hành đạt yêu cầu.",
+        }
+        for task in proposal_data.get("tasks", [])
+        if isinstance(task, dict)
+    ]
     proposal = ScheduleProposal(
         id=proposal_id,
         roadmap_id=roadmap_id,
         user_id=user_id,
-        proposal_data=dict(gate_res.validated_proposal_data),
+        proposal_data=proposal_data,
         status=ScheduleProposalStatus.DRAFT,
         created_at=now,
         updated_at=now,
@@ -1170,7 +1231,7 @@ async def test_full_evaluation_harness_summary_and_optional_live_llm() -> None:
     """
     scenarios = load_golden_scenarios()
     run_live = os.getenv("RUN_LIVE_AI_EVALS", "0").strip() == "1"
-    llm_adapter: LLMProviderPort = LiteLLMAdapter() if run_live else MockLLMAdapter()
+    llm_adapter: LLMProviderPort = LiteLLMAdapter() if run_live else StubLLMAdapter()
 
     gate_no_judge = ProposalValidationGateOrchestrator(enable_tier3_judge=False)
     adversarial_tested = 0

@@ -1,19 +1,33 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Router, ActivatedRoute } from '@angular/router';
 import { signal } from '@angular/core';
 import { of } from 'rxjs';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { RoadmapsHubComponent } from './roadmaps-hub.component';
 import { RoadmapService } from '../../services/roadmap.service';
 import { AuthService } from '../../../../core/services/auth.service';
+import { AvailabilityService } from '../../../../core/services/availability.service';
+import { CalendarIntegrationService } from '../../../../core/services/calendar-integration.service';
 import { RoadmapResponse } from '../../models/roadmap.model';
 
 describe('RoadmapsHubComponent', () => {
   let component: RoadmapsHubComponent;
   let fixture: ComponentFixture<RoadmapsHubComponent>;
+  let mockCalendarService: {
+    connection: ReturnType<typeof signal<any>>;
+    isConnected: ReturnType<typeof signal<boolean>>;
+    isLoading: ReturnType<typeof signal<boolean>>;
+    loadStatus: Mock<() => any>;
+  };
+  let mockAvailabilityService: {
+    profile: ReturnType<typeof signal<any>>;
+    hasConfiguredAvailability: Mock<() => boolean>;
+    loadMyAvailability: Mock<(cb?: any) => void>;
+    checkPrerequisites: Mock<(cb: (ready: boolean) => void) => void>;
+  };
   let mockRoadmapService: {
     roadmaps: ReturnType<typeof signal<RoadmapResponse[]>>;
     loading: ReturnType<typeof signal<boolean>>;
@@ -78,6 +92,26 @@ describe('RoadmapsHubComponent', () => {
       archiveRoadmap: vi.fn(),
     };
 
+    mockCalendarService = {
+      connection: signal({ connected: false, provider: 'GOOGLE', sync_status: 'IDLE' }),
+      isConnected: signal(false),
+      isLoading: signal(false),
+      loadStatus: vi.fn().mockReturnValue(of({ connected: false, provider: 'GOOGLE', sync_status: 'IDLE' })),
+    };
+
+    mockAvailabilityService = {
+      profile: signal({ id: 'avail-1', user_id: 'usr-1' }),
+      hasConfiguredAvailability: vi.fn().mockReturnValue(true),
+      loadMyAvailability: vi.fn((cb) => cb?.({ id: 'avail-1' })),
+      checkPrerequisites: vi.fn((cb: (ready: boolean) => void) => {
+        if (!mockAvailabilityService.profile()) {
+          mockAvailabilityService.loadMyAvailability();
+        }
+        const ready = mockCalendarService.isConnected() || mockAvailabilityService.hasConfiguredAvailability();
+        cb(ready);
+      }),
+    };
+
     const mockAuthService = {
       currentUser: signal({
         id: 'usr-1',
@@ -99,6 +133,8 @@ describe('RoadmapsHubComponent', () => {
         MessageService,
         { provide: RoadmapService, useValue: mockRoadmapService },
         { provide: AuthService, useValue: mockAuthService },
+        { provide: AvailabilityService, useValue: mockAvailabilityService },
+        { provide: CalendarIntegrationService, useValue: mockCalendarService },
       ],
     }).compileComponents();
 
@@ -221,5 +257,95 @@ describe('RoadmapsHubComponent', () => {
     const confirmSpy = vi.spyOn(confirmationService, 'confirm');
     component.onArchiveRoadmap('rm-1');
     expect(confirmSpy).toHaveBeenCalled();
+  });
+
+  describe('Kiểm tra tiền điều kiện Thời gian rảnh & Auto-open', () => {
+    it('bật PrerequisiteAvailabilityDialogComponent khi chưa có thời gian rảnh và bấm Tạo lộ trình mới', () => {
+      mockAvailabilityService.hasConfiguredAvailability.mockReturnValue(false);
+
+      component.openCreateWizard(1);
+      fixture.detectChanges();
+
+      expect(component.prerequisiteDialogOpen()).toBe(true);
+      expect(component.wizardOpen()).toBe(false);
+    });
+
+    it('bật PrerequisiteAvailabilityDialogComponent khi chưa có thời gian rảnh và chọn Starter Template', () => {
+      mockAvailabilityService.hasConfiguredAvailability.mockReturnValue(false);
+
+      component.onSelectTemplate({
+        id: 'tpl-1',
+        title: 'Python Core',
+        subtitle: 'From zero to hero',
+        categoryTag: 'Backend',
+        weeksCount: 8,
+        tasksCount: 20,
+        tags: ['Python'],
+        hoursPerWeek: 10,
+        knowledgeLevel: 'BEGINNER',
+      });
+      fixture.detectChanges();
+
+      expect(component.prerequisiteDialogOpen()).toBe(true);
+      expect(component.wizardOpen()).toBe(false);
+    });
+
+    it('gọi loadMyAvailability nếu profile() là null trước khi kiểm tra tiền điều kiện', () => {
+      mockAvailabilityService.profile.set(null);
+      mockAvailabilityService.hasConfiguredAvailability.mockReturnValue(false);
+
+      component.openCreateWizard(1);
+
+      expect(mockAvailabilityService.loadMyAvailability).toHaveBeenCalled();
+      expect(component.prerequisiteDialogOpen()).toBe(true);
+      expect(component.wizardOpen()).toBe(false);
+    });
+
+    it('mở Wizard trực tiếp khi đã cấu hình thời gian rảnh hợp lệ', () => {
+      mockAvailabilityService.profile.set({ id: 'avail-1' });
+      mockAvailabilityService.hasConfiguredAvailability.mockReturnValue(true);
+
+      component.openCreateWizard(1);
+
+      expect(component.prerequisiteDialogOpen()).toBe(false);
+      expect(component.wizardOpen()).toBe(true);
+      expect(component.wizardStep()).toBe(1);
+    });
+
+    it('tự động mở Wizard và dọn query param khi queryParam có autoOpen=true', () => {
+      const route = TestBed.inject(ActivatedRoute);
+      const router = TestBed.inject(Router);
+      const navigateSpy = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+
+      vi.spyOn(route.snapshot.queryParamMap, 'get').mockImplementation((k: string) => {
+        if (k === 'autoOpen') return 'true';
+        return null;
+      });
+      route.snapshot.queryParams = { autoOpen: 'true' };
+
+      mockAvailabilityService.hasConfiguredAvailability.mockReturnValue(true);
+
+      component.ngOnInit();
+
+      expect(component.wizardOpen()).toBe(true);
+      expect(navigateSpy).toHaveBeenCalledWith([], {
+        relativeTo: route,
+        queryParams: {},
+        replaceUrl: true,
+      });
+    });
+
+    it('khi Google Calendar isConnected === true (dù chưa có profile lịch rảnh), checkPrerequisites trả về true và mở thẳng Wizard tạo lộ trình', () => {
+      mockAvailabilityService.profile.set(null);
+      mockCalendarService.isConnected.set(true);
+      mockAvailabilityService.hasConfiguredAvailability.mockReturnValue(false);
+
+      component.openCreateWizard(1);
+      fixture.detectChanges();
+
+      expect(component.prerequisiteDialogOpen()).toBe(false);
+      expect(component.wizardOpen()).toBe(true);
+      expect(component.wizardStep()).toBe(1);
+    });
   });
 });

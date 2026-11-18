@@ -4,6 +4,7 @@ import re
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
+import httpx
 import pytest
 
 from src.account.application.dtos.calendar import (
@@ -26,9 +27,6 @@ from src.account.domain.ports.calendar_provider_port import (
     CalendarEventDTO,
     CalendarPreconditionFailedError,
     CalendarRateLimitError,
-)
-from src.account.infrastructure.adapters.mock_calendar_adapter import (
-    MockCalendarAdapter,
     get_deterministic_event_id,
 )
 from src.shared_kernel.config import Settings
@@ -39,6 +37,7 @@ from src.shared_kernel.infrastructure.security.encryption import (
     generate_fernet_key,
     validate_fernet_key,
 )
+from tests.helpers.calendar_stubs import InMemoryCalendarAdapter
 
 
 # --- In-Memory Repository for Unit Testing ---
@@ -177,7 +176,7 @@ async def test_deterministic_event_id() -> None:
 
 @pytest.mark.asyncio
 async def test_mock_calendar_crud_and_precondition() -> None:
-    adapter = MockCalendarAdapter()
+    adapter = InMemoryCalendarAdapter()
     block_id = uuid4()
     start_time = datetime(2026, 11, 10, 9, 0, tzinfo=UTC)
     end_time = datetime(2026, 11, 10, 10, 30, tzinfo=UTC)
@@ -221,7 +220,7 @@ async def test_mock_calendar_crud_and_precondition() -> None:
 
 @pytest.mark.asyncio
 async def test_mock_calendar_freebusy_query() -> None:
-    adapter = MockCalendarAdapter()
+    adapter = InMemoryCalendarAdapter()
     base_time = datetime(2026, 11, 10, 8, 0, tzinfo=UTC)
 
     # Insert 3 events
@@ -274,7 +273,7 @@ async def test_mock_calendar_freebusy_query() -> None:
 @pytest.mark.asyncio
 async def test_mock_calendar_pagination_loop() -> None:
     # Test pagination loop with page_size = 2
-    adapter = MockCalendarAdapter(page_size=2)
+    adapter = InMemoryCalendarAdapter(page_size=2)
     base_time = datetime(2026, 11, 10, 8, 0, tzinfo=UTC)
 
     # Insert 5 events
@@ -312,7 +311,7 @@ async def test_mock_calendar_pagination_loop() -> None:
 
 @pytest.mark.asyncio
 async def test_mock_calendar_fault_injections() -> None:
-    adapter = MockCalendarAdapter()
+    adapter = InMemoryCalendarAdapter()
 
     # Fault 429 Rate Limit
     adapter.inject_fault_429 = True
@@ -387,26 +386,42 @@ async def test_initiate_google_calendar_auth_use_case() -> None:
     assert "calendar.app.created" in resp_two_way.authorization_url
 
 
+def _fake_google_oauth_client(
+    refresh_token: str = "google_refresh_token_test",
+) -> httpx.AsyncClient:
+    def handler(request: httpx.Request) -> httpx.Response:
+        del request
+        return httpx.Response(
+            200,
+            json={"access_token": "ya29.test", "refresh_token": refresh_token},
+        )
+
+    return httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+
 @pytest.mark.asyncio
 async def test_handle_google_calendar_oauth_callback_use_case() -> None:
     key = generate_fernet_key()
     settings = Settings(
-        calendar_provider="mock",
+        calendar_provider="google",
+        google_client_id="test_client_id",
+        google_client_secret="test_client_secret",
         calendar_encryption_key=key,
     )
     repo = InMemoryCalendarConnectionRepository()
-    adapter = MockCalendarAdapter()
+    adapter = InMemoryCalendarAdapter()
     use_case = HandleGoogleCalendarOAuthCallbackUseCase(
         repository=repo,
         calendar_provider=adapter,
         settings=settings,
+        http_client=_fake_google_oauth_client(),
     )
 
     user_id = uuid4()
     state_payload = {"user_id": str(user_id), "sync_type": "two_way"}
     state_str = base64.urlsafe_b64encode(json.dumps(state_payload).encode("utf-8")).decode("utf-8")
 
-    request = CalendarOAuthCallbackRequestDTO(code="mock_auth_code", state=state_str)
+    request = CalendarOAuthCallbackRequestDTO(code="oauth_auth_code", state=state_str)
     result = await use_case.execute(user_id, request)
 
     assert result.connected is True
@@ -420,7 +435,34 @@ async def test_handle_google_calendar_oauth_callback_use_case() -> None:
     assert saved_conn.is_active is True
     # Verify token is encrypted and can be decrypted back
     decrypted_token = decrypt_token(saved_conn.oauth_refresh_token_encrypted, key=key)
-    assert decrypted_token.startswith("mock_refresh_token_")
+    assert decrypted_token == "google_refresh_token_test"
+
+    # Verify fail-closed when provider is not google or client_secret is missing
+    mock_provider_uc = HandleGoogleCalendarOAuthCallbackUseCase(
+        repository=repo,
+        calendar_provider=adapter,
+        settings=Settings(
+            calendar_provider="mock",
+            google_client_id="id",
+            google_client_secret="sec",
+            calendar_encryption_key=key,
+        ),
+    )
+    with pytest.raises(CalendarAuthError, match="CALENDAR_PROVIDER_NOT_CONFIGURED"):
+        await mock_provider_uc.execute(user_id, request)
+
+    missing_secret_uc = HandleGoogleCalendarOAuthCallbackUseCase(
+        repository=repo,
+        calendar_provider=adapter,
+        settings=Settings(
+            calendar_provider="google",
+            google_client_id="id",
+            google_client_secret="",
+            calendar_encryption_key=key,
+        ),
+    )
+    with pytest.raises(CalendarAuthError, match="CALENDAR_OAUTH_NOT_CONFIGURED"):
+        await missing_secret_uc.execute(user_id, request)
 
 
 @pytest.mark.asyncio
@@ -431,16 +473,19 @@ async def test_handle_google_calendar_callback_get_redirect() -> None:
 
     key = generate_fernet_key()
     settings = Settings(
-        calendar_provider="mock",
+        calendar_provider="google",
+        google_client_id="test_client_id",
+        google_client_secret="test_client_secret",
         calendar_encryption_key=key,
-        frontend_url="http://localhost:4200",
+        frontend_url="http://localhost:3000",
     )
     repo = InMemoryCalendarConnectionRepository()
-    adapter = MockCalendarAdapter()
+    adapter = InMemoryCalendarAdapter()
     use_case = HandleGoogleCalendarOAuthCallbackUseCase(
         repository=repo,
         calendar_provider=adapter,
         settings=settings,
+        http_client=_fake_google_oauth_client(),
     )
 
     user_id = uuid4()
@@ -462,7 +507,7 @@ async def test_handle_google_calendar_callback_get_redirect() -> None:
     )
     assert response.status_code == 302
     assert (
-        response.headers["location"] == "http://localhost:4200/schedule?calendar_connected=success"
+        response.headers["location"] == "http://localhost:3000/schedule?calendar_connected=success"
     )
 
     # 2. Error case (e.g. invalid code triggering CalendarAuthError) -> 302 redirect with ?calendar_connected=error
@@ -479,18 +524,41 @@ async def test_handle_google_calendar_callback_get_redirect() -> None:
     assert err_response.status_code == 302
     assert "calendar_connected=error" in err_response.headers["location"]
     assert "error_detail=" in err_response.headers["location"]
-    assert "http://localhost:4200/schedule" in err_response.headers["location"]
+    assert "http://localhost:3000/schedule" in err_response.headers["location"]
+
+    # 3. return_to already contains query parameters -> join with & instead of ?
+    state_with_query = {
+        "user_id": str(user_id),
+        "sync_type": "two_way",
+        "return_to": "/settings?tab=calendar&focus=calendar",
+    }
+    state_query_str = base64.urlsafe_b64encode(json.dumps(state_with_query).encode("utf-8")).decode(
+        "utf-8"
+    )
+    response_with_query = await handle_google_calendar_callback_get(
+        request=req,
+        code="mock_auth_code",
+        state=state_query_str,
+        use_case=use_case,
+    )
+    assert response_with_query.status_code == 302
+    assert (
+        response_with_query.headers["location"]
+        == "http://localhost:3000/settings?tab=calendar&focus=calendar&calendar_connected=success"
+    )
 
 
 @pytest.mark.asyncio
 async def test_get_calendar_connection_status_and_disconnect() -> None:
     key = generate_fernet_key()
     settings = Settings(
-        calendar_provider="mock",
+        calendar_provider="google",
+        google_client_id="test_client_id",
+        google_client_secret="test_client_secret",
         calendar_encryption_key=key,
     )
     repo = InMemoryCalendarConnectionRepository()
-    adapter = MockCalendarAdapter()
+    adapter = InMemoryCalendarAdapter()
 
     user_id = uuid4()
     status_uc = GetCalendarConnectionStatusUseCase(repository=repo)

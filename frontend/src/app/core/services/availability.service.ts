@@ -1,7 +1,8 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
-import { catchError, finalize, of, tap } from 'rxjs';
+import { Observable, catchError, finalize, forkJoin, of, tap } from 'rxjs';
 import { API_ENDPOINTS } from '../constants/api-endpoints';
+import { CalendarIntegrationService } from './calendar-integration.service';
 import {
   AllowedWindowDTO,
   AvailabilityMode,
@@ -168,6 +169,7 @@ export function createDefaultSchedule(): WeeklyScheduleDTO {
 })
 export class AvailabilityService {
   private readonly http = inject(HttpClient);
+  readonly calendarService = inject(CalendarIntegrationService);
 
   // Core signals
   readonly profile = signal<AvailabilityResponseDTO | null>(null);
@@ -558,12 +560,28 @@ export class AvailabilityService {
 
   hasConfiguredAvailability(): boolean {
     const prof = this.profile();
-    if (!prof || !prof.id) {
-      return false;
+
+    const conn =
+      typeof this.calendarService?.connection === 'function'
+        ? this.calendarService.connection()
+        : this.calendarService?.connection;
+
+    const isCalendarConnected =
+      conn?.connected === true ||
+      (typeof this.calendarService?.isConnected === 'function'
+        ? this.calendarService.isConnected()
+        : Boolean(this.calendarService?.isConnected)) === true;
+
+    if (
+      isCalendarConnected ||
+      this.calendarIntegrationMode() === 'CONNECTED' ||
+      prof?.calendar_integration_mode === 'CONNECTED'
+    ) {
+      return true;
     }
 
-    if (this.calendarIntegrationMode() === 'CONNECTED' || prof.calendar_integration_mode === 'CONNECTED') {
-      return true;
+    if (!prof || !prof.id) {
+      return false;
     }
 
     const schedule = this.weeklySchedule();
@@ -578,11 +596,11 @@ export class AvailabilityService {
     return this.isWeeklyValid();
   }
 
-  loadMyAvailability(callback?: (res: AvailabilityResponseDTO | null) => void): void {
+  fetchAvailability(): Observable<AvailabilityResponseDTO | null> {
     this.loading.set(true);
     this.errorMessage.set(null);
 
-    this.http
+    return this.http
       .get<AvailabilityResponseDTO>(API_ENDPOINTS.SETTINGS.AVAILABILITY, { withCredentials: true })
       .pipe(
         tap(res => {
@@ -603,19 +621,52 @@ export class AvailabilityService {
               this.allowedWindow.set({ start: firstAw.start, end: firstAw.end });
             }
           }
-          callback?.(res);
         }),
         catchError((err: HttpErrorResponse) => {
           const message = err.error?.message || err.message || 'Không thể tải cấu hình thời gian rảnh.';
           this.errorMessage.set(message);
-          callback?.(null);
           return of(null);
         }),
         finalize(() => {
           this.loading.set(false);
         })
-      )
-      .subscribe();
+      );
+  }
+
+  loadMyAvailability(callback?: (res: AvailabilityResponseDTO | null) => void): void {
+    this.fetchAvailability().subscribe(res => {
+      callback?.(res);
+    });
+  }
+
+  checkPrerequisites(callback: (ready: boolean) => void): void {
+    const observables: Observable<unknown>[] = [];
+
+    if (!this.profile()) {
+      observables.push(this.fetchAvailability());
+    }
+
+    const currentConnection =
+      typeof this.calendarService?.connection === 'function'
+        ? this.calendarService.connection()
+        : this.calendarService?.connection;
+
+    if (currentConnection === null && typeof this.calendarService?.loadStatus === 'function') {
+      observables.push(this.calendarService.loadStatus().pipe(catchError(() => of(null))));
+    }
+
+    if (observables.length > 0) {
+      forkJoin(observables).subscribe({
+        next: () => {
+          callback(this.hasConfiguredAvailability());
+        },
+        error: () => {
+          callback(this.hasConfiguredAvailability());
+        }
+      });
+    } else {
+      callback(this.hasConfiguredAvailability());
+    }
   }
 
   saveMyAvailability(callback?: (res: AvailabilityResponseDTO | null) => void): void {

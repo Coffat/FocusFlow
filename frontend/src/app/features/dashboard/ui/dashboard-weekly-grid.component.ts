@@ -374,7 +374,9 @@ export class DashboardWeeklyGridComponent {
 
   onStartSession(block: DashboardScheduleBlock): void {
     this.selectedBlock.set(null);
-    this.router.navigate(['/workspace']);
+    this.router.navigate(['/workspace'], {
+      queryParams: block.id ? { taskId: block.id } : undefined,
+    });
   }
 
   readonly TOP_OFFSET = 12;

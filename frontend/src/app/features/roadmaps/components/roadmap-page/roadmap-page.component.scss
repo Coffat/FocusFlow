@@ -1,10 +1,17 @@
 .roadmap-workspace {
   width: 100%;
+  min-width: 0;
   max-width: 80rem;
+  overflow-x: hidden;
   margin: 0 auto;
   padding: 1.5rem 1rem 3rem;
   @media (min-width: 640px) { padding: 2rem 1.5rem 4rem; }
   @media (min-width: 1024px) { padding: 2.5rem 2rem 5rem; }
+}
+
+.arch-card {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .page-header {
@@ -42,8 +49,13 @@
 }
 
 .header-content {
-  flex: 1;
-  max-width: 48rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  @media (min-width: 1024px) {
+    flex: 1 1 24rem;
+    max-width: 48rem;
+  }
 }
 
 .page-title {
@@ -53,6 +65,7 @@
   line-height: 2.5rem;
   letter-spacing: -0.025em;
   color: var(--on-surface);
+  overflow-wrap: break-word;
   margin: 0 0 0.5rem;
   @media (min-width: 640px) { font-size: 2.25rem; line-height: 2.75rem; }
 }
@@ -61,6 +74,7 @@
   font-size: 0.875rem;
   line-height: 1.5rem;
   color: var(--secondary);
+  overflow-wrap: break-word;
   margin: 0;
 }
 
@@ -69,9 +83,15 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .portfolio-select {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   height: 2.25rem;
   padding: 0 0.75rem;
   border: 1px solid var(--outline-variant);
@@ -80,10 +100,29 @@
   color: var(--on-surface);
   font-size: 0.8125rem;
   font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   outline: none;
   cursor: pointer;
   transition: border-color 150ms ease;
   &:focus { border-color: var(--on-surface); }
+}
+
+.header-toolbar .portfolio-select {
+  @media (min-width: 640px) {
+    width: auto;
+    max-width: 20rem;
+  }
+}
+
+.sse-pipeline-steps {
+  flex-wrap: wrap;
+  gap: 0.375rem 0.75rem;
+  @media (min-width: 640px) {
+    flex-wrap: nowrap;
+    gap: 0;
+  }
 }
 
 .sse-progress-card {
@@ -101,9 +140,10 @@
 
 .sse-header-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.75rem 1rem;
 }
 
 .sse-stage-cluster {
@@ -274,6 +314,9 @@
   flex-direction: column;
   gap: 1rem;
   margin-bottom: 1.25rem;
+  min-width: 0;
+  max-width: 100%;
+  > div { min-width: 0; }
   @media (min-width: 640px) { flex-direction: row; align-items: center; justify-content: space-between; }
 }
 
@@ -311,6 +354,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.375rem;
+  min-width: 0;
 }
 
 .form-label {
@@ -365,6 +409,8 @@
 }
 
 .milestone-card, .task-card {
+  min-width: 0;
+  max-width: 100%;
   background-color: var(--surface-container-low);
   border: 1px solid var(--outline-variant);
   border-radius: 0.25rem;
@@ -375,16 +421,20 @@
 
 .item-top-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.75rem;
   margin-bottom: 0.75rem;
+  min-width: 0;
 }
 
 .item-badge-cluster {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
+  min-width: 0;
 }
 
 .item-index-badge {

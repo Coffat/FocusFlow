@@ -78,3 +78,10 @@
   (closeModal)="closeAdaptationModal()"
   (confirmAdaptation)="closeAdaptationModal()"
 />
+
+<!-- PREREQUISITE AVAILABILITY POPUP DIALOG -->
+<app-prerequisite-availability-dialog
+  [open]="prerequisiteDialogOpen()"
+  returnUrl="/dashboard"
+  (closeDialog)="closePrerequisiteDialog()"
+/>

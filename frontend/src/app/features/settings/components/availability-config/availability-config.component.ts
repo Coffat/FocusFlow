@@ -3,10 +3,13 @@ import {
   Component,
   OnInit,
   computed,
-  inject
+  inject,
+  signal
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute, Router } from '@angular/router';
+import { MessageService } from 'primeng/api';
 import {
   LucideAngularModule,
   LUCIDE_ICONS,
@@ -99,6 +102,9 @@ export interface CommonShift {
 })
 export class AvailabilityConfigComponent implements OnInit {
   readonly service = inject(AvailabilityService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+  private readonly messageService = inject(MessageService, { optional: true });
 
   readonly daysOfWeek = DAYS_OF_WEEK;
   readonly dayLabels = DAY_LABELS;
@@ -113,8 +119,45 @@ export class AvailabilityConfigComponent implements OnInit {
   readonly totalWeeklyHours = computed(() => this.service.totalWeeklyHours());
   readonly isWeeklyValid = computed(() => this.service.isWeeklyValid());
 
+  readonly modeConflictPending = signal<boolean>(false);
+  readonly confirmedPrimaryMode = signal<'MANUAL_HYBRID' | 'GOOGLE_CALENDAR' | null>(null);
+  readonly showModeConflictBox = computed<boolean>(() => this.modeConflictPending());
+  readonly isGoogleCalendarPrimaryMode = computed<boolean>(
+    () =>
+      this.service.calendarIntegrationMode() === 'CONNECTED' &&
+      this.confirmedPrimaryMode() === 'GOOGLE_CALENDAR' &&
+      !this.modeConflictPending()
+  );
+
+  private triggerConflictIfConnected(): void {
+    if (this.service.calendarIntegrationMode() === 'CONNECTED') {
+      this.modeConflictPending.set(true);
+    }
+  }
+
+  chooseManualHybridPrimaryMode(): void {
+    this.service.setCalendarIntegrationMode('NONE');
+    this.confirmedPrimaryMode.set('MANUAL_HYBRID');
+    this.modeConflictPending.set(false);
+  }
+
+  chooseGoogleCalendarPrimaryMode(): void {
+    this.service.setCalendarIntegrationMode('CONNECTED');
+    this.confirmedPrimaryMode.set('GOOGLE_CALENDAR');
+    this.modeConflictPending.set(false);
+  }
+
   ngOnInit(): void {
     this.service.loadMyAvailability();
+
+    const focus = this.route.snapshot.queryParamMap.get('focus');
+    if (focus === 'calendar') {
+      setTimeout(() => {
+        const el = document.getElementById('calendar-sync-section') || document.getElementById('calendar-mode-select');
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        (document.getElementById('calendar-mode-select') as HTMLElement)?.focus?.();
+      }, 150);
+    }
   }
 
   loadMyAvailability(): void {
@@ -123,6 +166,7 @@ export class AvailabilityConfigComponent implements OnInit {
 
   setMode(mode: AvailabilityMode): void {
     this.service.setMode(mode);
+    this.triggerConflictIfConnected();
   }
 
   onMinSessionChange(event: Event): void {
@@ -133,6 +177,12 @@ export class AvailabilityConfigComponent implements OnInit {
   onCalendarModeChange(event: Event): void {
     const val = (event.target as HTMLSelectElement).value as CalendarIntegrationMode;
     this.service.setCalendarIntegrationMode(val);
+    if (val === 'CONNECTED') {
+      this.modeConflictPending.set(true);
+    } else {
+      this.modeConflictPending.set(false);
+      this.confirmedPrimaryMode.set('MANUAL_HYBRID');
+    }
   }
 
   onAllowedWindowChange(field: 'start' | 'end', event: Event): void {
@@ -148,42 +198,50 @@ export class AvailabilityConfigComponent implements OnInit {
   onQuotaRangeInput(day: DayOfWeek, event: Event): void {
     const val = Number((event.target as HTMLInputElement).value);
     this.service.updateDayQuota(day, val);
+    this.triggerConflictIfConnected();
   }
 
   updateDayQuota(day: DayOfWeek, quota: number): void {
     this.service.updateDayQuota(day, quota);
+    this.triggerConflictIfConnected();
   }
 
   adjustDayQuota(day: DayOfWeek, delta: number): void {
     const current = this.service.weeklySchedule()[day].quota_hours || 0;
     const nextVal = Math.max(0.5, Math.min(14.0, Math.round((current + delta) * 10) / 10));
     this.service.updateDayQuota(day, nextVal);
+    this.triggerConflictIfConnected();
   }
 
   onSlotFieldChange(day: DayOfWeek, index: number, field: keyof TimeSlotDTO, event: Event): void {
     const val = (event.target as HTMLInputElement).value;
     this.service.updateTimeSlot(day, index, field, val);
+    this.triggerConflictIfConnected();
   }
 
   updateTimeSlot(day: DayOfWeek, index: number, field: keyof TimeSlotDTO, value: string | number | undefined): void {
     this.service.updateTimeSlot(day, index, field, value);
+    this.triggerConflictIfConnected();
   }
 
   onSlotOffsetChange(day: DayOfWeek, index: number, event: Event): void {
     const checked = (event.target as HTMLInputElement).checked;
     this.service.updateTimeSlot(day, index, 'end_day_offset', checked ? 1 : 0);
+    this.triggerConflictIfConnected();
   }
 
   addTimeSlot(day: DayOfWeek): void {
     this.service.addTimeSlot(day);
+    this.triggerConflictIfConnected();
   }
 
   removeTimeSlot(day: DayOfWeek, index: number): void {
     this.service.removeTimeSlot(day, index);
+    this.triggerConflictIfConnected();
   }
 
   saveAvailability(): void {
-    this.service.saveMyAvailability();
+    this.onSaveAvailability();
   }
 
   resetToDefault(): void {
@@ -192,24 +250,30 @@ export class AvailabilityConfigComponent implements OnInit {
     this.service.allowedWindow.set({ start: '07:00', end: '23:00' });
     this.service.minSessionMinutes.set(30);
     this.service.calendarIntegrationMode.set('NONE');
+    this.modeConflictPending.set(false);
+    this.confirmedPrimaryMode.set(null);
     this.service.errorMessage.set(null);
     this.service.saveSuccessMessage.set(null);
   }
 
   copyMondayToWeekdays(): void {
     this.service.copyMondayToWeekdays();
+    this.triggerConflictIfConnected();
   }
 
   toggleDayEnabled(day: DayOfWeek): void {
     this.service.toggleDayEnabled(day);
+    this.triggerConflictIfConnected();
   }
 
   updateDayPeriod(day: DayOfWeek, period: import('../../../../core/models/availability.model').PreferredPeriod | string): void {
     this.service.updateDayPeriod(day, period);
+    this.triggerConflictIfConnected();
   }
 
   applyPreset(presetId: 'BUSY_PRO' | 'UNI_STUDENT' | 'BOOTCAMPER'): void {
     this.service.applyPreset(presetId);
+    this.triggerConflictIfConnected();
   }
 
   onModeKeydown(event: KeyboardEvent, currentMode: AvailabilityMode): void {
@@ -236,6 +300,8 @@ export class AvailabilityConfigComponent implements OnInit {
   toggleShift(day: DayOfWeek, start: string, end: string): void {
     const dayData = this.service.weeklySchedule()[day];
     if (!dayData) return;
+
+    this.triggerConflictIfConnected();
 
     if (!dayData.enabled) {
       this.service.toggleDayEnabled(day);
@@ -286,6 +352,28 @@ export class AvailabilityConfigComponent implements OnInit {
       0
     );
     return Math.round((minutes / 60) * 10) / 10;
+  }
+
+  onSaveAvailability(): void {
+    this.service.saveMyAvailability((res) => {
+      if (res) {
+        const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
+        if (returnUrl) {
+          this.messageService?.add({
+            severity: 'success',
+            summary: 'Thành công',
+            detail: 'Đã lưu cấu hình thời gian rảnh thành công!',
+          });
+          const autoOpen = this.route.snapshot.queryParamMap.get('autoOpen');
+          let targetUrl = returnUrl;
+          if (autoOpen === 'true' && !targetUrl.includes('autoOpen=')) {
+            const separator = targetUrl.includes('?') ? '&' : '?';
+            targetUrl = `${targetUrl}${separator}autoOpen=true`;
+          }
+          this.router.navigateByUrl(targetUrl);
+        }
+      }
+    });
   }
 
   clearError(): void {

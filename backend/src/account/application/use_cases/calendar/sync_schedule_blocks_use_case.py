@@ -46,11 +46,6 @@ class SyncScheduleBlocksToGoogleUseCase:
                 error_detail="No active Google Calendar connection found.",
             )
 
-        refresh_token = decrypt_token(
-            conn.oauth_refresh_token_encrypted,
-            key=self._settings.calendar_encryption_key,
-        )
-
         # Query blocks belonging to official_schedule_id
         blocks = await self._schedule_block_port.get_blocks_for_schedule(
             schedule_id,
@@ -60,9 +55,55 @@ class SyncScheduleBlocksToGoogleUseCase:
             # Fallback: scan all blocks for the schedule
             blocks = await self._schedule_block_port.get_blocks_for_schedule(schedule_id)
 
+        now = utc_now()
+        if not conn.oauth_refresh_token_encrypted:
+            for block in blocks:
+                await self._schedule_block_port.update_block_sync_info(
+                    block.id,
+                    external_calendar_event_id=block.external_calendar_event_id or "",
+                    etag=block.etag,
+                    sync_status="SYNC_FAILED",
+                    last_synced_at=now,
+                )
+            if self._uow:
+                await self._uow.commit()
+            return OutboundSyncResultDTO(
+                schedule_id=str(schedule_id),
+                user_id=str(user_id),
+                total_blocks_scanned=len(blocks),
+                synced_blocks_count=0,
+                skipped=True,
+                error_detail="Missing encrypted OAuth refresh token for Google Calendar.",
+            )
+
+        try:
+            refresh_token = decrypt_token(
+                conn.oauth_refresh_token_encrypted,
+                key=self._settings.calendar_encryption_key,
+            )
+        except Exception as exc:
+            for block in blocks:
+                await self._schedule_block_port.update_block_sync_info(
+                    block.id,
+                    external_calendar_event_id=block.external_calendar_event_id or "",
+                    etag=block.etag,
+                    sync_status="SYNC_FAILED",
+                    last_synced_at=now,
+                )
+            if self._uow:
+                await self._uow.commit()
+            return OutboundSyncResultDTO(
+                schedule_id=str(schedule_id),
+                user_id=str(user_id),
+                total_blocks_scanned=len(blocks),
+                synced_blocks_count=0,
+                skipped=True,
+                error_detail=f"Failed to decrypt Google Calendar token: {exc}",
+            )
+
         synced_count = 0
         conflict_resolved_count = 0
-        now = utc_now()
+        error_messages: list[str] = []
 
         for block in blocks:
             event_id = get_deterministic_event_id(block.id)
@@ -115,9 +156,28 @@ class SyncScheduleBlocksToGoogleUseCase:
                     )
                     synced_count += 1
                     conflict_resolved_count += 1
+                else:
+                    await self._schedule_block_port.update_block_sync_info(
+                        block.id,
+                        external_calendar_event_id=block.external_calendar_event_id or "",
+                        etag=block.etag,
+                        sync_status="SYNC_FAILED",
+                        last_synced_at=now,
+                    )
+                    error_messages.append(f"Conflict unresolved for block {block.id}")
+            except Exception as exc:
+                await self._schedule_block_port.update_block_sync_info(
+                    block.id,
+                    external_calendar_event_id=block.external_calendar_event_id or "",
+                    etag=block.etag,
+                    sync_status="SYNC_FAILED",
+                    last_synced_at=now,
+                )
+                error_messages.append(str(exc))
 
-        conn.last_synced_at = now
-        await self._repository.save(conn)
+        if synced_count > 0:
+            conn.last_synced_at = now
+            await self._repository.save(conn)
 
         if self._uow:
             await self._uow.commit()
@@ -129,4 +189,5 @@ class SyncScheduleBlocksToGoogleUseCase:
             synced_blocks_count=synced_count,
             conflict_resolved_count=conflict_resolved_count,
             skipped=False,
+            error_detail="; ".join(error_messages) if error_messages else None,
         )

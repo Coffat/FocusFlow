@@ -1,6 +1,8 @@
+from datetime import date
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from src.evaluation.application.dtos.dashboard_dtos import (
     DashboardSummaryResponseDTO,
@@ -11,6 +13,13 @@ from src.evaluation.application.dtos.intelligence import (
     MilestoneProofResponseDTO,
     SubmitProofRequestDTO,
     WeeklyReviewResponseDTO,
+)
+from src.evaluation.application.ports.intelligence_repository_port import (
+    DuplicateWeeklyReviewConflictError,
+)
+from src.evaluation.application.use_cases.analytics import (
+    GetAnalyticsSummaryUseCase,
+    GetWeeklyAnalyticsUseCase,
 )
 from src.evaluation.application.use_cases.dashboard_summary import (
     GetDashboardSummaryUseCase,
@@ -23,15 +32,23 @@ from src.evaluation.application.use_cases.intelligence import (
     SubmitMilestoneProofUseCase,
 )
 from src.evaluation.presentation.deps import (
+    get_analytics_summary_use_case,
     get_current_evaluation_learner_id,
     get_dashboard_summary_use_case,
     get_generate_proof_use_case,
     get_generate_weekly_review_use_case,
     get_latest_weekly_review_use_case,
     get_submit_proof_use_case,
+    get_weekly_analytics_use_case,
+)
+from src.evaluation.presentation.schemas.analytics_schemas import (
+    AnalyticsDailyMetricResponse,
+    AnalyticsSummaryResponse,
+    AnalyticsWeeklyResponse,
 )
 
 router = APIRouter(prefix="/api/v1/evaluation", tags=["Evaluation & Analytics"])
+analytics_router = APIRouter(prefix="/api/v1/analytics", tags=["Analytics"])
 
 
 @router.get("/status")
@@ -94,6 +111,11 @@ async def generate_weekly_review(
 ) -> WeeklyReviewResponseDTO:
     try:
         return await use_case.execute(user_id, request)
+    except DuplicateWeeklyReviewConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
     except EvaluationResourceNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Roadmap not found") from exc
     except ValueError as exc:
@@ -109,3 +131,74 @@ async def latest_weekly_review(
         return await use_case.execute(user_id)
     except EvaluationResourceNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Weekly review not found") from exc
+
+
+@analytics_router.get(
+    "/summary",
+    response_model=AnalyticsSummaryResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get quantitative analytics summary including WRLS, Adherence & Completion Rate (UC-19)",
+)
+async def get_analytics_summary(
+    user_id: UUID = Depends(get_current_evaluation_learner_id),
+    use_case: GetAnalyticsSummaryUseCase = Depends(get_analytics_summary_use_case),
+) -> AnalyticsSummaryResponse:
+    dto = await use_case.execute(user_id)
+    return AnalyticsSummaryResponse(
+        total_focused_hours=dto.total_focused_hours,
+        weekly_study_hours=dto.weekly_study_hours,
+        task_completion_rate=dto.task_completion_rate,
+        plan_adherence_rate=dto.plan_adherence_rate,
+        weekly_recovered_learning_sessions=dto.weekly_recovered_learning_sessions,
+        completed_tasks_count=dto.completed_tasks_count,
+        total_tasks_count=dto.total_tasks_count,
+        active_streak_days=dto.active_streak_days,
+        average_focus_score=dto.average_focus_score,
+        daily_metrics=[
+            AnalyticsDailyMetricResponse(
+                date=m.date,
+                day_label=m.day_label,
+                minutes_studied=m.minutes_studied,
+                pomodoros_completed=m.pomodoros_completed,
+                sessions_count=m.sessions_count,
+                is_today=m.is_today,
+            )
+            for m in dto.daily_metrics
+        ],
+    )
+
+
+@analytics_router.get(
+    "/weekly",
+    response_model=AnalyticsWeeklyResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get 7-day breakdown, WRLS, and adherence stats (UC-19)",
+)
+async def get_weekly_analytics(
+    user_id: UUID = Depends(get_current_evaluation_learner_id),
+    use_case: GetWeeklyAnalyticsUseCase = Depends(get_weekly_analytics_use_case),
+    week_start: Annotated[date | None, Query()] = None,
+) -> AnalyticsWeeklyResponse:
+    dto = await use_case.execute(user_id, week_start=week_start)
+    return AnalyticsWeeklyResponse(
+        week_start=dto.week_start,
+        week_end=dto.week_end,
+        total_focused_hours=dto.total_focused_hours,
+        completed_sessions_count=dto.completed_sessions_count,
+        completed_tasks_count=dto.completed_tasks_count,
+        total_scheduled_tasks_count=dto.total_scheduled_tasks_count,
+        task_completion_rate=dto.task_completion_rate,
+        plan_adherence_rate=dto.plan_adherence_rate,
+        weekly_recovered_learning_sessions=dto.weekly_recovered_learning_sessions,
+        daily_breakdown=[
+            AnalyticsDailyMetricResponse(
+                date=m.date,
+                day_label=m.day_label,
+                minutes_studied=m.minutes_studied,
+                pomodoros_completed=m.pomodoros_completed,
+                sessions_count=m.sessions_count,
+                is_today=m.is_today,
+            )
+            for m in dto.daily_breakdown
+        ],
+    )

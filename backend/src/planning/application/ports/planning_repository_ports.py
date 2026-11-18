@@ -24,13 +24,20 @@ class RoadmapRepositoryPort(Protocol):
 
     async def get_by_id(self, roadmap_id: UUID) -> Roadmap | None: ...
 
-    async def get_by_id_for_user(self, roadmap_id: UUID, user_id: UUID) -> Roadmap | None: ...
+    async def get_by_id_for_user(
+        self,
+        roadmap_id: UUID,
+        user_id: UUID,
+        *,
+        for_update: bool = False,
+    ) -> Roadmap | None: ...
 
     async def list_by_user_id(
         self,
         user_id: UUID,
         *,
         status: str | None = None,
+        for_update: bool = False,
     ) -> list[Roadmap]: ...
 
     async def count_active_by_user_id(
@@ -60,9 +67,16 @@ class MilestoneRepositoryPort(Protocol):
 class ScheduleProposalRepositoryPort(Protocol):
     async def save(self, proposal: ScheduleProposal) -> ScheduleProposal: ...
 
-    async def get_by_id(self, proposal_id: UUID) -> ScheduleProposal | None: ...
+    async def get_by_id(
+        self,
+        proposal_id: UUID,
+        *,
+        for_update: bool = False,
+    ) -> ScheduleProposal | None: ...
 
     async def get_current_draft(self, roadmap_id: UUID) -> ScheduleProposal | None: ...
+
+    async def list_by_roadmap_id(self, roadmap_id: UUID) -> list[ScheduleProposal]: ...
 
     async def discard_existing_drafts(self, roadmap_id: UUID, now: datetime) -> int: ...
 
@@ -70,4 +84,9 @@ class ScheduleProposalRepositoryPort(Protocol):
 class OfficialScheduleRepositoryPort(Protocol):
     async def save(self, schedule: OfficialSchedule) -> OfficialSchedule: ...
 
-    async def get_by_roadmap_id(self, roadmap_id: UUID) -> OfficialSchedule | None: ...
+    async def get_by_roadmap_id(
+        self,
+        roadmap_id: UUID,
+        *,
+        for_update: bool = False,
+    ) -> OfficialSchedule | None: ...

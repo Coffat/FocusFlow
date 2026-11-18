@@ -1,15 +1,50 @@
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  OnInit,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { LucideAngularModule, LUCIDE_ICONS, LucideIconProvider, Zap, Check, Calendar } from 'lucide-angular';
-import { ScheduleService } from '../services/schedule.service';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import {
+  AlertTriangle,
+  Calendar,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  LUCIDE_ICONS,
+  LucideAngularModule,
+  LucideIconProvider,
+  Play,
+  RefreshCw,
+  X,
+  Zap,
+} from 'lucide-angular';
+import {
+  ScheduleService,
+  formatLocalDateKey,
+  formatLocalTimeRange,
+  getLocalMondayIso,
+} from '../services/schedule.service';
+import { RoadmapResponse, WeeklyScheduleItemResponse } from '../models/schedule.model';
 import { CalendarIntegrationService } from '../../../core/services/calendar-integration.service';
 import { ButtonDirective } from '../../../shared/ui/button/button.directive';
 import { BadgeDirective } from '../../../shared/ui/badge/badge.directive';
-import { CardComponent } from '../../../shared/ui/card/card.component';
 
-export type QuickActionType = 'DOMINO_SHIFT' | 'TODAY_OFF' | 'EXTEND_TIME';
+export type QuickActionType = 'MOVE_TODAY_TO_BACKLOG' | 'REOPTIMIZE_SCHEDULE' | 'PAUSE_ROADMAP';
+
+function toLocalIsoDateTime(dateStr: string, timeStr: string): string | null {
+  if (!dateStr || !timeStr) return null;
+  const dt = new Date(`${dateStr}T${timeStr}:00`);
+  if (Number.isNaN(dt.getTime())) return null;
+  return dt.toISOString();
+}
 
 @Component({
   selector: 'app-schedule-page',
@@ -21,28 +56,43 @@ export type QuickActionType = 'DOMINO_SHIFT' | 'TODAY_OFF' | 'EXTEND_TIME';
     LucideAngularModule,
     ButtonDirective,
     BadgeDirective,
-    CardComponent
   ],
   providers: [
     {
       provide: LUCIDE_ICONS,
       multi: true,
-      useValue: new LucideIconProvider({ Zap, Check, Calendar })
-    }
+      useValue: new LucideIconProvider({
+        AlertTriangle,
+        Calendar,
+        Check,
+        ChevronLeft,
+        ChevronRight,
+        Clock,
+        Play,
+        RefreshCw,
+        X,
+        Zap,
+      }),
+    },
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
-    '(document:keydown.escape)': 'onEscapeKey()'
+    '(document:keydown.escape)': 'onEscapeKey()',
   },
   template: `
-    <div class="max-w-7xl mx-auto w-full p-4 sm:p-6 lg:p-8 space-y-6">
+    <div class="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
+      <!-- Top Bar -->
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 class="text-2xl font-bold tracking-tight">Thời Khóa Biểu Học Tập</h1>
-          <p class="text-sm text-[var(--muted-foreground)]">Lịch trình tự động được đồng bộ với quỹ thời gian rảnh của bạn</p>
+          <h1 class="text-2xl font-bold tracking-tight text-[var(--foreground)]">
+            Thời Khóa Biểu Học Tập
+          </h1>
+          <p class="text-xs sm:text-sm text-[var(--muted-foreground)] mt-0.5">
+            Lịch học chính thức hiển thị theo múi giờ địa phương của bạn
+          </p>
         </div>
 
-        <div class="flex items-center gap-3">
+        <div class="flex flex-wrap items-center gap-2.5">
           @if (!calendarService.isConnected()) {
             <button
               type="button"
@@ -51,9 +101,9 @@ export type QuickActionType = 'DOMINO_SHIFT' | 'TODAY_OFF' | 'EXTEND_TIME';
               size="sm"
               [disabled]="calendarService.isLoading()"
               (click)="connectGoogleCalendar()"
-              class="inline-flex items-center gap-1.5 cursor-pointer"
+              class="inline-flex items-center gap-1.5"
             >
-              <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24">
+              <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                 <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
                 <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
@@ -69,7 +119,7 @@ export type QuickActionType = 'DOMINO_SHIFT' | 'TODAY_OFF' | 'EXTEND_TIME';
                 type="button"
                 (click)="disconnectGoogleCalendar()"
                 [disabled]="calendarService.isLoading()"
-                class="ml-1 text-[11px] text-muted-foreground hover:text-red-600 underline cursor-pointer"
+                class="ml-1 text-[11px] hover:text-red-600 underline cursor-pointer"
                 title="Ngắt kết nối Google Calendar"
               >
                 Ngắt
@@ -84,100 +134,412 @@ export type QuickActionType = 'DOMINO_SHIFT' | 'TODAY_OFF' | 'EXTEND_TIME';
             size="sm"
             data-testid="open-quick-drawer-btn"
             (click)="openQuickDrawer()"
-            class="inline-flex items-center gap-1.5"
           >
-            <lucide-icon name="zap" [size]="14" class="shrink-0" aria-hidden="true"></lucide-icon>
+            <lucide-icon name="zap" [size]="14" aria-hidden="true"></lucide-icon>
             <span>Điều chỉnh lịch hôm nay</span>
           </button>
         </div>
       </div>
 
-      <!-- Quick Drawer Notification -->
-      @if (drawerSuccess()) {
+      <!-- Drawer / Action Success Notice -->
+      @if (drawerSuccess(); as notice) {
         <div
           role="status"
           data-testid="quick-drawer-notification"
-          class="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-700 dark:text-amber-400 font-medium flex items-center justify-between shadow-xs"
+          class="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs sm:text-sm text-emerald-900 dark:text-emerald-200 font-medium flex flex-col sm:flex-row sm:items-center justify-between gap-2"
         >
           <div class="flex items-center gap-2">
-            <lucide-icon name="check" [size]="14" class="shrink-0 text-emerald-600" aria-hidden="true"></lucide-icon>
-            <span>{{ drawerSuccess() }}</span>
+            <lucide-icon name="check" [size]="15" class="shrink-0 text-emerald-600" aria-hidden="true"></lucide-icon>
+            <span>{{ notice.message }}</span>
+            @if (notice.roadmapId) {
+              <a
+                [routerLink]="['/roadmaps', notice.roadmapId]"
+                class="underline font-semibold text-[var(--primary)] ml-1"
+              >
+                Xem &amp; Áp dụng đề xuất &rarr;
+              </a>
+            }
           </div>
-          <button type="button" (click)="drawerSuccess.set(null)" class="text-xs hover:underline">Đóng</button>
+          <button type="button" (click)="drawerSuccess.set(null)" class="text-xs hover:underline self-end sm:self-auto cursor-pointer">
+            Đóng
+          </button>
         </div>
       }
 
-      <!-- WebCal Sync Box -->
-      @if (scheduleService.webCalInfo().tokenUrl) {
-        <app-card class="bg-[var(--accent)]/30 border-dashed">
-          <div class="flex items-center justify-between">
-            <div class="space-y-1">
-              <span class="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">Đồng bộ lịch 1 chiều (RFC 5545)</span>
-              <div class="text-xs font-mono select-all bg-[var(--card)] px-3 py-1.5 rounded-md border border-[var(--border)] max-w-lg truncate">
-                {{ scheduleService.webCalInfo().tokenUrl }}
-              </div>
+      <!-- Page Error Banner -->
+      @if (pageError(); as err) {
+        <div
+          role="alert"
+          data-testid="schedule-error-banner"
+          class="p-4 rounded-xl border border-red-500/40 bg-red-500/10 text-red-900 dark:text-red-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+        >
+          <div class="text-xs sm:text-sm space-y-0.5">
+            <div class="font-bold flex items-center gap-1.5">
+              <lucide-icon name="alert-triangle" [size]="14" aria-hidden="true"></lucide-icon>
+              <span>{{ err.message }}</span>
+              @if (err.code) {
+                <span class="font-mono px-1.5 py-0.5 rounded bg-red-500/15 text-[11px]">{{ err.code }}</span>
+              }
             </div>
-            <button appButton variant="secondary" size="sm">Sao chép URL</button>
           </div>
-        </app-card>
+          <div class="flex items-center gap-2 shrink-0">
+            <button type="button" appButton variant="outline" size="sm" (click)="reloadCurrentWeek()">Thử lại</button>
+            <button type="button" appButton variant="ghost" size="sm" (click)="scheduleService.clearError()">Đóng</button>
+          </div>
+        </div>
       }
 
-      <!-- Weekly Slots -->
-      <div class="space-y-3">
-        <h2 class="text-base font-semibold">Các khung giờ học tuần này</h2>
-        @if (scheduleService.weeklySlots().length === 0) {
-          <div class="p-12 text-center flex flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--border)] bg-[var(--card)]">
-            <div class="w-12 h-12 rounded-2xl bg-neutral-100 text-neutral-500 flex items-center justify-center mb-3">
+      <!-- Week Navigation Toolbar -->
+      <div class="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-xl border border-[var(--border)] bg-[var(--card)]">
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            appButton
+            variant="outline"
+            size="sm"
+            data-testid="prev-week-btn"
+            (click)="navigateWeek(-1)"
+            aria-label="Tuần trước"
+          >
+            <lucide-icon name="chevron-left" [size]="15" aria-hidden="true"></lucide-icon>
+            <span>Tuần trước</span>
+          </button>
+
+          <span class="px-3 py-1 text-xs sm:text-sm font-semibold text-[var(--foreground)]" data-testid="week-range-label">
+            {{ weekRangeLabel() }}
+          </span>
+
+          <button
+            type="button"
+            appButton
+            variant="outline"
+            size="sm"
+            data-testid="next-week-btn"
+            (click)="navigateWeek(1)"
+            aria-label="Tuần sau"
+          >
+            <span>Tuần sau</span>
+            <lucide-icon name="chevron-right" [size]="15" aria-hidden="true"></lucide-icon>
+          </button>
+        </div>
+
+        <div class="flex items-center gap-2">
+          @if (scheduleService.weekOffset() !== 0) {
+            <button type="button" appButton variant="ghost" size="sm" (click)="resetToCurrentWeek()">
+              Về tuần hiện tại
+            </button>
+          }
+          <button
+            type="button"
+            appButton
+            variant="ghost"
+            size="sm"
+            [disabled]="scheduleService.isLoading()"
+            (click)="reloadCurrentWeek()"
+            aria-label="Làm mới lịch tuần"
+          >
+            <lucide-icon name="refresh-cw" [size]="14" aria-hidden="true"></lucide-icon>
+          </button>
+        </div>
+      </div>
+
+      <!-- Loading State -->
+      @if (scheduleService.isLoading() && scheduleService.items().length === 0) {
+        <div class="p-10 rounded-2xl border border-[var(--border)] bg-[var(--card)] flex flex-col items-center justify-center gap-3">
+          <lucide-icon name="refresh-cw" [size]="22" class="animate-spin text-[var(--primary)]" aria-hidden="true"></lucide-icon>
+          <p class="text-sm text-[var(--muted-foreground)]">Đang tải lịch học tuần...</p>
+        </div>
+      } @else {
+        <!-- Weekly Schedule Grouped by Local Day -->
+        @if (scheduleService.dayGroups().length === 0) {
+          <div class="p-10 sm:p-12 text-center flex flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--border)] bg-[var(--card)]">
+            <div class="w-12 h-12 rounded-2xl bg-[var(--muted)] text-[var(--muted-foreground)] flex items-center justify-center mb-3">
               <lucide-icon name="calendar" [size]="24" aria-hidden="true"></lucide-icon>
             </div>
-            <h3 class="text-base font-semibold text-neutral-900 dark:text-neutral-100 mb-1">
+            <h2 class="text-base font-semibold text-[var(--foreground)] mb-1">
               Chưa có buổi học nào trong tuần
-            </h3>
-            <p class="text-xs text-[var(--muted-foreground)] max-w-sm mb-5 leading-relaxed">
+            </h2>
+            <p class="text-xs sm:text-sm text-[var(--muted-foreground)] max-w-md mb-5 leading-relaxed">
               Bạn chưa có lịch học nào được xếp trong tuần này. Hãy tạo một Lộ trình học tập mới với AI hoặc cấu hình khung giờ rảnh để hệ thống tự động điều phối.
             </p>
-            <div class="flex items-center gap-3">
-              <a
-                routerLink="/roadmaps"
-                class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#005234] text-white text-xs font-semibold hover:bg-[#246B4A] transition-colors shadow-xs no-underline"
-              >
+            <div class="flex flex-wrap items-center justify-center gap-3">
+              <a routerLink="/roadmaps" appButton variant="default" size="sm" class="no-underline">
                 Tạo Lộ trình mới với AI
               </a>
-              <a
-                routerLink="/availability"
-                class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-xs font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors no-underline"
-              >
+              <a routerLink="/availability" appButton variant="outline" size="sm" class="no-underline">
                 Cấu hình Giờ rảnh
               </a>
             </div>
           </div>
         } @else {
-          @for (slot of scheduleService.weeklySlots(); track slot.id) {
-            <div class="p-4 rounded-xl border border-[var(--border)] bg-[var(--card)] flex items-center justify-between shadow-xs">
-              <div class="flex items-center gap-4">
-                <div class="w-16 text-center py-1 rounded bg-[var(--muted)] font-mono text-xs font-bold">
-                  {{ slot.startTime }}
-                </div>
-                <div>
-                  <div class="font-medium text-sm">{{ slot.taskTitle }}</div>
-                  <div class="text-xs text-[var(--muted-foreground)]">Khung giờ: {{ slot.startTime }} - {{ slot.endTime }}</div>
-                </div>
-              </div>
+          <div class="space-y-5">
+            @for (group of scheduleService.dayGroups(); track group.localDate) {
+              <section class="rounded-2xl border border-[var(--border)] bg-[var(--card)] overflow-hidden shadow-xs">
+                <header
+                  class="px-4 sm:px-5 py-3 border-b border-[var(--border)] flex items-center justify-between gap-2"
+                  [class]="group.isToday ? 'bg-[var(--primary)]/10' : 'bg-[var(--muted)]/50'"
+                >
+                  <div class="flex items-center gap-2">
+                    <h2 class="text-sm sm:text-base font-bold text-[var(--foreground)]">
+                      {{ group.dayLabel }}
+                    </h2>
+                    @if (group.isToday) {
+                      <span appBadge variant="default" class="text-[10px]">Hôm nay</span>
+                    }
+                  </div>
+                  <span class="text-xs text-[var(--muted-foreground)] font-mono">
+                    {{ group.items.length }} khung giờ
+                  </span>
+                </header>
 
-              <div class="flex items-center gap-2">
-                @if (slot.isCompleted) {
-                  <span appBadge variant="success">Đã hoàn thành</span>
-                } @else {
-                  <span appBadge variant="outline">Chưa bắt đầu</span>
-                }
-              </div>
-            </div>
-          }
+                <div class="divide-y divide-[var(--border)]">
+                  @for (item of group.items; track item.block_id) {
+                    <div
+                      data-testid="schedule-block-item"
+                      class="p-4 sm:px-5 flex flex-col md:flex-row md:items-center justify-between gap-3"
+                    >
+                      <div class="flex items-start sm:items-center gap-3.5 min-w-0">
+                        <div class="px-2.5 py-1.5 rounded-lg bg-[var(--muted)] font-mono text-xs font-bold text-[var(--foreground)] shrink-0">
+                          {{ formatTimeRange(item.start_time, item.end_time) }}
+                        </div>
+
+                        <div class="min-w-0 space-y-1">
+                          <div class="flex flex-wrap items-center gap-2">
+                            <span class="font-semibold text-sm text-[var(--foreground)]">
+                              {{ item.task?.title ?? item.roadmap_title }}
+                            </span>
+
+                            @if (item.block_status === 'COMPLETED' || item.task?.status === 'COMPLETED') {
+                              <span appBadge variant="success">Đã hoàn thành</span>
+                            } @else if (item.block_status === 'CANCELLED') {
+                              <span appBadge variant="outline">Đã hủy</span>
+                            } @else {
+                              <span appBadge variant="outline">{{ item.block_status }}</span>
+                            }
+
+                            @if (item.task?.is_overdue) {
+                              <span appBadge variant="destructive">Quá hạn</span>
+                            }
+                            @if (item.task?.is_blocked) {
+                              <span appBadge variant="outline" class="border-amber-500 text-amber-700 dark:text-amber-300">
+                                Bị chặn
+                              </span>
+                            }
+                            @if (item.task?.is_stalled || (item.task?.reschedule_count ?? 0) >= 3) {
+                              <span appBadge variant="outline" class="border-purple-500 text-purple-700 dark:text-purple-300">
+                                Đình trệ ({{ item.task?.reschedule_count ?? 3 }} lần)
+                              </span>
+                            }
+                          </div>
+
+                          <div class="text-xs text-[var(--muted-foreground)] flex flex-wrap items-center gap-2">
+                            <span>{{ item.roadmap_title }}</span>
+                            <span>&bull;</span>
+                            <span class="inline-flex items-center gap-1 font-mono">
+                              <lucide-icon name="clock" [size]="11" aria-hidden="true"></lucide-icon>
+                              {{ item.scheduled_duration_minutes }} phút
+                            </span>
+                            @if (item.placement_rationale) {
+                              <span>&bull;</span>
+                              <span class="truncate max-w-md">{{ item.placement_rationale }}</span>
+                            }
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="flex flex-wrap items-center gap-2 shrink-0">
+                        @if (
+                          item.task_id &&
+                          item.block_status !== 'COMPLETED' &&
+                          item.block_status !== 'CANCELLED' &&
+                          item.task?.status !== 'COMPLETED'
+                        ) {
+                          <a
+                            [routerLink]="['/workspace']"
+                            [queryParams]="{ taskId: item.task_id }"
+                            appButton
+                            variant="default"
+                            size="sm"
+                            class="no-underline"
+                          >
+                            <lucide-icon name="play" [size]="13" aria-hidden="true"></lucide-icon>
+                            <span>Vào học</span>
+                          </a>
+
+                          <button
+                            type="button"
+                            appButton
+                            variant="outline"
+                            size="sm"
+                            (click)="openRescheduleModal(item)"
+                          >
+                            Dời lịch
+                          </button>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+              </section>
+            }
+          </div>
         }
-      </div>
+      }
     </div>
 
-    <!-- Quick Drawer (SCR-05: In-context Adjustment §2.5 & §7.1) -->
+    <!-- Quick Reschedule / Move to Backlog Modal -->
+    @if (reschedulingItem(); as blockItem) {
+      <div
+        class="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs"
+        (click)="closeRescheduleModal()"
+        aria-hidden="true"
+      ></div>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="schedule-reschedule-title"
+        data-testid="schedule-reschedule-dialog"
+        class="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
+      >
+        <div
+          class="pointer-events-auto w-full max-w-md rounded-2xl border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] shadow-2xl p-5 sm:p-6 space-y-4"
+          (click)="$event.stopPropagation()"
+        >
+          <div class="flex items-start justify-between gap-2 border-b border-[var(--border)] pb-3">
+            <div>
+              <h2 id="schedule-reschedule-title" class="text-base font-bold">
+                Dời lịch nhiệm vụ
+              </h2>
+              <p class="text-xs text-[var(--muted-foreground)] mt-0.5">
+                {{ blockItem.task?.title ?? blockItem.roadmap_title }}
+              </p>
+            </div>
+            <button type="button" appButton variant="ghost" size="icon" (click)="closeRescheduleModal()" aria-label="Đóng">
+              <lucide-icon name="x" [size]="18" aria-hidden="true"></lucide-icon>
+            </button>
+          </div>
+
+          @if (modalError(); as mErr) {
+            <div
+              role="alert"
+              data-testid="schedule-reschedule-error"
+              class="p-3 rounded-xl border border-red-500/40 bg-red-500/10 text-xs text-red-900 dark:text-red-200 space-y-1"
+            >
+              @if (mErr.code) {
+                <div class="font-mono font-bold">{{ mErr.code }}</div>
+              }
+              <div>{{ mErr.message }}</div>
+              @if (mErr.violations.length > 0) {
+                <ul class="list-disc list-inside space-y-0.5 pt-1">
+                  @for (v of mErr.violations; track $index) {
+                    <li>{{ v }}</li>
+                  }
+                </ul>
+              }
+            </div>
+          }
+
+          @if (blockItem.task?.is_stalled || (blockItem.task?.reschedule_count ?? 0) >= 3) {
+            <div class="p-3 rounded-xl border border-purple-500/40 bg-purple-500/10 text-xs space-y-2">
+              <div class="font-bold">Nhiệm vụ đang đình trệ (STALLED)</div>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  [checked]="allowStalledCommitment()"
+                  (change)="allowStalledCommitment.set($any($event.target).checked)"
+                  class="h-4 w-4 accent-[var(--primary)]"
+                />
+                <span>Tôi cam kết hoàn thành nhiệm vụ ở khung giờ mới</span>
+              </label>
+            </div>
+          }
+
+          <div class="space-y-3">
+            <div class="space-y-1">
+              <label for="sched-reschedule-date" class="block text-xs font-semibold">Ngày mới</label>
+              <input
+                id="sched-reschedule-date"
+                type="date"
+                [ngModel]="rescheduleDate()"
+                (ngModelChange)="rescheduleDate.set($event)"
+                class="w-full h-9 rounded-lg border border-[var(--input)] bg-[var(--background)] px-3 text-sm"
+              />
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div class="space-y-1">
+                <label for="sched-reschedule-start" class="block text-xs font-semibold">Giờ bắt đầu</label>
+                <input
+                  id="sched-reschedule-start"
+                  type="time"
+                  [ngModel]="rescheduleStart()"
+                  (ngModelChange)="rescheduleStart.set($event)"
+                  class="w-full h-9 rounded-lg border border-[var(--input)] bg-[var(--background)] px-3 text-sm"
+                />
+              </div>
+              <div class="space-y-1">
+                <label for="sched-reschedule-end" class="block text-xs font-semibold">Giờ kết thúc</label>
+                <input
+                  id="sched-reschedule-end"
+                  type="time"
+                  [ngModel]="rescheduleEnd()"
+                  (ngModelChange)="rescheduleEnd.set($event)"
+                  class="w-full h-9 rounded-lg border border-[var(--input)] bg-[var(--background)] px-3 text-sm"
+                />
+              </div>
+            </div>
+            <div class="space-y-1">
+              <label for="sched-reschedule-reason" class="block text-xs font-semibold">Lý do (tùy chọn)</label>
+              <input
+                id="sched-reschedule-reason"
+                type="text"
+                [ngModel]="rescheduleReason()"
+                (ngModelChange)="rescheduleReason.set($event)"
+                placeholder="Ví dụ: Bận họp đột xuất"
+                class="w-full h-9 rounded-lg border border-[var(--input)] bg-[var(--background)] px-3 text-sm"
+              />
+            </div>
+
+            <label class="flex items-center gap-2 text-xs cursor-pointer">
+              <input
+                type="checkbox"
+                [checked]="confirmSoftOverflow()"
+                (change)="confirmSoftOverflow.set($any($event.target).checked)"
+                class="h-4 w-4 accent-[var(--primary)]"
+              />
+              <span>Xác nhận Soft Overflow (&le; 30 phút) nếu cần</span>
+            </label>
+          </div>
+
+          <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-[var(--border)]">
+            <button
+              type="button"
+              appButton
+              variant="outline"
+              size="sm"
+              [disabled]="scheduleService.isSubmitting()"
+              (click)="submitMoveItemToBacklog()"
+            >
+              Đưa về Backlog
+            </button>
+            <div class="flex items-center gap-2">
+              <button type="button" appButton variant="ghost" size="sm" (click)="closeRescheduleModal()">Hủy</button>
+              <button
+                type="button"
+                appButton
+                variant="default"
+                size="sm"
+                [disabled]="scheduleService.isSubmitting() || !rescheduleDate()"
+                (click)="submitRescheduleItem()"
+              >
+                {{ scheduleService.isSubmitting() ? 'Đang lưu...' : 'Xác nhận dời' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- Quick Drawer (Điều chỉnh lịch hôm nay) -->
     @if (isDrawerOpen()) {
       <div
         class="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 transition-opacity"
@@ -195,150 +557,253 @@ export type QuickActionType = 'DOMINO_SHIFT' | 'TODAY_OFF' | 'EXTEND_TIME';
         <div class="space-y-5">
           <div class="flex items-center justify-between border-b border-[var(--border)] pb-4">
             <div>
-              <h2 id="quick-drawer-title" class="text-lg font-bold">Điều Chỉnh Lịch Hôm Nay</h2>
-              <p class="text-xs text-[var(--muted-foreground)]">Thiết lập ngoại lệ đột xuất cho ngày hiện tại</p>
+              <h2 id="quick-drawer-title" class="text-lg font-bold text-[var(--foreground)]">
+                Điều Chỉnh Lịch Hôm Nay
+              </h2>
+              <p class="text-xs text-[var(--muted-foreground)]">
+                Thao tác trực tiếp với lịch trình hôm nay qua API hệ thống
+              </p>
             </div>
             <button
               type="button"
               appButton
               variant="ghost"
-              size="sm"
+              size="icon"
               (click)="closeQuickDrawer()"
-              class="h-9 w-9 min-h-9 min-w-9 p-0"
               aria-label="Đóng bảng điều khiển"
             >
-              ✕
+              <lucide-icon name="x" [size]="18" aria-hidden="true"></lucide-icon>
             </button>
           </div>
 
-          <!-- Architectural Boundary Notice -->
-          <div class="p-3 rounded-lg bg-[var(--muted)] border border-[var(--border)] space-y-1">
-            <span appBadge variant="secondary" class="text-[10px]">Quy tắc kiến trúc §2.5 & §7.1</span>
-            <p class="text-xs text-[var(--muted-foreground)] leading-relaxed">
-              Thao tác này tương tác với cơ chế lập lịch thích ứng (Domino Shift) cho riêng ngày hôm nay,
-              <strong class="text-[var(--foreground)]">không ghi đè khuôn mẫu tuần lặp lại</strong> trong Cài đặt chung.
-            </p>
-          </div>
+          @if (drawerError(); as dErr) {
+            <div
+              role="alert"
+              data-testid="quick-drawer-error"
+              class="p-3 rounded-xl border border-red-500/40 bg-red-500/10 text-xs text-red-900 dark:text-red-200 space-y-0.5"
+            >
+              @if (dErr.code) {
+                <div class="font-mono font-bold">{{ dErr.code }}</div>
+              }
+              <div>{{ dErr.message }}</div>
+            </div>
+          }
 
-          <!-- Action Options -->
           <div class="space-y-3" role="radiogroup" aria-label="Hình thức điều chỉnh">
             <span class="block text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
               Hình thức điều chỉnh
             </span>
 
-            <label class="flex items-start gap-3 p-3 rounded-xl border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--muted)]/50 cursor-pointer transition-colors">
+            <label class="flex items-start gap-3 p-3 rounded-xl border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--muted)]/50 cursor-pointer transition-colors">
               <input
                 type="radio"
                 name="quickActionType"
-                value="DOMINO_SHIFT"
-                data-testid="action-domino-shift"
+                value="MOVE_TODAY_TO_BACKLOG"
+                data-testid="action-move-backlog"
                 [ngModel]="selectedActionType()"
                 (ngModelChange)="selectedActionType.set($event)"
-                class="mt-1"
+                class="mt-1 accent-[var(--primary)]"
               />
               <div class="space-y-0.5">
-                <div class="text-sm font-semibold">Dời lịch tự động (Domino Shift)</div>
+                <div class="text-sm font-semibold">Chuyển việc chưa xong hôm nay về Backlog</div>
                 <div class="text-xs text-[var(--muted-foreground)]">
-                  Chuyển các task chưa hoàn thành hôm nay sang các khung rảnh của ngày tiếp theo mà không làm tăng reschedule_count.
+                  Đưa {{ todayIncompleteTaskIds().length }} nhiệm vụ chưa hoàn thành hôm nay về Hàng đợi Phục hồi để sắp xếp lại sau.
                 </div>
               </div>
             </label>
 
-            <label class="flex items-start gap-3 p-3 rounded-xl border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--muted)]/50 cursor-pointer transition-colors">
+            <label class="flex items-start gap-3 p-3 rounded-xl border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--muted)]/50 cursor-pointer transition-colors">
               <input
                 type="radio"
                 name="quickActionType"
-                value="TODAY_OFF"
-                data-testid="action-today-off"
+                value="REOPTIMIZE_SCHEDULE"
+                data-testid="action-reoptimize"
                 [ngModel]="selectedActionType()"
                 (ngModelChange)="selectedActionType.set($event)"
-                class="mt-1"
+                class="mt-1 accent-[var(--primary)]"
               />
               <div class="space-y-0.5">
-                <div class="text-sm font-semibold">Đánh dấu nghỉ hôm nay (Pause Today)</div>
+                <div class="text-sm font-semibold">Tạo đề xuất tái tối ưu lịch trình (0 AI credit)</div>
                 <div class="text-xs text-[var(--muted-foreground)]">
-                  Bận việc đột xuất, tạm dừng toàn bộ phiên học dự kiến hôm nay.
+                  Sinh bản nháp đề xuất lịch mới (DRAFT) cho lộ trình để bạn kiểm tra và bấm Áp dụng (BUSR-02).
                 </div>
               </div>
             </label>
 
-            <label class="flex items-start gap-3 p-3 rounded-xl border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--muted)]/50 cursor-pointer transition-colors">
+            <label class="flex items-start gap-3 p-3 rounded-xl border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--muted)]/50 cursor-pointer transition-colors">
               <input
                 type="radio"
                 name="quickActionType"
-                value="EXTEND_TIME"
-                data-testid="action-extend-time"
+                value="PAUSE_ROADMAP"
+                data-testid="action-pause-roadmap"
                 [ngModel]="selectedActionType()"
                 (ngModelChange)="selectedActionType.set($event)"
-                class="mt-1"
+                class="mt-1 accent-[var(--primary)]"
               />
               <div class="space-y-0.5">
-                <div class="text-sm font-semibold">Tăng thêm 30 phút học hôm nay</div>
+                <div class="text-sm font-semibold">Tạm dừng lộ trình học (Pause)</div>
                 <div class="text-xs text-[var(--muted-foreground)]">
-                  Áp dụng cơ chế Soft Overflow (dung sai &le; 30 phút) cho phiên học tối nay.
+                  Tạm dừng lộ trình đang học khi bạn bận việc đột xuất nhiều ngày.
                 </div>
               </div>
             </label>
           </div>
 
-          <!-- Note text area -->
-          <div class="space-y-1.5">
-            <label for="adjustment-reason" class="block text-xs font-medium text-[var(--muted-foreground)]">
-              Lý do điều chỉnh (Tùy chọn):
-            </label>
-            <input
-              id="adjustment-reason"
-              data-testid="adjustment-reason-input"
-              type="text"
-              [ngModel]="actionReason()"
-              (ngModelChange)="actionReason.set($event)"
-              placeholder="Ví dụ: Tăng ca đột xuất, ôn thi đại học..."
-              class="flex h-9 w-full rounded-md border border-[var(--input)] bg-[var(--card)] px-3 py-1 text-xs shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]"
-            />
-          </div>
+          @if (selectedActionType() !== 'MOVE_TODAY_TO_BACKLOG') {
+            <div class="space-y-1.5">
+              <label for="drawer-roadmap-select" class="block text-xs font-semibold">
+                Chọn lộ trình áp dụng
+              </label>
+              <select
+                id="drawer-roadmap-select"
+                [ngModel]="selectedDrawerRoadmapId()"
+                (ngModelChange)="selectedDrawerRoadmapId.set($event)"
+                class="w-full h-9 rounded-lg border border-[var(--input)] bg-[var(--background)] px-2.5 text-sm"
+              >
+                @for (rm of activeRoadmaps(); track rm.id) {
+                  <option [value]="rm.id">{{ rm.title }} ({{ rm.status }})</option>
+                }
+              </select>
+            </div>
+          }
+
+          @if (selectedActionType() === 'MOVE_TODAY_TO_BACKLOG') {
+            <div class="space-y-1.5">
+              <label for="adjustment-reason" class="block text-xs font-medium text-[var(--muted-foreground)]">
+                Lý do điều chỉnh (Tùy chọn):
+              </label>
+              <input
+                id="adjustment-reason"
+                data-testid="adjustment-reason-input"
+                type="text"
+                [ngModel]="actionReason()"
+                (ngModelChange)="actionReason.set($event)"
+                placeholder="Ví dụ: Tăng ca đột xuất..."
+                class="flex h-9 w-full rounded-md border border-[var(--input)] bg-[var(--background)] px-3 py-1 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]"
+              />
+            </div>
+          }
         </div>
 
-        <!-- Drawer Footer Buttons -->
         <div class="pt-6 border-t border-[var(--border)] flex items-center justify-end gap-3">
-          <button
-            type="button"
-            appButton
-            variant="outline"
-            size="default"
-            (click)="closeQuickDrawer()"
-          >
+          <button type="button" appButton variant="outline" (click)="closeQuickDrawer()">
             Hủy bỏ
           </button>
           <button
             type="button"
             appButton
             variant="default"
-            size="default"
             data-testid="confirm-today-adjustment-btn"
+            [disabled]="scheduleService.isSubmitting()"
             (click)="applyTodayAdjustment()"
           >
-            Xác nhận điều chỉnh hôm nay
+            {{ scheduleService.isSubmitting() ? 'Đang xử lý...' : 'Xác nhận điều chỉnh hôm nay' }}
           </button>
         </div>
       </div>
     }
-  `
+  `,
 })
 export class SchedulePageComponent implements OnInit {
   readonly scheduleService = inject(ScheduleService);
   readonly calendarService = inject(CalendarIntegrationService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly destroyRef = inject(DestroyRef);
 
   readonly isDrawerOpen = signal<boolean>(false);
-  readonly drawerSuccess = signal<string | null>(null);
+  readonly drawerSuccess = signal<{ message: string; roadmapId?: string } | null>(null);
+  readonly localDrawerNotice = signal<string | null>(null);
 
-  readonly selectedActionType = signal<QuickActionType>('DOMINO_SHIFT');
+  readonly selectedActionType = signal<QuickActionType>('MOVE_TODAY_TO_BACKLOG');
   readonly actionReason = signal<string>('');
+  readonly selectedDrawerRoadmapId = signal<string>('');
+
+  // Reschedule modal state
+  readonly reschedulingItem = signal<WeeklyScheduleItemResponse | null>(null);
+  readonly rescheduleDate = signal<string>('');
+  readonly rescheduleStart = signal<string>('19:00');
+  readonly rescheduleEnd = signal<string>('19:30');
+  readonly rescheduleReason = signal<string>('');
+  readonly allowStalledCommitment = signal<boolean>(false);
+  readonly confirmSoftOverflow = signal<boolean>(false);
+
+  readonly pageError = computed(() =>
+    !this.isDrawerOpen() && !this.reschedulingItem() ? this.scheduleService.errorState() : null
+  );
+  readonly modalError = computed(() =>
+    this.reschedulingItem() ? this.scheduleService.errorState() : null
+  );
+  readonly drawerError = computed(() => {
+    if (!this.isDrawerOpen()) return null;
+    const svcErr = this.scheduleService.errorState();
+    if (svcErr) return svcErr;
+    const localMsg = this.localDrawerNotice();
+    return localMsg ? { code: null, message: localMsg, violations: [], isOffline: false } : null;
+  });
+
+  readonly activeRoadmaps = computed<RoadmapResponse[]>(() => {
+    const all = this.scheduleService.roadmaps();
+    const active = all.filter((r) => r.status === 'ACTIVE');
+    return active.length > 0 ? active : all;
+  });
+
+  readonly todayIncompleteTaskIds = computed<string[]>(() => {
+    const todayKey = formatLocalDateKey(new Date());
+    const todayGroup = this.scheduleService.dayGroups().find((g) => g.localDate === todayKey);
+    if (!todayGroup) return [];
+    const ids = todayGroup.items
+      .filter(
+        (item) =>
+          item.task_id &&
+          item.block_status !== 'COMPLETED' &&
+          item.block_status !== 'CANCELLED' &&
+          item.task?.status !== 'COMPLETED'
+      )
+      .map((item) => item.task_id as string);
+    return Array.from(new Set(ids));
+  });
+
+  readonly weekRangeLabel = computed(() => {
+    const ws = this.scheduleService.weeklySchedule();
+    if (ws) {
+      return `Tuần ${ws.week_start} – ${ws.week_end}`;
+    }
+    return `Tuần bắt đầu ${getLocalMondayIso(this.scheduleService.weekOffset())}`;
+  });
 
   ngOnInit(): void {
     this.calendarService.checkUrlCallback(this.route, this.router);
-    this.calendarService.loadStatus().subscribe();
+    this.calendarService.loadStatus().pipe(takeUntilDestroyed(this.destroyRef)).subscribe();
+    this.reloadCurrentWeek();
+    this.scheduleService.loadRoadmaps().pipe(takeUntilDestroyed(this.destroyRef)).subscribe((list) => {
+      const firstActive = list.find((r) => r.status === 'ACTIVE') ?? list[0];
+      if (firstActive && !this.selectedDrawerRoadmapId()) {
+        this.selectedDrawerRoadmapId.set(firstActive.id);
+      }
+    });
+  }
+
+  reloadCurrentWeek(): void {
+    const weekStart = getLocalMondayIso(this.scheduleService.weekOffset());
+    this.scheduleService
+      .loadWeeklySchedule(weekStart)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe();
+  }
+
+  navigateWeek(delta: number): void {
+    this.scheduleService.weekOffset.update((v) => v + delta);
+    this.reloadCurrentWeek();
+  }
+
+  resetToCurrentWeek(): void {
+    this.scheduleService.weekOffset.set(0);
+    this.reloadCurrentWeek();
+  }
+
+  formatTimeRange(startIso: string, endIso: string): string {
+    return formatLocalTimeRange(startIso, endIso);
   }
 
   connectGoogleCalendar(): void {
@@ -347,34 +812,173 @@ export class SchedulePageComponent implements OnInit {
 
   disconnectGoogleCalendar(): void {
     if (confirm('Bạn có chắc chắn muốn ngắt kết nối Google Calendar?')) {
-      this.calendarService.disconnectGoogleCalendar().subscribe();
+      this.calendarService.disconnectGoogleCalendar().pipe(takeUntilDestroyed(this.destroyRef)).subscribe();
     }
   }
 
+  openRescheduleModal(item: WeeklyScheduleItemResponse): void {
+    this.scheduleService.clearError();
+    const localDate = item.task?.scheduled_date ?? item.block_date;
+    this.rescheduleDate.set(localDate);
+    this.rescheduleStart.set(this.extractLocalHHmm(item.start_time) || '19:00');
+    this.rescheduleEnd.set(this.extractLocalHHmm(item.end_time) || '19:30');
+    this.rescheduleReason.set('');
+    this.allowStalledCommitment.set(false);
+    this.confirmSoftOverflow.set(false);
+    this.reschedulingItem.set(item);
+  }
+
+  closeRescheduleModal(): void {
+    this.reschedulingItem.set(null);
+    this.scheduleService.clearError();
+  }
+
+  submitRescheduleItem(): void {
+    const item = this.reschedulingItem();
+    const dateStr = this.rescheduleDate().trim();
+    if (!item?.task_id || !dateStr) return;
+
+    this.scheduleService
+      .rescheduleTask(item.task_id, {
+        scheduled_date: dateStr,
+        scheduled_start: toLocalIsoDateTime(dateStr, this.rescheduleStart()),
+        scheduled_end: toLocalIsoDateTime(dateStr, this.rescheduleEnd()),
+        reason: this.rescheduleReason().trim() || null,
+        allow_stalled_commitment: this.allowStalledCommitment(),
+        confirm_soft_overflow: this.confirmSoftOverflow(),
+      })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.closeRescheduleModal();
+          this.drawerSuccess.set({ message: 'Đã cập nhật lịch học cho nhiệm vụ.' });
+          this.reloadCurrentWeek();
+        },
+      });
+  }
+
+  submitMoveItemToBacklog(): void {
+    const item = this.reschedulingItem();
+    if (!item?.task_id) return;
+
+    this.scheduleService
+      .rescheduleTask(item.task_id, {
+        scheduled_date: null,
+        scheduled_start: null,
+        scheduled_end: null,
+        reason: this.rescheduleReason().trim() || 'Chuyển về Backlog',
+        allow_stalled_commitment: this.allowStalledCommitment(),
+        confirm_soft_overflow: false,
+      })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          this.closeRescheduleModal();
+          this.drawerSuccess.set({ message: 'Đã chuyển nhiệm vụ về Hàng đợi Phục hồi (Backlog).' });
+          this.reloadCurrentWeek();
+        },
+      });
+  }
+
   openQuickDrawer(): void {
+    this.scheduleService.clearError();
+    this.localDrawerNotice.set(null);
+    if (!this.selectedDrawerRoadmapId()) {
+      const firstActive = this.activeRoadmaps()[0];
+      if (firstActive) {
+        this.selectedDrawerRoadmapId.set(firstActive.id);
+      }
+    }
     this.isDrawerOpen.set(true);
   }
 
   closeQuickDrawer(): void {
     this.isDrawerOpen.set(false);
+    this.localDrawerNotice.set(null);
+    this.scheduleService.clearError();
   }
 
   onEscapeKey(): void {
-    if (this.isDrawerOpen()) {
+    if (this.reschedulingItem()) {
+      this.closeRescheduleModal();
+    } else if (this.isDrawerOpen()) {
       this.closeQuickDrawer();
     }
   }
 
   applyTodayAdjustment(): void {
-    const actionLabels: Record<QuickActionType, string> = {
-      DOMINO_SHIFT: 'Đã kích hoạt Domino Shift: Các phiên học còn lại đã được dời sang ngày tiếp theo.',
-      TODAY_OFF: 'Đã ghi nhận ngày nghỉ đột xuất hôm nay.',
-      EXTEND_TIME: 'Đã bổ sung 30 phút Soft Overflow cho phiên học hôm nay.'
-    };
+    this.scheduleService.clearError();
+    this.localDrawerNotice.set(null);
 
-    const reason = this.actionReason().trim();
-    const baseMsg = actionLabels[this.selectedActionType()] || 'Đã áp dụng điều chỉnh thành công.';
-    this.drawerSuccess.set(reason ? `${baseMsg} (Lý do: ${reason})` : baseMsg);
-    this.closeQuickDrawer();
+    const action = this.selectedActionType();
+    if (action === 'MOVE_TODAY_TO_BACKLOG') {
+      const taskIds = this.todayIncompleteTaskIds();
+      if (taskIds.length === 0) {
+        this.localDrawerNotice.set('Không có nhiệm vụ chưa hoàn thành nào trong hôm nay để chuyển về Backlog.');
+        return;
+      }
+      this.scheduleService
+        .moveTasksToBacklog(taskIds, this.actionReason().trim() || null)
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe({
+          next: () => {
+            this.closeQuickDrawer();
+            this.drawerSuccess.set({
+              message: `Đã chuyển ${taskIds.length} nhiệm vụ chưa xong hôm nay về Hàng đợi Phục hồi (Backlog).`,
+            });
+            this.reloadCurrentWeek();
+          },
+        });
+      return;
+    }
+
+    const roadmapId = this.selectedDrawerRoadmapId();
+    if (!roadmapId) {
+      this.localDrawerNotice.set('Vui lòng chọn một lộ trình học tập.');
+      return;
+    }
+
+    if (action === 'REOPTIMIZE_SCHEDULE') {
+      this.scheduleService
+        .reoptimizeRoadmapSchedule(roadmapId)
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe({
+          next: () => {
+            this.closeQuickDrawer();
+            this.drawerSuccess.set({
+              message: 'Đã tạo bản nháp tái tối ưu lịch trình (DRAFT).',
+              roadmapId,
+            });
+          },
+        });
+      return;
+    }
+
+    if (action === 'PAUSE_ROADMAP') {
+      this.scheduleService
+        .pauseRoadmap(roadmapId)
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe({
+          next: (rm) => {
+            this.closeQuickDrawer();
+            this.drawerSuccess.set({
+              message: `Đã tạm dừng lộ trình "${rm.title}".`,
+            });
+            this.reloadCurrentWeek();
+            this.scheduleService.loadRoadmaps().pipe(takeUntilDestroyed(this.destroyRef)).subscribe();
+          },
+        });
+    }
+  }
+
+  private extractLocalHHmm(iso: string | null | undefined): string {
+    if (!iso) return '';
+    const dt = new Date(iso);
+    if (Number.isNaN(dt.getTime())) return '';
+    return dt.toLocaleTimeString('vi-VN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
   }
 }

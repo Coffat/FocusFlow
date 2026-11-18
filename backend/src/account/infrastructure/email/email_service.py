@@ -121,3 +121,62 @@ Trân trọng,
             # Fallback output to stdout for defense stability
             print(f"\n[SMTP ERROR FALLBACK] OTP for {to_email} is: {otp_code}\n")
             raise
+
+    @staticmethod
+    async def send_overdue_alert_email(
+        to_email: str,
+        overdue_task_titles: list[str],
+        remaining_reschedule_budget: int,
+    ) -> None:
+        """Send overdue tasks warning email via configured backend (UC-25, BUSR-23)."""
+        settings = get_settings()
+        subject_title = "FocusFlow — Cảnh báo nhiệm vụ học tập quá hạn"
+        tasks_list_str = "\n".join(f"- {t}" for t in overdue_task_titles)
+
+        if settings.email_backend.lower() == "console":
+            print("\n" + "=" * 60)
+            print(f" [MOCK EMAIL DISPATCH] To: {to_email}")
+            print(f" Subject: {subject_title}")
+            print(f" Overdue tasks:\n{tasks_list_str}")
+            print(f" Remaining weekly reschedule budget: {remaining_reschedule_budget}")
+            print("=" * 60 + "\n")
+            return
+
+        msg = EmailMessage()
+        msg["From"] = settings.email_from
+        msg["To"] = to_email
+        msg["Subject"] = subject_title
+
+        plain_text = f"""Xin chào,
+
+Hệ thống ghi nhận bạn có {len(overdue_task_titles)} nhiệm vụ học tập đã quá hạn:
+{tasks_list_str}
+
+Số lượt dời lịch bằng AI còn lại trong tuần của bạn: {remaining_reschedule_budget}.
+Vui lòng truy cập FocusFlow Dashboard (mục Needs Attention) để thực hiện AI Reschedule hoặc điều chỉnh kế hoạch học tập.
+
+Trân trọng,
+Đội ngũ FocusFlow
+"""
+        msg.set_content(plain_text)
+
+        is_mailpit = settings.email_port in (1025, 25) or settings.email_host in (
+            "localhost",
+            "127.0.0.1",
+            "mailpit",
+        )
+        use_start_tls = not is_mailpit and bool(settings.email_user)
+
+        try:
+            await aiosmtplib.send(
+                msg,
+                hostname=settings.email_host,
+                port=settings.email_port,
+                username=settings.email_user or None,
+                password=settings.email_pass or None,
+                start_tls=use_start_tls,
+                timeout=12.0,
+            )
+            logger.info("Overdue alert email successfully dispatched to %s", to_email)
+        except Exception as exc:
+            logger.error("Failed to send overdue alert email to %s: %s", to_email, str(exc))

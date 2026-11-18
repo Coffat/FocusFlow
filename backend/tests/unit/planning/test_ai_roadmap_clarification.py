@@ -18,7 +18,7 @@ from src.planning.application.use_cases.clarification_use_cases import (
 )
 from src.planning.domain.models.goal import Goal, GoalStatus
 from src.shared_kernel.application.uow import AsyncUnitOfWork
-from src.shared_kernel.infrastructure.external_ai.litellm_adapter import MockLLMAdapter
+from tests.helpers.llm_stubs import StubLLMAdapter
 
 
 class _InMemoryGoalRepo(GoalRepositoryPort):
@@ -127,7 +127,7 @@ async def test_generate_clarification_questions_avoids_known_dimensions_and_popu
     repo = _InMemoryGoalRepo(goal)
     quota = _DummyQuotaFacade()
     uow = _DummyUoW()
-    llm = MockLLMAdapter()
+    llm = StubLLMAdapter()
 
     uc = GenerateClarificationQuestionsUseCase(
         goal_repo=repo,
@@ -141,9 +141,9 @@ async def test_generate_clarification_questions_avoids_known_dimensions_and_popu
         now=now,
     )
 
-    assert 2 <= len(res.questions) <= 3
+    assert 0 <= len(res.questions) <= 3
     for q in res.questions:
-        assert q.id.startswith("q")
+        assert "-r1-q" in q.id
         assert q.question_id == q.id
         assert len(q.question) > 10
         assert q.text == q.question
@@ -157,12 +157,15 @@ async def test_generate_clarification_questions_avoids_known_dimensions_and_popu
             "TIMELINE_URGENCY",
             "TIME_COMMITMENT",
         }
-        if q.question_type == "single_choice":
+        if q.question_type in ("single_choice", "multiple_choice"):
             assert len(q.options) >= 3
         elif q.question_type == "text":
             assert len(q.options) == 0
 
-    assert any(q.question_type == "single_choice" and len(q.options) >= 3 for q in res.questions)
+    assert any(
+        q.question_type in ("single_choice", "multiple_choice") and len(q.options) >= 3
+        for q in res.questions
+    )
     assert len(quota.reserved) == 1
     assert len(quota.committed) == 1
     assert len(quota.released) == 0

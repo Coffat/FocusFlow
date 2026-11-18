@@ -1,13 +1,16 @@
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
-from typing import Protocol
+from typing import Any, Protocol
 from uuid import UUID
 
 from src.shared_kernel.domain.events import DomainEvent
 from src.shared_kernel.domain.exceptions import DomainError
 
 __all__ = [
+    "AnalyticsDailyMetricDTO",
+    "AnalyticsSummaryQueryDTO",
+    "AnalyticsWeeklyQueryDTO",
     "DagCycleValidator",
     "DagDependencyEdge",
     "DagTaskNode",
@@ -20,7 +23,10 @@ __all__ = [
     "ExecutionScheduleSyncPort",
     "ExecutionTodayTaskDTO",
     "ExistingScheduledTaskDTO",
+    "ExistingTaskDependencyDTO",
     "ExternalCalendarBusyUpdatedEvent",
+    "NotificationServicePort",
+    "OverdueTaskAlertEvent",
     "ProposedDependencySyncItemDTO",
     "ProposedTaskSyncItemDTO",
     "ScheduleSyncResultDTO",
@@ -28,10 +34,14 @@ __all__ = [
     "StudyExecutionStatsDTO",
     "StudySessionAbandonedEvent",
     "StudySessionCompletedEvent",
+    "WeeklyExecutionMetricsDTO",
+    "WeeklyExecutionMetricsQueryPort",
     "create_execution_dashboard_query_port",
     "create_execution_schedule_sync_port",
+    "create_weekly_execution_metrics_port",
     "register_execution_dashboard_factory",
     "register_execution_sync_factory",
+    "register_weekly_execution_metrics_factory",
 ]
 
 
@@ -285,6 +295,17 @@ class ExternalCalendarBusyUpdatedEvent(DomainEvent):
     user_id: UUID
 
 
+@dataclass(frozen=True, kw_only=True)
+class OverdueTaskAlertEvent(DomainEvent):
+    """Published to outbox when learner has overdue tasks requiring email notification (UC-25, BUSR-23)."""
+
+    user_id: UUID
+    email: str
+    overdue_task_titles: list[str]
+    remaining_reschedule_budget: int
+    alert_date: str = ""
+
+
 @dataclass(frozen=True)
 class StudyExecutionStatsDTO:
     """Read-only execution statistics for Evaluation and SRL profile aggregation."""
@@ -314,6 +335,18 @@ class ExistingScheduledTaskDTO:
     scheduled_end: datetime | None
     status: str
     roadmap_target_date: date | None = None
+    description: str | None = None
+    concept_id: str | None = None
+    learning_resources: tuple[dict[str, Any], ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ExistingTaskDependencyDTO:
+    """Read-only DTO representing a persisted TaskDependencyORM edge."""
+
+    predecessor_id: UUID
+    successor_id: UUID
+    is_mandatory: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -328,6 +361,8 @@ class ProposedTaskSyncItemDTO:
     scheduled_date: date | None = None
     scheduled_start: datetime | None = None
     scheduled_end: datetime | None = None
+    concept_id: str | None = None
+    learning_resources: tuple[dict[str, Any], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -352,6 +387,7 @@ class ScheduleSyncResultDTO:
     total_shifted_minutes: int
     total_active_sessions: int
     total_planned_minutes: int
+    task_id_remap: Mapping[UUID, UUID] = field(default_factory=dict)
 
 
 class ExecutionScheduleSyncPort(Protocol):
@@ -363,6 +399,11 @@ class ExecutionScheduleSyncPort(Protocol):
         *,
         roadmap_target_dates: Mapping[UUID, date | None] | None = None,
     ) -> list[ExistingScheduledTaskDTO]: ...
+
+    async def get_task_dependencies_for_roadmap(
+        self,
+        roadmap_id: UUID,
+    ) -> list[ExistingTaskDependencyDTO]: ...
 
     async def get_active_roadmaps_tasks(
         self,
@@ -383,6 +424,14 @@ class ExecutionScheduleSyncPort(Protocol):
         now: datetime,
         protected_task_ids: Sequence[UUID] = (),
     ) -> ScheduleSyncResultDTO: ...
+
+    async def shift_incomplete_tasks_for_domino(
+        self,
+        *,
+        roadmap_id: UUID,
+        shift_days: int,
+        now: datetime,
+    ) -> int: ...
 
 
 _execution_sync_factory: object = None
@@ -436,14 +485,88 @@ class ExecutionDayStudyDTO:
     is_today: bool
 
 
+@dataclass(frozen=True, slots=True)
+class AnalyticsDailyMetricDTO:
+    date: date
+    day_label: str
+    minutes_studied: int
+    pomodoros_completed: int
+    sessions_count: int
+    is_today: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class AnalyticsSummaryQueryDTO:
+    total_focused_hours: float
+    weekly_study_hours: float
+    task_completion_rate: float
+    plan_adherence_rate: float
+    weekly_recovered_learning_sessions: int
+    completed_tasks_count: int
+    total_tasks_count: int
+    active_streak_days: int
+    average_focus_score: float
+    daily_metrics: tuple[AnalyticsDailyMetricDTO, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class AnalyticsWeeklyQueryDTO:
+    week_start: date
+    week_end: date
+    total_focused_hours: float
+    completed_sessions_count: int
+    completed_tasks_count: int
+    total_scheduled_tasks_count: int
+    task_completion_rate: float
+    plan_adherence_rate: float
+    weekly_recovered_learning_sessions: int
+    daily_breakdown: tuple[AnalyticsDailyMetricDTO, ...] = ()
+
+
 class ExecutionDashboardQueryPort(Protocol):
-    async def get_today_queue(self, user_id: UUID, today: date) -> list[ExecutionTodayTaskDTO]: ...
+    async def get_today_queue(
+        self,
+        user_id: UUID,
+        today: date | None = None,
+        *,
+        user_timezone: str | None = None,
+        now: datetime | None = None,
+    ) -> list[ExecutionTodayTaskDTO]: ...
 
     async def get_7day_study_distribution(
-        self, user_id: UUID, today: date
+        self,
+        user_id: UUID,
+        today: date | None = None,
+        *,
+        user_timezone: str | None = None,
+        now: datetime | None = None,
     ) -> list[ExecutionDayStudyDTO]: ...
 
-    async def get_execution_kpis(self, user_id: UUID, today: date) -> ExecutionKpiStatsDTO: ...
+    async def get_execution_kpis(
+        self,
+        user_id: UUID,
+        today: date | None = None,
+        *,
+        user_timezone: str | None = None,
+        now: datetime | None = None,
+    ) -> ExecutionKpiStatsDTO: ...
+
+    async def get_analytics_summary(
+        self,
+        user_id: UUID,
+        *,
+        user_timezone: str | None = None,
+        now: datetime | None = None,
+    ) -> AnalyticsSummaryQueryDTO: ...
+
+    async def get_weekly_analytics(
+        self,
+        user_id: UUID,
+        *,
+        week_start: date | None = None,
+        user_timezone: str | None = None,
+        now: datetime | None = None,
+    ) -> AnalyticsWeeklyQueryDTO: ...
 
 
 _execution_dashboard_factory: object = None
@@ -463,3 +586,66 @@ def create_execution_dashboard_query_port(session: object) -> ExecutionDashboard
     assert callable(_execution_dashboard_factory)
     res: ExecutionDashboardQueryPort = _execution_dashboard_factory(session)
     return res
+
+
+@dataclass(frozen=True, slots=True)
+class WeeklyExecutionMetricsDTO:
+    """Deterministic weekly execution metrics aggregated from StudySession & Task records."""
+
+    completed_minutes: int = 0
+    planned_minutes: int = 0
+    completed_sessions_count: int = 0
+    completed_tasks_count: int = 0
+    planned_tasks_count: int = 0
+    overdue_tasks_count: int = 0
+    adherence_rate_pct: float | None = None
+    task_type_breakdown: dict[str, dict[str, int]] = field(default_factory=dict)
+    previous_week_completed_minutes: int = 0
+    week_over_week_delta_pct: float | None = None
+
+
+class WeeklyExecutionMetricsQueryPort(Protocol):
+    """Cross-context read-only query port for Weekly Review deterministic metrics."""
+
+    async def get_roadmap_period_metrics(
+        self,
+        *,
+        user_id: UUID,
+        roadmap_id: UUID,
+        period_start: date,
+        period_end: date,
+    ) -> WeeklyExecutionMetricsDTO: ...
+
+
+_weekly_execution_metrics_factory: object = None
+
+
+def register_weekly_execution_metrics_factory(factory: object) -> None:
+    global _weekly_execution_metrics_factory
+    _weekly_execution_metrics_factory = factory
+
+
+def create_weekly_execution_metrics_port(session: object) -> WeeklyExecutionMetricsQueryPort:
+    global _weekly_execution_metrics_factory
+    if _weekly_execution_metrics_factory is None:
+        import importlib
+
+        importlib.import_module(
+            "src.execution.infrastructure.adapters.weekly_execution_metrics_adapter"
+        )
+    assert callable(_weekly_execution_metrics_factory)
+    res: WeeklyExecutionMetricsQueryPort = _weekly_execution_metrics_factory(session)
+    return res
+
+
+class NotificationServicePort(Protocol):
+    """Protocol for dispatching user notifications and overdue alerts (UC-25, ACT-07)."""
+
+    async def send_overdue_alert(
+        self,
+        *,
+        user_id: UUID,
+        email: str,
+        overdue_task_titles: list[str],
+        remaining_reschedule_budget: int,
+    ) -> None: ...

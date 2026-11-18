@@ -40,6 +40,7 @@ class Roadmap(AggregateRoot):
     status: RoadmapStatus = RoadmapStatus.INITIALIZED
     start_date: date | None = None
     target_date: date | None = None
+    planning_metadata: dict[str, object] = field(default_factory=dict)
     created_at: datetime = field(default_factory=lambda: datetime.min)
     updated_at: datetime = field(default_factory=lambda: datetime.min)
 

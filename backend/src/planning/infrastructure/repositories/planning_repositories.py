@@ -127,6 +127,7 @@ class SqlAlchemyRoadmapRepository(RoadmapRepositoryPort):
             status=RoadmapStatus(row.status),
             start_date=row.start_date,
             target_date=row.target_date,
+            planning_metadata=dict(getattr(row, "planning_metadata", {}) or {}),
             created_at=row.created_at,
             updated_at=row.updated_at,
         )
@@ -146,6 +147,7 @@ class SqlAlchemyRoadmapRepository(RoadmapRepositoryPort):
                 status=roadmap.status.value,
                 start_date=roadmap.start_date,
                 target_date=roadmap.target_date,
+                planning_metadata=dict(roadmap.planning_metadata),
                 created_at=created,
                 updated_at=now,
             )
@@ -156,6 +158,7 @@ class SqlAlchemyRoadmapRepository(RoadmapRepositoryPort):
             row.status = roadmap.status.value
             row.start_date = roadmap.start_date
             row.target_date = roadmap.target_date
+            row.planning_metadata = dict(roadmap.planning_metadata)
             row.updated_at = now
 
         await self._session.flush()
@@ -167,11 +170,19 @@ class SqlAlchemyRoadmapRepository(RoadmapRepositoryPort):
             return None
         return self._to_domain(row)
 
-    async def get_by_id_for_user(self, roadmap_id: UUID, user_id: UUID) -> Roadmap | None:
+    async def get_by_id_for_user(
+        self,
+        roadmap_id: UUID,
+        user_id: UUID,
+        *,
+        for_update: bool = False,
+    ) -> Roadmap | None:
         stmt = select(RoadmapORM).where(
             RoadmapORM.id == roadmap_id,
             RoadmapORM.user_id == user_id,
         )
+        if for_update:
+            stmt = stmt.with_for_update().execution_options(populate_existing=True)
         row = (await self._session.execute(stmt)).scalar_one_or_none()
         if row is None:
             return None
@@ -182,14 +193,23 @@ class SqlAlchemyRoadmapRepository(RoadmapRepositoryPort):
         user_id: UUID,
         *,
         status: str | None = None,
+        for_update: bool = False,
     ) -> list[Roadmap]:
         stmt = select(RoadmapORM).where(RoadmapORM.user_id == user_id)
         if status is not None:
             stmt = stmt.where(RoadmapORM.status == status.strip().upper())
-        stmt = stmt.order_by(
-            RoadmapORM.target_date.asc().nulls_last(),
-            RoadmapORM.created_at.desc(),
-        )
+        if for_update:
+            # Deterministic ORDER BY id prevents cross-roadmap deadlocks under concurrent Apply/Resume
+            stmt = (
+                stmt.order_by(RoadmapORM.id.asc())
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+        else:
+            stmt = stmt.order_by(
+                RoadmapORM.target_date.asc().nulls_last(),
+                RoadmapORM.created_at.desc(),
+            )
         rows = list((await self._session.execute(stmt)).scalars().all())
         return [self._to_domain(r) for r in rows]
 
@@ -223,6 +243,14 @@ class SqlAlchemyMilestoneRepository(MilestoneRepositoryPort):
             sequence_order=row.sequence_order,
             title=row.title,
             description=row.description,
+            learning_outcomes=tuple(getattr(row, "learning_outcomes", []) or []),
+            completion_criteria=getattr(row, "completion_criteria", None),
+            estimated_effort_minutes=int(getattr(row, "estimated_effort_minutes", 60) or 60),
+            required_concepts=tuple(getattr(row, "required_concepts", []) or []),
+            unverified_concepts=tuple(getattr(row, "unverified_concepts", []) or []),
+            prerequisite_milestone_ids=tuple(
+                UUID(str(item)) for item in (getattr(row, "prerequisite_milestone_ids", []) or [])
+            ),
             status=MilestoneStatus(row.status),
             created_at=row.created_at,
             updated_at=row.updated_at,
@@ -253,6 +281,14 @@ class SqlAlchemyMilestoneRepository(MilestoneRepositoryPort):
                 row.sequence_order = seq
                 row.title = m.title
                 row.description = m.description
+                row.learning_outcomes = list(m.learning_outcomes)
+                row.completion_criteria = m.completion_criteria
+                row.estimated_effort_minutes = m.estimated_effort_minutes
+                row.required_concepts = list(m.required_concepts)
+                row.unverified_concepts = list(m.unverified_concepts)
+                row.prerequisite_milestone_ids = [
+                    str(item) for item in m.prerequisite_milestone_ids
+                ]
                 row.status = m.status.value
                 row.updated_at = now
             else:
@@ -262,6 +298,12 @@ class SqlAlchemyMilestoneRepository(MilestoneRepositoryPort):
                     sequence_order=seq,
                     title=m.title,
                     description=m.description,
+                    learning_outcomes=list(m.learning_outcomes),
+                    completion_criteria=m.completion_criteria,
+                    estimated_effort_minutes=m.estimated_effort_minutes,
+                    required_concepts=list(m.required_concepts),
+                    unverified_concepts=list(m.unverified_concepts),
+                    prerequisite_milestone_ids=[str(item) for item in m.prerequisite_milestone_ids],
                     status=m.status.value,
                     created_at=created,
                     updated_at=now,
@@ -376,8 +418,22 @@ class SqlAlchemyScheduleProposalRepository(ScheduleProposalRepositoryPort):
         await self._session.flush()
         return self._to_domain(row)
 
-    async def get_by_id(self, proposal_id: UUID) -> ScheduleProposal | None:
-        row = await self._session.get(ScheduleProposalORM, proposal_id)
+    async def get_by_id(
+        self,
+        proposal_id: UUID,
+        *,
+        for_update: bool = False,
+    ) -> ScheduleProposal | None:
+        if for_update:
+            stmt = (
+                select(ScheduleProposalORM)
+                .where(ScheduleProposalORM.id == proposal_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+            row = (await self._session.execute(stmt)).scalar_one_or_none()
+        else:
+            row = await self._session.get(ScheduleProposalORM, proposal_id)
         if row is None:
             return None
         return self._to_domain(row)
@@ -391,6 +447,19 @@ class SqlAlchemyScheduleProposalRepository(ScheduleProposalRepositoryPort):
         if row is None:
             return None
         return self._to_domain(row)
+
+    async def list_by_roadmap_id(self, roadmap_id: UUID) -> list[ScheduleProposal]:
+        stmt = (
+            select(ScheduleProposalORM)
+            .where(ScheduleProposalORM.roadmap_id == roadmap_id)
+            .order_by(
+                ScheduleProposalORM.applied_at.desc().nulls_last(),
+                ScheduleProposalORM.updated_at.desc(),
+                ScheduleProposalORM.created_at.desc(),
+            )
+        )
+        rows = list((await self._session.execute(stmt)).scalars().all())
+        return [self._to_domain(row) for row in rows]
 
 
 class SqlAlchemyOfficialScheduleRepository(OfficialScheduleRepositoryPort):
@@ -406,6 +475,10 @@ class SqlAlchemyOfficialScheduleRepository(OfficialScheduleRepositoryPort):
             roadmap_id=row.roadmap_id,
             total_sessions=row.total_sessions,
             total_planned_minutes=row.total_planned_minutes,
+            buffer_minutes_per_week=int(getattr(row, "buffer_minutes_per_week", 60) or 60),
+            recovery_window_days=int(getattr(row, "recovery_window_days", 7) or 7),
+            daily_workload_cap_minutes=int(getattr(row, "daily_workload_cap_minutes", 180) or 180),
+            stability_weight=float(getattr(row, "stability_weight", 0.8) or 0.8),
             activated_at=row.activated_at,
             created_at=row.created_at,
             updated_at=row.updated_at,
@@ -429,6 +502,10 @@ class SqlAlchemyOfficialScheduleRepository(OfficialScheduleRepositoryPort):
                 roadmap_id=schedule.roadmap_id,
                 total_sessions=schedule.total_sessions,
                 total_planned_minutes=schedule.total_planned_minutes,
+                buffer_minutes_per_week=schedule.buffer_minutes_per_week,
+                recovery_window_days=schedule.recovery_window_days,
+                daily_workload_cap_minutes=schedule.daily_workload_cap_minutes,
+                stability_weight=schedule.stability_weight,
                 activated_at=activated,
                 created_at=created,
                 updated_at=updated,
@@ -437,14 +514,25 @@ class SqlAlchemyOfficialScheduleRepository(OfficialScheduleRepositoryPort):
         else:
             row.total_sessions = schedule.total_sessions
             row.total_planned_minutes = schedule.total_planned_minutes
+            row.buffer_minutes_per_week = schedule.buffer_minutes_per_week
+            row.recovery_window_days = schedule.recovery_window_days
+            row.daily_workload_cap_minutes = schedule.daily_workload_cap_minutes
+            row.stability_weight = schedule.stability_weight
             row.activated_at = activated
             row.updated_at = updated
 
         await self._session.flush()
         return self._to_domain(row)
 
-    async def get_by_roadmap_id(self, roadmap_id: UUID) -> OfficialSchedule | None:
+    async def get_by_roadmap_id(
+        self,
+        roadmap_id: UUID,
+        *,
+        for_update: bool = False,
+    ) -> OfficialSchedule | None:
         stmt = select(OfficialScheduleORM).where(OfficialScheduleORM.roadmap_id == roadmap_id)
+        if for_update:
+            stmt = stmt.with_for_update().execution_options(populate_existing=True)
         row = (await self._session.execute(stmt)).scalar_one_or_none()
         if row is None:
             return None

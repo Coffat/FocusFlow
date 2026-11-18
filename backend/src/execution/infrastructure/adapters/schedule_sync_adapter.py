@@ -1,5 +1,5 @@
 from collections.abc import Mapping, Sequence
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import delete, select, text
@@ -10,6 +10,7 @@ from src.execution.infrastructure.orm.task_orm import TaskDependencyORM, TaskORM
 from src.execution.public_api import (
     ExecutionScheduleSyncPort,
     ExistingScheduledTaskDTO,
+    ExistingTaskDependencyDTO,
     ProposedDependencySyncItemDTO,
     ProposedTaskSyncItemDTO,
     ScheduleSyncResultDTO,
@@ -60,6 +61,31 @@ class ExecutionScheduleSyncAdapter(ExecutionScheduleSyncPort):
                 scheduled_end=row.scheduled_end,
                 status=row.status,
                 roadmap_target_date=target_map.get(row.roadmap_id),
+                description=row.description,
+                concept_id=row.concept_id,
+                learning_resources=tuple(
+                    dict(r) for r in (row.learning_resources_json or []) if isinstance(r, dict)
+                ),
+            )
+            for row in rows
+        ]
+
+    async def get_task_dependencies_for_roadmap(
+        self,
+        roadmap_id: UUID,
+    ) -> list[ExistingTaskDependencyDTO]:
+        """Return persisted task dependency edges for the given roadmap."""
+        stmt = (
+            select(TaskDependencyORM)
+            .where(TaskDependencyORM.roadmap_id == roadmap_id)
+            .order_by(TaskDependencyORM.created_at.asc(), TaskDependencyORM.id.asc())
+        )
+        rows = list((await self._session.execute(stmt)).scalars().all())
+        return [
+            ExistingTaskDependencyDTO(
+                predecessor_id=row.predecessor_id,
+                successor_id=row.successor_id,
+                is_mandatory=bool(row.is_mandatory),
             )
             for row in rows
         ]
@@ -108,12 +134,15 @@ class ExecutionScheduleSyncAdapter(ExecutionScheduleSyncPort):
 
         completed_tasks: dict[UUID, TaskORM] = {}
         protected_tasks: dict[UUID, TaskORM] = {}
+        cancelled_task_ids: set[UUID] = set()
         non_completed_tasks: list[TaskORM] = []
         protected_ids = set(protected_task_ids)
 
         for task in existing_tasks:
             if task.status == "COMPLETED":
                 completed_tasks[task.id] = task
+            elif task.status == "CANCELLED":
+                cancelled_task_ids.add(task.id)
             elif task.id in protected_ids:
                 protected_tasks[task.id] = task
             else:
@@ -162,8 +191,25 @@ class ExecutionScheduleSyncAdapter(ExecutionScheduleSyncPort):
             comp_task.official_schedule_id = official_schedule_id
             comp_task.updated_at = now
 
-        # Insert new tasks (skipping any task_id that is already COMPLETED)
+        # Verify referenced concept_ids exist in learning_concepts to preserve FK integrity
+        candidate_concept_ids = sorted(
+            {
+                item.concept_id.strip()
+                for item in proposed_tasks
+                if item.concept_id and item.concept_id.strip()
+            }
+        )
+        valid_concept_ids: set[str] = set()
+        if candidate_concept_ids:
+            c_res = await self._session.execute(
+                text("SELECT concept_id FROM learning_concepts WHERE concept_id = ANY(:cids)"),
+                {"cids": candidate_concept_ids},
+            )
+            valid_concept_ids = {str(r[0]) for r in c_res.fetchall()}
+
+        # Insert new tasks (skipping any task_id that is already COMPLETED or protected)
         valid_task_ids: set[UUID] = set(completed_tasks) | set(protected_tasks)
+        id_remap: dict[UUID, UUID] = {}
         inserted_count = 0
         inserted_minutes = 0
 
@@ -171,17 +217,29 @@ class ExecutionScheduleSyncAdapter(ExecutionScheduleSyncPort):
             if item.task_id in completed_tasks or item.task_id in protected_tasks:
                 continue
             new_id = item.task_id
-            if new_id in tasks_with_sessions:
+            if new_id in tasks_with_sessions or new_id in cancelled_task_ids:
                 new_id = uuid7()
+                id_remap[item.task_id] = new_id
+
+            concept_id = (
+                item.concept_id.strip()
+                if item.concept_id and item.concept_id.strip() in valid_concept_ids
+                else None
+            )
+            resources_json: list[dict[str, object]] = [
+                dict(r) for r in item.learning_resources if isinstance(r, dict)
+            ]
 
             new_task = TaskORM(
                 id=new_id,
                 roadmap_id=roadmap_id,
                 milestone_id=item.milestone_id,
                 official_schedule_id=official_schedule_id,
+                concept_id=concept_id,
                 title=item.title,
                 description=item.description,
                 estimated_minutes=item.estimated_minutes,
+                learning_resources_json=resources_json,
                 scheduled_date=item.scheduled_date,
                 scheduled_start=item.scheduled_start,
                 scheduled_end=item.scheduled_end,
@@ -198,21 +256,23 @@ class ExecutionScheduleSyncAdapter(ExecutionScheduleSyncPort):
 
         await self._session.flush()
 
-        # Insert dependencies between valid existing/new tasks
+        # Insert dependencies between valid existing/new tasks (remapping rotated task IDs)
         seen_pairs: set[tuple[UUID, UUID]] = set()
         for dep in proposed_dependencies:
-            if dep.predecessor_id == dep.successor_id:
+            pred_id = id_remap.get(dep.predecessor_id, dep.predecessor_id)
+            succ_id = id_remap.get(dep.successor_id, dep.successor_id)
+            if pred_id == succ_id:
                 continue
-            if dep.predecessor_id not in valid_task_ids or dep.successor_id not in valid_task_ids:
+            if pred_id not in valid_task_ids or succ_id not in valid_task_ids:
                 continue
-            pair = (dep.predecessor_id, dep.successor_id)
+            pair = (pred_id, succ_id)
             if pair in seen_pairs:
                 continue
             seen_pairs.add(pair)
             dep_orm = TaskDependencyORM(
                 id=uuid7(),
-                predecessor_id=dep.predecessor_id,
-                successor_id=dep.successor_id,
+                predecessor_id=pred_id,
+                successor_id=succ_id,
                 roadmap_id=roadmap_id,
                 is_mandatory=dep.is_mandatory,
                 created_at=now,
@@ -240,7 +300,37 @@ class ExecutionScheduleSyncAdapter(ExecutionScheduleSyncPort):
             total_shifted_minutes=total_shifted_minutes,
             total_active_sessions=total_active_sessions,
             total_planned_minutes=total_planned_minutes,
+            task_id_remap=id_remap,
         )
+
+    async def shift_incomplete_tasks_for_domino(
+        self,
+        *,
+        roadmap_id: UUID,
+        shift_days: int,
+        now: datetime,
+    ) -> int:
+        """Shift TODO/IN_PROGRESS tasks forward by `shift_days` without incrementing `reschedule_count` (UC-22)."""
+        if shift_days <= 0:
+            return 0
+        delta = timedelta(days=shift_days)
+        stmt = select(TaskORM).where(
+            TaskORM.roadmap_id == roadmap_id,
+            TaskORM.status.in_(("TODO", "IN_PROGRESS")),
+        )
+        rows = list((await self._session.execute(stmt)).scalars().all())
+        shifted_count = 0
+        for row in rows:
+            if row.scheduled_date is not None:
+                row.scheduled_date = row.scheduled_date + delta
+            if row.scheduled_start is not None:
+                row.scheduled_start = row.scheduled_start + delta
+            if row.scheduled_end is not None:
+                row.scheduled_end = row.scheduled_end + delta
+            row.updated_at = now
+            shifted_count += 1
+        await self._session.flush()
+        return shifted_count
 
 
 SqlAlchemyExecutionScheduleSyncAdapter = ExecutionScheduleSyncAdapter

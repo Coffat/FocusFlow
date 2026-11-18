@@ -53,6 +53,13 @@ class GoogleCalendarAdapter(CalendarProviderPort):
 
     async def _get_access_token(self, refresh_token: str) -> str:
         """Exchange refresh token for ephemeral Google OAuth access token."""
+        if (
+            not self.settings.google_client_id.strip()
+            or not self.settings.google_client_secret.strip()
+        ):
+            raise CalendarAuthError(
+                "CALENDAR_OAUTH_NOT_CONFIGURED: Missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET."
+            )
         client = self._get_client()
         payload = {
             "client_id": self.settings.google_client_id,

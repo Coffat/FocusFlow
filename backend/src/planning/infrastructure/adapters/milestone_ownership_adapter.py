@@ -30,6 +30,11 @@ class MilestoneOwnershipAdapter(MilestoneOwnershipQueryPort):
             roadmap_id=milestone.roadmap_id,
             user_id=user_id,
             title=milestone.title,
+            description=milestone.description,
+            learning_outcomes=tuple(milestone.learning_outcomes or ()),
+            completion_criteria=milestone.completion_criteria,
+            required_concepts=tuple(milestone.required_concepts or ()),
+            unverified_concepts=tuple(milestone.unverified_concepts or ()),
         )
 
     async def roadmap_belongs_to(self, roadmap_id: UUID, user_id: UUID) -> bool:

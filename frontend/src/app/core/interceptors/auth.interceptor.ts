@@ -1,10 +1,11 @@
 import { HttpInterceptorFn, HttpErrorResponse } from '@angular/common/http';
 import { inject } from '@angular/core';
-import { catchError, switchMap, throwError } from 'rxjs';
+import { BehaviorSubject, catchError, filter, switchMap, take, throwError } from 'rxjs';
 import { AuthService } from '../services/auth.service';
 import { API_BASE_URL } from '../../constant/api.constant';
 
 let isRefreshing = false;
+const refreshTokenSubject = new BehaviorSubject<string | null>(null);
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const authService = inject(AuthService);
@@ -35,19 +36,47 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   return next(authReq).pipe(
     catchError((error: HttpErrorResponse) => {
       // Avoid infinite loop if refresh endpoint itself returns 401
-      if (error.status === 401 && !req.url.includes('/api/v1/auth/refresh') && !req.url.includes('/api/v1/auth/login')) {
+      if (
+        error.status === 401 &&
+        !req.url.includes('/api/v1/auth/refresh') &&
+        !req.url.includes('/api/v1/auth/login')
+      ) {
         if (!isRefreshing) {
           isRefreshing = true;
+          refreshTokenSubject.next(null);
+
           return authService.refreshToken().pipe(
-            switchMap(() => {
+            switchMap((response) => {
               isRefreshing = false;
-              // Retry original request with credentials
-              return next(authReq);
+              const newToken = response?.accessToken || localStorage.getItem('access_token') || '';
+              refreshTokenSubject.next(newToken);
+
+              const retryHeaders: Record<string, string> = {};
+              if (newToken.length > 0) {
+                retryHeaders['Authorization'] = `Bearer ${newToken}`;
+              }
+              const retriedReq = authReq.clone({ setHeaders: retryHeaders });
+              return next(retriedReq);
             }),
             catchError((refreshErr) => {
               isRefreshing = false;
+              refreshTokenSubject.next(null);
               authService.handleSessionExpired();
               return throwError(() => refreshErr);
+            })
+          );
+        } else {
+          // Concurrent request: wait for ongoing refresh to complete then retry with new token
+          return refreshTokenSubject.pipe(
+            filter((newToken) => newToken !== null),
+            take(1),
+            switchMap((newToken) => {
+              const retryHeaders: Record<string, string> = {};
+              if (newToken && newToken.length > 0) {
+                retryHeaders['Authorization'] = `Bearer ${newToken}`;
+              }
+              const retriedReq = authReq.clone({ setHeaders: retryHeaders });
+              return next(retriedReq);
             })
           );
         }
@@ -56,4 +85,5 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
     })
   );
 };
+
 

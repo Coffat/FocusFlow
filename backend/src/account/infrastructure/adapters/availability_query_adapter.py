@@ -64,6 +64,11 @@ class SqlAlchemyAvailabilityQueryAdapter(AvailabilityQueryPort):
             for slot in d.time_slots
         )
 
+        enabled_days = [d for d in profile.weekly_schedule.days.values() if d.enabled]
+        first_window = enabled_days[0].allowed_window if enabled_days else None
+        allowed_window_start = first_window.start if first_window is not None else "07:00"
+        allowed_window_end = first_window.end if first_window is not None else "23:00"
+
         return AvailabilitySnapshotDTO(
             user_id=profile.user_id,
             mode=profile.mode.value,
@@ -73,6 +78,11 @@ class SqlAlchemyAvailabilityQueryAdapter(AvailabilityQueryPort):
             daily_quota_minutes=daily_quota_minutes,
             availability_slots=availability_slots,
             disabled_weekdays=disabled_weekdays,
+            calendar_integration_mode=profile.calendar_integration_mode.value,
+            allowed_window_start=allowed_window_start,
+            allowed_window_end=allowed_window_end,
+            min_session_minutes=profile.min_session_minutes,
+            is_persisted=is_persisted,
         )
 
     async def validate_schedule_proposal(

@@ -1,13 +1,18 @@
 import asyncio
+import contextlib
 import json
-from collections.abc import AsyncIterator
+import time
+from collections.abc import AsyncGenerator, AsyncIterator
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
 import redis.asyncio as aioredis
+from uuid6 import uuid7
 
 from src.planning.application.ports.sse_job_port import (
+    DEFAULT_SSE_STREAM_TIMEOUT_SECONDS,
+    IdempotencySlotClaim,
     SseEventRecord,
     SseJobNotFoundError,
     SseJobPort,
@@ -15,13 +20,79 @@ from src.planning.application.ports.sse_job_port import (
 )
 from src.shared_kernel.config import get_settings
 
+DEFAULT_SSE_KEEPALIVE_INTERVAL_SECONDS: float = 10.0
+SSE_KEEPALIVE_COMMENT: str = ": keepalive\n\n"
+_PENDING_PREFIX: str = "PENDING:"
+
+_LUA_CLAIM_IDEMPOTENCY = """
+local ok = redis.call("SET", KEYS[1], ARGV[1], "NX", "EX", tonumber(ARGV[2]))
+if ok then
+    return {1, ARGV[1]}
+end
+return {0, redis.call("GET", KEYS[1]) or ""}
+"""
+
+_LUA_FINALIZE_IDEMPOTENCY = """
+if redis.call("GET", KEYS[1]) == ARGV[1] then
+    redis.call("SET", KEYS[1], ARGV[2], "EX", tonumber(ARGV[3]))
+    return 1
+end
+return 0
+"""
+
+_LUA_RELEASE_IDEMPOTENCY = """
+if redis.call("GET", KEYS[1]) == ARGV[1] then
+    return redis.call("DEL", KEYS[1])
+end
+return 0
+"""
+
+
+async def stream_sse_wire_with_keepalive(
+    event_stream: AsyncIterator[SseEventRecord],
+    *,
+    keepalive_interval_seconds: float = DEFAULT_SSE_KEEPALIVE_INTERVAL_SECONDS,
+) -> AsyncGenerator[str, None]:
+    """Yield SSE wire frames from `event_stream` with periodic `: keepalive` comments on silence."""
+    interval = max(0.01, float(keepalive_interval_seconds))
+
+    async def _pull_next() -> SseEventRecord:
+        return await event_stream.__anext__()
+
+    pending_next: asyncio.Task[SseEventRecord] | None = None
+    try:
+        while True:
+            if pending_next is None:
+                pending_next = asyncio.create_task(_pull_next())
+            done, _ = await asyncio.wait({pending_next}, timeout=interval)
+            if not done:
+                yield SSE_KEEPALIVE_COMMENT
+                continue
+            try:
+                ev = pending_next.result()
+            except StopAsyncIteration:
+                pending_next = None
+                return
+            pending_next = None
+            yield ev.format_sse()
+    finally:
+        if pending_next is not None and not pending_next.done():
+            pending_next.cancel()
+            with contextlib.suppress(asyncio.CancelledError, StopAsyncIteration):
+                await pending_next
+        aclose = getattr(event_stream, "aclose", None)
+        if callable(aclose):
+            with contextlib.suppress(Exception):
+                await aclose()
+
 
 class InMemorySseJobStore(SseJobPort):
     """In-memory 2-Stage SSE Job Store supporting 24h Idempotency-Key & Last-Event-ID replay (ADR-005)."""
 
     def __init__(self) -> None:
         self._jobs: dict[UUID, SseJobRecord] = {}
-        self._idempotency_map: dict[tuple[UUID, str, str], tuple[UUID, datetime]] = {}
+        self._idempotency_map: dict[tuple[UUID, str, str], tuple[str, datetime]] = {}
+        self._idempotency_lock = asyncio.Lock()
         self._condition_map: dict[UUID, asyncio.Condition] = {}
 
     def clear(self) -> None:
@@ -52,16 +123,117 @@ class InMemorySseJobStore(SseJobPort):
         if entry is None:
             return None
 
-        job_id, expires_at = entry
+        raw_value, expires_at = entry
         now = datetime.now(UTC)
         if now >= expires_at:
             self._idempotency_map.pop(composite, None)
+            return None
+
+        if raw_value.startswith(_PENDING_PREFIX):
+            return None
+
+        try:
+            job_id = UUID(raw_value)
+        except ValueError:
             return None
 
         job = self._jobs.get(job_id)
         if job is None or job.user_id != user_id:
             return None
         return job
+
+    async def claim_idempotency_slot(
+        self,
+        *,
+        user_id: UUID,
+        operation: str,
+        idempotency_key: str,
+        pending_ttl_seconds: int = 30,
+    ) -> IdempotencySlotClaim:
+        cleaned_key = (idempotency_key or "").strip()
+        if not cleaned_key:
+            return IdempotencySlotClaim(acquired=True, token=None)
+
+        composite = (user_id, operation.strip().upper(), cleaned_key)
+        token = uuid7().hex
+        pending_val = f"{_PENDING_PREFIX}{token}"
+        now = datetime.now(UTC)
+
+        async with self._idempotency_lock:
+            entry = self._idempotency_map.get(composite)
+            if entry is not None:
+                raw_value, expires_at = entry
+                if now >= expires_at:
+                    self._idempotency_map.pop(composite, None)
+                elif raw_value.startswith(_PENDING_PREFIX):
+                    return IdempotencySlotClaim(acquired=False, in_progress=True)
+                else:
+                    try:
+                        existing_id = UUID(raw_value)
+                        job = self._jobs.get(existing_id)
+                    except ValueError:
+                        job = None
+                    if job is not None and job.user_id == user_id:
+                        return IdempotencySlotClaim(
+                            acquired=False,
+                            existing_job=job,
+                            in_progress=False,
+                        )
+                    self._idempotency_map.pop(composite, None)
+
+            self._idempotency_map[composite] = (
+                pending_val,
+                now + timedelta(seconds=max(1, pending_ttl_seconds)),
+            )
+            return IdempotencySlotClaim(acquired=True, token=token)
+
+    async def finalize_idempotency_slot(
+        self,
+        *,
+        user_id: UUID,
+        operation: str,
+        idempotency_key: str,
+        token: str,
+        job_id: UUID,
+        ttl_seconds: int = 86400,
+    ) -> bool:
+        cleaned_key = (idempotency_key or "").strip()
+        if not cleaned_key or not token:
+            return False
+
+        composite = (user_id, operation.strip().upper(), cleaned_key)
+        expected = f"{_PENDING_PREFIX}{token}"
+        now = datetime.now(UTC)
+        async with self._idempotency_lock:
+            entry = self._idempotency_map.get(composite)
+            if entry is None or entry[0] != expected:
+                return False
+            self._idempotency_map[composite] = (
+                str(job_id),
+                now + timedelta(seconds=max(1, ttl_seconds)),
+            )
+            return True
+
+    async def release_idempotency_slot(
+        self,
+        *,
+        user_id: UUID,
+        operation: str,
+        idempotency_key: str,
+        token: str,
+    ) -> bool:
+        cleaned_key = (idempotency_key or "").strip()
+        if not cleaned_key or not token:
+            return False
+
+        composite = (user_id, operation.strip().upper(), cleaned_key)
+        expected = f"{_PENDING_PREFIX}{token}"
+        async with self._idempotency_lock:
+            entry = self._idempotency_map.get(composite)
+            if entry is None or entry[0] != expected:
+                return False
+            self._idempotency_map.pop(composite, None)
+            return True
 
     async def create_job(
         self,
@@ -74,6 +246,7 @@ class InMemorySseJobStore(SseJobPort):
         operation: str,
         idempotency_key: str | None = None,
         ttl_seconds: int = 86400,
+        register_idempotency: bool = True,
     ) -> SseJobRecord:
         now = datetime.now(UTC)
         record = SseJobRecord(
@@ -88,10 +261,10 @@ class InMemorySseJobStore(SseJobPort):
             events=[],
         )
         self._jobs[job_id] = record
-        if idempotency_key and idempotency_key.strip():
+        if register_idempotency and idempotency_key and idempotency_key.strip():
             composite = (user_id, operation.strip().upper(), idempotency_key.strip())
             self._idempotency_map[composite] = (
-                job_id,
+                str(job_id),
                 now + timedelta(seconds=max(1, ttl_seconds)),
             )
         return record
@@ -152,7 +325,7 @@ class InMemorySseJobStore(SseJobPort):
         job_id: UUID,
         user_id: UUID,
         last_event_id: int | None = None,
-        timeout_seconds: float = 55.0,
+        timeout_seconds: float = DEFAULT_SSE_STREAM_TIMEOUT_SECONDS,
     ) -> AsyncIterator[SseEventRecord]:
         job = await self.get_job_for_user(job_id=job_id, user_id=user_id)
         cursor = int(last_event_id) if last_event_id is not None else 0
@@ -184,6 +357,26 @@ class InMemorySseJobStore(SseJobPort):
                 if job.status in ("COMPLETED", "FAILED"):
                     continue
 
+    def stream_sse_wire(
+        self,
+        *,
+        job_id: UUID,
+        user_id: UUID,
+        last_event_id: int | None = None,
+        timeout_seconds: float = DEFAULT_SSE_STREAM_TIMEOUT_SECONDS,
+        keepalive_interval_seconds: float = DEFAULT_SSE_KEEPALIVE_INTERVAL_SECONDS,
+    ) -> AsyncGenerator[str, None]:
+        """Yield SSE wire frames with periodic keepalive comments while keeping `stream_events` intact."""
+        return stream_sse_wire_with_keepalive(
+            self.stream_events(
+                job_id=job_id,
+                user_id=user_id,
+                last_event_id=last_event_id,
+                timeout_seconds=timeout_seconds,
+            ),
+            keepalive_interval_seconds=keepalive_interval_seconds,
+        )
+
 
 class RedisSseJobStore(SseJobPort):
     """Redis-backed 2-Stage SSE Job Store with automatic fallback to InMemorySseJobStore."""
@@ -197,10 +390,24 @@ class RedisSseJobStore(SseJobPort):
         self._redis_url = redis_url or settings.redis_url
         self._fallback = fallback_store or default_in_memory_sse_job_store
         self._client: aioredis.Redis | None = None
+        self._redis_retry_after: float = 0.0
 
-    def _get_client(self) -> aioredis.Redis:
+    def _redis_temporarily_disabled(self) -> bool:
+        return time.monotonic() < self._redis_retry_after
+
+    def _mark_redis_unavailable(self) -> None:
+        self._redis_retry_after = time.monotonic() + 15.0
+
+    def _get_client(self) -> aioredis.Redis | None:
+        if self._redis_temporarily_disabled():
+            return None
         if self._client is None:
-            self._client = aioredis.from_url(self._redis_url, decode_responses=True)
+            self._client = aioredis.from_url(
+                self._redis_url,
+                decode_responses=True,
+                socket_connect_timeout=0.3,
+                socket_timeout=1.5,
+            )
         return self._client
 
     @staticmethod
@@ -236,14 +443,146 @@ class RedisSseJobStore(SseJobPort):
 
         try:
             client = self._get_client()
-            job_id_str = await client.get(self._idem_key(user_id, operation, cleaned_key))
-            if not job_id_str:
+            if client is None:
                 return None
-            return await self.get_job_for_user(job_id=UUID(str(job_id_str)), user_id=user_id)
-        except SseJobNotFoundError:
+            raw_val = await client.get(self._idem_key(user_id, operation, cleaned_key))
+            if not raw_val or str(raw_val).startswith(_PENDING_PREFIX):
+                return None
+            return await self.get_job_for_user(job_id=UUID(str(raw_val)), user_id=user_id)
+        except (SseJobNotFoundError, ValueError):
             return None
         except Exception:
+            self._mark_redis_unavailable()
             return None
+
+    async def claim_idempotency_slot(
+        self,
+        *,
+        user_id: UUID,
+        operation: str,
+        idempotency_key: str,
+        pending_ttl_seconds: int = 30,
+    ) -> IdempotencySlotClaim:
+        cleaned_key = (idempotency_key or "").strip()
+        if not cleaned_key:
+            return IdempotencySlotClaim(acquired=True, token=None)
+
+        redis_key = self._idem_key(user_id, operation, cleaned_key)
+        token = uuid7().hex
+        pending_val = f"{_PENDING_PREFIX}{token}"
+        ttl = max(1, int(pending_ttl_seconds))
+
+        try:
+            client = self._get_client()
+            if client is not None:
+                for _ in range(2):
+                    res = await client.eval(_LUA_CLAIM_IDEMPOTENCY, 1, redis_key, pending_val, ttl)
+                    acquired_flag = int(res[0]) if isinstance(res, (list, tuple)) and res else 0
+                    if acquired_flag == 1:
+                        return IdempotencySlotClaim(acquired=True, token=token)
+
+                    current_val = (
+                        str(res[1])
+                        if isinstance(res, (list, tuple)) and len(res) > 1 and res[1] is not None
+                        else ""
+                    )
+                    if not current_val:
+                        continue
+                    if current_val.startswith(_PENDING_PREFIX):
+                        return IdempotencySlotClaim(acquired=False, in_progress=True)
+                    try:
+                        existing_job = await self.get_job_for_user(
+                            job_id=UUID(current_val),
+                            user_id=user_id,
+                        )
+                        return IdempotencySlotClaim(
+                            acquired=False,
+                            existing_job=existing_job,
+                            in_progress=False,
+                        )
+                    except (SseJobNotFoundError, ValueError):
+                        await client.eval(_LUA_RELEASE_IDEMPOTENCY, 1, redis_key, current_val)
+                        continue
+                return IdempotencySlotClaim(acquired=False, in_progress=True)
+        except Exception:
+            self._mark_redis_unavailable()
+
+        return await self._fallback.claim_idempotency_slot(
+            user_id=user_id,
+            operation=operation,
+            idempotency_key=cleaned_key,
+            pending_ttl_seconds=ttl,
+        )
+
+    async def finalize_idempotency_slot(
+        self,
+        *,
+        user_id: UUID,
+        operation: str,
+        idempotency_key: str,
+        token: str,
+        job_id: UUID,
+        ttl_seconds: int = 86400,
+    ) -> bool:
+        cleaned_key = (idempotency_key or "").strip()
+        if not cleaned_key or not token:
+            return False
+
+        redis_key = self._idem_key(user_id, operation, cleaned_key)
+        expected = f"{_PENDING_PREFIX}{token}"
+        ttl = max(1, int(ttl_seconds))
+        mem_done = await self._fallback.finalize_idempotency_slot(
+            user_id=user_id,
+            operation=operation,
+            idempotency_key=cleaned_key,
+            token=token,
+            job_id=job_id,
+            ttl_seconds=ttl,
+        )
+        try:
+            client = self._get_client()
+            if client is not None:
+                res = await client.eval(
+                    _LUA_FINALIZE_IDEMPOTENCY,
+                    1,
+                    redis_key,
+                    expected,
+                    str(job_id),
+                    ttl,
+                )
+                return bool(int(res or 0))
+        except Exception:
+            self._mark_redis_unavailable()
+        return mem_done
+
+    async def release_idempotency_slot(
+        self,
+        *,
+        user_id: UUID,
+        operation: str,
+        idempotency_key: str,
+        token: str,
+    ) -> bool:
+        cleaned_key = (idempotency_key or "").strip()
+        if not cleaned_key or not token:
+            return False
+
+        redis_key = self._idem_key(user_id, operation, cleaned_key)
+        expected = f"{_PENDING_PREFIX}{token}"
+        mem_released = await self._fallback.release_idempotency_slot(
+            user_id=user_id,
+            operation=operation,
+            idempotency_key=cleaned_key,
+            token=token,
+        )
+        try:
+            client = self._get_client()
+            if client is not None:
+                res = await client.eval(_LUA_RELEASE_IDEMPOTENCY, 1, redis_key, expected)
+                return bool(int(res or 0))
+        except Exception:
+            self._mark_redis_unavailable()
+        return mem_released
 
     async def create_job(
         self,
@@ -256,6 +595,7 @@ class RedisSseJobStore(SseJobPort):
         operation: str,
         idempotency_key: str | None = None,
         ttl_seconds: int = 86400,
+        register_idempotency: bool = True,
     ) -> SseJobRecord:
         record = await self._fallback.create_job(
             job_id=job_id,
@@ -266,32 +606,34 @@ class RedisSseJobStore(SseJobPort):
             operation=operation,
             idempotency_key=idempotency_key,
             ttl_seconds=ttl_seconds,
+            register_idempotency=register_idempotency,
         )
         try:
             client = self._get_client()
-            meta = {
-                "job_id": str(record.job_id),
-                "user_id": str(record.user_id),
-                "roadmap_id": str(record.roadmap_id),
-                "reservation_id": str(record.reservation_id),
-                "job_type": record.job_type,
-                "status": record.status,
-                "created_at": record.created_at.isoformat(),
-                "updated_at": record.updated_at.isoformat(),
-            }
-            await client.set(
-                self._job_meta_key(job_id),
-                json.dumps(meta),
-                ex=max(1, ttl_seconds),
-            )
-            if idempotency_key and idempotency_key.strip():
+            if client is not None:
+                meta = {
+                    "job_id": str(record.job_id),
+                    "user_id": str(record.user_id),
+                    "roadmap_id": str(record.roadmap_id),
+                    "reservation_id": str(record.reservation_id),
+                    "job_type": record.job_type,
+                    "status": record.status,
+                    "created_at": record.created_at.isoformat(),
+                    "updated_at": record.updated_at.isoformat(),
+                }
                 await client.set(
-                    self._idem_key(user_id, operation, idempotency_key),
-                    str(job_id),
+                    self._job_meta_key(job_id),
+                    json.dumps(meta),
                     ex=max(1, ttl_seconds),
                 )
+                if register_idempotency and idempotency_key and idempotency_key.strip():
+                    await client.set(
+                        self._idem_key(user_id, operation, idempotency_key),
+                        str(job_id),
+                        ex=max(1, ttl_seconds),
+                    )
         except Exception:
-            pass
+            self._mark_redis_unavailable()
         return record
 
     async def get_job_for_user(
@@ -307,6 +649,8 @@ class RedisSseJobStore(SseJobPort):
 
         try:
             client = self._get_client()
+            if client is None:
+                raise SseJobNotFoundError()
             raw_meta = await client.get(self._job_meta_key(job_id))
             if not raw_meta:
                 raise SseJobNotFoundError()
@@ -336,6 +680,7 @@ class RedisSseJobStore(SseJobPort):
         except SseJobNotFoundError:
             raise
         except Exception as exc:
+            self._mark_redis_unavailable()
             raise SseJobNotFoundError() from exc
 
     async def append_event(
@@ -346,19 +691,59 @@ class RedisSseJobStore(SseJobPort):
         data: dict[str, Any],
         status: str | None = None,
     ) -> SseEventRecord:
-        ev = await self._fallback.append_event(
-            job_id=job_id,
-            event=event,
-            data=data,
-            status=status,
-        )
+        ev: SseEventRecord | None = None
+        next_status = status
+        if next_status is None:
+            if event == "completed":
+                next_status = "COMPLETED"
+            elif event == "failed":
+                next_status = "FAILED"
+
+        try:
+            ev = await self._fallback.append_event(
+                job_id=job_id,
+                event=event,
+                data=data,
+                status=status,
+            )
+        except SseJobNotFoundError:
+            ev = None
+
         try:
             client = self._get_client()
-            serialized = json.dumps({"id": ev.id, "event": ev.event, "data": ev.data})
-            await client.rpush(self._job_events_key(job_id), serialized)
-            await client.expire(self._job_events_key(job_id), 86400)
+            if client is not None:
+                meta_key = self._job_meta_key(job_id)
+                events_key = self._job_events_key(job_id)
+                raw_meta = await client.get(meta_key)
+                if raw_meta:
+                    meta = json.loads(raw_meta)
+                    if ev is None:
+                        next_id = int(await client.llen(events_key)) + 1
+                        enriched_data = dict(data)
+                        enriched_data.setdefault("id", next_id)
+                        enriched_data.setdefault("event", event)
+                        ev = SseEventRecord(id=next_id, event=event, data=enriched_data)
+                    if next_status is not None:
+                        meta["status"] = next_status
+                    elif meta.get("status") == "RESERVED":
+                        meta["status"] = "STREAMING"
+                    meta["updated_at"] = datetime.now(UTC).isoformat()
+                    serialized = json.dumps({"id": ev.id, "event": ev.event, "data": ev.data})
+                    await client.rpush(events_key, serialized)
+                    await client.expire(events_key, 86400)
+                    await client.set(meta_key, json.dumps(meta), ex=86400)
+                elif ev is None:
+                    raise SseJobNotFoundError()
+            elif ev is None:
+                raise SseJobNotFoundError()
+        except SseJobNotFoundError:
+            raise
         except Exception:
-            pass
+            self._mark_redis_unavailable()
+            if ev is None:
+                raise SseJobNotFoundError()
+
+        assert ev is not None
         return ev
 
     async def stream_events(
@@ -367,15 +752,104 @@ class RedisSseJobStore(SseJobPort):
         job_id: UUID,
         user_id: UUID,
         last_event_id: int | None = None,
-        timeout_seconds: float = 55.0,
+        timeout_seconds: float = DEFAULT_SSE_STREAM_TIMEOUT_SECONDS,
     ) -> AsyncIterator[SseEventRecord]:
-        async for ev in self._fallback.stream_events(
-            job_id=job_id,
-            user_id=user_id,
-            last_event_id=last_event_id,
-            timeout_seconds=timeout_seconds,
-        ):
-            yield ev
+        job = await self.get_job_for_user(job_id=job_id, user_id=user_id)
+        cursor = int(last_event_id) if last_event_id is not None else 0
+        deadline = asyncio.get_running_loop().time() + timeout_seconds
+
+        # Try streaming via Redis when available so cross-process Taskiq workers work seamlessly.
+        redis_available = False
+        try:
+            client = self._get_client()
+            if client is not None:
+                raw_meta = await client.get(self._job_meta_key(job_id))
+                redis_available = bool(raw_meta)
+        except Exception:
+            self._mark_redis_unavailable()
+            redis_available = False
+
+        if not redis_available:
+            async for ev in self._fallback.stream_events(
+                job_id=job_id,
+                user_id=user_id,
+                last_event_id=last_event_id,
+                timeout_seconds=timeout_seconds,
+            ):
+                yield ev
+            return
+
+        del job
+        while True:
+            try:
+                client = self._get_client()
+                if client is None:
+                    return
+                raw_meta = await client.get(self._job_meta_key(job_id))
+                if not raw_meta:
+                    return
+                meta = json.loads(raw_meta)
+                if UUID(meta["user_id"]) != user_id:
+                    return
+                raw_events = await client.lrange(self._job_events_key(job_id), 0, -1)
+                parsed = [
+                    SseEventRecord(
+                        id=int(ev_dict["id"]),
+                        event=str(ev_dict["event"]),
+                        data=dict(ev_dict["data"]),
+                    )
+                    for ev_dict in (json.loads(item) for item in raw_events)
+                ]
+            except Exception:
+                async for ev in self._fallback.stream_events(
+                    job_id=job_id,
+                    user_id=user_id,
+                    last_event_id=cursor if cursor > 0 else last_event_id,
+                    timeout_seconds=max(0.1, deadline - asyncio.get_running_loop().time()),
+                ):
+                    yield ev
+                return
+
+            pending = [ev for ev in parsed if ev.id > cursor]
+            for ev in pending:
+                cursor = ev.id
+                yield ev
+                if ev.event in ("completed", "failed") or ev.data.get("stage") in (
+                    "COMPLETED",
+                    "FAILED",
+                ):
+                    return
+
+            if meta.get("status") in ("COMPLETED", "FAILED") and all(
+                ev.id <= cursor for ev in parsed
+            ):
+                return
+
+            remaining = deadline - asyncio.get_running_loop().time()
+            if remaining <= 0:
+                return
+            await asyncio.sleep(min(0.1, remaining))
+
+    def stream_sse_wire(
+        self,
+        *,
+        job_id: UUID,
+        user_id: UUID,
+        last_event_id: int | None = None,
+        timeout_seconds: float = DEFAULT_SSE_STREAM_TIMEOUT_SECONDS,
+        keepalive_interval_seconds: float = DEFAULT_SSE_KEEPALIVE_INTERVAL_SECONDS,
+    ) -> AsyncGenerator[str, None]:
+        """Yield SSE wire frames with periodic keepalive comments while keeping `stream_events` intact."""
+        return stream_sse_wire_with_keepalive(
+            self.stream_events(
+                job_id=job_id,
+                user_id=user_id,
+                last_event_id=last_event_id,
+                timeout_seconds=timeout_seconds,
+            ),
+            keepalive_interval_seconds=keepalive_interval_seconds,
+        )
 
 
 default_in_memory_sse_job_store = InMemorySseJobStore()
+default_redis_sse_job_store = RedisSseJobStore(fallback_store=default_in_memory_sse_job_store)

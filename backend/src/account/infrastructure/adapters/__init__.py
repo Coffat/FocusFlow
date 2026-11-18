@@ -1,5 +1,6 @@
 from typing import Any
 
+from src.account.domain.ports.calendar_provider_port import CalendarProviderError
 from src.account.infrastructure.adapters.availability_query_adapter import (
     SqlAlchemyAvailabilityQueryAdapter,
 )
@@ -12,9 +13,6 @@ from src.account.infrastructure.adapters.google_calendar_adapter import (
 from src.account.infrastructure.adapters.learner_profile_query_adapter import (
     LearnerProfileQueryAdapter,
     SqlAlchemyLearnerProfileQueryAdapter,
-)
-from src.account.infrastructure.adapters.mock_calendar_adapter import (
-    MockCalendarAdapter,
 )
 from src.account.infrastructure.adapters.quota_facade_adapter import (
     QuotaFacadeAdapter,
@@ -45,10 +43,13 @@ def _create_calendar_connection_query(
         from src.shared_kernel.config import get_settings
 
         settings = get_settings()
-        if settings.calendar_provider.strip().lower() in ("mock", "local_mock"):
-            calendar_provider = MockCalendarAdapter()
-        else:
-            calendar_provider = GoogleCalendarAdapter(settings=settings)
+        provider_name = settings.calendar_provider.strip().lower()
+        if provider_name not in ("google", "google_calendar"):
+            raise CalendarProviderError(
+                f"CALENDAR_PROVIDER_NOT_CONFIGURED: Unsupported calendar_provider={settings.calendar_provider!r}. Only 'google' is supported.",
+                code="CALENDAR_PROVIDER_NOT_CONFIGURED",
+            )
+        calendar_provider = GoogleCalendarAdapter(settings=settings)
     repo = SqlAlchemyCalendarConnectionRepository(session)
     return SqlAlchemyCalendarConnectionQueryAdapter(
         repository=repo,
@@ -67,7 +68,6 @@ register_account_port_factories(
 __all__ = [
     "GoogleCalendarAdapter",
     "LearnerProfileQueryAdapter",
-    "MockCalendarAdapter",
     "QuotaFacadeAdapter",
     "SqlAlchemyAvailabilityQueryAdapter",
     "SqlAlchemyCalendarConnectionQueryAdapter",

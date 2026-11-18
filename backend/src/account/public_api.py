@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol, runtime_checkable
 from uuid import UUID
 
 from src.shared_kernel.domain.events import DomainEvent
@@ -15,7 +15,10 @@ __all__ = [
     "CalendarConnectionQueryPort",
     "CalendarConnectionSnapshotDTO",
     "CalendarSyncFacadePort",
+    "ConceptMasterySnapshotDTO",
     "InsufficientQuotaError",
+    "LearnerMemoryItemSnapshotDTO",
+    "LearnerMemoryQueryPort",
     "LearnerProfileDTO",
     "LearnerProfileQueryPort",
     "ProposedTaskBlockDTO",
@@ -30,6 +33,7 @@ __all__ = [
     "create_availability_query_port",
     "create_calendar_connection_query_port",
     "create_calendar_sync_facade",
+    "create_learner_memory_query_port",
     "create_learner_profile_query_port",
     "create_quota_facade",
     "create_user_query_port",
@@ -93,6 +97,11 @@ class AvailabilitySnapshotDTO:
     daily_quota_minutes: dict[str, int] = field(default_factory=dict)
     availability_slots: tuple[dict[str, Any], ...] = ()
     disabled_weekdays: tuple[str, ...] = ()
+    calendar_integration_mode: str = "NONE"
+    allowed_window_start: str = "07:00"
+    allowed_window_end: str = "23:00"
+    min_session_minutes: int = 30
+    is_persisted: bool = True
 
 
 @dataclass(frozen=True)
@@ -155,7 +164,7 @@ class QuotaFacadePort(Protocol):
         reservation_id: UUID,
         prompt_tokens: int = 0,
         completion_tokens: int = 0,
-        model_name: str = "gemini-2.5-flash",
+        model_name: str = "gemini-3.8-flash",
     ) -> None: ...
 
     async def release_reservation(
@@ -165,6 +174,29 @@ class QuotaFacadePort(Protocol):
     ) -> None: ...
 
     async def expire_stale_reservations(self, now: datetime | None = None) -> int: ...
+
+    async def record_attempt_usage(
+        self,
+        *,
+        user_id: UUID,
+        action_type: str,
+        requested_model: str = "gemini-3.8-flash",
+        resolved_model: str | None = None,
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
+        thinking_tokens: int = 0,
+        latency_ms: int = 0,
+        status: Literal["SUCCESS", "FAILED", "RATE_LIMITED", "TIMEOUT"] = "SUCCESS",
+        usage_completeness: Literal["COMPLETE", "PARTIAL", "UNKNOWN"] = "COMPLETE",
+        usage_source: Literal[
+            "GATEWAY_TELEMETRY", "CACHE", "ESTIMATED", "UNKNOWN"
+        ] = "GATEWAY_TELEMETRY",
+        error_code: str | None = None,
+        error_message: str | None = None,
+        attempt_no: int = 1,
+        idempotency_key: str | None = None,
+        reservation_id: UUID | None = None,
+    ) -> Any: ...
 
 
 @dataclass(frozen=True)
@@ -190,6 +222,55 @@ class LearnerProfileQueryPort(Protocol):
     """Cross-context read-only query port for Zimmerman SRL Learner Profile (UC-07/08, ADR-010)."""
 
     async def get_learner_profile(self, user_id: UUID) -> LearnerProfileDTO: ...
+
+
+@dataclass(frozen=True, slots=True)
+class LearnerMemoryItemSnapshotDTO:
+    """Read-only Learner Memory Item snapshot exposed across bounded contexts."""
+
+    id: UUID
+    user_id: UUID
+    category: str
+    memory_key: str
+    memory_value: str
+    confidence: float
+    source_workflow: str
+    status: str = "CONFIRMED"
+
+
+@dataclass(frozen=True, slots=True)
+class ConceptMasterySnapshotDTO:
+    """Read-only Concept Mastery snapshot exposed across bounded contexts."""
+
+    user_id: UUID
+    concept_id: str
+    mastery_score: float
+    status: str
+    evidence_count: int
+
+
+class LearnerMemoryQueryPort(Protocol):
+    """Cross-context port for reading & recording SRL Learner Memory & Concept Mastery."""
+
+    async def list_active_memory_items(
+        self,
+        user_id: UUID,
+        limit: int = 20,
+    ) -> list[LearnerMemoryItemSnapshotDTO]: ...
+
+    async def list_concept_masteries(
+        self,
+        user_id: UUID,
+        concept_ids: list[str] | None = None,
+    ) -> list[ConceptMasterySnapshotDTO]: ...
+
+    async def upsert_memory_and_mastery_feedback(
+        self,
+        user_id: UUID,
+        *,
+        memories: list[dict[str, Any]] | None = None,
+        masteries: list[dict[str, Any]] | None = None,
+    ) -> None: ...
 
 
 @dataclass(frozen=True)
@@ -234,6 +315,7 @@ class CalendarBusyIntervalDTO:
     end_time: datetime
 
 
+@runtime_checkable
 class CalendarConnectionQueryPort(Protocol):
     """Cross-context read-only query port for Google/Outlook Calendar connection state."""
 
@@ -252,6 +334,7 @@ class CalendarConnectionQueryPort(Protocol):
     ) -> list[CalendarBusyIntervalDTO]: ...
 
 
+@runtime_checkable
 class CalendarSyncFacadePort(Protocol):
     """Cross-context facade port for calendar synchronization operations (UC-17)."""
 
@@ -259,7 +342,7 @@ class CalendarSyncFacadePort(Protocol):
         self,
         schedule_id: UUID,
         user_id: UUID,
-    ) -> None: ...
+    ) -> str: ...
 
 
 _quota_factory: Any = None
@@ -322,6 +405,12 @@ def create_availability_query_port(session: Any) -> AvailabilityQueryPort:
 def create_learner_profile_query_port(session: Any) -> LearnerProfileQueryPort:
     _ensure_account_factories_loaded()
     res: LearnerProfileQueryPort = _learner_profile_factory(session)
+    return res
+
+
+def create_learner_memory_query_port(session: Any) -> LearnerMemoryQueryPort:
+    _ensure_account_factories_loaded()
+    res: LearnerMemoryQueryPort = _learner_profile_factory(session)
     return res
 
 

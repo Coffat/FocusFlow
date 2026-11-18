@@ -77,15 +77,15 @@ from src.account.domain.exceptions.auth_exceptions import (
     InvalidTokenError,
     TokenExpiredError,
 )
-from src.account.domain.ports.calendar_provider_port import CalendarProviderPort
+from src.account.domain.ports.calendar_provider_port import (
+    CalendarProviderError,
+    CalendarProviderPort,
+)
 from src.account.infrastructure.adapters.google_calendar_adapter import (
     GoogleCalendarAdapter,
 )
 from src.account.infrastructure.adapters.learner_profile_query_adapter import (
     LearnerProfileQueryAdapter,
-)
-from src.account.infrastructure.adapters.mock_calendar_adapter import (
-    MockCalendarAdapter,
 )
 from src.account.infrastructure.adapters.quota_facade_adapter import (
     QuotaFacadeAdapter,
@@ -129,6 +129,20 @@ class TaskiqEmailServiceAdapter:
 
     async def send_otp_email(self, to_email: str, otp_code: str, purpose: str) -> None:
         await dispatch_otp_email(to_email=to_email, otp_code=otp_code, purpose=purpose)
+
+    async def send_overdue_alert_email(
+        self,
+        to_email: str,
+        overdue_task_titles: list[str],
+        remaining_reschedule_budget: int,
+    ) -> None:
+        from src.account.infrastructure.email.email_service import EmailService
+
+        await EmailService.send_overdue_alert_email(
+            to_email=to_email,
+            overdue_task_titles=overdue_task_titles,
+            remaining_reschedule_budget=remaining_reschedule_budget,
+        )
 
 
 # --- Database & Unit of Work Dependencies ---
@@ -427,9 +441,6 @@ def get_learner_profile_query_port(
 
 
 # --- Calendar Integration Dependencies (UC-17) ---
-_mock_calendar_adapter_instance: MockCalendarAdapter | None = None
-
-
 def get_calendar_connection_repository(
     session: AsyncSession = Depends(get_account_db_session),
 ) -> CalendarConnectionRepositoryPort:
@@ -437,13 +448,18 @@ def get_calendar_connection_repository(
 
 
 def get_calendar_provider() -> CalendarProviderPort:
-    global _mock_calendar_adapter_instance
     settings = get_settings()
     provider_name = settings.calendar_provider.strip().lower()
-    if provider_name in ("mock", "local_mock"):
-        if _mock_calendar_adapter_instance is None:
-            _mock_calendar_adapter_instance = MockCalendarAdapter()
-        return _mock_calendar_adapter_instance
+    if provider_name not in ("google", "google_calendar"):
+        raise CalendarProviderError(
+            f"CALENDAR_PROVIDER_NOT_CONFIGURED: Unsupported calendar_provider={settings.calendar_provider!r}. Only 'google' is supported.",
+            code="CALENDAR_PROVIDER_NOT_CONFIGURED",
+        )
+    if not settings.google_client_id.strip() or not settings.google_client_secret.strip():
+        raise CalendarProviderError(
+            "CALENDAR_OAUTH_NOT_CONFIGURED: Missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET.",
+            code="CALENDAR_OAUTH_NOT_CONFIGURED",
+        )
     return GoogleCalendarAdapter(settings=settings)
 
 

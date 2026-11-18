@@ -6,7 +6,7 @@ Nguồn nghiệp vụ hiện hành: `docs/srs/srs-v1.3.md` (03/11/2026, UC-01..U
 
 1. Hành vi, BUSR/FR, state machine và số UC: theo SRS v1.3. Kiến trúc, thư viện và hạ tầng: theo ADR.
 2. Nếu SRS và ADR quy định khác nhau, chọn hướng bảo toàn bất biến người học rồi báo rõ mâu thuẫn và tài liệu cần sửa. Không sửa SRS/ADR khi chưa được cho phép.
-3. Đích 35 bảng không đồng nghĩa đã triển khai: Alembic hiện tạo 28 bảng. Không dùng bảng chưa có migration; không tự thêm bảng ngoài thiết kế.
+3. Đích 35 bảng đã được tạo đầy đủ qua chuỗi Alembic `0001..0010` (`12 account`, `10 planning`, `5 execution`, `4 evaluation`, `4 shared_kernel`). Luôn dùng bảng/migration hiện hữu trong repo; không tự thêm bảng ngoài thiết kế.
 
 ## Các quyết định cần giữ
 

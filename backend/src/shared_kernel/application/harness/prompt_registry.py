@@ -1,11 +1,25 @@
+from __future__ import annotations
+
 import hashlib
 import json
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
+from typing import Any
 
 from .models import PromptTemplate
 
 _SEMVER_PATTERN = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
+
+
+def build_prompt_audit_metadata(template: PromptTemplate) -> dict[str, str]:
+    """Return canonical prompt provenance metadata for WorkflowRun snapshots and steps."""
+    return {
+        "prompt_id": template.prompt_id,
+        "prompt_version": template.version,
+        "prompt_ref": template.prompt_ref,
+        "prompt_checksum": template.checksum,
+        "schema_checksum": template.schema_checksum,
+    }
 
 
 class PromptRegistry:
@@ -15,6 +29,16 @@ class PromptRegistry:
         self._templates: dict[tuple[str, str], PromptTemplate] = {}
         for template in templates:
             self.register(template)
+
+    @staticmethod
+    def schema_checksum_for(output_schema: Mapping[str, Any]) -> str:
+        canonical_schema = json.dumps(
+            dict(output_schema),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        return hashlib.sha256(canonical_schema.encode()).hexdigest()
 
     @staticmethod
     def checksum_for(
@@ -54,6 +78,11 @@ class PromptRegistry:
         )
         if template.checksum != expected:
             raise ValueError(f"Checksum mismatch for {template.prompt_id}@{template.version}")
+        expected_schema_checksum = self.schema_checksum_for(template.output_schema)
+        if template.schema_checksum != expected_schema_checksum:
+            raise ValueError(
+                f"Schema checksum mismatch for {template.prompt_id}@{template.version}"
+            )
         key = (template.prompt_id, template.version)
         if key in self._templates:
             raise ValueError(f"Prompt already registered: {template.prompt_id}@{template.version}")
@@ -70,3 +99,20 @@ class PromptRegistry:
         if not matches:
             raise KeyError(f"Unknown prompt: {prompt_id}")
         return max(matches, key=lambda item: tuple(int(part) for part in item.version.split(".")))
+
+    def list_templates(self) -> tuple[PromptTemplate, ...]:
+        return tuple(
+            self._templates[key]
+            for key in sorted(
+                self._templates.keys(),
+                key=lambda k: (k[0], tuple(int(part) for part in k[1].split("."))),
+            )
+        )
+
+    @classmethod
+    def merge(cls, *registries: PromptRegistry) -> PromptRegistry:
+        merged = cls()
+        for reg in registries:
+            for tpl in reg.list_templates():
+                merged.register(tpl)
+        return merged

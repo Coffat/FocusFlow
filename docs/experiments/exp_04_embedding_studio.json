@@ -1,0 +1,338 @@
+{
+  "experiment": "0.4_embedding_studio",
+  "timestamp": "2026-11-16T05:33:09Z",
+  "endpoint": "google_ai_studio_default",
+  "api_key_source_env": "GEMINI_API_KEY",
+  "available_embedding_models": [
+    "models/gemini-embedding-001",
+    "models/gemini-embedding-2",
+    "models/gemini-embedding-2-preview"
+  ],
+  "retrieval_sanity": {
+    "litellm_gemini_embedding_2": {
+      "sim_relevant_doc": 0.837932,
+      "sim_other_doc": 0.627321,
+      "top1_correct": true
+    },
+    "genai_gemini-embedding-001": {
+      "sim_relevant_doc": 0.764373,
+      "sim_other_doc": 0.633371,
+      "top1_correct": true
+    }
+  },
+  "checks": [
+    {
+      "label": "litellm_prefix_default_dim",
+      "sdk": "litellm.aembedding",
+      "model": "gemini/gemini-embedding-2",
+      "extra_kwargs": {},
+      "ok": true,
+      "latency_ms": 752.162,
+      "vector_count": 2,
+      "dimensions": [
+        3072,
+        3072
+      ],
+      "l2_norms": [
+        1.0,
+        1.0
+      ],
+      "vectors_preview": [
+        [
+          0.010164459,
+          0.01005173,
+          -0.011163628,
+          0.009724712
+        ],
+        [
+          -0.02886075,
+          0.017376257,
+          0.010836086,
+          0.028257202
+        ]
+      ]
+    },
+    {
+      "label": "litellm_noprefix_default_dim",
+      "sdk": "litellm.aembedding",
+      "model": "gemini-embedding-2",
+      "extra_kwargs": {},
+      "ok": false,
+      "latency_ms": 9118.713,
+      "error_type": "APIConnectionError",
+      "error_message": "APIConnectionError: litellm.APIConnectionError: Your default credentials were not found. To set up Application Default Credentials, see https://cloud.google.com/docs/authentication/external/set-up-adc for more information.\nTraceback (most recent call last):\n  File \"/Users/vuthang/Documents/FocusFlow/backend/.venv/lib/python3.14/site-packages/litellm/main.py\", line 6922, in embedding\n    response = google_batch_embeddings.batch_embeddings(\n        model=model,\n    ...<15 lines>...\n        drop_pa"
+    },
+    {
+      "label": "litellm_dimensions_768",
+      "sdk": "litellm.aembedding",
+      "model": "gemini/gemini-embedding-2",
+      "extra_kwargs": {
+        "dimensions": 768
+      },
+      "ok": true,
+      "latency_ms": 495.81,
+      "vector_count": 2,
+      "dimensions": [
+        768,
+        768
+      ],
+      "l2_norms": [
+        1.0,
+        1.0
+      ],
+      "vectors_preview": [
+        [
+          0.017869713,
+          0.017671527,
+          -0.019626308,
+          0.01709661
+        ],
+        [
+          -0.05065845,
+          0.030500047,
+          0.019020272,
+          0.04959906
+        ]
+      ]
+    },
+    {
+      "label": "litellm_output_dimensionality_768",
+      "sdk": "litellm.aembedding",
+      "model": "gemini/gemini-embedding-2",
+      "extra_kwargs": {
+        "output_dimensionality": 768
+      },
+      "ok": true,
+      "latency_ms": 478.497,
+      "vector_count": 2,
+      "dimensions": [
+        3072,
+        3072
+      ],
+      "l2_norms": [
+        1.0,
+        1.0
+      ],
+      "vectors_preview": [
+        [
+          0.010164459,
+          0.01005173,
+          -0.011163628,
+          0.009724712
+        ],
+        [
+          -0.02886075,
+          0.017376257,
+          0.010836086,
+          0.028257202
+        ]
+      ]
+    },
+    {
+      "label": "litellm_task_type_retrieval_document_768",
+      "sdk": "litellm.aembedding",
+      "model": "gemini/gemini-embedding-2",
+      "extra_kwargs": {
+        "dimensions": 768,
+        "task_type": "RETRIEVAL_DOCUMENT"
+      },
+      "ok": true,
+      "latency_ms": 491.407,
+      "vector_count": 2,
+      "dimensions": [
+        768,
+        768
+      ],
+      "l2_norms": [
+        1.0,
+        1.0
+      ],
+      "vectors_preview": [
+        [
+          0.017869713,
+          0.017671527,
+          -0.019626308,
+          0.01709661
+        ],
+        [
+          -0.05065845,
+          0.030500047,
+          0.019020272,
+          0.04959906
+        ]
+      ]
+    },
+    {
+      "label": "litellm_task_type_retrieval_query_768",
+      "sdk": "litellm.aembedding",
+      "model": "gemini/gemini-embedding-2",
+      "extra_kwargs": {
+        "dimensions": 768,
+        "task_type": "RETRIEVAL_QUERY"
+      },
+      "ok": true,
+      "latency_ms": 477.919,
+      "vector_count": 1,
+      "dimensions": [
+        768
+      ],
+      "l2_norms": [
+        1.000001
+      ],
+      "vectors_preview": [
+        [
+          0.026105877,
+          0.016464276,
+          0.0015881625,
+          0.014663168
+        ]
+      ]
+    },
+    {
+      "label": "genai_gemini-embedding-2-preview_default",
+      "sdk": "google.genai",
+      "model": "gemini-embedding-2-preview",
+      "output_dimensionality": null,
+      "task_type": null,
+      "ok": true,
+      "latency_ms": 560.383,
+      "vector_count": 1,
+      "dimensions": [
+        3072
+      ],
+      "l2_norms": [
+        1.0
+      ]
+    },
+    {
+      "label": "genai_gemini-embedding-2-preview_768_doc",
+      "sdk": "google.genai",
+      "model": "gemini-embedding-2-preview",
+      "output_dimensionality": 768,
+      "task_type": "RETRIEVAL_DOCUMENT",
+      "ok": true,
+      "latency_ms": 531.861,
+      "vector_count": 1,
+      "dimensions": [
+        768
+      ],
+      "l2_norms": [
+        1.0
+      ]
+    },
+    {
+      "label": "genai_gemini-embedding-2-preview_768_query",
+      "sdk": "google.genai",
+      "model": "gemini-embedding-2-preview",
+      "output_dimensionality": 768,
+      "task_type": "RETRIEVAL_QUERY",
+      "ok": true,
+      "latency_ms": 591.486,
+      "vector_count": 1,
+      "dimensions": [
+        768
+      ],
+      "l2_norms": [
+        1.000001
+      ]
+    },
+    {
+      "label": "genai_gemini-embedding-2_default",
+      "sdk": "google.genai",
+      "model": "gemini-embedding-2",
+      "output_dimensionality": null,
+      "task_type": null,
+      "ok": true,
+      "latency_ms": 509.19,
+      "vector_count": 1,
+      "dimensions": [
+        3072
+      ],
+      "l2_norms": [
+        1.0
+      ]
+    },
+    {
+      "label": "genai_gemini-embedding-2_768_doc",
+      "sdk": "google.genai",
+      "model": "gemini-embedding-2",
+      "output_dimensionality": 768,
+      "task_type": "RETRIEVAL_DOCUMENT",
+      "ok": true,
+      "latency_ms": 557.259,
+      "vector_count": 1,
+      "dimensions": [
+        768
+      ],
+      "l2_norms": [
+        1.0
+      ]
+    },
+    {
+      "label": "genai_gemini-embedding-2_768_query",
+      "sdk": "google.genai",
+      "model": "gemini-embedding-2",
+      "output_dimensionality": 768,
+      "task_type": "RETRIEVAL_QUERY",
+      "ok": true,
+      "latency_ms": 521.695,
+      "vector_count": 1,
+      "dimensions": [
+        768
+      ],
+      "l2_norms": [
+        1.000001
+      ]
+    },
+    {
+      "label": "genai_gemini-embedding-001_default",
+      "sdk": "google.genai",
+      "model": "gemini-embedding-001",
+      "output_dimensionality": null,
+      "task_type": null,
+      "ok": true,
+      "latency_ms": 531.605,
+      "vector_count": 1,
+      "dimensions": [
+        3072
+      ],
+      "l2_norms": [
+        1.0
+      ]
+    },
+    {
+      "label": "genai_gemini-embedding-001_768_doc",
+      "sdk": "google.genai",
+      "model": "gemini-embedding-001",
+      "output_dimensionality": 768,
+      "task_type": "RETRIEVAL_DOCUMENT",
+      "ok": true,
+      "latency_ms": 491.841,
+      "vector_count": 2,
+      "dimensions": [
+        768,
+        768
+      ],
+      "l2_norms": [
+        0.58808,
+        0.588801
+      ]
+    },
+    {
+      "label": "genai_gemini-embedding-001_768_query",
+      "sdk": "google.genai",
+      "model": "gemini-embedding-001",
+      "output_dimensionality": 768,
+      "task_type": "RETRIEVAL_QUERY",
+      "ok": true,
+      "latency_ms": 501.339,
+      "vector_count": 1,
+      "dimensions": [
+        768
+      ],
+      "l2_norms": [
+        0.59249
+      ]
+    }
+  ]
+}

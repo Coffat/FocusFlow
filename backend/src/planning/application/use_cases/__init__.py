@@ -1,3 +1,6 @@
+from src.planning.application.use_cases.availability_outbox_consumer import (
+    HandleAvailabilityUpdatedEventUseCase,
+)
 from src.planning.application.use_cases.clarification_use_cases import (
     GenerateClarificationQuestionsUseCase,
     SubmitClarificationAnswersUseCase,
@@ -20,6 +23,8 @@ from src.planning.application.use_cases.proposal_generation_use_cases import (
 from src.planning.application.use_cases.proposal_management_use_cases import (
     ApplyScheduleProposalUseCase,
     GetCurrentScheduleProposalUseCase,
+    InitiateOverdueRecoveryUseCase,
+    ReoptimizeScheduleProposalUseCase,
     SaveManualRoadmapPlanUseCase,
     UpdateScheduleProposalUseCase,
 )
@@ -27,6 +32,8 @@ from src.planning.application.use_cases.roadmap_management_use_cases import (
     ArchiveRoadmapUseCase,
     GetRoadmapDetailUseCase,
     ListRoadmapsUseCase,
+    PauseRoadmapUseCase,
+    ResumeRoadmapUseCase,
     UpdateRoadmapUseCase,
 )
 
@@ -40,9 +47,14 @@ __all__ = [
     "GenerateClarificationQuestionsUseCase",
     "GetCurrentScheduleProposalUseCase",
     "GetRoadmapDetailUseCase",
+    "HandleAvailabilityUpdatedEventUseCase",
     "InitiateMilestoneGenerationUseCase",
+    "InitiateOverdueRecoveryUseCase",
     "InitiateScheduleProposalGenerationUseCase",
     "ListRoadmapsUseCase",
+    "PauseRoadmapUseCase",
+    "ReoptimizeScheduleProposalUseCase",
+    "ResumeRoadmapUseCase",
     "SaveManualRoadmapPlanUseCase",
     "SubmitClarificationAnswersUseCase",
     "UpdateMilestonesUseCase",

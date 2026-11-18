@@ -1,13 +1,19 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { provideRouter, Router, ActivatedRoute } from '@angular/router';
+import { MessageService } from 'primeng/api';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { AvailabilityConfigComponent } from './availability-config.component';
 import { AvailabilityService } from '../../../../core/services/availability.service';
+import { AvailabilityResponseDTO } from '../../../../core/models/availability.model';
 
 describe('AvailabilityConfigComponent', () => {
   let component: AvailabilityConfigComponent;
   let fixture: ComponentFixture<AvailabilityConfigComponent>;
   let service: AvailabilityService;
+  let router: Router;
+  let messageService: MessageService;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
@@ -15,13 +21,17 @@ describe('AvailabilityConfigComponent', () => {
       providers: [
         AvailabilityService,
         provideHttpClient(),
-        provideHttpClientTesting()
+        provideHttpClientTesting(),
+        provideRouter([]),
+        MessageService,
       ]
     }).compileComponents();
 
     fixture = TestBed.createComponent(AvailabilityConfigComponent);
     component = fixture.componentInstance;
     service = TestBed.inject(AvailabilityService);
+    router = TestBed.inject(Router);
+    messageService = TestBed.inject(MessageService);
     fixture.detectChanges();
   });
 
@@ -120,6 +130,61 @@ describe('AvailabilityConfigComponent', () => {
     saveButton?.click();
 
     expect(saveSpy).toHaveBeenCalled();
+  });
+
+  it('điều hướng trở lại returnUrl và hiển thị toast thành công khi lưu có query param returnUrl', () => {
+    const route = TestBed.inject(ActivatedRoute);
+    vi.spyOn(route.snapshot.queryParamMap, 'get').mockImplementation((key: string) => {
+      if (key === 'returnUrl') return '/roadmaps';
+      if (key === 'autoOpen') return 'true';
+      return null;
+    });
+
+    const navigateSpy = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+    const toastSpy = vi.spyOn(messageService, 'add');
+
+    vi.spyOn(service, 'saveMyAvailability').mockImplementation((cb) => {
+      cb?.({
+        id: 'avail-1',
+        user_id: 'usr-1',
+        mode: 'MODE_A',
+        calendar_integration_mode: 'NONE',
+        min_session_minutes: 30,
+        weekly_schedule: service.weeklySchedule(),
+        total_weekly_hours: 16.0,
+        updated_at: '2026-11-13T00:00:00Z',
+      });
+    });
+
+    component.onSaveAvailability();
+
+    expect(toastSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        severity: 'success',
+        detail: 'Đã lưu cấu hình thời gian rảnh thành công!',
+      })
+    );
+    expect(navigateSpy).toHaveBeenCalledWith('/roadmaps?autoOpen=true');
+  });
+
+  it('tự động cuộn tới phần Calendar Sync khi có query param focus=calendar', async () => {
+    const route = TestBed.inject(ActivatedRoute);
+    vi.spyOn(route.snapshot.queryParamMap, 'get').mockImplementation((key: string) => {
+      if (key === 'focus') return 'calendar';
+      return null;
+    });
+
+    const calendarEl = document.getElementById('calendar-sync-section');
+    expect(calendarEl).toBeTruthy();
+    const scrollSpy = vi.fn();
+    if (calendarEl) {
+      calendarEl.scrollIntoView = scrollSpy;
+    }
+
+    component.ngOnInit();
+    await new Promise((r) => setTimeout(r, 200));
+
+    expect(scrollSpy).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
   });
 
   it('bật và tắt ca học 1-Click trong Mode B', () => {
@@ -237,5 +302,51 @@ describe('AvailabilityConfigComponent', () => {
     const eventLeft = new KeyboardEvent('keydown', { key: 'ArrowLeft' });
     component.onModeKeydown(eventLeft, 'MODE_B');
     expect(service.activeMode()).toBe('MODE_A');
+  });
+
+  it('hiển thị hộp xác nhận khi chọn Đồng bộ Google Calendar (CONNECTED) cùng Rảnh Lai thủ công và cho phép chọn 1 chế độ chủ đạo', () => {
+    const compiled = fixture.nativeElement as HTMLElement;
+    const selectEl = compiled.querySelector('#calendar-mode-select') as HTMLSelectElement;
+    expect(selectEl).toBeTruthy();
+
+    selectEl.value = 'CONNECTED';
+    selectEl.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    expect(service.calendarIntegrationMode()).toBe('CONNECTED');
+    expect(component.showModeConflictBox()).toBe(true);
+    const conflictBox = compiled.querySelector('[data-testid="availability-mode-conflict-box"]');
+    expect(conflictBox).toBeTruthy();
+
+    // Lựa chọn 1: Dùng Rảnh Lai thủ công (Mode A/B) -> vô hiệu hóa đồng bộ tự động (NONE)
+    const manualBtn = compiled.querySelector(
+      '[data-testid="choose-manual-hybrid-mode-btn"]'
+    ) as HTMLButtonElement;
+    manualBtn.click();
+    fixture.detectChanges();
+
+    expect(service.calendarIntegrationMode()).toBe('NONE');
+    expect(component.showModeConflictBox()).toBe(false);
+
+    // Chọn lại CONNECTED và chọn Lựa chọn 2: Dùng Đồng bộ Google Calendar (CONNECTED)
+    selectEl.value = 'CONNECTED';
+    selectEl.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(component.showModeConflictBox()).toBe(true);
+
+    const googleBtn = compiled.querySelector(
+      '[data-testid="choose-google-calendar-mode-btn"]'
+    ) as HTMLButtonElement;
+    googleBtn.click();
+    fixture.detectChanges();
+
+    expect(service.calendarIntegrationMode()).toBe('CONNECTED');
+    expect(component.isGoogleCalendarPrimaryMode()).toBe(true);
+    expect(compiled.querySelector('[data-testid="google-calendar-primary-active-banner"]')).toBeTruthy();
+
+    // Nếu đang ở CONNECTED mà chỉnh sửa lịch Rảnh Lai thủ công -> hiện lại hộp xác nhận
+    component.adjustDayQuota('monday', 0.5);
+    fixture.detectChanges();
+    expect(component.showModeConflictBox()).toBe(true);
   });
 });

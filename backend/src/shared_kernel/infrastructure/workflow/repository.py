@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.shared_kernel.application.harness.models import (
@@ -30,6 +30,18 @@ class SqlAlchemyWorkflowRepository(WorkflowRepositoryPort):
         row = await self._session.scalar(stmt)
         return self._run_to_domain(row) if row else None
 
+    async def get_run_for_update(
+        self,
+        run_id: UUID,
+        *,
+        user_id: UUID | None = None,
+    ) -> WorkflowRun | None:
+        stmt = select(WorkflowRunORM).where(WorkflowRunORM.id == run_id).with_for_update()
+        if user_id is not None:
+            stmt = stmt.where(WorkflowRunORM.user_id == user_id)
+        row = await self._session.scalar(stmt)
+        return self._run_to_domain(row) if row else None
+
     async def save_run(self, run: WorkflowRun) -> None:
         row = await self._session.get(WorkflowRunORM, run.id)
         if row is None:
@@ -41,6 +53,54 @@ class SqlAlchemyWorkflowRepository(WorkflowRepositoryPort):
         row.paused_at = run.paused_at
         row.completed_at = run.completed_at
         await self._session.flush()
+
+    async def get_active_run_for_goal(
+        self,
+        goal_id: UUID,
+        user_id: UUID,
+        workflow_type: WorkflowType = WorkflowType.PLAN_CREATION,
+    ) -> WorkflowRun | None:
+        row = await self._session.scalar(
+            select(WorkflowRunORM)
+            .where(
+                WorkflowRunORM.goal_id == goal_id,
+                WorkflowRunORM.user_id == user_id,
+                WorkflowRunORM.workflow_type == workflow_type.value,
+                WorkflowRunORM.status.in_(("RUNNING", "PAUSED_WAITING_USER")),
+                WorkflowRunORM.current_step.in_(
+                    ("CLARIFICATION_ROUND_1", "CLARIFICATION_FOLLOW_UP")
+                ),
+            )
+            .order_by(WorkflowRunORM.started_at.desc())
+            .limit(1)
+        )
+        return self._run_to_domain(row) if row else None
+
+    async def acquire_goal_clarification_lock(self, goal_id: UUID, user_id: UUID) -> None:
+        lock_key = f"goal-clarification:{user_id}:{goal_id}"
+        await self._session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:lock_key, 0))"),
+            {"lock_key": lock_key},
+        )
+
+    async def get_run_by_idempotency_key(
+        self,
+        goal_id: UUID,
+        user_id: UUID,
+        idempotency_key: str,
+    ) -> WorkflowRun | None:
+        row = await self._session.scalar(
+            select(WorkflowRunORM)
+            .where(
+                WorkflowRunORM.goal_id == goal_id,
+                WorkflowRunORM.user_id == user_id,
+                WorkflowRunORM.workflow_type == WorkflowType.PLAN_CREATION.value,
+                WorkflowRunORM.context_snapshot["idempotency_key"].astext == idempotency_key,
+            )
+            .order_by(WorkflowRunORM.started_at.desc())
+            .limit(1)
+        )
+        return self._run_to_domain(row) if row else None
 
     async def add_step(self, step: WorkflowStepExecution) -> None:
         self._session.add(

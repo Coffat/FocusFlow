@@ -114,6 +114,15 @@ export type SettingsTab = 'general' | 'ai' | 'calendar' | 'security';
               </p>
             </div>
             <div class="flex items-center gap-2">
+              @if (returnUrl()) {
+                <a
+                  [routerLink]="returnUrl()"
+                  data-testid="header-back-to-roadmap-link"
+                  class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold bg-white border border-[#EAE8E7] text-[#246B4A] hover:bg-emerald-50/50 hover:border-[#246B4A]/40 transition-colors shadow-2xs no-underline"
+                >
+                  <span>&larr; Quay lại Lộ trình</span>
+                </a>
+              }
               <a
                 routerLink="/availability"
                 class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold bg-white border border-[#EAE8E7] text-[#1B1C1C] hover:text-[#246B4A] hover:border-[#246B4A]/40 hover:bg-[#FBF9F8] transition-colors shadow-2xs no-underline"
@@ -523,6 +532,47 @@ export type SettingsTab = 'general' | 'ai' | 'calendar' | 'security';
           @if (activeTab() === 'calendar') {
             <div role="tabpanel" id="panel-calendar" aria-labelledby="tab-calendar" class="space-y-6">
 
+              @if (returnUrl()) {
+                <!-- Back Link in Tab -->
+                <div class="flex items-center justify-between">
+                  <a
+                    [routerLink]="returnUrl()"
+                    data-testid="tab-back-to-roadmap-link"
+                    class="inline-flex items-center gap-1.5 text-xs font-semibold text-[#246B4A] hover:underline cursor-pointer no-underline"
+                  >
+                    <span>&larr; Quay lại Lộ trình</span>
+                  </a>
+                </div>
+
+                <!-- Architectural Focus Success Banner when Google Calendar is Connected -->
+                @if (calendarService.isConnected()) {
+                  <div
+                    data-testid="calendar-success-banner"
+                    class="p-5 rounded-2xl border border-emerald-300 bg-white/95 sm:bg-emerald-50/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs"
+                  >
+                    <div class="flex items-start gap-3.5">
+                      <div class="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center shrink-0 text-[#246B4A] shadow-2xs">
+                        <lucide-icon name="check-circle-2" [size]="20"></lucide-icon>
+                      </div>
+                      <div>
+                        <h4 class="text-sm font-bold text-[#1B1C1C]">Liên kết Google Calendar thành công</h4>
+                        <p class="text-xs text-[#404942] mt-0.5 leading-relaxed">
+                          Đã liên kết Google Calendar thành công! Bạn đã đủ điều kiện để AI lập lịch học tự động.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      data-testid="continue-to-roadmap-btn"
+                      (click)="continueToRoadmap()"
+                      class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full text-xs font-semibold text-white bg-[#246B4A] hover:bg-[#1B5338] transition-colors shadow-2xs whitespace-nowrap cursor-pointer shrink-0"
+                    >
+                      <span>Tiếp tục tạo Lộ trình &rarr;</span>
+                    </button>
+                  </div>
+                }
+              }
+
               <!-- Quick Link Card to /availability -->
               <div class="p-5 rounded-2xl border border-emerald-200 bg-emerald-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
                 <div class="space-y-1">
@@ -547,7 +597,7 @@ export type SettingsTab = 'general' | 'ai' | 'calendar' | 'security';
               </div>
 
               <!-- Google Calendar 1-Click OAuth Integration Card -->
-              <section class="bg-white rounded-2xl border border-[#EAE8E7] p-6 sm:p-8 shadow-xs space-y-6">
+              <section id="google-calendar-section" class="bg-white rounded-2xl border border-[#EAE8E7] p-6 sm:p-8 shadow-xs space-y-6">
                 <div class="border-b border-[#EAE8E7] pb-4">
                   <span class="text-[11px] font-mono uppercase tracking-widest text-[#246B4A] font-semibold">
                     Đồng Bộ Tự Động 2 Chiều
@@ -884,6 +934,8 @@ export class SettingsPageComponent implements OnInit, OnDestroy {
   readonly defaultCycleEnd = new Date(Date.now() + 30 * 86400000).toISOString();
 
   readonly activeTab = signal<SettingsTab>('general');
+  readonly returnUrl = signal<string | null>(null);
+  readonly autoOpen = signal<boolean>(false);
   private queryParamsSub?: Subscription;
 
   readonly webcalUrl = signal<string>(
@@ -923,20 +975,54 @@ export class SettingsPageComponent implements OnInit, OnDestroy {
     this.calendarService.loadStatus().subscribe();
     void this.settingsService.loadQuota();
 
-    const initialTab = this.route.snapshot.queryParamMap.get('tab') as SettingsTab | null;
-    if (initialTab && this.isValidTab(initialTab)) {
+    const snapshotParams = this.route.snapshot.queryParamMap;
+    const initialReturnUrl = snapshotParams.get('returnUrl');
+    if (initialReturnUrl) {
+      this.returnUrl.set(initialReturnUrl);
+    }
+    const initialAutoOpen = snapshotParams.get('autoOpen');
+    if (initialAutoOpen === 'true') {
+      this.autoOpen.set(true);
+    }
+
+    const initialFocus = snapshotParams.get('focus');
+    const initialTab = snapshotParams.get('tab') as SettingsTab | null;
+    if (initialFocus === 'calendar') {
+      this.activeTab.set('calendar');
+      setTimeout(() => this.scrollToGoogleCalendarSection(), 100);
+    } else if (initialTab && this.isValidTab(initialTab)) {
       this.activeTab.set(initialTab);
     }
 
     this.queryParamsSub = this.route.queryParamMap.subscribe((params) => {
+      const rUrl = params.get('returnUrl');
+      if (rUrl !== null) {
+        this.returnUrl.set(rUrl);
+      }
+      const aOpen = params.get('autoOpen');
+      if (aOpen !== null) {
+        this.autoOpen.set(aOpen === 'true');
+      }
+
+      if (params.get('focus') === 'calendar') {
+        this.activeTab.set('calendar');
+        setTimeout(() => this.scrollToGoogleCalendarSection(), 100);
+        return;
+      }
+
       if (params.has('calendar_connected')) {
         this.activeTab.set('calendar');
         return;
       }
       const tab = params.get('tab') as SettingsTab | null;
-      const targetTab: SettingsTab = tab && this.isValidTab(tab) ? tab : 'general';
-      if (targetTab !== this.activeTab()) {
-        this.activeTab.set(targetTab);
+      if (tab && this.isValidTab(tab)) {
+        if (tab !== this.activeTab()) {
+          this.activeTab.set(tab);
+        }
+      } else if (!params.has('focus') && !params.has('returnUrl') && !params.has('calendar_connected')) {
+        if (this.activeTab() !== 'general') {
+          this.activeTab.set('general');
+        }
       }
     });
 
@@ -980,7 +1066,29 @@ export class SettingsPageComponent implements OnInit, OnDestroy {
   }
 
   onConnectGoogleCalendar(): void {
-    this.calendarService.connectGoogleCalendar('/settings?tab=calendar');
+    let returnTo = '/settings?tab=calendar';
+    if (this.returnUrl()) {
+      const encodedReturn = encodeURIComponent(this.returnUrl()!);
+      returnTo += `&returnUrl=${encodedReturn}&autoOpen=${this.autoOpen()}`;
+    }
+    this.calendarService.connectGoogleCalendar(returnTo);
+  }
+
+  continueToRoadmap(): void {
+    const dest = this.returnUrl() || '/roadmaps';
+    let targetUrl = dest;
+    if (this.autoOpen() && !targetUrl.includes('autoOpen=')) {
+      const separator = targetUrl.includes('?') ? '&' : '?';
+      targetUrl = `${targetUrl}${separator}autoOpen=true`;
+    }
+    void this.router.navigateByUrl(targetUrl);
+  }
+
+  scrollToGoogleCalendarSection(): void {
+    const el = document.getElementById('google-calendar-section');
+    if (el && typeof el.scrollIntoView === 'function') {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   }
 
   onDisconnectGoogleCalendar(): void {

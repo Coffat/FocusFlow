@@ -55,6 +55,12 @@ class MilestoneOwnershipDTO:
     roadmap_id: UUID
     user_id: UUID
     title: str
+    description: str | None = None
+    learning_outcomes: tuple[str, ...] = ()
+    completion_criteria: str | None = None
+    required_concepts: tuple[str, ...] = ()
+    unverified_concepts: tuple[str, ...] = ()
+    task_titles: tuple[str, ...] = ()
 
 
 class MilestoneOwnershipQueryPort(Protocol):
@@ -186,7 +192,11 @@ class PlanningDashboardQueryPort(Protocol):
     ) -> list[PlanningActiveRoadmapDTO]: ...
 
     async def get_week_schedule_blocks(
-        self, user_id: UUID, start_date: date, end_date: date
+        self,
+        user_id: UUID,
+        start_date: date,
+        end_date: date,
+        user_timezone: str | None = None,
     ) -> list[PlanningDashboardScheduleBlockDTO]: ...
 
     async def get_monthly_target_hours(self, user_id: UUID) -> float: ...
@@ -208,4 +218,147 @@ def create_planning_dashboard_query_port(session: Any) -> PlanningDashboardQuery
         importlib.import_module("src.planning.infrastructure.adapters.planning_dashboard_adapter")
     assert callable(_planning_dashboard_factory)
     res: PlanningDashboardQueryPort = _planning_dashboard_factory(session)
+    return res
+
+
+@dataclass(frozen=True, slots=True)
+class RoadmapExecutionContextDTO:
+    """Read-only roadmap metadata exposed to Execution context."""
+
+    roadmap_id: UUID
+    user_id: UUID
+    title: str
+    status: str
+    target_date: date | None
+    official_schedule_id: UUID | None
+    weekly_reschedule_budget: int
+    weekly_reschedule_used: int
+    budget_week_start: date | None
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionWeekScheduleBlockDTO:
+    """ScheduleBlock + roadmap metadata exposed to Execution weekly schedule view."""
+
+    id: UUID
+    roadmap_id: UUID
+    roadmap_title: str
+    roadmap_status: str
+    official_schedule_id: UUID
+    task_id: UUID | None
+    sequence_in_task: int
+    block_type: str
+    block_date: date
+    start_time: datetime
+    end_time: datetime
+    scheduled_duration_minutes: int
+    is_protected: bool
+    status: str
+    sync_status: str
+    placement_rationale: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ManualSlotValidationResultDTO:
+    """Result of deterministic Tier 2 validation for a manual task create/reschedule."""
+
+    is_valid: bool
+    violations: tuple[dict[str, Any], ...] = ()
+    soft_overflow_warnings: tuple[dict[str, Any], ...] = ()
+    calendar_conflicts: tuple[dict[str, Any], ...] = ()
+    official_schedule_id: UUID | None = None
+    availability_mode: str = "MODE_A"
+
+
+class PlanningExecutionBridgePort(Protocol):
+    """Cross-context bridge port exposed by Planning to Execution."""
+
+    async def get_user_roadmaps_context(
+        self,
+        user_id: UUID,
+        roadmap_id: UUID | None = None,
+    ) -> list[RoadmapExecutionContextDTO]: ...
+
+    async def get_milestone_sequences(
+        self,
+        roadmap_ids: Sequence[UUID],
+    ) -> dict[UUID, int]: ...
+
+    async def verify_milestone_in_roadmap(
+        self,
+        user_id: UUID,
+        roadmap_id: UUID,
+        milestone_id: UUID,
+    ) -> bool: ...
+
+    async def get_week_schedule_blocks(
+        self,
+        user_id: UUID,
+        start_date: date,
+        end_date: date,
+    ) -> list[ExecutionWeekScheduleBlockDTO]: ...
+
+    async def verify_roadmap_writable(
+        self,
+        user_id: UUID,
+        roadmap_id: UUID,
+    ) -> date | None: ...
+
+    async def validate_manual_task_slot(
+        self,
+        *,
+        user_id: UUID,
+        roadmap_id: UUID,
+        task_id: UUID | None,
+        scheduled_date: date,
+        scheduled_start: datetime | None,
+        scheduled_end: datetime | None,
+        estimated_minutes: int,
+        confirm_soft_overflow: bool = False,
+    ) -> ManualSlotValidationResultDTO: ...
+
+    async def sync_task_lifecycle_to_blocks(
+        self,
+        *,
+        task_id: UUID,
+        roadmap_id: UUID,
+        new_status: str,
+        scheduled_date: date | None,
+        scheduled_start: datetime | None,
+        scheduled_end: datetime | None,
+        estimated_minutes: int,
+        now: datetime,
+    ) -> None: ...
+
+    async def deduct_overdue_reschedule_budget(
+        self,
+        roadmap_id: UUID,
+        now: datetime,
+    ) -> int: ...
+
+    async def record_study_activity_and_check_completion(
+        self,
+        roadmap_id: UUID,
+        activity_at: datetime,
+        all_tasks_completed: bool,
+        now: datetime,
+    ) -> str: ...
+
+
+_planning_execution_bridge_factory: Any = None
+
+
+def register_planning_execution_bridge_factory(factory: Any) -> None:
+    global _planning_execution_bridge_factory
+    _planning_execution_bridge_factory = factory
+
+
+def create_planning_execution_bridge(session: Any) -> PlanningExecutionBridgePort:
+    global _planning_execution_bridge_factory
+    if _planning_execution_bridge_factory is None:
+        import importlib
+
+        importlib.import_module("src.planning.infrastructure.adapters.planning_execution_bridge")
+    assert callable(_planning_execution_bridge_factory)
+    res: PlanningExecutionBridgePort = _planning_execution_bridge_factory(session)
     return res

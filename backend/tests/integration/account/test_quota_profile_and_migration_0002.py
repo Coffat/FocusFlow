@@ -168,7 +168,7 @@ async def test_quota_facade_reserve_commit_release_idempotency_and_free_first_de
                 reservation_id=res_id_1,
                 prompt_tokens=150,
                 completion_tokens=350,
-                model_name="gemini-2.5-flash",
+                model_name="gemini-3.8-flash",
             )
             await session.commit()
 
@@ -183,7 +183,7 @@ async def test_quota_facade_reserve_commit_release_idempotency_and_free_first_de
                 reservation_id=res_id_1,
                 prompt_tokens=150,
                 completion_tokens=350,
-                model_name="gemini-2.5-flash",
+                model_name="gemini-3.8-flash",
             )
             await session.commit()
             assert quota_row.free_credits_remaining == 1
@@ -201,7 +201,7 @@ async def test_quota_facade_reserve_commit_release_idempotency_and_free_first_de
             assert len(logs) == 1
             assert logs[0].action_type == "ROADMAP_GENERATION"
             assert logs[0].total_tokens == 500
-            assert logs[0].model_name == "gemini-2.5-flash"
+            assert logs[0].model_name == "gemini-3.8-flash"
 
             # 3. Reserve cost=2 and commit -> deducts remaining 1 free credit + 1 paid credit (free=0, paid=1)
             res_id_2 = await facade.reserve_quota(

@@ -7,7 +7,7 @@ import {
   signal,
   computed,
 } from '@angular/core';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import {
   LucideAngularModule,
   LUCIDE_ICONS,
@@ -15,6 +15,7 @@ import {
   Plus,
 } from 'lucide-angular';
 import { AuthService } from '../../core/services/auth.service';
+import { AvailabilityService } from '../../core/services/availability.service';
 import { TranslationService } from '../../core/services/translation.service';
 import { DashboardService } from './services/dashboard.service';
 import { DashboardDataState } from './models/dashboard.model';
@@ -26,9 +27,10 @@ import { DashboardActiveRoadmapsComponent } from './ui/dashboard-active-roadmaps
 import { DashboardTodayQueueComponent } from './ui/dashboard-today-queue.component';
 import { DashboardAiInsightsComponent } from './ui/dashboard-ai-insights.component';
 import { StarterTemplate } from '../../shared/components/blueprint-empty-state/blueprint-empty-state.component';
-import { PriorKnowledgeLevel } from '../roadmaps/models/roadmap.model';
+import { PlanningStep, PriorKnowledgeLevel } from '../roadmaps/models/roadmap.model';
 import { RoadmapWizardHostComponent } from '../roadmaps/components/dialogs/roadmap-wizard-host/roadmap-wizard-host.component';
 import { AdaptationModalDialogComponent } from '../roadmaps/components/dialogs/adaptation-modal-dialog/adaptation-modal-dialog.component';
+import { PrerequisiteAvailabilityDialogComponent } from '../roadmaps/components/dialogs/prerequisite-availability-dialog/prerequisite-availability-dialog.component';
 
 @Component({
   selector: 'app-dashboard',
@@ -45,6 +47,7 @@ import { AdaptationModalDialogComponent } from '../roadmaps/components/dialogs/a
     DashboardAiInsightsComponent,
     RoadmapWizardHostComponent,
     AdaptationModalDialogComponent,
+    PrerequisiteAvailabilityDialogComponent,
   ],
   providers: [
     {
@@ -59,8 +62,10 @@ import { AdaptationModalDialogComponent } from '../roadmaps/components/dialogs/a
 export class DashboardComponent implements OnInit {
   readonly authService = inject(AuthService);
   readonly dashboardService = inject(DashboardService);
+  readonly availabilityService = inject(AvailabilityService);
   readonly translationService = inject(TranslationService);
   readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
 
   readonly currentUser = this.authService.currentUser;
   readonly summary = this.dashboardService.summary;
@@ -72,9 +77,12 @@ export class DashboardComponent implements OnInit {
     return this.currentState() === 'new-user' || (this.summary()?.activeRoadmaps?.length ?? 0) === 0;
   });
 
-  // 4-Step Wizard Dialog State
+  // Prerequisite Availability Dialog State
+  readonly prerequisiteDialogOpen = signal<boolean>(false);
+
+  // 5-Step Wizard Dialog State
   readonly wizardOpen = signal<boolean>(false);
-  readonly wizardStep = signal<1 | 2 | 3 | 4>(1);
+  readonly wizardStep = signal<PlanningStep>(1);
   readonly wizardInitialTitle = signal<string>('');
   readonly wizardInitialLevel = signal<PriorKnowledgeLevel>('BEGINNER');
   readonly wizardInitialWeeklyHours = signal<number>(12);
@@ -87,6 +95,32 @@ export class DashboardComponent implements OnInit {
       this.authService.initAuth();
     }
     this.dashboardService.loadSummary().subscribe();
+
+    const autoOpen = this.route.snapshot.queryParamMap.get('autoOpen');
+    if (autoOpen === 'true') {
+      this.openCreateWizard(1);
+      const queryParams = { ...this.route.snapshot.queryParams };
+      delete queryParams['autoOpen'];
+      this.router.navigate([], {
+        relativeTo: this.route,
+        queryParams,
+        replaceUrl: true,
+      });
+    }
+  }
+
+  checkAvailabilityAndProceed(action: () => void): void {
+    this.availabilityService.checkPrerequisites((ready) => {
+      if (!ready) {
+        this.prerequisiteDialogOpen.set(true);
+      } else {
+        action();
+      }
+    });
+  }
+
+  closePrerequisiteDialog(): void {
+    this.prerequisiteDialogOpen.set(false);
   }
 
   onStateChange(state: DashboardDataState): void {
@@ -97,12 +131,14 @@ export class DashboardComponent implements OnInit {
     this.dashboardService.setWeekOffset(offset);
   }
 
-  openCreateWizard(step: 1 | 2 | 3 | 4 = 1): void {
-    this.wizardInitialTitle.set('');
-    this.wizardInitialLevel.set('BEGINNER');
-    this.wizardInitialWeeklyHours.set(12);
-    this.wizardStep.set(step);
-    this.wizardOpen.set(true);
+  openCreateWizard(step: PlanningStep = 1): void {
+    this.checkAvailabilityAndProceed(() => {
+      this.wizardInitialTitle.set('');
+      this.wizardInitialLevel.set('BEGINNER');
+      this.wizardInitialWeeklyHours.set(12);
+      this.wizardStep.set(step);
+      this.wizardOpen.set(true);
+    });
   }
 
   closeCreateWizard(): void {
@@ -110,11 +146,13 @@ export class DashboardComponent implements OnInit {
   }
 
   onSelectStarterTemplate(tpl: StarterTemplate): void {
-    this.wizardInitialTitle.set(tpl.title);
-    this.wizardInitialLevel.set(tpl.knowledgeLevel ?? 'BEGINNER');
-    this.wizardInitialWeeklyHours.set(tpl.hoursPerWeek ?? 12);
-    this.wizardStep.set(1);
-    this.wizardOpen.set(true);
+    this.checkAvailabilityAndProceed(() => {
+      this.wizardInitialTitle.set(tpl.title);
+      this.wizardInitialLevel.set(tpl.knowledgeLevel ?? 'BEGINNER');
+      this.wizardInitialWeeklyHours.set(tpl.hoursPerWeek ?? 12);
+      this.wizardStep.set(1);
+      this.wizardOpen.set(true);
+    });
   }
 
   openAdaptationModal(): void {

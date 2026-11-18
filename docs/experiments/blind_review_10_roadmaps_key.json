@@ -1,0 +1,109 @@
+{
+  "schema_version": "1.0",
+  "seed": 20261116,
+  "source_file": "docs/experiments/exp_09_judge_and_quality_ab.json",
+  "blind_review_doc": "docs/reports/blind-review-10-roadmaps.md",
+  "roadmaps_count": 10,
+  "mapping": {
+    "R-01": {
+      "goal_id": "G1_BEGINNER_PYTHON_FASTAPI",
+      "arm": "medium",
+      "model_id": "gemini-3.8-flash-medium",
+      "attempts_used": 1,
+      "judge_low_score": 100.0,
+      "judge_medium_score": 100.0,
+      "milestones_count": 4,
+      "tasks_count": 12
+    },
+    "R-02": {
+      "goal_id": "G1_BEGINNER_PYTHON_FASTAPI",
+      "arm": "low",
+      "model_id": "gemini-3.8-flash-low",
+      "attempts_used": 1,
+      "judge_low_score": 96.0,
+      "judge_medium_score": 92.0,
+      "milestones_count": 5,
+      "tasks_count": 18
+    },
+    "R-03": {
+      "goal_id": "G5_INTERMEDIATE_DATA_ENG_AIRFLOW_DBT",
+      "arm": "low",
+      "model_id": "gemini-3.8-flash-low",
+      "attempts_used": 2,
+      "judge_low_score": 95.0,
+      "judge_medium_score": 96.0,
+      "milestones_count": 6,
+      "tasks_count": 12
+    },
+    "R-04": {
+      "goal_id": "G3_ADVANCED_RUST_ASYNC_TOKIO",
+      "arm": "medium",
+      "model_id": "gemini-3.8-flash-medium",
+      "attempts_used": 1,
+      "judge_low_score": 96.0,
+      "judge_medium_score": 98.0,
+      "milestones_count": 6,
+      "tasks_count": 33
+    },
+    "R-05": {
+      "goal_id": "G3_ADVANCED_RUST_ASYNC_TOKIO",
+      "arm": "low",
+      "model_id": "gemini-3.8-flash-low",
+      "attempts_used": 1,
+      "judge_low_score": 98.0,
+      "judge_medium_score": 100.0,
+      "milestones_count": 5,
+      "tasks_count": 23
+    },
+    "R-06": {
+      "goal_id": "G2_INTERMEDIATE_SYSTEM_DESIGN_CACHE",
+      "arm": "low",
+      "model_id": "gemini-3.8-flash-low",
+      "attempts_used": 1,
+      "judge_low_score": 100.0,
+      "judge_medium_score": 96.0,
+      "milestones_count": 4,
+      "tasks_count": 12
+    },
+    "R-07": {
+      "goal_id": "G4_BEGINNER_IELTS_WRITING",
+      "arm": "medium",
+      "model_id": "gemini-3.8-flash-medium",
+      "attempts_used": 1,
+      "judge_low_score": 95.0,
+      "judge_medium_score": 98.0,
+      "milestones_count": 6,
+      "tasks_count": 32
+    },
+    "R-08": {
+      "goal_id": "G4_BEGINNER_IELTS_WRITING",
+      "arm": "low",
+      "model_id": "gemini-3.8-flash-low",
+      "attempts_used": 2,
+      "judge_low_score": 95.0,
+      "judge_medium_score": 95.0,
+      "milestones_count": 6,
+      "tasks_count": 31
+    },
+    "R-09": {
+      "goal_id": "G5_INTERMEDIATE_DATA_ENG_AIRFLOW_DBT",
+      "arm": "medium",
+      "model_id": "gemini-3.8-flash-medium",
+      "attempts_used": 1,
+      "judge_low_score": 95.0,
+      "judge_medium_score": 90.0,
+      "milestones_count": 5,
+      "tasks_count": 26
+    },
+    "R-10": {
+      "goal_id": "G2_INTERMEDIATE_SYSTEM_DESIGN_CACHE",
+      "arm": "medium",
+      "model_id": "gemini-3.8-flash-medium",
+      "attempts_used": 1,
+      "judge_low_score": 98.0,
+      "judge_medium_score": 95.0,
+      "milestones_count": 4,
+      "tasks_count": 16
+    }
+  }
+}

@@ -8,22 +8,21 @@
     (click)="onBackdropClick($event)"
   >
     <div
-      class="w-full bg-[#FFFFFF] border border-[#DCDCDC] rounded-xl shadow-[0_24px_48px_-12px_rgba(17,17,17,0.12)] flex flex-col max-h-[92vh] overflow-hidden my-auto"
+      class="w-full bg-[#FFFFFF] border border-[#DCDCDC] rounded-xl shadow-[0_24px_48px_-12px_rgba(17,17,17,0.12)] flex flex-col h-[min(92vh,800px)] lg:h-[min(86vh,800px)] max-h-[92vh] overflow-hidden my-auto"
       [ngClass]="maxWidthClass()"
       data-testid="wizard-dialog-container"
     >
       <!-- TOP HEADER BAR -->
-      <header class="px-5 sm:px-6 py-3.5 border-b border-[#DCDCDC] bg-[#FFFFFF] flex flex-wrap items-center justify-between gap-3 shrink-0">
-        <!-- Left: FocusFlow Emblem + Title -->
-        <div class="flex items-center gap-2.5 min-w-0">
-          <div
-            class="w-7 h-7 rounded-md bg-[#111111] text-white font-serif italic font-semibold text-base flex items-center justify-center shrink-0"
-            aria-hidden="true"
-          >
-            F
-          </div>
+      <header class="px-5 sm:px-6 py-3.5 border-b border-[#DCDCDC] bg-[#FFFFFF] flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 shrink-0">
+        <!-- Left: FocusFlow Logo + Title -->
+        <div class="flex items-center gap-2.5 min-w-0 shrink-0">
+          <img
+            src="assets/logo.svg"
+            alt="FocusFlow"
+            class="w-7 h-7 object-contain shrink-0"
+          />
           <div class="min-w-0">
-            <span class="block text-[10px] font-mono font-semibold uppercase tracking-widest text-[#555555] truncate">
+            <span class="block text-sm font-semibold text-[#111111] tracking-tight truncate">
               {{ title() }}
             </span>
           </div>
@@ -32,7 +31,7 @@
         <!-- Center: Interactive 4-Step Stepper -->
         <nav
           aria-label="Tiến trình khởi tạo lộ trình"
-          class="flex items-center gap-1.5 sm:gap-2 overflow-x-auto py-0.5"
+          class="flex items-center gap-1.5 sm:gap-2 overflow-x-auto py-0.5 min-w-0"
         >
           @for (item of steps; track item.step) {
             <button
@@ -57,17 +56,8 @@
           }
         </nav>
 
-        <!-- Right: Save Draft & Exit + Close X -->
-        <div class="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            (click)="onSaveDraft()"
-            data-testid="wizard-save-draft-btn"
-            class="text-xs font-medium text-[#555555] hover:text-[#111111] hover:bg-[#F3F3F1] px-3 py-1.5 rounded-full transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#246B4A]"
-          >
-            Lưu nháp &amp; Thoát
-          </button>
-
+        <!-- Right: Close X -->
+        <div class="flex items-center shrink-0">
           <button
             type="button"
             (click)="onClose()"
@@ -79,36 +69,6 @@
           </button>
         </div>
       </header>
-
-      <!-- 2-STAGE SSE LIVE TELEMETRY BANNER -->
-      @if (isSseActive() && sseProgress(); as sse) {
-        <div
-          class="bg-[#EBF3EE] border-b border-[#246B4A]/20 px-6 py-3 flex flex-col gap-2 shrink-0"
-          aria-live="polite"
-          data-testid="wizard-sse-banner"
-        >
-          <div class="flex items-center justify-between gap-3 text-xs">
-            <div class="flex items-center gap-2 text-[#246B4A] font-medium min-w-0">
-              <span class="w-2 h-2 rounded-full bg-[#246B4A] animate-ping shrink-0" aria-hidden="true"></span>
-              <span class="truncate">{{ sse.message || 'Đang thực thi tiến trình AI 2-Stage SSE...' }}</span>
-            </div>
-            <div class="flex items-center gap-2 shrink-0 font-mono text-xs font-semibold text-[#246B4A]">
-              @if (sse.stage) {
-                <span class="px-2 py-0.5 rounded bg-white/80 border border-[#246B4A]/20 text-[10px]">
-                  {{ sse.stage }}
-                </span>
-              }
-              <span>{{ sse.progressPercent }}%</span>
-            </div>
-          </div>
-          <div class="w-full h-1.5 bg-white/80 rounded-full overflow-hidden">
-            <div
-              class="h-full bg-[#246B4A] rounded-full transition-all duration-300"
-              [style.width.%]="sse.progressPercent"
-            ></div>
-          </div>
-        </div>
-      }
 
       <!-- ACCESSIBLE ERROR SUMMARY BANNER -->
       @if (errorMessage(); as err) {
@@ -126,8 +86,8 @@
         </div>
       }
 
-      <!-- MAIN SCROLLABLE BODY SLOT -->
-      <div class="flex-1 overflow-y-auto">
+      <!-- MAIN FLEX BODY SLOT -->
+      <div class="flex-1 min-h-0 flex flex-col overflow-hidden">
         <ng-content />
       </div>
 
