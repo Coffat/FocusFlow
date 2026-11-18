@@ -26,6 +26,7 @@ from src.evaluation.application.dtos.intelligence import (
     WeeklyReviewResponseDTO,
 )
 from src.evaluation.application.ports.intelligence_repository_port import (
+    DuplicateWeeklyReviewConflictError,
     EvaluationIntelligenceRepositoryPort,
 )
 from src.evaluation.application.prompts import (
@@ -673,6 +674,17 @@ class GenerateWeeklyReviewUseCase:
         if not await self._ownership.roadmap_belongs_to(request.roadmap_id, user_id):
             raise EvaluationResourceNotFoundError
 
+        get_for_period = getattr(self._repository, "get_weekly_review_for_period", None)
+        if callable(get_for_period):
+            existing_review = await get_for_period(
+                request.roadmap_id,
+                request.period_start,
+                request.period_end,
+            )
+            if existing_review is not None:
+                await _close_read_transaction(self._uow)
+                return _weekly_dto(existing_review)
+
         # Phase 1: Read-only deterministic metrics via Bounded Context Query Ports.
         exec_metrics = WeeklyExecutionMetricsDTO()
         if self._execution_metrics_port is not None:
@@ -839,80 +851,85 @@ class GenerateWeeklyReviewUseCase:
                 if hasattr(write_scope.uow, "__aenter__") and hasattr(write_scope.uow, "__aexit__")
                 else nullcontext(write_scope.uow)
             )
-            async with uow_cm:
-                review = await write_scope.repository.create_weekly_review(
-                    roadmap_id=request.roadmap_id,
-                    user_id=user_id,
-                    period_start=request.period_start,
-                    period_end=request.period_end,
-                    reflection=request.reflection,
-                )
-                review.quantitative_summary = dict(quantitative_summary)
-                review.strengths_feedback = final_strengths
-                review.bottlenecks_feedback = final_bottlenecks
-                review.action_recommendations = final_actions
-                await write_scope.repository.save_weekly_review(review, model_used=model_used)
-
-                if write_scope.learner_memory_port is not None:
-                    await write_scope.learner_memory_port.upsert_memory_and_mastery_feedback(
-                        user_id,
-                        memories=[
-                            {
-                                "memory_key": (
-                                    f"weekly_review:{request.roadmap_id}:{request.period_end.isoformat()}"
-                                ),
-                                "category": "BEHAVIOR",
-                                "epistemic_level": "OBSERVED",
-                                "confidence": 0.85,
-                                "value": {
-                                    "summary": review.strengths_feedback,
-                                    "bottleneck": review.bottlenecks_feedback,
-                                    "source_workflow": "WEEKLY_REVIEW",
-                                    "quantitative_summary": dict(review.quantitative_summary),
-                                    "model_used": model_used,
-                                },
-                                "evidence": [
-                                    {
-                                        "review_id": str(review.id),
-                                        "period_start": request.period_start.isoformat(),
-                                        "period_end": request.period_end.isoformat(),
-                                    }
-                                ],
-                            }
-                        ],
+            try:
+                async with uow_cm:
+                    review = await write_scope.repository.create_weekly_review(
+                        roadmap_id=request.roadmap_id,
+                        user_id=user_id,
+                        period_start=request.period_start,
+                        period_end=request.period_end,
+                        reflection=request.reflection,
                     )
-                await _record_eval_workflow(
-                    write_scope.workflow_repo,
-                    user_id=user_id,
-                    workflow_type=WorkflowType.WEEKLY_REVIEW,
-                    roadmap_id=request.roadmap_id,
-                    step_name="WEEKLY_REVIEW_SRL",
-                    input_summary={
-                        "roadmap_id": str(request.roadmap_id),
-                        "period_start": request.period_start.isoformat(),
-                        "period_end": request.period_end.isoformat(),
-                        "has_sufficient_data": has_sufficient_data,
-                        **weekly_audit,
-                    },
-                    output_payload={
-                        "review_id": str(review.id),
-                        "quantitative_faithfulness": raw_faithfulness,
-                        "model_used": model_used,
-                        "prompt_tokens": prompt_tokens,
-                        "output_tokens": completion_tokens,
-                        "completion_tokens": completion_tokens,
-                        "thinking_tokens": thinking_tokens,
-                        "attempts": llm_attempts,
-                        "fallback_reason_code": fallback_reason_code,
-                    },
-                    step_status=(
-                        WorkflowStepStatus.COMPLETED
-                        if fallback_reason_code in (None, "INSUFFICIENT_QUANTITATIVE_DATA")
-                        else WorkflowStepStatus.FAILED
-                    ),
-                    error_detail=fallback_reason_code,
-                )
-                await write_scope.uow.commit()
+                    review.quantitative_summary = dict(quantitative_summary)
+                    review.strengths_feedback = final_strengths
+                    review.bottlenecks_feedback = final_bottlenecks
+                    review.action_recommendations = final_actions
+                    await write_scope.repository.save_weekly_review(review, model_used=model_used)
+
+                    if write_scope.learner_memory_port is not None:
+                        await write_scope.learner_memory_port.upsert_memory_and_mastery_feedback(
+                            user_id,
+                            memories=[
+                                {
+                                    "memory_key": (
+                                        f"weekly_review:{request.roadmap_id}:{request.period_end.isoformat()}"
+                                    ),
+                                    "category": "BEHAVIOR",
+                                    "epistemic_level": "OBSERVED",
+                                    "confidence": 0.85,
+                                    "value": {
+                                        "summary": review.strengths_feedback,
+                                        "bottleneck": review.bottlenecks_feedback,
+                                        "source_workflow": "WEEKLY_REVIEW",
+                                        "quantitative_summary": dict(review.quantitative_summary),
+                                        "model_used": model_used,
+                                    },
+                                    "evidence": [
+                                        {
+                                            "review_id": str(review.id),
+                                            "period_start": request.period_start.isoformat(),
+                                            "period_end": request.period_end.isoformat(),
+                                        }
+                                    ],
+                                }
+                            ],
+                        )
+                    await _record_eval_workflow(
+                        write_scope.workflow_repo,
+                        user_id=user_id,
+                        workflow_type=WorkflowType.WEEKLY_REVIEW,
+                        roadmap_id=request.roadmap_id,
+                        step_name="WEEKLY_REVIEW_SRL",
+                        input_summary={
+                            "roadmap_id": str(request.roadmap_id),
+                            "period_start": request.period_start.isoformat(),
+                            "period_end": request.period_end.isoformat(),
+                            "has_sufficient_data": has_sufficient_data,
+                            **weekly_audit,
+                        },
+                        output_payload={
+                            "review_id": str(review.id),
+                            "quantitative_faithfulness": raw_faithfulness,
+                            "model_used": model_used,
+                            "prompt_tokens": prompt_tokens,
+                            "output_tokens": completion_tokens,
+                            "completion_tokens": completion_tokens,
+                            "thinking_tokens": thinking_tokens,
+                            "attempts": llm_attempts,
+                            "fallback_reason_code": fallback_reason_code,
+                        },
+                        step_status=(
+                            WorkflowStepStatus.COMPLETED
+                            if fallback_reason_code in (None, "INSUFFICIENT_QUANTITATIVE_DATA")
+                            else WorkflowStepStatus.FAILED
+                        ),
+                        error_detail=fallback_reason_code,
+                    )
+                    await write_scope.uow.commit()
+            except DuplicateWeeklyReviewConflictError as dup_exc:
+                if dup_exc.existing_review is not None:
+                    return _weekly_dto(dup_exc.existing_review)
+                raise
         return _weekly_dto(review)
 
 

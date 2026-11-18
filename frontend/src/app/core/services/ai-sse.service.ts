@@ -30,6 +30,39 @@ export interface AiStreamChunkEvent<T = unknown> {
   readonly code?: string;
 }
 
+export type SseStreamErrorCode =
+  | 'SSE_TIMEOUT'
+  | 'SSE_CONNECTION_LOST'
+  | 'SSE_RECONNECT_EXHAUSTED'
+  | 'SSE_PARSE_ERROR';
+
+export class SseStreamError extends Error {
+  constructor(
+    message: string,
+    readonly code: SseStreamErrorCode
+  ) {
+    super(message);
+    this.name = 'SseStreamError';
+  }
+}
+
+export interface SseStreamWatchdogOptions {
+  readonly inactivityTimeoutMs?: number;
+  readonly maxReconnectAttempts?: number;
+}
+
+const DEFAULT_INACTIVITY_TIMEOUT_MS = 90_000;
+const DEFAULT_MAX_RECONNECT_ATTEMPTS = 3;
+
+function pickNonEmpty(...candidates: Array<string | null | undefined>): string | undefined {
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim().length > 0) {
+      return candidate.trim();
+    }
+  }
+  return undefined;
+}
+
 /**
  * Uniform 2-Stage SSE Streaming Service (ADR-005).
  * Stage 1: POST request reserves ACID AI Quota & returns jobId + streamUrl.
@@ -55,16 +88,61 @@ export class AiSseService {
     });
   }
 
-  observeJobStream<TPayload = unknown>(streamUrl: string): Observable<AiStreamChunkEvent<TPayload>> {
+  observeJobStream<TPayload = unknown>(
+    streamUrl: string,
+    options?: SseStreamWatchdogOptions
+  ): Observable<AiStreamChunkEvent<TPayload>> {
     return new Observable<AiStreamChunkEvent<TPayload>>(subscriber => {
       let resolvedUrl = streamUrl;
       if (streamUrl.startsWith('/api/v1')) {
         resolvedUrl = `${API_BASE_URL}${streamUrl.slice('/api/v1'.length)}`;
       }
       const eventSource = new EventSource(resolvedUrl, { withCredentials: true });
+      const inactivityTimeoutMs = options?.inactivityTimeoutMs ?? DEFAULT_INACTIVITY_TIMEOUT_MS;
+      const maxReconnectAttempts = options?.maxReconnectAttempts ?? DEFAULT_MAX_RECONNECT_ATTEMPTS;
+
       let terminalReceived = false;
+      let reconnectAttempts = 0;
+      let inactivityTimer: ReturnType<typeof setTimeout> | null = null;
+
+      const clearWatchdog = () => {
+        if (inactivityTimer !== null) {
+          clearTimeout(inactivityTimer);
+          inactivityTimer = null;
+        }
+      };
+
+      const failAndClose = (message: string, code: SseStreamErrorCode) => {
+        if (terminalReceived || subscriber.closed) {
+          return;
+        }
+        terminalReceived = true;
+        clearWatchdog();
+        eventSource.close();
+        subscriber.error(new SseStreamError(message, code));
+      };
+
+      const resetWatchdog = () => {
+        clearWatchdog();
+        if (terminalReceived || subscriber.closed || inactivityTimeoutMs <= 0) {
+          return;
+        }
+        inactivityTimer = setTimeout(() => {
+          failAndClose(
+            'Luồng AI không phản hồi quá thời gian chờ. Vui lòng thử lại.',
+            'SSE_TIMEOUT'
+          );
+        }, inactivityTimeoutMs);
+      };
+
+      resetWatchdog();
 
       const handleEvent = (rawEvent: MessageEvent<string>, eventType: SseEventType) => {
+        if (terminalReceived || subscriber.closed) {
+          return;
+        }
+        reconnectAttempts = 0;
+        resetWatchdog();
         try {
           const parsed = JSON.parse(rawEvent.data) as AiStreamChunkEvent<TPayload>;
           const isTerminal =
@@ -77,17 +155,23 @@ export class AiSseService {
             ...parsed,
             eventType,
             deltaText: parsed.deltaText ?? parsed.delta_text,
-            error: parsed.error ?? parsed.message,
-            error_code: parsed.error_code ?? parsed.code,
+            error: pickNonEmpty(parsed.error, parsed.message),
+            error_code: pickNonEmpty(parsed.error_code, parsed.code),
           };
           subscriber.next(normalized);
           if (isTerminal) {
+            clearWatchdog();
             eventSource.close();
             subscriber.complete();
           }
-        } catch (err) {
-          subscriber.error(err);
+        } catch {
+          failAndClose('Dữ liệu phản hồi từ luồng SSE không hợp lệ.', 'SSE_PARSE_ERROR');
         }
+      };
+
+      eventSource.onopen = () => {
+        reconnectAttempts = 0;
+        resetWatchdog();
       };
 
       eventSource.onmessage = (event: MessageEvent<string>) => {
@@ -109,19 +193,27 @@ export class AiSseService {
         }
       }
 
-      eventSource.onerror = (error: Event) => {
+      eventSource.onerror = () => {
         if (terminalReceived || subscriber.closed) {
           return;
         }
-        // A transient network interruption moves EventSource to CONNECTING;
-        // keep it open so the browser reconnects with Last-Event-ID.
         if (eventSource.readyState === EventSource.CLOSED) {
-          eventSource.close();
-          subscriber.error(error);
+          failAndClose('Kết nối luồng SSE đã bị đóng đột ngột.', 'SSE_CONNECTION_LOST');
+          return;
+        }
+        // A transient network interruption moves EventSource to CONNECTING;
+        // allow bounded reconnect attempts with Last-Event-ID, then abort cleanly.
+        reconnectAttempts += 1;
+        if (reconnectAttempts > maxReconnectAttempts) {
+          failAndClose(
+            'Mất kết nối luồng SSE sau nhiều lần thử kết nối lại. Vui lòng thử lại.',
+            'SSE_RECONNECT_EXHAUSTED'
+          );
         }
       };
 
       return () => {
+        clearWatchdog();
         eventSource.close();
       };
     });

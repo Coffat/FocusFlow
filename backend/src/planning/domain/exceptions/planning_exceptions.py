@@ -255,3 +255,84 @@ class AIExecutionError(PlanningDomainError):
         message: str = "Hệ thống AI hiện đang bận hoặc gặp sự cố kết nối. Vui lòng bấm 'Thử lại' sau giây lát.",
     ) -> None:
         super().__init__(message=message, code="AI_EXECUTION_ERROR")
+
+
+class ScopeApprovalRequiredError(PlanningDomainError):
+    """Raised when a FIT_CAPACITY scope proposal requires explicit learner confirmation of the current version."""
+
+    def __init__(
+        self,
+        *,
+        preliminary_feasibility: dict[str, object] | None = None,
+        scope_proposal_version: int | None = None,
+        scope_proposal_hash: str | None = None,
+        message: str | None = None,
+    ) -> None:
+        msg = message or (
+            "Lộ trình vượt quá quỹ thời gian hiện tại và cần bạn xác nhận phương án thu gọn phạm vi "
+            "(FIT_CAPACITY) đúng phiên bản trước khi tiếp tục."
+        )
+        super().__init__(message=msg, code="SCOPE_APPROVAL_REQUIRED")
+        self.preliminary_feasibility = dict(preliminary_feasibility or {})
+        self.scope_proposal_version = scope_proposal_version
+        self.scope_proposal_hash = scope_proposal_hash
+
+
+class InsufficientCapacityError(PlanningDomainError):
+    """Raised when preliminary milestone feasibility is PRELIMINARY_UNSCHEDULABLE."""
+
+    def __init__(
+        self,
+        *,
+        preliminary_feasibility: dict[str, object] | None = None,
+        hard_packable_capacity_minutes: int = 0,
+        message: str | None = None,
+    ) -> None:
+        msg = message or (
+            "Quỹ thời gian khả dụng hiện tại không đủ để xếp dù chỉ cột mốc nền tảng đầu tiên. "
+            "Vui lòng gia hạn ngày đích hoặc tăng thời gian học hàng tuần."
+        )
+        super().__init__(message=msg, code="PRELIMINARY_UNSCHEDULABLE")
+        self.preliminary_feasibility = dict(preliminary_feasibility or {})
+        self.hard_packable_capacity_minutes = hard_packable_capacity_minutes
+
+
+class IdempotencyInProgressError(PlanningDomainError):
+    """Raised when a concurrent request with the same Idempotency-Key is still in flight."""
+
+    def __init__(
+        self,
+        message: str = "Yêu cầu cùng Idempotency-Key đang được xử lý. Vui lòng thử lại sau giây lát.",
+    ) -> None:
+        super().__init__(message=message, code="IDEMPOTENCY_REQUEST_IN_PROGRESS")
+
+
+class ProposalSupersededError(PlanningDomainError):
+    """Raised when re-applying an APPLIED proposal that was superseded or mismatched idempotency."""
+
+    def __init__(
+        self,
+        message: str = "Đề xuất lịch học này đã bị thay thế bởi phiên bản mới hơn hoặc không khớp khóa lũy đẳng.",
+        code: str = "PROPOSAL_SUPERSEDED",
+    ) -> None:
+        super().__init__(message=message, code=code)
+
+
+class RoadmapReadOnlyError(PlanningDomainError):
+    """Raised when attempting to mutate tasks of a COMPLETED or ARCHIVED roadmap."""
+
+    def __init__(
+        self,
+        message: str = "Lộ trình đã hoàn thành hoặc lưu trữ nên chỉ ở chế độ chỉ đọc.",
+    ) -> None:
+        super().__init__(message=message, code="ROADMAP_READ_ONLY")
+
+
+class RescheduleBudgetExhaustedError(PlanningDomainError):
+    """Raised when weekly overdue reschedule budget for a roadmap is exhausted (FR-ADAPT-001)."""
+
+    def __init__(
+        self,
+        message: str = "Ngân sách dời lịch quá hạn trong tuần đã hết. Hãy chọn MVS hoặc chia nhỏ bài học.",
+    ) -> None:
+        super().__init__(message=message, code="RESCHEDULE_BUDGET_EXHAUSTED")

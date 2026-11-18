@@ -5,8 +5,16 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from src.account.public_api import LearnerMemoryQueryPort, QuotaFacadePort
+from src.account.public_api import (
+    AvailabilityQueryPort,
+    CalendarConnectionQueryPort,
+    LearnerMemoryQueryPort,
+    QuotaFacadePort,
+    UserQueryPort,
+)
+from src.execution.public_api import ExecutionScheduleSyncPort
 from src.planning.application.dtos.planning_dtos import (
+    ApproveMilestonesRequestDTO,
     MilestoneGenerationLLMOutput,
     MilestoneInputItemDTO,
     SseJobTicketDTO,
@@ -19,21 +27,38 @@ from src.planning.application.ports.planning_repository_ports import (
     GoalRepositoryPort,
     MilestoneRepositoryPort,
     RoadmapRepositoryPort,
+    ScheduleProposalRepositoryPort,
 )
-from src.planning.application.ports.sse_job_port import SseJobPort
+from src.planning.application.ports.schedule_block_repository_port import (
+    ScheduleBlockRepositoryPort,
+)
+from src.planning.application.ports.sse_job_port import (
+    IdempotencySlotClaim,
+    SseJobPort,
+    claim_idempotency_slot_with_wait,
+    sanitize_sse_error_details,
+)
+from src.planning.application.services.effective_availability_service import (
+    GetEffectiveAvailabilityUseCase,
+)
+from src.planning.application.services.existing_schedule_occupancy import (
+    expand_existing_schedule_occupancy,
+)
 from src.planning.application.services.harness_support import (
     compact_context_snapshot,
     load_planning_harness_context_inputs,
-)
-from src.planning.application.services.knowledge_tool_dispatcher import (
-    KnowledgeToolDispatcher,
-    RoadmapPipelineStage,
 )
 from src.planning.application.services.learning_quality import (
     GenerationStrategy,
     has_operational_quality_review_failure,
     run_dual_quality_critics,
 )
+from src.planning.application.services.preliminary_feasibility_service import (
+    _verify_preliminary_hash_matches,
+    refresh_roadmap_preliminary_feasibility,
+    verify_or_refresh_preliminary_feasibility_for_gate,
+)
+from src.planning.application.services.repo_lock import call_for_update
 from src.planning.application.services.roadmap_context_builder import (
     RoadmapContextBuilder,
 )
@@ -48,14 +73,19 @@ from src.planning.application.services.validation_gate import (
 )
 from src.planning.domain.events.planning_events import MilestoneApprovedEvent
 from src.planning.domain.exceptions.planning_exceptions import (
+    InsufficientCapacityError,
     ProposalValidationGateError,
     RoadmapNotFoundError,
+    ScopeApprovalRequiredError,
 )
 from src.planning.domain.models.milestone import (
     Milestone,
     MilestoneStatus,
     validate_milestone_sequence,
 )
+from src.planning.domain.services.milestone_effort_allocator import MilestoneEffortAllocator
+from src.planning.domain.services.spatio_temporal_engine import SpatioTemporalRuleEngine
+from src.planning.domain.services.validation_types import AvailabilityConfigurationDTO
 from src.shared_kernel.application.embedding_port import EmbeddingProviderPort
 from src.shared_kernel.application.harness.execution_manager import AIExecutionManager
 from src.shared_kernel.application.harness.models import WorkflowType
@@ -107,6 +137,12 @@ class ExecuteMilestoneGenerationUseCase:
         knowledge_source_repo: KnowledgeSourceRepositoryPort | None = None,
         embedding_provider: EmbeddingProviderPort | None = None,
         workflow_repo: WorkflowRepositoryPort | None = None,
+        availability_query_port: AvailabilityQueryPort | None = None,
+        execution_sync_port: ExecutionScheduleSyncPort | None = None,
+        block_repo: ScheduleBlockRepositoryPort | None = None,
+        user_query_port: UserQueryPort | None = None,
+        calendar_connection_query_port: CalendarConnectionQueryPort | None = None,
+        proposal_repo: ScheduleProposalRepositoryPort | None = None,
     ) -> None:
         self._goal_repo = goal_repo
         self._roadmap_repo = roadmap_repo
@@ -120,6 +156,12 @@ class ExecuteMilestoneGenerationUseCase:
         self._knowledge_source_repo = knowledge_source_repo
         self._embedding_provider = embedding_provider
         self._workflow_repo = workflow_repo
+        self._availability_port = availability_query_port
+        self._execution_sync_port = execution_sync_port
+        self._block_repo = block_repo
+        self._user_query_port = user_query_port
+        self._calendar_connection_port = calendar_connection_query_port
+        self._proposal_repo = proposal_repo
 
     async def execute(
         self,
@@ -192,9 +234,19 @@ class ExecuteMilestoneGenerationUseCase:
             planner_tpl = build_planning_prompt_registry().latest(MILESTONE_PLANNER_SKILL.skill_id)
             system_prompt = planner_tpl.system_template
             if goal is not None:
+                (
+                    prefetched_concepts,
+                    prefetched_graphs,
+                ) = await RoadmapContextBuilder.prefetch_milestone_kb_evidence(
+                    self._kb,
+                    query_text=f"{raw_title} {raw_desc}",
+                    learner_level=prior_knowledge,
+                )
                 context_block = RoadmapContextBuilder.build_milestone_planning_context(
                     goal=goal,
                     roadmap=roadmap,
+                    kb_concepts=prefetched_concepts,
+                    kb_graphs=prefetched_graphs,
                 )
             else:
                 prompt_lines = [
@@ -234,6 +286,7 @@ class ExecuteMilestoneGenerationUseCase:
                 memory_items=harness_inputs.memory_items,
                 concept_masteries=harness_inputs.concept_masteries,
                 knowledge_chunks=harness_inputs.knowledge_chunks,
+                include_planning_context=False,
             )
             effective_context = (
                 f"{context_block}\n\n{assembled.text}"
@@ -252,14 +305,6 @@ class ExecuteMilestoneGenerationUseCase:
             )
 
             settings = get_settings()
-            dispatcher: KnowledgeToolDispatcher | None = None
-            if self._kb is not None:
-                dispatcher = KnowledgeToolDispatcher(
-                    self._kb,
-                    stage=RoadmapPipelineStage.MILESTONE_PLANNING,
-                    max_tool_calls=MILESTONE_PLANNER_SKILL.max_tool_calls,
-                    timeout_seconds=float(settings.llm_tool_timeout_seconds),
-                )
 
             current_prompt = base_user_prompt
             total_prompt_tokens = 0
@@ -296,19 +341,9 @@ class ExecuteMilestoneGenerationUseCase:
                     user_prompt=current_prompt,
                     response_schema=MILESTONE_RESPONSE_SCHEMA,
                     model_name=getattr(self._llm, "model_identifier", "gemini-3.8-flash"),
-                    tools=(
-                        dispatcher.get_allowed_tool_declarations()
-                        if dispatcher is not None and attempt == 1
-                        else None
-                    ),
-                    tool_executor=(
-                        dispatcher.dispatch if dispatcher is not None and attempt == 1 else None
-                    ),
-                    max_tool_calls=(
-                        MILESTONE_PLANNER_SKILL.max_tool_calls
-                        if dispatcher is not None and attempt == 1
-                        else 0
-                    ),
+                    tools=None,
+                    tool_executor=None,
+                    max_tool_calls=0,
                     thinking_level=MILESTONE_PLANNER_SKILL.thinking_level,
                     existing_reservation_id=reservation_id,
                     commit_on_success=False,
@@ -404,6 +439,7 @@ class ExecuteMilestoneGenerationUseCase:
                                     roadmap_id=roadmap_id,
                                     workflow_type=WorkflowType.PLAN_CREATION,
                                     token_accumulator=critic_tokens,
+                                    quota=self._quota_facade,
                                 ),
                                 timeout=remaining_seconds,
                             )
@@ -510,9 +546,153 @@ class ExecuteMilestoneGenerationUseCase:
                 validated_items,
                 key=lambda item: int(item.get("sequence_order", 0) or 0),
             )
+            generated_ids = [generate_uuid7() for _ in sorted_items]
+            seq_to_id = {idx: generated_ids[idx - 1] for idx in range(1, len(sorted_items) + 1)}
+            raw_seq_to_normalized_seq = {
+                int(item.get("sequence_order", idx) or idx): idx
+                for idx, item in enumerate(sorted_items, start=1)
+            }
+
+            prelim_dict: dict[str, Any] | None = None
+            efforts_by_seq: dict[int, int] = {}
+            if getattr(settings, "milestone_effort_allocator_enabled", True):
+                p_hard: int | None = None
+                avail_cfg: AvailabilityConfigurationDTO | None = None
+                effective_existing: Sequence[Any] = ()
+                effective_start = roadmap.start_date or effective_now.date()
+                if roadmap.target_date is not None and self._availability_port is not None:
+                    user_tz = "Asia/Ho_Chi_Minh"
+                    if self._user_query_port is not None:
+                        user_snap = await self._user_query_port.get_user_by_id(user_id)
+                        if user_snap is not None and user_snap.timezone:
+                            user_tz = user_snap.timezone
+                    existing_tasks: list[Any] = []
+                    if self._execution_sync_port is not None:
+                        active_roadmaps = await self._roadmap_repo.list_by_user_id(
+                            user_id, status="ACTIVE"
+                        )
+                        other_roadmaps = [r for r in active_roadmaps if r.id != roadmap_id]
+                        other_ids = [r.id for r in other_roadmaps]
+                        target_dates_map = {r.id: r.target_date for r in other_roadmaps}
+                        existing_tasks = list(
+                            await self._execution_sync_port.get_tasks_for_roadmaps(
+                                other_ids,
+                                roadmap_target_dates=target_dates_map,
+                            )
+                        )
+                        if self._block_repo is not None:
+                            existing_tasks = expand_existing_schedule_occupancy(
+                                existing_tasks,
+                                await self._block_repo.list_by_roadmap_ids(other_ids),
+                            )
+                    effective_avail = await GetEffectiveAvailabilityUseCase(
+                        availability_query_port=self._availability_port,
+                        calendar_connection_query_port=self._calendar_connection_port,
+                        execution_sync_port=self._execution_sync_port,
+                    ).execute(
+                        user_id=user_id,
+                        start_date=effective_start,
+                        target_date=roadmap.target_date,
+                        timezone=user_tz,
+                        existing_tasks=existing_tasks,
+                        exclude_roadmap_id=roadmap_id,
+                    )
+                    avail_cfg = effective_avail.availability_config
+                    effective_existing = effective_avail.effective_existing_tasks
+                    p_hard, _ = SpatioTemporalRuleEngine.calculate_hard_packable_capacity(
+                        avail_cfg,
+                        start_date=effective_start,
+                        target_date=roadmap.target_date,
+                        existing_tasks=effective_existing,
+                    )
+
+                prev_prelim = (
+                    roadmap.planning_metadata.get("preliminary_feasibility")
+                    if isinstance(roadmap.planning_metadata, dict)
+                    else None
+                )
+                prev_version = (
+                    int(prev_prelim.get("scope_proposal_version") or 0)
+                    if isinstance(prev_prelim, dict)
+                    else 0
+                )
+                allocator_inputs = [
+                    {
+                        **item,
+                        "sequence_order": idx,
+                        "milestone_id": str(generated_ids[idx - 1]),
+                        "dependencies": [
+                            raw_seq_to_normalized_seq[int(dep)]
+                            for dep in (item.get("dependencies") or [])
+                            if isinstance(dep, (int, str))
+                            and str(dep).isdigit()
+                            and int(dep) in raw_seq_to_normalized_seq
+                        ],
+                        "prerequisite_milestone_ids": [
+                            str(seq_to_id[raw_seq_to_normalized_seq[int(dep)]])
+                            for dep in (item.get("dependencies") or [])
+                            if isinstance(dep, (int, str))
+                            and str(dep).isdigit()
+                            and int(dep) in raw_seq_to_normalized_seq
+                            and raw_seq_to_normalized_seq[int(dep)] != idx
+                        ],
+                    }
+                    for idx, item in enumerate(sorted_items, start=1)
+                ]
+                prelim_res = MilestoneEffortAllocator.allocate(
+                    allocator_inputs,
+                    hard_packable_capacity_minutes=p_hard,
+                    prior_knowledge_level=prior_knowledge,
+                    target_utilization=float(
+                        getattr(settings, "ai_milestone_target_utilization", 0.85)
+                    ),
+                    gamma_min=float(getattr(settings, "ai_milestone_min_effort_ratio", 0.65)),
+                    alpha_by_level={
+                        "BEGINNER": float(getattr(settings, "ai_milestone_alpha_beginner", 1.15)),
+                        "INTERMEDIATE": float(
+                            getattr(settings, "ai_milestone_alpha_intermediate", 1.00)
+                        ),
+                        "ADVANCED": float(getattr(settings, "ai_milestone_alpha_advanced", 0.85)),
+                    },
+                    previous_scope_proposal_version=prev_version,
+                    start_date=effective_start,
+                    target_date=roadmap.target_date,
+                    availability=avail_cfg,
+                    existing_tasks=effective_existing,
+                )
+                prelim_dict = prelim_res.to_metadata_dict()
+                for bd in prelim_res.breakdowns:
+                    efforts_by_seq[bd.sequence_order] = (
+                        bd.normalized_planned_effort_minutes
+                        if bd.kept_in_scope and bd.normalized_planned_effort_minutes > 0
+                        else bd.estimated_effort_minutes
+                    )
+                updated_meta = {
+                    **roadmap.planning_metadata,
+                    "preliminary_feasibility": prelim_dict,
+                }
+                if prelim_res.status == "FIT_CAPACITY_REQUIRES_APPROVAL":
+                    updated_meta["deferred_scope"] = [
+                        str(item.get("title", "")) for item in prelim_res.deferred_scope
+                    ]
+                    if not str(updated_meta.get("scope_summary", "")).startswith("FIT_CAPACITY"):
+                        updated_meta["scope_summary"] = (
+                            f"FIT_CAPACITY (chờ xác nhận v{prelim_res.scope_proposal_version}): "
+                            + str(updated_meta.get("scope_summary") or "")
+                        ).strip()
+                roadmap.planning_metadata = updated_meta
+            else:
+                if (
+                    isinstance(roadmap.planning_metadata, dict)
+                    and "preliminary_feasibility" in roadmap.planning_metadata
+                ):
+                    cleaned_meta = dict(roadmap.planning_metadata)
+                    cleaned_meta.pop("preliminary_feasibility", None)
+                    roadmap.planning_metadata = cleaned_meta
+
             new_milestones = [
                 Milestone(
-                    id=generate_uuid7(),
+                    id=generated_ids[idx - 1],
                     roadmap_id=roadmap_id,
                     sequence_order=idx,
                     title=str(item.get("title", "")).strip(),
@@ -527,7 +707,10 @@ class ExecuteMilestoneGenerationUseCase:
                         if str(value).strip()
                     ),
                     completion_criteria=str(item.get("completion_criteria", "")).strip() or None,
-                    estimated_effort_minutes=int(item.get("estimated_effort_minutes", 60) or 60),
+                    estimated_effort_minutes=efforts_by_seq.get(
+                        idx,
+                        int(item.get("estimated_effort_minutes", 60) or 60),
+                    ),
                     required_concepts=tuple(
                         str(value).strip()
                         for value in item.get("required_concepts", [])
@@ -537,6 +720,14 @@ class ExecuteMilestoneGenerationUseCase:
                         str(value).strip()
                         for value in item.get("unverified_concepts", [])
                         if str(value).strip()
+                    ),
+                    prerequisite_milestone_ids=tuple(
+                        seq_to_id[raw_seq_to_normalized_seq[int(dep)]]
+                        for dep in (item.get("dependencies") or [])
+                        if isinstance(dep, (int, str))
+                        and str(dep).isdigit()
+                        and int(dep) in raw_seq_to_normalized_seq
+                        and raw_seq_to_normalized_seq[int(dep)] != idx
                     ),
                     status=MilestoneStatus.PENDING,
                     created_at=effective_now,
@@ -549,6 +740,8 @@ class ExecuteMilestoneGenerationUseCase:
             async with self._uow:
                 saved_milestones = await self._milestone_repo.save_many(roadmap_id, new_milestones)
                 await self._roadmap_repo.save(roadmap)
+                if self._proposal_repo is not None:
+                    await self._proposal_repo.discard_existing_drafts(roadmap_id, effective_now)
                 billable_completion_tokens = max(total_completion_tokens, total_thinking_tokens)
                 await self._quota_facade.commit_reservation(
                     reservation_id,
@@ -587,6 +780,12 @@ class ExecuteMilestoneGenerationUseCase:
                 }
                 for m in saved_milestones
             ]
+            completed_payload: dict[str, Any] = {
+                "roadmap_id": str(roadmap_id),
+                "milestones": milestones_payload,
+            }
+            if prelim_dict is not None:
+                completed_payload["preliminary_feasibility"] = prelim_dict
             await self._sse.append_event(
                 job_id=job_id,
                 event="completed",
@@ -596,10 +795,7 @@ class ExecuteMilestoneGenerationUseCase:
                     "progress": 100,
                     "delta_text": "Hoàn tất phân rã cột mốc học tập!",
                     "deltaText": "Hoàn tất phân rã cột mốc học tập!",
-                    "payload": {
-                        "roadmap_id": str(roadmap_id),
-                        "milestones": milestones_payload,
-                    },
+                    "payload": completed_payload,
                 },
             )
             return saved_milestones
@@ -634,7 +830,11 @@ class ExecuteMilestoneGenerationUseCase:
             raise
 
         except Exception as exc:
-            error_code, error_message = _milestone_generation_error_details(exc)
+            error_code, error_message = sanitize_sse_error_details(
+                exc,
+                default_code="MILESTONE_GEN_FAILED",
+                default_message="Không thể sinh cột mốc học tập bằng AI. Vui lòng thử lại.",
+            )
             try:
                 await _release_once(error_code)
             except Exception as release_exc:
@@ -694,11 +894,16 @@ class InitiateMilestoneGenerationUseCase:
 
         strategy = GenerationStrategy(generation_strategy)
         operation = f"MILESTONE_GEN:{strategy.value}:{roadmap_id}"
-        if idempotency_key and idempotency_key.strip():
-            existing_job = await self._sse.get_by_idempotency_key(
+        cleaned_key = (
+            idempotency_key.strip() if idempotency_key and idempotency_key.strip() else None
+        )
+        claim: IdempotencySlotClaim | None = None
+        if cleaned_key is not None:
+            claim, existing_job = await claim_idempotency_slot_with_wait(
+                self._sse,
                 user_id=user_id,
                 operation=operation,
-                idempotency_key=idempotency_key,
+                idempotency_key=cleaned_key,
             )
             if existing_job is not None:
                 return SseJobTicketDTO(
@@ -711,34 +916,63 @@ class InitiateMilestoneGenerationUseCase:
                     is_existing=True,
                 )
 
-        async with self._uow:
-            reservation_id = await self._quota_facade.reserve_quota(
-                user_id=user_id,
-                operation_type="MILESTONE_GEN",
-                cost=1,
-            )
-            job_id = generate_uuid7()
-            job_record = await self._sse.create_job(
-                job_id=job_id,
-                user_id=user_id,
-                roadmap_id=roadmap_id,
-                reservation_id=reservation_id,
-                job_type=f"MILESTONE_GEN:{strategy.value}",
-                operation=operation,
-                idempotency_key=idempotency_key,
-            )
-            await self._sse.append_event(
-                job_id=job_id,
-                event="stage",
-                status="RESERVED",
-                data={
-                    "stage": "RESERVED",
-                    "progress": 10,
-                    "delta_text": "Đã giữ chỗ hạn ngạch AI. Bắt đầu phân rã cột mốc...",
-                    "deltaText": "Đã giữ chỗ hạn ngạch AI. Bắt đầu phân rã cột mốc...",
-                },
-            )
-            await self._uow.commit()
+        committed = False
+        try:
+            async with self._uow:
+                reservation_id = await self._quota_facade.reserve_quota(
+                    user_id=user_id,
+                    operation_type="MILESTONE_GEN",
+                    cost=1,
+                )
+                job_id = generate_uuid7()
+                job_record = await self._sse.create_job(
+                    job_id=job_id,
+                    user_id=user_id,
+                    roadmap_id=roadmap_id,
+                    reservation_id=reservation_id,
+                    job_type=f"MILESTONE_GEN:{strategy.value}",
+                    operation=operation,
+                    idempotency_key=cleaned_key,
+                    register_idempotency=False,
+                )
+                await self._sse.append_event(
+                    job_id=job_id,
+                    event="stage",
+                    status="RESERVED",
+                    data={
+                        "stage": "RESERVED",
+                        "progress": 10,
+                        "delta_text": "Đã giữ chỗ hạn ngạch AI. Bắt đầu phân rã cột mốc...",
+                        "deltaText": "Đã giữ chỗ hạn ngạch AI. Bắt đầu phân rã cột mốc...",
+                    },
+                )
+                await self._uow.commit()
+                committed = True
+            if cleaned_key is not None and claim is not None and claim.token is not None:
+                await self._sse.finalize_idempotency_slot(
+                    user_id=user_id,
+                    operation=operation,
+                    idempotency_key=cleaned_key,
+                    token=claim.token,
+                    job_id=job_id,
+                )
+        except BaseException:
+            if (
+                not committed
+                and cleaned_key is not None
+                and claim is not None
+                and claim.token is not None
+            ):
+                try:
+                    await self._sse.release_idempotency_slot(
+                        user_id=user_id,
+                        operation=operation,
+                        idempotency_key=cleaned_key,
+                        token=claim.token,
+                    )
+                except Exception:
+                    pass
+            raise
 
         if run_inline and self._executor is not None:
             try:
@@ -780,10 +1014,24 @@ class UpdateMilestonesUseCase:
         roadmap_repo: RoadmapRepositoryPort,
         milestone_repo: MilestoneRepositoryPort,
         uow: AsyncUnitOfWork,
+        goal_repo: GoalRepositoryPort | None = None,
+        proposal_repo: ScheduleProposalRepositoryPort | None = None,
+        availability_query_port: AvailabilityQueryPort | None = None,
+        execution_sync_port: ExecutionScheduleSyncPort | None = None,
+        user_query_port: UserQueryPort | None = None,
+        block_repo: ScheduleBlockRepositoryPort | None = None,
+        calendar_connection_query_port: CalendarConnectionQueryPort | None = None,
     ) -> None:
         self._roadmap_repo = roadmap_repo
         self._milestone_repo = milestone_repo
         self._uow = uow
+        self._goal_repo = goal_repo
+        self._proposal_repo = proposal_repo
+        self._availability_port = availability_query_port
+        self._execution_sync_port = execution_sync_port
+        self._user_query_port = user_query_port
+        self._block_repo = block_repo
+        self._calendar_connection_port = calendar_connection_query_port
 
     async def execute(
         self,
@@ -846,15 +1094,85 @@ class UpdateMilestonesUseCase:
 
         validate_milestone_sequence(milestones, enforce_ai_bounds=False)
 
+        milestones_changed = len(milestones) != len(existing) or any(
+            (
+                m.id != e.id
+                or m.sequence_order != e.sequence_order
+                or m.title != e.title
+                or m.learning_outcomes != e.learning_outcomes
+                or m.completion_criteria != e.completion_criteria
+                or m.estimated_effort_minutes != e.estimated_effort_minutes
+                or m.required_concepts != e.required_concepts
+                or m.unverified_concepts != e.unverified_concepts
+                or m.prerequisite_milestone_ids != e.prerequisite_milestone_ids
+            )
+            for m, e in zip(milestones, existing, strict=True)
+        )
+
+        refresh_res = await refresh_roadmap_preliminary_feasibility(
+            user_id=user_id,
+            roadmap=roadmap,
+            milestones=milestones,
+            goal_repo=self._goal_repo,
+            roadmap_repo=self._roadmap_repo,
+            proposal_repo=None,
+            availability_query_port=self._availability_port,
+            execution_sync_port=self._execution_sync_port,
+            block_repo=self._block_repo,
+            user_query_port=self._user_query_port,
+            calendar_connection_query_port=self._calendar_connection_port,
+            force_recompute=True,
+            discard_drafts_on_change=False,
+            now=effective_now,
+        )
+        roadmap_dirty = refresh_res.roadmap_dirty
+
+        # Fallback invalidation when allocator disabled / no availability & no prior prelim
+        if not roadmap_dirty:
+            raw_prelim = (
+                roadmap.planning_metadata.get("preliminary_feasibility")
+                if (
+                    getattr(get_settings(), "milestone_effort_allocator_enabled", True)
+                    and isinstance(roadmap.planning_metadata, dict)
+                )
+                else None
+            )
+            if isinstance(raw_prelim, dict) and bool(raw_prelim.get("requires_learner_approval")):
+                updated_prelim = {
+                    **raw_prelim,
+                    "scope_approval_status": "PENDING_LEARNER_APPROVAL",
+                    "approved_scope_version": None,
+                }
+                roadmap.planning_metadata = {
+                    **roadmap.planning_metadata,
+                    "preliminary_feasibility": updated_prelim,
+                }
+                roadmap.updated_at = effective_now
+                roadmap_dirty = True
+                for m in milestones:
+                    m.reset_to_pending(effective_now)
+
         async with self._uow:
+            locked_roadmap = await call_for_update(
+                self._roadmap_repo.get_by_id_for_user, roadmap_id, user_id
+            )
+            if locked_roadmap is None:
+                raise RoadmapNotFoundError()
+            if roadmap_dirty:
+                locked_roadmap.planning_metadata = roadmap.planning_metadata
+                locked_roadmap.updated_at = roadmap.updated_at
             saved = await self._milestone_repo.save_many(roadmap_id, milestones)
+            if roadmap_dirty:
+                await self._roadmap_repo.save(locked_roadmap)
+            if self._proposal_repo is not None and (milestones_changed or refresh_res.drifted):
+                await self._proposal_repo.discard_existing_drafts(roadmap_id, effective_now)
             await self._uow.commit()
 
         return saved
 
 
 class ApproveMilestonesUseCase:
-    """Approve all Level-1 Milestones of a Roadmap and emit MilestoneApprovedEvent to Outbox (UC-07)."""
+    """Approve Level-1 Milestones of a Roadmap (enforcing versioned FIT_CAPACITY approval) and emit MilestoneApprovedEvent."""
 
     def __init__(
         self,
@@ -862,16 +1180,33 @@ class ApproveMilestonesUseCase:
         roadmap_repo: RoadmapRepositoryPort,
         milestone_repo: MilestoneRepositoryPort,
         uow: AsyncUnitOfWork,
+        goal_repo: GoalRepositoryPort | None = None,
+        proposal_repo: ScheduleProposalRepositoryPort | None = None,
+        availability_query_port: AvailabilityQueryPort | None = None,
+        execution_sync_port: ExecutionScheduleSyncPort | None = None,
+        user_query_port: UserQueryPort | None = None,
+        block_repo: ScheduleBlockRepositoryPort | None = None,
+        calendar_connection_query_port: CalendarConnectionQueryPort | None = None,
     ) -> None:
         self._roadmap_repo = roadmap_repo
         self._milestone_repo = milestone_repo
         self._uow = uow
+        self._goal_repo = goal_repo
+        self._proposal_repo = proposal_repo
+        self._availability_port = availability_query_port
+        self._execution_sync_port = execution_sync_port
+        self._user_query_port = user_query_port
+        self._block_repo = block_repo
+        self._calendar_connection_port = calendar_connection_query_port
 
     async def execute(
         self,
         *,
         user_id: UUID,
         roadmap_id: UUID,
+        request: ApproveMilestonesRequestDTO | None = None,
+        confirmed_scope_proposal_version: int | None = None,
+        accept_fit_capacity: bool = False,
         now: datetime | None = None,
     ) -> list[Milestone]:
         effective_now = now or datetime.now(UTC)
@@ -882,18 +1217,242 @@ class ApproveMilestonesUseCase:
         current_milestones = await self._milestone_repo.list_by_roadmap_id(roadmap_id)
         validate_milestone_sequence(current_milestones, enforce_ai_bounds=False)
 
+        eff_accept = request.accept_fit_capacity if request is not None else accept_fit_capacity
+        eff_version = (
+            request.confirmed_scope_proposal_version
+            if request is not None
+            else confirmed_scope_proposal_version
+        )
+
+        # Synchronous drift verification (checks live availability, target_date, milestones & hash)
+        await verify_or_refresh_preliminary_feasibility_for_gate(
+            user_id=user_id,
+            roadmap=roadmap,
+            milestones=current_milestones,
+            goal_repo=self._goal_repo,
+            roadmap_repo=self._roadmap_repo,
+            milestone_repo=self._milestone_repo,
+            proposal_repo=self._proposal_repo,
+            availability_query_port=self._availability_port,
+            execution_sync_port=self._execution_sync_port,
+            block_repo=self._block_repo,
+            user_query_port=self._user_query_port,
+            calendar_connection_query_port=self._calendar_connection_port,
+            uow=self._uow,
+            raise_on_stale_fit_capacity=True,
+            now=effective_now,
+        )
+
+        raw_prelim = (
+            roadmap.planning_metadata.get("preliminary_feasibility")
+            if (
+                getattr(get_settings(), "milestone_effort_allocator_enabled", True)
+                and isinstance(roadmap.planning_metadata, dict)
+            )
+            else None
+        )
+        if isinstance(raw_prelim, dict):
+            prelim_status = str(raw_prelim.get("status") or "")
+            if prelim_status == "PRELIMINARY_UNSCHEDULABLE":
+                raise InsufficientCapacityError(
+                    preliminary_feasibility=raw_prelim,
+                    hard_packable_capacity_minutes=int(
+                        raw_prelim.get("hard_packable_capacity_minutes") or 0
+                    ),
+                )
+
+            requires_approval = bool(raw_prelim.get("requires_learner_approval", False))
+            approval_status = str(raw_prelim.get("scope_approval_status") or "NOT_REQUIRED")
+            raw_ver = raw_prelim.get("scope_proposal_version")
+            current_version = int(raw_ver) if isinstance(raw_ver, int) else None
+            raw_hash = raw_prelim.get("scope_proposal_hash")
+            proposal_hash = str(raw_hash) if raw_hash is not None else None
+
+            if requires_approval or prelim_status == "FIT_CAPACITY_REQUIRES_APPROVAL":
+                kept_scope_items = [
+                    item
+                    for item in (raw_prelim.get("kept_scope") or [])
+                    if isinstance(item, dict) and "sequence_order" in item
+                ]
+                deferred_scope_items = [
+                    item
+                    for item in (raw_prelim.get("deferred_scope") or [])
+                    if isinstance(item, dict) and "sequence_order" in item
+                ]
+                if current_version is not None and proposal_hash:
+                    if not _verify_preliminary_hash_matches(
+                        raw_prelim,
+                        version=current_version,
+                        status="FIT_CAPACITY_REQUIRES_APPROVAL",
+                        kept_scope_items=kept_scope_items,
+                        deferred_scope_items=deferred_scope_items,
+                    ):
+                        raise ScopeApprovalRequiredError(
+                            preliminary_feasibility=raw_prelim,
+                            scope_proposal_version=current_version,
+                            scope_proposal_hash=proposal_hash,
+                            message="Đề xuất phạm vi FIT_CAPACITY đã thay đổi (hash không khớp). Vui lòng xác nhận lại phiên bản mới nhất.",
+                        )
+
+                if approval_status == "APPROVED_BY_LEARNER":
+                    approved_ver = raw_prelim.get("approved_scope_version")
+                    if (
+                        approved_ver is not None
+                        and current_version is not None
+                        and int(approved_ver) == current_version
+                        and (eff_version is None or eff_version == current_version)
+                    ):
+                        # Idempotent re-approval of already-approved fresh FIT_CAPACITY scope
+                        return current_milestones
+                    raise ScopeApprovalRequiredError(
+                        preliminary_feasibility=raw_prelim,
+                        scope_proposal_version=current_version,
+                        scope_proposal_hash=proposal_hash,
+                    )
+
+                if (
+                    not eff_accept
+                    or eff_version is None
+                    or current_version is None
+                    or eff_version != current_version
+                ):
+                    raise ScopeApprovalRequiredError(
+                        preliminary_feasibility=raw_prelim,
+                        scope_proposal_version=current_version,
+                        scope_proposal_hash=proposal_hash,
+                    )
+
+                kept_orders = {int(item["sequence_order"]) for item in kept_scope_items}
+                if not kept_orders:
+                    raise InsufficientCapacityError(
+                        preliminary_feasibility=raw_prelim,
+                        hard_packable_capacity_minutes=int(
+                            raw_prelim.get("hard_packable_capacity_minutes") or 0
+                        ),
+                    )
+
+                updated_prelim = {
+                    **raw_prelim,
+                    "scope_approval_status": "APPROVED_BY_LEARNER",
+                    "approved_scope_version": current_version,
+                }
+                roadmap.planning_metadata = {
+                    **roadmap.planning_metadata,
+                    "preliminary_feasibility": updated_prelim,
+                }
+                roadmap.updated_at = effective_now
+
+                for milestone in current_milestones:
+                    if milestone.sequence_order in kept_orders:
+                        milestone.approve(effective_now)
+                    else:
+                        milestone.reset_to_pending(effective_now)
+
+                async with self._uow:
+                    locked_roadmap = await call_for_update(
+                        self._roadmap_repo.get_by_id_for_user, roadmap_id, user_id
+                    )
+                    if locked_roadmap is None:
+                        raise RoadmapNotFoundError()
+                    locked_prelim = (
+                        locked_roadmap.planning_metadata.get("preliminary_feasibility")
+                        if isinstance(locked_roadmap.planning_metadata, dict)
+                        else None
+                    )
+                    if isinstance(locked_prelim, dict) and current_version is not None:
+                        locked_ver = locked_prelim.get("scope_proposal_version")
+                        locked_hash = (
+                            str(locked_prelim.get("scope_proposal_hash"))
+                            if locked_prelim.get("scope_proposal_hash") is not None
+                            else None
+                        )
+                        if locked_ver != current_version or (
+                            proposal_hash and locked_hash != proposal_hash
+                        ):
+                            raise ScopeApprovalRequiredError(
+                                preliminary_feasibility=locked_prelim,
+                                scope_proposal_version=(
+                                    int(locked_ver)
+                                    if isinstance(locked_ver, int)
+                                    else current_version
+                                ),
+                                scope_proposal_hash=locked_hash or proposal_hash or "",
+                            )
+                    locked_roadmap.planning_metadata = {
+                        **(
+                            locked_roadmap.planning_metadata
+                            if isinstance(locked_roadmap.planning_metadata, dict)
+                            else {}
+                        ),
+                        "preliminary_feasibility": updated_prelim,
+                    }
+                    locked_roadmap.updated_at = effective_now
+
+                    saved_milestones = await self._milestone_repo.save_many(
+                        roadmap_id, current_milestones
+                    )
+                    await self._roadmap_repo.save(locked_roadmap)
+                    approved_count = sum(
+                        1 for m in saved_milestones if m.status != MilestoneStatus.PENDING
+                    )
+                    locked_roadmap.add_domain_event(
+                        MilestoneApprovedEvent(
+                            aggregate_id=locked_roadmap.id,
+                            user_id=user_id,
+                            roadmap_id=locked_roadmap.id,
+                            milestone_count=approved_count,
+                            occurred_at=effective_now,
+                        )
+                    )
+                    self._uow.collect_events_from(locked_roadmap)
+                    await self._uow.commit()
+                return saved_milestones
+
         async with self._uow:
+            locked_roadmap = await call_for_update(
+                self._roadmap_repo.get_by_id_for_user, roadmap_id, user_id
+            )
+            if locked_roadmap is None:
+                raise RoadmapNotFoundError()
+            locked_prelim = (
+                locked_roadmap.planning_metadata.get("preliminary_feasibility")
+                if isinstance(locked_roadmap.planning_metadata, dict)
+                else None
+            )
+            if isinstance(locked_prelim, dict):
+                locked_status = str(locked_prelim.get("status") or "")
+                if locked_status == "PRELIMINARY_UNSCHEDULABLE":
+                    raise InsufficientCapacityError(
+                        preliminary_feasibility=locked_prelim,
+                        hard_packable_capacity_minutes=int(
+                            locked_prelim.get("hard_packable_capacity_minutes") or 0
+                        ),
+                    )
+                if (
+                    bool(locked_prelim.get("requires_learner_approval", False))
+                    or locked_status == "FIT_CAPACITY_REQUIRES_APPROVAL"
+                ):
+                    raw_l_ver = locked_prelim.get("scope_proposal_version")
+                    raise ScopeApprovalRequiredError(
+                        preliminary_feasibility=locked_prelim,
+                        scope_proposal_version=(
+                            int(raw_l_ver) if isinstance(raw_l_ver, int) else 1
+                        ),
+                        scope_proposal_hash=str(locked_prelim.get("scope_proposal_hash") or ""),
+                    )
             approved = await self._milestone_repo.approve_all_for_roadmap(roadmap_id, effective_now)
-            roadmap.add_domain_event(
+            if locked_roadmap.planning_metadata:
+                await self._roadmap_repo.save(locked_roadmap)
+            locked_roadmap.add_domain_event(
                 MilestoneApprovedEvent(
-                    aggregate_id=roadmap.id,
+                    aggregate_id=locked_roadmap.id,
                     user_id=user_id,
-                    roadmap_id=roadmap.id,
+                    roadmap_id=locked_roadmap.id,
                     milestone_count=len(approved),
                     occurred_at=effective_now,
                 )
             )
-            self._uow.collect_events_from(roadmap)
+            self._uow.collect_events_from(locked_roadmap)
             await self._uow.commit()
 
         return approved

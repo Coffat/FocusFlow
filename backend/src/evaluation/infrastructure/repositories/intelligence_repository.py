@@ -1,12 +1,16 @@
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from uuid6 import uuid7
 
 from src.evaluation.application.ports.intelligence_repository_port import (
+    DuplicateWeeklyReviewConflictError,
     EvaluationIntelligenceRepositoryPort,
 )
 from src.evaluation.domain.models.intelligence import MilestoneProof, WeeklyReview
@@ -93,6 +97,45 @@ class SqlAlchemyEvaluationIntelligenceRepository(EvaluationIntelligenceRepositor
             "avg_proof_confidence": avg_conf,
         }
 
+    @staticmethod
+    def _to_weekly_review(row: AIReviewORM) -> WeeklyReview:
+        assert row.period_start is not None and row.period_end is not None
+        return WeeklyReview(
+            id=row.id,
+            roadmap_id=row.roadmap_id,
+            user_id=row.user_id,
+            period_start=row.period_start,
+            period_end=row.period_end,
+            quantitative_summary=row.quantitative_summary,
+            strengths_feedback=row.strengths_feedback,
+            bottlenecks_feedback=row.bottlenecks_feedback,
+            action_recommendations=row.action_recommendations,
+            user_reflection_payload=row.user_reflection_payload,
+            generated_at=row.generated_at,
+        )
+
+    async def get_weekly_review_for_period(
+        self,
+        roadmap_id: UUID,
+        period_start: date,
+        period_end: date,
+    ) -> WeeklyReview | None:
+        result = await self._session.execute(
+            select(AIReviewORM)
+            .where(
+                AIReviewORM.roadmap_id == roadmap_id,
+                AIReviewORM.review_cycle == "WEEKLY",
+                AIReviewORM.period_start == period_start,
+                AIReviewORM.period_end == period_end,
+            )
+            .order_by(AIReviewORM.generated_at.desc())
+            .limit(1)
+        )
+        row = result.scalar_one_or_none()
+        if row is None or row.period_start is None or row.period_end is None:
+            return None
+        return self._to_weekly_review(row)
+
     async def create_weekly_review(
         self,
         *,
@@ -126,6 +169,52 @@ class SqlAlchemyEvaluationIntelligenceRepository(EvaluationIntelligenceRepositor
             action_recommendations
             or "Ưu tiên một phiên Prove Mode cho khái niệm có confidence thấp nhất."
         )
+        bind = self._session.get_bind() if hasattr(self._session, "get_bind") else None
+        dialect_name = getattr(getattr(bind, "dialect", None), "name", None)
+        if dialect_name == "postgresql":
+            review_id = uuid7()
+            now = datetime.now(UTC)
+            stmt = (
+                pg_insert(AIReviewORM)
+                .values(
+                    id=review_id,
+                    roadmap_id=roadmap_id,
+                    user_id=user_id,
+                    review_cycle="WEEKLY",
+                    period_start=period_start,
+                    period_end=period_end,
+                    quantitative_summary=summary_payload,
+                    strengths_feedback=default_strengths,
+                    bottlenecks_feedback=default_bottlenecks,
+                    action_recommendations=default_actions,
+                    user_reflection_payload=reflection,
+                    model_used=model_used[:100],
+                    generated_at=now,
+                    created_at=now,
+                    updated_at=now,
+                )
+                .on_conflict_do_nothing(
+                    index_elements=["roadmap_id", "period_start", "period_end"],
+                    index_where=text("review_cycle = 'WEEKLY'"),
+                )
+                .returning(AIReviewORM.id)
+            )
+            inserted_id = (await self._session.execute(stmt)).scalar_one_or_none()
+            if inserted_id is None:
+                existing = await self.get_weekly_review_for_period(
+                    roadmap_id, period_start, period_end
+                )
+                raise DuplicateWeeklyReviewConflictError(existing_review=existing)
+            row = await self._session.get(AIReviewORM, inserted_id)
+            if row is None:
+                existing = await self.get_weekly_review_for_period(
+                    roadmap_id, period_start, period_end
+                )
+                if existing is not None:
+                    raise DuplicateWeeklyReviewConflictError(existing_review=existing)
+                raise RuntimeError("Inserted weekly review could not be reloaded")
+            return self._to_weekly_review(row)
+
         review = AIReviewORM(
             roadmap_id=roadmap_id,
             user_id=user_id,
@@ -139,21 +228,14 @@ class SqlAlchemyEvaluationIntelligenceRepository(EvaluationIntelligenceRepositor
             user_reflection_payload=reflection,
             model_used=model_used[:100],
         )
-        self._session.add(review)
-        await self._session.flush()
-        return WeeklyReview(
-            id=review.id,
-            roadmap_id=review.roadmap_id,
-            user_id=review.user_id,
-            period_start=period_start,
-            period_end=period_end,
-            quantitative_summary=review.quantitative_summary,
-            strengths_feedback=review.strengths_feedback,
-            bottlenecks_feedback=review.bottlenecks_feedback,
-            action_recommendations=review.action_recommendations,
-            user_reflection_payload=reflection,
-            generated_at=review.generated_at,
-        )
+        try:
+            async with self._session.begin_nested():
+                self._session.add(review)
+                await self._session.flush()
+        except IntegrityError as exc:
+            existing = await self.get_weekly_review_for_period(roadmap_id, period_start, period_end)
+            raise DuplicateWeeklyReviewConflictError(existing_review=existing) from exc
+        return self._to_weekly_review(review)
 
     async def save_weekly_review(
         self,
@@ -181,16 +263,4 @@ class SqlAlchemyEvaluationIntelligenceRepository(EvaluationIntelligenceRepositor
         row = result.scalar_one_or_none()
         if row is None or row.period_start is None or row.period_end is None:
             return None
-        return WeeklyReview(
-            id=row.id,
-            roadmap_id=row.roadmap_id,
-            user_id=row.user_id,
-            period_start=row.period_start,
-            period_end=row.period_end,
-            quantitative_summary=row.quantitative_summary,
-            strengths_feedback=row.strengths_feedback,
-            bottlenecks_feedback=row.bottlenecks_feedback,
-            action_recommendations=row.action_recommendations,
-            user_reflection_payload=row.user_reflection_payload,
-            generated_at=row.generated_at,
-        )
+        return self._to_weekly_review(row)

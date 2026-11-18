@@ -15,6 +15,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -120,7 +121,7 @@ class AIQuotaORM(Base):
             pc = int(paid_credits if paid_credits is not None else 0)
             used = int(kwargs.get("used_calls", 0) or 0)
             reserved = int(kwargs.get("reserved_calls", 0) or 0)
-            kwargs["monthly_limit"] = max(1, used + reserved + fc + pc)
+            kwargs["monthly_limit"] = max(1, used + reserved, used + fc + pc)
             super().__init__(**kwargs)
             self._set_credit_pool(fc, pc)
         else:
@@ -132,14 +133,20 @@ class AIQuotaORM(Base):
         pc_attr = self.__dict__.get("_paid_credits_remaining")
         if fc_attr is not None and pc_attr is not None:
             return int(fc_attr), int(pc_attr)
-        if self.user_id and self.user_id in self._credit_ledger_by_user:
+        if (
+            self.user_id
+            and self.user_id in self._credit_ledger_by_user
+            and int(self.used_calls or 0) == 0
+            and int(self.reserved_calls or 0) == 0
+        ):
             fc, pc = self._credit_ledger_by_user[self.user_id]
-            self.__dict__["_free_credits_remaining"] = fc
-            self.__dict__["_paid_credits_remaining"] = pc
-            return fc, pc
+            if int(self.monthly_limit or 0) == fc + pc:
+                self.__dict__["_free_credits_remaining"] = fc
+                self.__dict__["_paid_credits_remaining"] = pc
+                return fc, pc
         remaining_total = max(
             0,
-            (self.monthly_limit or 0) - (self.used_calls or 0) - (self.reserved_calls or 0),
+            (self.monthly_limit or 0) - (self.used_calls or 0),
         )
         return remaining_total, 0
 
@@ -152,7 +159,7 @@ class AIQuotaORM(Base):
             self._credit_ledger_by_user[self.user_id] = (fc, pc)
         used = int(self.used_calls or 0)
         reserved = int(self.reserved_calls or 0)
-        self.monthly_limit = max(1, used + reserved + fc + pc)
+        self.monthly_limit = max(1, used + reserved, used + fc + pc)
 
     @property
     def free_credits_remaining(self) -> int:
@@ -227,11 +234,23 @@ class AIQuotaReservationORM(Base):
         if "cost" in kwargs:
             cost_val = kwargs.pop("cost")
             kwargs.setdefault("tokens_reserved", cost_val)
+        if "model_name" in kwargs:
+            self._model_name = kwargs.pop("model_name")
+        else:
+            self._model_name = None
         kwargs.setdefault("id", uuid7())
         kwargs.setdefault("status", "RESERVED")
         kwargs.setdefault("tokens_reserved", 1)
         kwargs.setdefault("created_at", datetime.now(UTC))
         super().__init__(**kwargs)
+
+    @property
+    def model_name(self) -> str | None:
+        return getattr(self, "_model_name", None)
+
+    @model_name.setter
+    def model_name(self, value: str | None) -> None:
+        self._model_name = value
 
     @property
     def cost(self) -> int:
@@ -261,6 +280,12 @@ class AIUsageLogORM(Base):
             name="chk_ai_usage_logs_status",
         ),
         Index("idx_ai_usage_logs_user_action", "user_id", "action_type", "created_at"),
+        Index(
+            "uq_ai_usage_logs_idempotency_key",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text("idempotency_key IS NOT NULL"),
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -287,6 +312,8 @@ class AIUsageLogORM(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="SUCCESS")
     error_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    audit_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
