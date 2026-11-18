@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Literal, Protocol, runtime_checkable
 from uuid import UUID
 
 from src.shared_kernel.domain.events import DomainEvent
@@ -174,6 +174,29 @@ class QuotaFacadePort(Protocol):
     ) -> None: ...
 
     async def expire_stale_reservations(self, now: datetime | None = None) -> int: ...
+
+    async def record_attempt_usage(
+        self,
+        *,
+        user_id: UUID,
+        action_type: str,
+        requested_model: str = "gemini-3.8-flash",
+        resolved_model: str | None = None,
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
+        thinking_tokens: int = 0,
+        latency_ms: int = 0,
+        status: Literal["SUCCESS", "FAILED", "RATE_LIMITED", "TIMEOUT"] = "SUCCESS",
+        usage_completeness: Literal["COMPLETE", "PARTIAL", "UNKNOWN"] = "COMPLETE",
+        usage_source: Literal[
+            "GATEWAY_TELEMETRY", "CACHE", "ESTIMATED", "UNKNOWN"
+        ] = "GATEWAY_TELEMETRY",
+        error_code: str | None = None,
+        error_message: str | None = None,
+        attempt_no: int = 1,
+        idempotency_key: str | None = None,
+        reservation_id: UUID | None = None,
+    ) -> Any: ...
 
 
 @dataclass(frozen=True)

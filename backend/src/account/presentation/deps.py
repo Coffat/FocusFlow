@@ -130,6 +130,20 @@ class TaskiqEmailServiceAdapter:
     async def send_otp_email(self, to_email: str, otp_code: str, purpose: str) -> None:
         await dispatch_otp_email(to_email=to_email, otp_code=otp_code, purpose=purpose)
 
+    async def send_overdue_alert_email(
+        self,
+        to_email: str,
+        overdue_task_titles: list[str],
+        remaining_reschedule_budget: int,
+    ) -> None:
+        from src.account.infrastructure.email.email_service import EmailService
+
+        await EmailService.send_overdue_alert_email(
+            to_email=to_email,
+            overdue_task_titles=overdue_task_titles,
+            remaining_reschedule_budget=remaining_reschedule_budget,
+        )
+
 
 # --- Database & Unit of Work Dependencies ---
 async def get_account_db_session() -> AsyncGenerator[AsyncSession, None]:

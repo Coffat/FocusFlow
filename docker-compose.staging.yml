@@ -1,0 +1,8 @@
+services:
+  backend:
+    environment:
+      - ENVIRONMENT=staging
+      - DEBUG=False
+      - EMAIL_BACKEND=smtp
+      - EMAIL_HOST=mailpit
+      - EMAIL_PORT=1025

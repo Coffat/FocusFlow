@@ -71,6 +71,13 @@ class EmailServicePort(Protocol):
 
     async def send_otp_email(self, to_email: str, otp_code: str, purpose: str) -> None: ...
 
+    async def send_overdue_alert_email(
+        self,
+        to_email: str,
+        overdue_task_titles: list[str],
+        remaining_reschedule_budget: int,
+    ) -> None: ...
+
 
 class GoogleAuthPort(Protocol):
     """Protocol for verifying Google OAuth identity tokens."""

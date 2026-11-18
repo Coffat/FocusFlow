@@ -291,12 +291,13 @@ test.describe('FR-AVAIL v2.0 — Hybrid Availability End-to-End Verification (E2
     await page.getByTestId('open-quick-drawer-btn').click();
     await expect(drawerDialog).toBeVisible();
 
-    await page.getByTestId('action-domino-shift').check();
+    await page.getByTestId('action-move-backlog').check();
     await page.getByTestId('adjustment-reason-input').fill('Tăng ca đột xuất tại công ty');
     await page.getByTestId('confirm-today-adjustment-btn').click();
 
+    await expect(page.getByTestId('quick-drawer-error')).toContainText('Backlog');
+    await page.keyboard.press('Escape');
     await expect(drawerDialog).toBeHidden();
-    await expect(page.getByTestId('quick-drawer-notification')).toContainText('Domino Shift');
     expect(putAvailabilityCount).toBe(0);
 
     // Quay lại /availability kiểm tra khuôn mẫu tuần vẫn nguyên vẹn 100%
