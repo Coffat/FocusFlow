@@ -1,0 +1,2604 @@
+{
+  "schema_version": "1.0",
+  "roadmaps_10_summary": {
+    "count": 10,
+    "warn_gt_90pct_count": 1,
+    "warn_gt_100pct_count": 0,
+    "all_efforts_equal_count": 0,
+    "pure_linear_dep_count": 8,
+    "sensitive_split_across_days_total": 5,
+    "short_project_under_90_total": 8
+  },
+  "milestones_12_summary": {
+    "count": 12,
+    "warn_gt_90pct_count": 9,
+    "warn_gt_100pct_count": 1,
+    "all_efforts_equal_count": 8
+  },
+  "roadmaps_10": [
+    {
+      "label": "R-01",
+      "goal_id": "G1_BEGINNER_PYTHON_FASTAPI",
+      "arm": "medium",
+      "model_id": "gemini-3.8-flash-medium",
+      "attempts_used": 1,
+      "judge_low_score": 100.0,
+      "judge_medium_score": 100.0,
+      "milestones_count": 4,
+      "effort_values_minutes": [
+        210,
+        180,
+        240,
+        180
+      ],
+      "total_milestone_effort_minutes": 810,
+      "available_capacity_minutes": 3030,
+      "capacity_utilization": 0.2673,
+      "warn_utilization_gt_90pct": false,
+      "warn_utilization_gt_100pct": false,
+      "effort_equal_ratio": 0.5,
+      "all_efforts_equal": false,
+      "unique_effort_values_count": 3,
+      "effort_stddev_minutes": 24.87,
+      "has_deferred_scope": false,
+      "scope_summary_mentions_fit": false,
+      "hard_violations": [],
+      "conditional_violations": [
+        "PROJECT_UNDER_90_MIN"
+      ],
+      "soft_quality_warnings": [
+        "PURELY_LINEAR_DEPENDENCIES"
+      ],
+      "diagnostics": {
+        "unique_effort_values_count": 3,
+        "effort_stddev_minutes": 24.87,
+        "has_deferred_scope": false,
+        "scope_summary_mentions_fit": false,
+        "tasks_count": 12,
+        "branching_nodes_count": 0,
+        "active_study_days": 11,
+        "max_consecutive_study_days": 11,
+        "days_idle_before_deadline": 20,
+        "tasks_split_across_days_count": 2,
+        "adjacent_same_day_split_count": 1
+      },
+      "structural_validity": true,
+      "scheduling_feasibility": true,
+      "pedagogical_quality": {
+        "soft_quality_score": 0.85,
+        "soft_quality_warnings": [
+          "PURELY_LINEAR_DEPENDENCIES"
+        ]
+      },
+      "failure_reasons_by_layer": {
+        "structural_validity": [],
+        "scheduling_feasibility": [],
+        "conditional_constraints": [
+          "PROJECT_UNDER_90_MIN"
+        ],
+        "soft_quality_warnings": [
+          "PURELY_LINEAR_DEPENDENCIES"
+        ]
+      },
+      "warnings": [
+        "PROJECT_UNDER_90_MIN",
+        "PURELY_LINEAR_DEPENDENCIES"
+      ],
+      "tasks_count": 12,
+      "total_task_minutes": 810,
+      "task_capacity_utilization": 0.2673,
+      "milestone_vs_tasks_gap": 0.0,
+      "milestone_vs_tasks_ratio": 1.0,
+      "milestone_vs_tasks_delta_minutes": 0,
+      "dependencies_count": 11,
+      "linear_dep_tasks_count": 11,
+      "non_initial_tasks_count": 11,
+      "linear_dependency_ratio": 1.0,
+      "branching_nodes_count": 0,
+      "active_study_days": 11,
+      "first_study_date": "2026-11-17",
+      "last_study_date": "2026-11-27",
+      "max_consecutive_study_days": 11,
+      "days_idle_before_deadline": 20,
+      "split_integrity": {
+        "tasks_split_across_days_count": 2,
+        "sensitive_tasks_split_across_days_count": 0,
+        "adjacent_same_day_split_count": 1,
+        "tasks_split_across_days": [
+          {
+            "task_id": "T8",
+            "title": "Thiết kế Routing và Path/Query Parameters trong FastAPI",
+            "task_type": "PRACTICE",
+            "estimated_minutes": 90,
+            "distinct_dates": [
+              "2026-11-22",
+              "2026-11-23"
+            ],
+            "block_durations_minutes": [
+              45,
+              45
+            ],
+            "is_sensitive_non_splittable": false
+          },
+          {
+            "task_id": "T9",
+            "title": "Dự án nhỏ: Xây dựng RESTful API CRUD hoàn chỉnh",
+            "task_type": "PROJECT",
+            "estimated_minutes": 90,
+            "distinct_dates": [
+              "2026-11-23",
+              "2026-11-24"
+            ],
+            "block_durations_minutes": [
+              45,
+              45
+            ],
+            "is_sensitive_non_splittable": false
+          }
+        ],
+        "sensitive_tasks_split_across_days": [],
+        "adjacent_same_day_split_tasks": [
+          {
+            "task_id": "T2",
+            "title": "Cấu trúc điều khiển và Tổ chức hàm trong Python",
+            "block_date": "2026-11-18",
+            "block_durations_minutes": [
+              45,
+              45
+            ],
+            "is_contiguous": true
+          }
+        ]
+      },
+      "project_min_minutes": {
+        "project_tasks_count": 2,
+        "min_project_minutes": 60,
+        "short_project_under_90_count": 1,
+        "short_project_tasks": [
+          {
+            "task_id": "T12",
+            "title": "Xây dựng bộ kiểm thử hồi quy bao phủ toàn diện cho CRUD API",
+            "estimated_minutes": 60
+          }
+        ]
+      }
+    },
+    {
+      "label": "R-02",
+      "goal_id": "G1_BEGINNER_PYTHON_FASTAPI",
+      "arm": "low",
+      "model_id": "gemini-3.8-flash-low",
+      "attempts_used": 1,
+      "judge_low_score": 96.0,
+      "judge_medium_score": 92.0,
+      "milestones_count": 5,
+      "effort_values_minutes": [
+        210,
+        240,
+        240,
+        300,
+        210
+      ],
+      "total_milestone_effort_minutes": 1200,
+      "available_capacity_minutes": 3030,
+      "capacity_utilization": 0.396,
+      "warn_utilization_gt_90pct": false,
+      "warn_utilization_gt_100pct": false,
+      "effort_equal_ratio": 0.4,
+      "all_efforts_equal": false,
+      "unique_effort_values_count": 3,
+      "effort_stddev_minutes": 32.86,
+      "has_deferred_scope": false,
+      "scope_summary_mentions_fit": false,
+      "hard_violations": [],
+      "conditional_violations": [],
+      "soft_quality_warnings": [
+        "PURELY_LINEAR_DEPENDENCIES",
+        "NO_REST_DAY_STREAK_GE_14"
+      ],
+      "diagnostics": {
+        "unique_effort_values_count": 3,
+        "effort_stddev_minutes": 32.86,
+        "has_deferred_scope": false,
+        "scope_summary_mentions_fit": false,
+        "tasks_count": 18,
+        "branching_nodes_count": 0,
+        "active_study_days": 15,
+        "max_consecutive_study_days": 15,
+        "days_idle_before_deadline": 16,
+        "tasks_split_across_days_count": 1,
+        "adjacent_same_day_split_count": 2
+      },
+      "structural_validity": true,
+      "scheduling_feasibility": true,
+      "pedagogical_quality": {
+        "soft_quality_score": 0.7,
+        "soft_quality_warnings": [
+          "PURELY_LINEAR_DEPENDENCIES",
+          "NO_REST_DAY_STREAK_GE_14"
+        ]
+      },
+      "failure_reasons_by_layer": {
+        "structural_validity": [],
+        "scheduling_feasibility": [],
+        "conditional_constraints": [],
+        "soft_quality_warnings": [
+          "PURELY_LINEAR_DEPENDENCIES",
+          "NO_REST_DAY_STREAK_GE_14"
+        ]
+      },
+      "warnings": [
+        "PURELY_LINEAR_DEPENDENCIES",
+        "NO_REST_DAY_STREAK_GE_14"
+      ],
+      "tasks_count": 18,
+      "total_task_minutes": 1200,
+      "task_capacity_utilization": 0.396,
+      "milestone_vs_tasks_gap": 0.0,
+      "milestone_vs_tasks_ratio": 1.0,
+      "milestone_vs_tasks_delta_minutes": 0,
+      "dependencies_count": 17,
+      "linear_dep_tasks_count": 17,
+      "non_initial_tasks_count": 17,
+      "linear_dependency_ratio": 1.0,
+      "branching_nodes_count": 0,
+      "active_study_days": 15,
+      "first_study_date": "2026-11-17",
+      "last_study_date": "2026-12-01",
+      "max_consecutive_study_days": 15,
+      "days_idle_before_deadline": 16,
+      "split_integrity": {
+        "tasks_split_across_days_count": 1,
+        "sensitive_tasks_split_across_days_count": 0,
+        "adjacent_same_day_split_count": 2,
+        "tasks_split_across_days": [
+          {
+            "task_id": "T15",
+            "title": "Xây dựng Mini Project: Hoàn thiện CRUD REST API với FastAPI",
+            "task_type": "PROJECT",
+            "estimated_minutes": 120,
+            "distinct_dates": [
+              "2026-11-28",
+              "2026-11-29"
+            ],
+            "block_durations_minutes": [
+              60,
+              60
+            ],
+            "is_sensitive_non_splittable": false
+          }
+        ],
+        "sensitive_tasks_split_across_days": [],
+        "adjacent_same_day_split_tasks": [
+          {
+            "task_id": "T3",
+            "title": "Thực hành giải bài toán logic thuật toán cơ bản với Python",
+            "block_date": "2026-11-19",
+            "block_durations_minutes": [
+              45,
+              45
+            ],
+            "is_contiguous": true
+          },
+          {
+            "task_id": "T18",
+            "title": "Hoàn thiện Bộ kiểm thử tự động toàn diện cho CRUD API",
+            "block_date": "2026-12-01",
+            "block_durations_minutes": [
+              45,
+              45
+            ],
+            "is_contiguous": true
+          }
+        ]
+      },
+      "project_min_minutes": {
+        "project_tasks_count": 2,
+        "min_project_minutes": 90,
+        "short_project_under_90_count": 0,
+        "short_project_tasks": []
+      }
+    },
+    {
+      "label": "R-03",
+      "goal_id": "G5_INTERMEDIATE_DATA_ENG_AIRFLOW_DBT",
+      "arm": "low",
+      "model_id": "gemini-3.8-flash-low",
+      "attempts_used": 2,
+      "judge_low_score": 95.0,
+      "judge_medium_score": 96.0,
+      "milestones_count": 6,
+      "effort_values_minutes": [
+        240,
+        360,
+        300,
+        360,
+        360,
+        420
+      ],
+      "total_milestone_effort_minutes": 2040,
+      "available_capacity_minutes": 2250,
+      "capacity_utilization": 0.9067,
+      "warn_utilization_gt_90pct": true,
+      "warn_utilization_gt_100pct": false,
+      "effort_equal_ratio": 0.5,
+      "all_efforts_equal": false,
+      "unique_effort_values_count": 4,
+      "effort_stddev_minutes": 56.57,
+      "has_deferred_scope": false,
+      "scope_summary_mentions_fit": false,
+      "hard_violations": [],
+      "conditional_violations": [
+        "UTILIZATION_OVER_90_PCT",
+        "MILESTONE_VS_TASKS_GAP_GT_15_PCT"
+      ],
+      "soft_quality_warnings": [
+        "PURELY_LINEAR_DEPENDENCIES"
+      ],
+      "diagnostics": {
+        "unique_effort_values_count": 4,
+        "effort_stddev_minutes": 56.57,
+        "has_deferred_scope": false,
+        "scope_summary_mentions_fit": false,
+        "tasks_count": 12,
+        "branching_nodes_count": 0,
+        "active_study_days": 10,
+        "max_consecutive_study_days": 2,
+        "days_idle_before_deadline": 18,
+        "tasks_split_across_days_count": 0,
+        "adjacent_same_day_split_count": 12
+      },
+      "structural_validity": true,
+      "scheduling_feasibility": true,
+      "pedagogical_quality": {
+        "soft_quality_score": 0.85,
+        "soft_quality_warnings": [
+          "PURELY_LINEAR_DEPENDENCIES"
+        ]
+      },
+      "failure_reasons_by_layer": {
+        "structural_validity": [],
+        "scheduling_feasibility": [],
+        "conditional_constraints": [
+          "UTILIZATION_OVER_90_PCT",
+          "MILESTONE_VS_TASKS_GAP_GT_15_PCT"
+        ],
+        "soft_quality_warnings": [
+          "PURELY_LINEAR_DEPENDENCIES"
+        ]
+      },
+      "warnings": [
+        "UTILIZATION_OVER_90_PCT",
+        "MILESTONE_VS_TASKS_GAP_GT_15_PCT",
+        "PURELY_LINEAR_DEPENDENCIES"
+      ],
+      "tasks_count": 12,
+      "total_task_minutes": 1080,
+      "task_capacity_utilization": 0.48,
+      "milestone_vs_tasks_gap": 0.4706,
+      "milestone_vs_tasks_ratio": 0.5294,
+      "milestone_vs_tasks_delta_minutes": -960,
+      "dependencies_count": 11,
+      "linear_dep_tasks_count": 11,
+      "non_initial_tasks_count": 11,
+      "linear_dependency_ratio": 1.0,
+      "branching_nodes_count": 0,
+      "active_study_days": 10,
+      "first_study_date": "2026-11-18",
+      "last_study_date": "2026-12-04",
+      "max_consecutive_study_days": 2,
+      "days_idle_before_deadline": 18,
+      "split_integrity": {
+        "tasks_split_across_days_count": 0,
+        "sensitive_tasks_split_across_days_count": 0,
+        "adjacent_same_day_split_count": 12,
+        "tasks_split_across_days": [],
+        "sensitive_tasks_split_across_days": [],
+        "adjacent_same_day_split_tasks": [
+          {
+            "task_id": "T1",
+            "title": "Tổng quan kiến trúc ELT và Mô hình hóa dữ liệu quan hệ (3NF vs Star Schema)",
+            "block_date": "2026-11-18",
+            "block_durations_minutes": [
+              45,
+              45
+            ],
+            "is_contiguous": true
+          },
+          {
+            "task_id": "T2",
+            "title": "Thiết lập môi trường PostgreSQL và thiết kế Schema dữ liệu mẫu",
+            "block_date": "2026-11-20",
+            "block_durations_minutes": [
+              45,
+              45
+            ],
+            "is_contiguous": true
+          },
+          {
+            "task_id": "T3",
+            "title": "Lập trình DAG với Apache Airflow TaskFlow API",
+            "block_date": "2026-11-21",
+            "block_durations_minutes": [
+              45,
+              45
+            ],
+            "is_contiguous": true
+          },
+          {
+            "task_id": "T4",
+            "title": "Quản lý XCom, Airflow Connections và Variables",
+            "block_date": "2026-11-21",
+            "block_durations_minutes": [
+              45,
+              45
+            ],
+            "is_contiguous": true
+          },
+          {
+            "task_id": "T5",
+            "title": "Thiết kế Pipeline Idempotent với Upsert và Execution Date",
+            "block_date": "2026-11-23",
+            "block_durations_minutes": [
+              45,
+              45
+            ],
+            "is_contiguous": true
+          },
+          {
+            "task_id": "T6",
+            "title": "Cấu hình Retry, Alerts, Callback và Backfill thực chiến",
+            "block_date": "2026-11-25",
+            "block_durations_minutes": [
+              45,
+              45
+            ],
+            "is_contiguous": true
+          },
+          {
+            "task_id": "T7",
+            "title": "Khởi tạo dự án dbt Core và quản lý nguồn dữ liệu (Sources & Ref)",
+            "block_date": "2026-11-27",
+            "block_durations_minutes": [
+              45,
+              45
+            ],
+            "is_contiguous": true
+          },
+          {
+            "task_id": "T8",
+            "title": "Xây dựng Tầng Phân tích Marts với Star Schema trên dbt",
+            "block_date": "2026-11-28",
+            "block_durations_minutes": [
+              45,
+              45
+            ],
+            "is_contiguous": true
+          },
+          {
+            "task_id": "T9",
+            "title": "Cài đặt dbt Incremental Models và Snapshots (SCD Type 2)",
+            "block_date": "2026-11-28",
+            "block_durations_minutes": [
+              45,
+              45
+            ],
+            "is_contiguous": true
+          },
+          {
+            "task_id": "T10",
+            "title": "Thiết lập Bộ kiểm thử chất lượng dữ liệu dbt Test",
+            "block_date": "2026-11-30",
+            "block_durations_minutes": [
+              45,
+              45
+            ],
+            "is_contiguous": true
+          },
+          {
+            "task_id": "T11",
+            "title": "Tích hợp và Điều phối dbt trong Airflow Pipeline",
+            "block_date": "2026-12-02",
+            "block_durations_minutes": [
+              45,
+              45
+            ],
+            "is_contiguous": true
+          },
+          {
+            "task_id": "T12",
+            "title": "Đóng gói, Đánh giá và Hoàn thiện Pipeline ELT Toàn diện",
+            "block_date": "2026-12-04",
+            "block_durations_minutes": [
+              45,
+              45
+            ],
+            "is_contiguous": true
+          }
+        ]
+      },
+      "project_min_minutes": {
+        "project_tasks_count": 1,
+        "min_project_minutes": 90,
+        "short_project_under_90_count": 0,
+        "short_project_tasks": []
+      }
+    },
+    {
+      "label": "R-04",
+      "goal_id": "G3_ADVANCED_RUST_ASYNC_TOKIO",
+      "arm": "medium",
+      "model_id": "gemini-3.8-flash-medium",
+      "attempts_used": 1,
+      "judge_low_score": 96.0,
+      "judge_medium_score": 98.0,
+      "milestones_count": 6,
+      "effort_values_minutes": [
+        450,
+        480,
+        540,
+        540,
+        480,
+        600
+      ],
+      "total_milestone_effort_minutes": 3090,
+      "available_capacity_minutes": 4590,
+      "capacity_utilization": 0.6732,
+      "warn_utilization_gt_90pct": false,
+      "warn_utilization_gt_100pct": false,
+      "effort_equal_ratio": 0.3333,
+      "all_efforts_equal": false,
+      "unique_effort_values_count": 4,
+      "effort_stddev_minutes": 50.25,
+      "has_deferred_scope": false,
+      "scope_summary_mentions_fit": false,
+      "hard_violations": [],
+      "conditional_violations": [],
+      "soft_quality_warnings": [
+        "NO_REST_DAY_STREAK_GE_14"
+      ],
+      "diagnostics": {
+        "unique_effort_values_count": 4,
+        "effort_stddev_minutes": 50.25,
+        "has_deferred_scope": false,
+        "scope_summary_mentions_fit": false,
+        "tasks_count": 33,
+        "branching_nodes_count": 5,
+        "active_study_days": 34,
+        "max_consecutive_study_days": 34,
+        "days_idle_before_deadline": 9,
+        "tasks_split_across_days_count": 3,
+        "adjacent_same_day_split_count": 1
+      },
+      "structural_validity": true,
+      "scheduling_feasibility": true,
+      "pedagogical_quality": {
+        "soft_quality_score": 0.85,
+        "soft_quality_warnings": [
+          "NO_REST_DAY_STREAK_GE_14"
+        ]
+      },
+      "failure_reasons_by_layer": {
+        "structural_validity": [],
+        "scheduling_feasibility": [],
+        "conditional_constraints": [],
+        "soft_quality_warnings": [
+          "NO_REST_DAY_STREAK_GE_14"
+        ]
+      },
+      "warnings": [
+        "NO_REST_DAY_STREAK_GE_14"
+      ],
+      "tasks_count": 33,
+      "total_task_minutes": 3090,
+      "task_capacity_utilization": 0.6732,
+      "milestone_vs_tasks_gap": 0.0,
+      "milestone_vs_tasks_ratio": 1.0,
+      "milestone_vs_tasks_delta_minutes": 0,
+      "dependencies_count": 34,
+      "linear_dep_tasks_count": 27,
+      "non_initial_tasks_count": 32,
+      "linear_dependency_ratio": 0.8438,
+      "branching_nodes_count": 5,
+      "active_study_days": 34,
+      "first_study_date": "2026-11-17",
+      "last_study_date": "2026-12-20",
+      "max_consecutive_study_days": 34,
+      "days_idle_before_deadline": 9,
+      "split_integrity": {
+        "tasks_split_across_days_count": 3,
+        "sensitive_tasks_split_across_days_count": 0,
+        "adjacent_same_day_split_count": 1,
+        "tasks_split_across_days": [
+          {
+            "task_id": "T9",
+            "title": "Dự án nhỏ: Hoàn thiện Minimal Single-threaded Executor Độc lập",
+            "task_type": "PROJECT",
+            "estimated_minutes": 120,
+            "distinct_dates": [
+              "2026-11-25",
+              "2026-11-26"
+            ],
+            "block_durations_minutes": [
+              60,
+              60
+            ],
+            "is_sensitive_non_splittable": false
+          },
+          {
+            "task_id": "T26",
+            "title": "Dự án nhỏ: Xây dựng Server Graceful Shutdown Hoàn chỉnh",
+            "task_type": "PROJECT",
+            "estimated_minutes": 120,
+            "distinct_dates": [
+              "2026-12-12",
+              "2026-12-13"
+            ],
+            "block_durations_minutes": [
+              60,
+              60
+            ],
+            "is_sensitive_non_splittable": false
+          },
+          {
+            "task_id": "T31",
+            "title": "Dự án Tổng hợp: Triển khai High-Performance Network Service Hoàn chỉnh",
+            "task_type": "PROJECT",
+            "estimated_minutes": 120,
+            "distinct_dates": [
+              "2026-12-17",
+              "2026-12-18"
+            ],
+            "block_durations_minutes": [
+              60,
+              60
+            ],
+            "is_sensitive_non_splittable": false
+          }
+        ],
+        "sensitive_tasks_split_across_days": [],
+        "adjacent_same_day_split_tasks": [
+          {
+            "task_id": "T32",
+            "title": "Thực hành Đo lường Hiệu năng với Flamegraph và Tối ưu Contention",
+            "block_date": "2026-12-19",
+            "block_durations_minutes": [
+              60,
+              60
+            ],
+            "is_contiguous": true
+          }
+        ]
+      },
+      "project_min_minutes": {
+        "project_tasks_count": 5,
+        "min_project_minutes": 90,
+        "short_project_under_90_count": 0,
+        "short_project_tasks": []
+      }
+    },
+    {
+      "label": "R-05",
+      "goal_id": "G3_ADVANCED_RUST_ASYNC_TOKIO",
+      "arm": "low",
+      "model_id": "gemini-3.8-flash-low",
+      "attempts_used": 1,
+      "judge_low_score": 98.0,
+      "judge_medium_score": 100.0,
+      "milestones_count": 5,
+      "effort_values_minutes": [
+        360,
+        360,
+        450,
+        360,
+        540
+      ],
+      "total_milestone_effort_minutes": 2070,
+      "available_capacity_minutes": 4590,
+      "capacity_utilization": 0.451,
+      "warn_utilization_gt_90pct": false,
+      "warn_utilization_gt_100pct": false,
+      "effort_equal_ratio": 0.6,
+      "all_efforts_equal": false,
+      "unique_effort_values_count": 3,
+      "effort_stddev_minutes": 72.0,
+      "has_deferred_scope": false,
+      "scope_summary_mentions_fit": false,
+      "hard_violations": [],
+      "conditional_violations": [],
+      "soft_quality_warnings": [
+        "NO_REST_DAY_STREAK_GE_14"
+      ],
+      "diagnostics": {
+        "unique_effort_values_count": 3,
+        "effort_stddev_minutes": 72.0,
+        "has_deferred_scope": false,
+        "scope_summary_mentions_fit": false,
+        "tasks_count": 23,
+        "branching_nodes_count": 8,
+        "active_study_days": 23,
+        "max_consecutive_study_days": 23,
+        "days_idle_before_deadline": 20,
+        "tasks_split_across_days_count": 0,
+        "adjacent_same_day_split_count": 0
+      },
+      "structural_validity": true,
+      "scheduling_feasibility": true,
+      "pedagogical_quality": {
+        "soft_quality_score": 0.85,
+        "soft_quality_warnings": [
+          "NO_REST_DAY_STREAK_GE_14"
+        ]
+      },
+      "failure_reasons_by_layer": {
+        "structural_validity": [],
+        "scheduling_feasibility": [],
+        "conditional_constraints": [],
+        "soft_quality_warnings": [
+          "NO_REST_DAY_STREAK_GE_14"
+        ]
+      },
+      "warnings": [
+        "NO_REST_DAY_STREAK_GE_14"
+      ],
+      "tasks_count": 23,
+      "total_task_minutes": 2070,
+      "task_capacity_utilization": 0.451,
+      "milestone_vs_tasks_gap": 0.0,
+      "milestone_vs_tasks_ratio": 1.0,
+      "milestone_vs_tasks_delta_minutes": 0,
+      "dependencies_count": 25,
+      "linear_dep_tasks_count": 14,
+      "non_initial_tasks_count": 22,
+      "linear_dependency_ratio": 0.6364,
+      "branching_nodes_count": 8,
+      "active_study_days": 23,
+      "first_study_date": "2026-11-17",
+      "last_study_date": "2026-12-09",
+      "max_consecutive_study_days": 23,
+      "days_idle_before_deadline": 20,
+      "split_integrity": {
+        "tasks_split_across_days_count": 0,
+        "sensitive_tasks_split_across_days_count": 0,
+        "adjacent_same_day_split_count": 0,
+        "tasks_split_across_days": [],
+        "sensitive_tasks_split_across_days": [],
+        "adjacent_same_day_split_tasks": []
+      },
+      "project_min_minutes": {
+        "project_tasks_count": 1,
+        "min_project_minutes": 90,
+        "short_project_under_90_count": 0,
+        "short_project_tasks": []
+      }
+    },
+    {
+      "label": "R-06",
+      "goal_id": "G2_INTERMEDIATE_SYSTEM_DESIGN_CACHE",
+      "arm": "low",
+      "model_id": "gemini-3.8-flash-low",
+      "attempts_used": 1,
+      "judge_low_score": 100.0,
+      "judge_medium_score": 96.0,
+      "milestones_count": 4,
+      "effort_values_minutes": [
+        240,
+        300,
+        360,
+        360
+      ],
+      "total_milestone_effort_minutes": 1260,
+      "available_capacity_minutes": 1800,
+      "capacity_utilization": 0.7,
+      "warn_utilization_gt_90pct": false,
+      "warn_utilization_gt_100pct": false,
+      "effort_equal_ratio": 0.5,
+      "all_efforts_equal": false,
+      "unique_effort_values_count": 3,
+      "effort_stddev_minutes": 49.75,
+      "has_deferred_scope": false,
+      "scope_summary_mentions_fit": false,
+      "hard_violations": [
+        "SENSITIVE_TASK_SPLIT_ACROSS_DAYS"
+      ],
+      "conditional_violations": [],
+      "soft_quality_warnings": [
+        "PURELY_LINEAR_DEPENDENCIES"
+      ],
+      "diagnostics": {
+        "unique_effort_values_count": 3,
+        "effort_stddev_minutes": 49.75,
+        "has_deferred_scope": false,
+        "scope_summary_mentions_fit": false,
+        "tasks_count": 12,
+        "branching_nodes_count": 0,
+        "active_study_days": 9,
+        "max_consecutive_study_days": 1,
+        "days_idle_before_deadline": 10,
+        "tasks_split_across_days_count": 7,
+        "adjacent_same_day_split_count": 2
+      },
+      "structural_validity": true,
+      "scheduling_feasibility": false,
+      "pedagogical_quality": {
+        "soft_quality_score": 0.85,
+        "soft_quality_warnings": [
+          "PURELY_LINEAR_DEPENDENCIES"
+        ]
+      },
+      "failure_reasons_by_layer": {
+        "structural_validity": [],
+        "scheduling_feasibility": [
+          "SENSITIVE_TASK_SPLIT_ACROSS_DAYS"
+        ],
+        "conditional_constraints": [],
+        "soft_quality_warnings": [
+          "PURELY_LINEAR_DEPENDENCIES"
+        ]
+      },
+      "warnings": [
+        "SENSITIVE_TASK_SPLIT_ACROSS_DAYS",
+        "PURELY_LINEAR_DEPENDENCIES"
+      ],
+      "tasks_count": 12,
+      "total_task_minutes": 1200,
+      "task_capacity_utilization": 0.6667,
+      "milestone_vs_tasks_gap": 0.0476,
+      "milestone_vs_tasks_ratio": 0.9524,
+      "milestone_vs_tasks_delta_minutes": -60,
+      "dependencies_count": 11,
+      "linear_dep_tasks_count": 11,
+      "non_initial_tasks_count": 11,
+      "linear_dependency_ratio": 1.0,
+      "branching_nodes_count": 0,
+      "active_study_days": 9,
+      "first_study_date": "2026-11-17",
+      "last_study_date": "2026-12-05",
+      "max_consecutive_study_days": 1,
+      "days_idle_before_deadline": 10,
+      "split_integrity": {
+        "tasks_split_across_days_count": 7,
+        "sensitive_tasks_split_across_days_count": 2,
+        "adjacent_same_day_split_count": 2,
+        "tasks_split_across_days": [
+          {
+            "task_id": "T2",
+            "title": "Cài đặt thực hành Cache-Aside và Write-Through với Redis",
+            "task_type": "PRACTICE",
+            "estimated_minutes": 90,
+            "distinct_dates": [
+              "2026-11-17",
+              "2026-11-19"
+            ],
+            "block_durations_minutes": [
+              45,
+              45
+            ],
+            "is_sensitive_non_splittable": false
+          },
+          {
+            "task_id": "T3",
+            "title": "Cài đặt Write-Behind (Write-Back) và kiểm thử đối chuẩn độ trễ",
+            "task_type": "PROJECT",
+            "estimated_minutes": 90,
+            "distinct_dates": [
+              "2026-11-19",
+              "2026-11-21"
+            ],
+            "block_durations_minutes": [
+              45,
+              45
+            ],
+            "is_sensitive_non_splittable": true
+          },
+          {
+            "task_id": "T5",
+            "title": "Cài đặt giải pháp phòng chống Cache Stampede, Breakdown & Penetration",
+            "task_type": "PRACTICE",
+            "estimated_minutes": 120,
+            "distinct_dates": [
+              "2026-11-21",
+              "2026-11-24"
+            ],
+            "block_durations_minutes": [
+              60,
+              60
+            ],
+            "is_sensitive_non_splittable": false
+          },
+          {
+            "task_id": "T6",
+            "title": "Mô phỏng kiểm thử tải cao và đánh giá chống sập Cache Avalanche",
+            "task_type": "PROJECT",
+            "estimated_minutes": 120,
+            "distinct_dates": [
+              "2026-11-24",
+              "2026-11-26"
+            ],
+            "block_durations_minutes": [
+              60,
+              60
+            ],
+            "is_sensitive_non_splittable": true
+          },
+          {
+            "task_id": "T9",
+            "title": "Đánh giá tỷ lệ dịch chuyển key và kiểm thử cân bằng tải",
+            "task_type": "PROJECT",
+            "estimated_minutes": 120,
+            "distinct_dates": [
+              "2026-11-28",
+              "2026-12-01"
+            ],
+            "block_durations_minutes": [
+              60,
+              60
+            ],
+            "is_sensitive_non_splittable": false
+          },
+          {
+            "task_id": "T10",
+            "title": "Khởi tạo Cụm Redis Cluster đa node với Docker Compose & Failover",
+            "task_type": "PRACTICE",
+            "estimated_minutes": 120,
+            "distinct_dates": [
+              "2026-12-01",
+              "2026-12-03"
+            ],
+            "block_durations_minutes": [
+              60,
+              60
+            ],
+            "is_sensitive_non_splittable": false
+          },
+          {
+            "task_id": "T11",
+            "title": "Viết Redis Lua Script thực thi thuật toán Sliding Window Counter",
+            "task_type": "PRACTICE",
+            "estimated_minutes": 120,
+            "distinct_dates": [
+              "2026-12-03",
+              "2026-12-05"
+            ],
+            "block_durations_minutes": [
+              60,
+              60
+            ],
+            "is_sensitive_non_splittable": false
+          }
+        ],
+        "sensitive_tasks_split_across_days": [
+          {
+            "task_id": "T3",
+            "title": "Cài đặt Write-Behind (Write-Back) và kiểm thử đối chuẩn độ trễ",
+            "task_type": "PROJECT",
+            "estimated_minutes": 90,
+            "distinct_dates": [
+              "2026-11-19",
+              "2026-11-21"
+            ],
+            "block_durations_minutes": [
+              45,
+              45
+            ],
+            "is_sensitive_non_splittable": true
+          },
+          {
+            "task_id": "T6",
+            "title": "Mô phỏng kiểm thử tải cao và đánh giá chống sập Cache Avalanche",
+            "task_type": "PROJECT",
+            "estimated_minutes": 120,
+            "distinct_dates": [
+              "2026-11-24",
+              "2026-11-26"
+            ],
+            "block_durations_minutes": [
+              60,
+              60
+            ],
+            "is_sensitive_non_splittable": true
+          }
+        ],
+        "adjacent_same_day_split_tasks": [
+          {
+            "task_id": "T8",
+            "title": "Hiện thực module Consistent Hash Router với Virtual Nodes",
+            "block_date": "2026-11-28",
+            "block_durations_minutes": [
+              60,
+              60
+            ],
+            "is_contiguous": true
+          },
+          {
+            "task_id": "T12",
+            "title": "Kiểm thử chịu tải Rate Limiter phân tán đạt 5000 RPS",
+            "block_date": "2026-12-05",
+            "block_durations_minutes": [
+              60,
+              60
+            ],
+            "is_contiguous": true
+          }
+        ]
+      },
+      "project_min_minutes": {
+        "project_tasks_count": 4,
+        "min_project_minutes": 90,
+        "short_project_under_90_count": 0,
+        "short_project_tasks": []
+      }
+    },
+    {
+      "label": "R-07",
+      "goal_id": "G4_BEGINNER_IELTS_WRITING",
+      "arm": "medium",
+      "model_id": "gemini-3.8-flash-medium",
+      "attempts_used": 1,
+      "judge_low_score": 95.0,
+      "judge_medium_score": 98.0,
+      "milestones_count": 6,
+      "effort_values_minutes": [
+        300,
+        360,
+        240,
+        360,
+        360,
+        300
+      ],
+      "total_milestone_effort_minutes": 1920,
+      "available_capacity_minutes": 3060,
+      "capacity_utilization": 0.6275,
+      "warn_utilization_gt_90pct": false,
+      "warn_utilization_gt_100pct": false,
+      "effort_equal_ratio": 0.5,
+      "all_efforts_equal": false,
+      "unique_effort_values_count": 3,
+      "effort_stddev_minutes": 44.72,
+      "has_deferred_scope": false,
+      "scope_summary_mentions_fit": false,
+      "hard_violations": [],
+      "conditional_violations": [
+        "PROJECT_UNDER_90_MIN"
+      ],
+      "soft_quality_warnings": [
+        "PURELY_LINEAR_DEPENDENCIES",
+        "NO_REST_DAY_STREAK_GE_14"
+      ],
+      "diagnostics": {
+        "unique_effort_values_count": 3,
+        "effort_stddev_minutes": 44.72,
+        "has_deferred_scope": false,
+        "scope_summary_mentions_fit": false,
+        "tasks_count": 32,
+        "branching_nodes_count": 0,
+        "active_study_days": 32,
+        "max_consecutive_study_days": 32,
+        "days_idle_before_deadline": 13,
+        "tasks_split_across_days_count": 0,
+        "adjacent_same_day_split_count": 0
+      },
+      "structural_validity": true,
+      "scheduling_feasibility": true,
+      "pedagogical_quality": {
+        "soft_quality_score": 0.7,
+        "soft_quality_warnings": [
+          "PURELY_LINEAR_DEPENDENCIES",
+          "NO_REST_DAY_STREAK_GE_14"
+        ]
+      },
+      "failure_reasons_by_layer": {
+        "structural_validity": [],
+        "scheduling_feasibility": [],
+        "conditional_constraints": [
+          "PROJECT_UNDER_90_MIN"
+        ],
+        "soft_quality_warnings": [
+          "PURELY_LINEAR_DEPENDENCIES",
+          "NO_REST_DAY_STREAK_GE_14"
+        ]
+      },
+      "warnings": [
+        "PROJECT_UNDER_90_MIN",
+        "PURELY_LINEAR_DEPENDENCIES",
+        "NO_REST_DAY_STREAK_GE_14"
+      ],
+      "tasks_count": 32,
+      "total_task_minutes": 1920,
+      "task_capacity_utilization": 0.6275,
+      "milestone_vs_tasks_gap": 0.0,
+      "milestone_vs_tasks_ratio": 1.0,
+      "milestone_vs_tasks_delta_minutes": 0,
+      "dependencies_count": 31,
+      "linear_dep_tasks_count": 31,
+      "non_initial_tasks_count": 31,
+      "linear_dependency_ratio": 1.0,
+      "branching_nodes_count": 0,
+      "active_study_days": 32,
+      "first_study_date": "2026-11-17",
+      "last_study_date": "2026-12-18",
+      "max_consecutive_study_days": 32,
+      "days_idle_before_deadline": 13,
+      "split_integrity": {
+        "tasks_split_across_days_count": 0,
+        "sensitive_tasks_split_across_days_count": 0,
+        "adjacent_same_day_split_count": 0,
+        "tasks_split_across_days": [],
+        "sensitive_tasks_split_across_days": [],
+        "adjacent_same_day_split_tasks": []
+      },
+      "project_min_minutes": {
+        "project_tasks_count": 2,
+        "min_project_minutes": 60,
+        "short_project_under_90_count": 2,
+        "short_project_tasks": [
+          {
+            "task_id": "T15",
+            "title": "Hoàn thiện và đánh giá cặp bài viết Process & Map theo chuẩn Band 6.5",
+            "estimated_minutes": 60
+          },
+          {
+            "task_id": "T31",
+            "title": "Luyện viết Full Test 2 với dạng đề kết hợp dưới điều kiện phòng thi",
+            "estimated_minutes": 60
+          }
+        ]
+      }
+    },
+    {
+      "label": "R-08",
+      "goal_id": "G4_BEGINNER_IELTS_WRITING",
+      "arm": "low",
+      "model_id": "gemini-3.8-flash-low",
+      "attempts_used": 2,
+      "judge_low_score": 95.0,
+      "judge_medium_score": 95.0,
+      "milestones_count": 6,
+      "effort_values_minutes": [
+        360,
+        480,
+        300,
+        480,
+        480,
+        360
+      ],
+      "total_milestone_effort_minutes": 2460,
+      "available_capacity_minutes": 3060,
+      "capacity_utilization": 0.8039,
+      "warn_utilization_gt_90pct": false,
+      "warn_utilization_gt_100pct": false,
+      "effort_equal_ratio": 0.5,
+      "all_efforts_equal": false,
+      "unique_effort_values_count": 3,
+      "effort_stddev_minutes": 72.8,
+      "has_deferred_scope": false,
+      "scope_summary_mentions_fit": false,
+      "hard_violations": [
+        "SENSITIVE_TASK_SPLIT_ACROSS_DAYS"
+      ],
+      "conditional_violations": [],
+      "soft_quality_warnings": [
+        "PURELY_LINEAR_DEPENDENCIES",
+        "NO_REST_DAY_STREAK_GE_14"
+      ],
+      "diagnostics": {
+        "unique_effort_values_count": 3,
+        "effort_stddev_minutes": 72.8,
+        "has_deferred_scope": false,
+        "scope_summary_mentions_fit": false,
+        "tasks_count": 31,
+        "branching_nodes_count": 0,
+        "active_study_days": 43,
+        "max_consecutive_study_days": 43,
+        "days_idle_before_deadline": 2,
+        "tasks_split_across_days_count": 15,
+        "adjacent_same_day_split_count": 3
+      },
+      "structural_validity": true,
+      "scheduling_feasibility": false,
+      "pedagogical_quality": {
+        "soft_quality_score": 0.7,
+        "soft_quality_warnings": [
+          "PURELY_LINEAR_DEPENDENCIES",
+          "NO_REST_DAY_STREAK_GE_14"
+        ]
+      },
+      "failure_reasons_by_layer": {
+        "structural_validity": [],
+        "scheduling_feasibility": [
+          "SENSITIVE_TASK_SPLIT_ACROSS_DAYS"
+        ],
+        "conditional_constraints": [],
+        "soft_quality_warnings": [
+          "PURELY_LINEAR_DEPENDENCIES",
+          "NO_REST_DAY_STREAK_GE_14"
+        ]
+      },
+      "warnings": [
+        "SENSITIVE_TASK_SPLIT_ACROSS_DAYS",
+        "PURELY_LINEAR_DEPENDENCIES",
+        "NO_REST_DAY_STREAK_GE_14"
+      ],
+      "tasks_count": 31,
+      "total_task_minutes": 2460,
+      "task_capacity_utilization": 0.8039,
+      "milestone_vs_tasks_gap": 0.0,
+      "milestone_vs_tasks_ratio": 1.0,
+      "milestone_vs_tasks_delta_minutes": 0,
+      "dependencies_count": 30,
+      "linear_dep_tasks_count": 30,
+      "non_initial_tasks_count": 30,
+      "linear_dependency_ratio": 1.0,
+      "branching_nodes_count": 0,
+      "active_study_days": 43,
+      "first_study_date": "2026-11-17",
+      "last_study_date": "2026-12-29",
+      "max_consecutive_study_days": 43,
+      "days_idle_before_deadline": 2,
+      "split_integrity": {
+        "tasks_split_across_days_count": 15,
+        "sensitive_tasks_split_across_days_count": 2,
+        "adjacent_same_day_split_count": 3,
+        "tasks_split_across_days": [
+          {
+            "task_id": "T4",
+            "title": "Luyện tập chuyển đổi câu đơn thành câu phức và ghép nối mạch lạc",
+            "task_type": "PRACTICE",
+            "estimated_minutes": 90,
+            "distinct_dates": [
+              "2026-11-20",
+              "2026-11-21"
+            ],
+            "block_durations_minutes": [
+              45,
+              45
+            ],
+            "is_sensitive_non_splittable": false
+          },
+          {
+            "task_id": "T5",
+            "title": "Đánh giá và tổng kết nền tảng ngữ pháp câu học thuật",
+            "task_type": "REVIEW",
+            "estimated_minutes": 90,
+            "distinct_dates": [
+              "2026-11-21",
+              "2026-11-22"
+            ],
+            "block_durations_minutes": [
+              45,
+              45
+            ],
+            "is_sensitive_non_splittable": false
+          },
+          {
+            "task_id": "T9",
+            "title": "Thực hành viết thân bài phân tích số liệu cho Line Graph và Bar Chart",
+            "task_type": "PRACTICE",
+            "estimated_minutes": 90,
+            "distinct_dates": [
+              "2026-11-26",
+              "2026-11-27"
+            ],
+            "block_durations_minutes": [
+              45,
+              45
+            ],
+            "is_sensitive_non_splittable": false
+          },
+          {
+            "task_id": "T11",
+            "title": "Đánh giá và tinh chỉnh bài viết báo cáo biến thiên & so sánh",
+            "task_type": "REVIEW",
+            "estimated_minutes": 120,
+            "distinct_dates": [
+              "2026-11-29",
+              "2026-11-30"
+            ],
+            "block_durations_minutes": [
+              60,
+              60
+            ],
+            "is_sensitive_non_splittable": false
+          },
+          {
+            "task_id": "T13",
+            "title": "Thực hành viết bài quy trình sản xuất nhân tạo (Man-made Process)",
+            "task_type": "PRACTICE",
+            "estimated_minutes": 90,
+            "distinct_dates": [
+              "2026-12-02",
+              "2026-12-03"
+            ],
+            "block_durations_minutes": [
+              45,
+              45
+            ],
+            "is_sensitive_non_splittable": false
+          },
+          {
+            "task_id": "T14",
+            "title": "Thực hành viết quy trình tự nhiên và tổng kết dạng Process/Map",
+            "task_type": "PRACTICE",
+            "estimated_minutes": 90,
+            "distinct_dates": [
+              "2026-12-04",
+              "2026-12-05"
+            ],
+            "block_durations_minutes": [
+              45,
+              45
+            ],
+            "is_sensitive_non_splittable": false
+          },
+          {
+            "task_id": "T18",
+            "title": "Thực hành triển khai đoạn văn PEEL hoàn chỉnh cho dạng Opinion",
+            "task_type": "PRACTICE",
+            "estimated_minutes": 90,
+            "distinct_dates": [
+              "2026-12-09",
+              "2026-12-10"
+            ],
+            "block_durations_minutes": [
+              45,
+              45
+            ],
+            "is_sensitive_non_splittable": false
+          },
+          {
+            "task_id": "T19",
+            "title": "Thực hành viết bài luận Opinion Essay hoàn chỉnh (Bài số 1)",
+            "task_type": "PRACTICE",
+            "estimated_minutes": 90,
+            "distinct_dates": [
+              "2026-12-11",
+              "2026-12-12"
+            ],
+            "block_durations_minutes": [
+              45,
+              45
+            ],
+            "is_sensitive_non_splittable": false
+          },
+          {
+            "task_id": "T20",
+            "title": "Luyện viết bài luận Opinion Essay thứ hai và kiểm tra tính nhất quán",
+            "task_type": "PRACTICE",
+            "estimated_minutes": 90,
+            "distinct_dates": [
+              "2026-12-12",
+              "2026-12-13"
+            ],
+            "block_durations_minutes": [
+              45,
+              45
+            ],
+            "is_sensitive_non_splittable": false
+          },
+          {
+            "task_id": "T21",
+            "title": "Đánh giá, sửa lỗi và đúc kết cấu trúc bài luận Opinion",
+            "task_type": "REVIEW",
+            "estimated_minutes": 90,
+            "distinct_dates": [
+              "2026-12-13",
+              "2026-12-14"
+            ],
+            "block_durations_minutes": [
+              45,
+              45
+            ],
+            "is_sensitive_non_splittable": false
+          },
+          {
+            "task_id": "T24",
+            "title": "Thực hành viết bài luận hoàn chỉnh dạng Discussion Both Views",
+            "task_type": "PRACTICE",
+            "estimated_minutes": 90,
+            "distinct_dates": [
+              "2026-12-17",
+              "2026-12-18"
+            ],
+            "block_durations_minutes": [
+              45,
+              45
+            ],
+            "is_sensitive_non_splittable": false
+          },
+          {
+            "task_id": "T27",
+            "title": "Rà soát và tổng kết chiến thuật viết các dạng bài Task 2",
+            "task_type": "REVIEW",
+            "estimated_minutes": 90,
+            "distinct_dates": [
+              "2026-12-21",
+              "2026-12-22"
+            ],
+            "block_durations_minutes": [
+              45,
+              45
+            ],
+            "is_sensitive_non_splittable": false
+          },
+          {
+            "task_id": "T29",
+            "title": "Thi thử Mock Test 1 trọn vẹn Task 1 & Task 2 trong 60 phút",
+            "task_type": "PRACTICE",
+            "estimated_minutes": 90,
+            "distinct_dates": [
+              "2026-12-24",
+              "2026-12-25"
+            ],
+            "block_durations_minutes": [
+              45,
+              45
+            ],
+            "is_sensitive_non_splittable": true
+          },
+          {
+            "task_id": "T30",
+            "title": "Thi thử Mock Test 2 và tự đánh giá toàn diện theo Band Descriptors",
+            "task_type": "PROJECT",
+            "estimated_minutes": 120,
+            "distinct_dates": [
+              "2026-12-26",
+              "2026-12-27"
+            ],
+            "block_durations_minutes": [
+              60,
+              60
+            ],
+            "is_sensitive_non_splittable": true
+          },
+          {
+            "task_id": "T31",
+            "title": "Tổng kết lộ trình, phân tích điểm mạnh - điểm yếu và kế hoạch duy trì",
+            "task_type": "REVIEW",
+            "estimated_minutes": 90,
+            "distinct_dates": [
+              "2026-12-28",
+              "2026-12-29"
+            ],
+            "block_durations_minutes": [
+              45,
+              45
+            ],
+            "is_sensitive_non_splittable": false
+          }
+        ],
+        "sensitive_tasks_split_across_days": [
+          {
+            "task_id": "T29",
+            "title": "Thi thử Mock Test 1 trọn vẹn Task 1 & Task 2 trong 60 phút",
+            "task_type": "PRACTICE",
+            "estimated_minutes": 90,
+            "distinct_dates": [
+              "2026-12-24",
+              "2026-12-25"
+            ],
+            "block_durations_minutes": [
+              45,
+              45
+            ],
+            "is_sensitive_non_splittable": true
+          },
+          {
+            "task_id": "T30",
+            "title": "Thi thử Mock Test 2 và tự đánh giá toàn diện theo Band Descriptors",
+            "task_type": "PROJECT",
+            "estimated_minutes": 120,
+            "distinct_dates": [
+              "2026-12-26",
+              "2026-12-27"
+            ],
+            "block_durations_minutes": [
+              60,
+              60
+            ],
+            "is_sensitive_non_splittable": true
+          }
+        ],
+        "adjacent_same_day_split_tasks": [
+          {
+            "task_id": "T10",
+            "title": "Luyện viết hoàn chỉnh bài báo cáo Table và ôn tập Task 1",
+            "block_date": "2026-11-28",
+            "block_durations_minutes": [
+              45,
+              45
+            ],
+            "is_contiguous": true
+          },
+          {
+            "task_id": "T25",
+            "title": "Thực hành viết bài luận hoàn chỉnh dạng Problem - Solution",
+            "block_date": "2026-12-19",
+            "block_durations_minutes": [
+              45,
+              45
+            ],
+            "is_contiguous": true
+          },
+          {
+            "task_id": "T26",
+            "title": "Dự án tổng hợp viết luận chuyên sâu đa dạng chủ đề Task 2",
+            "block_date": "2026-12-20",
+            "block_durations_minutes": [
+              45,
+              45
+            ],
+            "is_contiguous": true
+          }
+        ]
+      },
+      "project_min_minutes": {
+        "project_tasks_count": 2,
+        "min_project_minutes": 90,
+        "short_project_under_90_count": 0,
+        "short_project_tasks": []
+      }
+    },
+    {
+      "label": "R-09",
+      "goal_id": "G5_INTERMEDIATE_DATA_ENG_AIRFLOW_DBT",
+      "arm": "medium",
+      "model_id": "gemini-3.8-flash-medium",
+      "attempts_used": 1,
+      "judge_low_score": 95.0,
+      "judge_medium_score": 90.0,
+      "milestones_count": 5,
+      "effort_values_minutes": [
+        240,
+        300,
+        300,
+        360,
+        360
+      ],
+      "total_milestone_effort_minutes": 1560,
+      "available_capacity_minutes": 2250,
+      "capacity_utilization": 0.6933,
+      "warn_utilization_gt_90pct": false,
+      "warn_utilization_gt_100pct": false,
+      "effort_equal_ratio": 0.4,
+      "all_efforts_equal": false,
+      "unique_effort_values_count": 3,
+      "effort_stddev_minutes": 44.9,
+      "has_deferred_scope": false,
+      "scope_summary_mentions_fit": false,
+      "hard_violations": [],
+      "conditional_violations": [
+        "PROJECT_UNDER_90_MIN"
+      ],
+      "soft_quality_warnings": [
+        "PURELY_LINEAR_DEPENDENCIES"
+      ],
+      "diagnostics": {
+        "unique_effort_values_count": 3,
+        "effort_stddev_minutes": 44.9,
+        "has_deferred_scope": false,
+        "scope_summary_mentions_fit": false,
+        "tasks_count": 26,
+        "branching_nodes_count": 0,
+        "active_study_days": 18,
+        "max_consecutive_study_days": 2,
+        "days_idle_before_deadline": 4,
+        "tasks_split_across_days_count": 0,
+        "adjacent_same_day_split_count": 0
+      },
+      "structural_validity": true,
+      "scheduling_feasibility": true,
+      "pedagogical_quality": {
+        "soft_quality_score": 0.85,
+        "soft_quality_warnings": [
+          "PURELY_LINEAR_DEPENDENCIES"
+        ]
+      },
+      "failure_reasons_by_layer": {
+        "structural_validity": [],
+        "scheduling_feasibility": [],
+        "conditional_constraints": [
+          "PROJECT_UNDER_90_MIN"
+        ],
+        "soft_quality_warnings": [
+          "PURELY_LINEAR_DEPENDENCIES"
+        ]
+      },
+      "warnings": [
+        "PROJECT_UNDER_90_MIN",
+        "PURELY_LINEAR_DEPENDENCIES"
+      ],
+      "tasks_count": 26,
+      "total_task_minutes": 1560,
+      "task_capacity_utilization": 0.6933,
+      "milestone_vs_tasks_gap": 0.0,
+      "milestone_vs_tasks_ratio": 1.0,
+      "milestone_vs_tasks_delta_minutes": 0,
+      "dependencies_count": 25,
+      "linear_dep_tasks_count": 25,
+      "non_initial_tasks_count": 25,
+      "linear_dependency_ratio": 1.0,
+      "branching_nodes_count": 0,
+      "active_study_days": 18,
+      "first_study_date": "2026-11-18",
+      "last_study_date": "2026-12-18",
+      "max_consecutive_study_days": 2,
+      "days_idle_before_deadline": 4,
+      "split_integrity": {
+        "tasks_split_across_days_count": 0,
+        "sensitive_tasks_split_across_days_count": 0,
+        "adjacent_same_day_split_count": 0,
+        "tasks_split_across_days": [],
+        "sensitive_tasks_split_across_days": [],
+        "adjacent_same_day_split_tasks": []
+      },
+      "project_min_minutes": {
+        "project_tasks_count": 5,
+        "min_project_minutes": 60,
+        "short_project_under_90_count": 5,
+        "short_project_tasks": [
+          {
+            "task_id": "T4",
+            "title": "Thiết lập Retry Logic, SLA Alerting & Trigger Rules cho Pipeline",
+            "estimated_minutes": 60
+          },
+          {
+            "task_id": "T9",
+            "title": "Xây Dựng DAG Idempotent Hoàn Chỉnh với Dynamic Mapping & Backfill",
+            "estimated_minutes": 60
+          },
+          {
+            "task_id": "T14",
+            "title": "Kiểm Soát Lineage DAG & Phát Hành Tài Liệu dbt Docs",
+            "estimated_minutes": 60
+          },
+          {
+            "task_id": "T20",
+            "title": "Tổng Hợp Vận Hành Suite Incremental, Snapshots & Data Quality",
+            "estimated_minutes": 60
+          },
+          {
+            "task_id": "T26",
+            "title": "Đóng Gói & Vận Hành Pipeline ELT Sản Xuất Toàn Diện",
+            "estimated_minutes": 60
+          }
+        ]
+      }
+    },
+    {
+      "label": "R-10",
+      "goal_id": "G2_INTERMEDIATE_SYSTEM_DESIGN_CACHE",
+      "arm": "medium",
+      "model_id": "gemini-3.8-flash-medium",
+      "attempts_used": 1,
+      "judge_low_score": 98.0,
+      "judge_medium_score": 95.0,
+      "milestones_count": 4,
+      "effort_values_minutes": [
+        300,
+        360,
+        360,
+        420
+      ],
+      "total_milestone_effort_minutes": 1440,
+      "available_capacity_minutes": 1800,
+      "capacity_utilization": 0.8,
+      "warn_utilization_gt_90pct": false,
+      "warn_utilization_gt_100pct": false,
+      "effort_equal_ratio": 0.5,
+      "all_efforts_equal": false,
+      "unique_effort_values_count": 3,
+      "effort_stddev_minutes": 42.43,
+      "has_deferred_scope": false,
+      "scope_summary_mentions_fit": false,
+      "hard_violations": [
+        "SENSITIVE_TASK_SPLIT_ACROSS_DAYS"
+      ],
+      "conditional_violations": [],
+      "soft_quality_warnings": [
+        "PURELY_LINEAR_DEPENDENCIES"
+      ],
+      "diagnostics": {
+        "unique_effort_values_count": 3,
+        "effort_stddev_minutes": 42.43,
+        "has_deferred_scope": false,
+        "scope_summary_mentions_fit": false,
+        "tasks_count": 16,
+        "branching_nodes_count": 0,
+        "active_study_days": 12,
+        "max_consecutive_study_days": 1,
+        "days_idle_before_deadline": 3,
+        "tasks_split_across_days_count": 6,
+        "adjacent_same_day_split_count": 5
+      },
+      "structural_validity": true,
+      "scheduling_feasibility": false,
+      "pedagogical_quality": {
+        "soft_quality_score": 0.85,
+        "soft_quality_warnings": [
+          "PURELY_LINEAR_DEPENDENCIES"
+        ]
+      },
+      "failure_reasons_by_layer": {
+        "structural_validity": [],
+        "scheduling_feasibility": [
+          "SENSITIVE_TASK_SPLIT_ACROSS_DAYS"
+        ],
+        "conditional_constraints": [],
+        "soft_quality_warnings": [
+          "PURELY_LINEAR_DEPENDENCIES"
+        ]
+      },
+      "warnings": [
+        "SENSITIVE_TASK_SPLIT_ACROSS_DAYS",
+        "PURELY_LINEAR_DEPENDENCIES"
+      ],
+      "tasks_count": 16,
+      "total_task_minutes": 1440,
+      "task_capacity_utilization": 0.8,
+      "milestone_vs_tasks_gap": 0.0,
+      "milestone_vs_tasks_ratio": 1.0,
+      "milestone_vs_tasks_delta_minutes": 0,
+      "dependencies_count": 15,
+      "linear_dep_tasks_count": 15,
+      "non_initial_tasks_count": 15,
+      "linear_dependency_ratio": 1.0,
+      "branching_nodes_count": 0,
+      "active_study_days": 12,
+      "first_study_date": "2026-11-17",
+      "last_study_date": "2026-12-12",
+      "max_consecutive_study_days": 1,
+      "days_idle_before_deadline": 3,
+      "split_integrity": {
+        "tasks_split_across_days_count": 6,
+        "sensitive_tasks_split_across_days_count": 1,
+        "adjacent_same_day_split_count": 5,
+        "tasks_split_across_days": [
+          {
+            "task_id": "T6",
+            "title": "Cài đặt kỹ thuật Jittered TTL và Khóa phân tán phòng chống Stampede",
+            "task_type": "PRACTICE",
+            "estimated_minutes": 100,
+            "distinct_dates": [
+              "2026-11-21",
+              "2026-11-24"
+            ],
+            "block_durations_minutes": [
+              50,
+              50
+            ],
+            "is_sensitive_non_splittable": false
+          },
+          {
+            "task_id": "T7",
+            "title": "Triển khai Bloom Filter và thuật toán Probabilistic Early Expiration",
+            "task_type": "PRACTICE",
+            "estimated_minutes": 100,
+            "distinct_dates": [
+              "2026-11-24",
+              "2026-11-26"
+            ],
+            "block_durations_minutes": [
+              50,
+              50
+            ],
+            "is_sensitive_non_splittable": false
+          },
+          {
+            "task_id": "T8",
+            "title": "Kiểm thử chịu tải mô phỏng 5000 concurrent requests",
+            "task_type": "REVIEW",
+            "estimated_minutes": 100,
+            "distinct_dates": [
+              "2026-11-26",
+              "2026-11-28"
+            ],
+            "block_durations_minutes": [
+              50,
+              50
+            ],
+            "is_sensitive_non_splittable": true
+          },
+          {
+            "task_id": "T10",
+            "title": "Cài đặt thuật toán Hash Ring hỗ trợ Virtual Nodes",
+            "task_type": "PRACTICE",
+            "estimated_minutes": 100,
+            "distinct_dates": [
+              "2026-11-28",
+              "2026-12-01"
+            ],
+            "block_durations_minutes": [
+              50,
+              50
+            ],
+            "is_sensitive_non_splittable": false
+          },
+          {
+            "task_id": "T11",
+            "title": "Tìm hiểu kiến trúc Hash Slots và Redirection trong Redis Cluster",
+            "task_type": "PRACTICE",
+            "estimated_minutes": 100,
+            "distinct_dates": [
+              "2026-12-01",
+              "2026-12-03"
+            ],
+            "block_durations_minutes": [
+              50,
+              50
+            ],
+            "is_sensitive_non_splittable": false
+          },
+          {
+            "task_id": "T12",
+            "title": "Đo kiểm tỷ lệ phân phối và di chuyển keys trên Hash Ring",
+            "task_type": "REVIEW",
+            "estimated_minutes": 100,
+            "distinct_dates": [
+              "2026-12-03",
+              "2026-12-05"
+            ],
+            "block_durations_minutes": [
+              50,
+              50
+            ],
+            "is_sensitive_non_splittable": false
+          }
+        ],
+        "sensitive_tasks_split_across_days": [
+          {
+            "task_id": "T8",
+            "title": "Kiểm thử chịu tải mô phỏng 5000 concurrent requests",
+            "task_type": "REVIEW",
+            "estimated_minutes": 100,
+            "distinct_dates": [
+              "2026-11-26",
+              "2026-11-28"
+            ],
+            "block_durations_minutes": [
+              50,
+              50
+            ],
+            "is_sensitive_non_splittable": true
+          }
+        ],
+        "adjacent_same_day_split_tasks": [
+          {
+            "task_id": "T3",
+            "title": "Xây dựng ứng dụng tích hợp Cache-Aside và Write-Behind",
+            "block_date": "2026-11-19",
+            "block_durations_minutes": [
+              60,
+              60
+            ],
+            "is_contiguous": true
+          },
+          {
+            "task_id": "T13",
+            "title": "Thiết lập cụm Redis Cluster đa node với Master-Replica",
+            "block_date": "2026-12-05",
+            "block_durations_minutes": [
+              50,
+              50
+            ],
+            "is_contiguous": true
+          },
+          {
+            "task_id": "T14",
+            "title": "Cài đặt giải thuật Token Bucket và Sliding Window bằng Redis Lua Script",
+            "block_date": "2026-12-08",
+            "block_durations_minutes": [
+              50,
+              50
+            ],
+            "is_contiguous": true
+          },
+          {
+            "task_id": "T15",
+            "title": "Đóng gói Distributed Rate Limiting Middleware",
+            "block_date": "2026-12-10",
+            "block_durations_minutes": [
+              50,
+              50
+            ],
+            "is_contiguous": true
+          },
+          {
+            "task_id": "T16",
+            "title": "Dự án tổng hợp: Kiểm thử tải và xác thực Rate Limiter trên Redis Cluster",
+            "block_date": "2026-12-12",
+            "block_durations_minutes": [
+              60,
+              60
+            ],
+            "is_contiguous": true
+          }
+        ]
+      },
+      "project_min_minutes": {
+        "project_tasks_count": 1,
+        "min_project_minutes": 120,
+        "short_project_under_90_count": 0,
+        "short_project_tasks": []
+      }
+    }
+  ],
+  "milestones_12": [
+    {
+      "label": "M-01",
+      "scenario_id": "H_E2E_04_LAKEHOUSE_SPARK_ICEBERG",
+      "arm": "arm_b_server_prefetch",
+      "wall_ms": 17832.72,
+      "milestones_count": 7,
+      "effort_values_minutes": [
+        420,
+        420,
+        420,
+        420,
+        420,
+        420,
+        420
+      ],
+      "total_milestone_effort_minutes": 2940,
+      "available_capacity_minutes": 2940,
+      "capacity_utilization": 1.0,
+      "warn_utilization_gt_90pct": true,
+      "warn_utilization_gt_100pct": false,
+      "effort_equal_ratio": 1.0,
+      "all_efforts_equal": true,
+      "unique_effort_values_count": 1,
+      "effort_stddev_minutes": 0.0,
+      "has_deferred_scope": false,
+      "scope_summary_mentions_fit": false,
+      "hard_violations": [],
+      "conditional_violations": [
+        "UTILIZATION_OVER_90_PCT"
+      ],
+      "soft_quality_warnings": [
+        "ALL_MILESTONE_EFFORTS_EQUAL"
+      ],
+      "diagnostics": {
+        "unique_effort_values_count": 1,
+        "effort_stddev_minutes": 0.0,
+        "has_deferred_scope": false,
+        "scope_summary_mentions_fit": false
+      },
+      "structural_validity": true,
+      "scheduling_feasibility": true,
+      "pedagogical_quality": {
+        "soft_quality_score": 0.85,
+        "soft_quality_warnings": [
+          "ALL_MILESTONE_EFFORTS_EQUAL"
+        ]
+      },
+      "failure_reasons_by_layer": {
+        "structural_validity": [],
+        "scheduling_feasibility": [],
+        "conditional_constraints": [
+          "UTILIZATION_OVER_90_PCT"
+        ],
+        "soft_quality_warnings": [
+          "ALL_MILESTONE_EFFORTS_EQUAL"
+        ]
+      },
+      "warnings": [
+        "UTILIZATION_OVER_90_PCT",
+        "ALL_MILESTONE_EFFORTS_EQUAL"
+      ]
+    },
+    {
+      "label": "M-02",
+      "scenario_id": "H_E2E_06_MLOPS_LLMOPS_PROD",
+      "arm": "arm_a_tool_calling",
+      "wall_ms": 30660.5,
+      "milestones_count": 6,
+      "effort_values_minutes": [
+        420,
+        480,
+        540,
+        600,
+        540,
+        420
+      ],
+      "total_milestone_effort_minutes": 3000,
+      "available_capacity_minutes": 3480,
+      "capacity_utilization": 0.8621,
+      "warn_utilization_gt_90pct": false,
+      "warn_utilization_gt_100pct": false,
+      "effort_equal_ratio": 0.3333,
+      "all_efforts_equal": false,
+      "unique_effort_values_count": 4,
+      "effort_stddev_minutes": 66.33,
+      "has_deferred_scope": false,
+      "scope_summary_mentions_fit": false,
+      "hard_violations": [],
+      "conditional_violations": [],
+      "soft_quality_warnings": [],
+      "diagnostics": {
+        "unique_effort_values_count": 4,
+        "effort_stddev_minutes": 66.33,
+        "has_deferred_scope": false,
+        "scope_summary_mentions_fit": false
+      },
+      "structural_validity": true,
+      "scheduling_feasibility": true,
+      "pedagogical_quality": {
+        "soft_quality_score": 1.0,
+        "soft_quality_warnings": []
+      },
+      "failure_reasons_by_layer": {
+        "structural_validity": [],
+        "scheduling_feasibility": [],
+        "conditional_constraints": [],
+        "soft_quality_warnings": []
+      },
+      "warnings": []
+    },
+    {
+      "label": "M-03",
+      "scenario_id": "H_E2E_03_K8S_SECURITY_TERRAFORM",
+      "arm": "arm_a_tool_calling",
+      "wall_ms": 37630.49,
+      "milestones_count": 4,
+      "effort_values_minutes": [
+        540,
+        540,
+        540,
+        540
+      ],
+      "total_milestone_effort_minutes": 2160,
+      "available_capacity_minutes": 2280,
+      "capacity_utilization": 0.9474,
+      "warn_utilization_gt_90pct": true,
+      "warn_utilization_gt_100pct": false,
+      "effort_equal_ratio": 1.0,
+      "all_efforts_equal": true,
+      "unique_effort_values_count": 1,
+      "effort_stddev_minutes": 0.0,
+      "has_deferred_scope": false,
+      "scope_summary_mentions_fit": false,
+      "hard_violations": [],
+      "conditional_violations": [
+        "UTILIZATION_OVER_90_PCT"
+      ],
+      "soft_quality_warnings": [
+        "ALL_MILESTONE_EFFORTS_EQUAL"
+      ],
+      "diagnostics": {
+        "unique_effort_values_count": 1,
+        "effort_stddev_minutes": 0.0,
+        "has_deferred_scope": false,
+        "scope_summary_mentions_fit": false
+      },
+      "structural_validity": true,
+      "scheduling_feasibility": true,
+      "pedagogical_quality": {
+        "soft_quality_score": 0.85,
+        "soft_quality_warnings": [
+          "ALL_MILESTONE_EFFORTS_EQUAL"
+        ]
+      },
+      "failure_reasons_by_layer": {
+        "structural_validity": [],
+        "scheduling_feasibility": [],
+        "conditional_constraints": [
+          "UTILIZATION_OVER_90_PCT"
+        ],
+        "soft_quality_warnings": [
+          "ALL_MILESTONE_EFFORTS_EQUAL"
+        ]
+      },
+      "warnings": [
+        "UTILIZATION_OVER_90_PCT",
+        "ALL_MILESTONE_EFFORTS_EQUAL"
+      ]
+    },
+    {
+      "label": "M-04",
+      "scenario_id": "H_E2E_03_K8S_SECURITY_TERRAFORM",
+      "arm": "arm_b_server_prefetch",
+      "wall_ms": 14768.93,
+      "milestones_count": 4,
+      "effort_values_minutes": [
+        540,
+        540,
+        540,
+        540
+      ],
+      "total_milestone_effort_minutes": 2160,
+      "available_capacity_minutes": 2280,
+      "capacity_utilization": 0.9474,
+      "warn_utilization_gt_90pct": true,
+      "warn_utilization_gt_100pct": false,
+      "effort_equal_ratio": 1.0,
+      "all_efforts_equal": true,
+      "unique_effort_values_count": 1,
+      "effort_stddev_minutes": 0.0,
+      "has_deferred_scope": false,
+      "scope_summary_mentions_fit": false,
+      "hard_violations": [],
+      "conditional_violations": [
+        "UTILIZATION_OVER_90_PCT"
+      ],
+      "soft_quality_warnings": [
+        "ALL_MILESTONE_EFFORTS_EQUAL"
+      ],
+      "diagnostics": {
+        "unique_effort_values_count": 1,
+        "effort_stddev_minutes": 0.0,
+        "has_deferred_scope": false,
+        "scope_summary_mentions_fit": false
+      },
+      "structural_validity": true,
+      "scheduling_feasibility": true,
+      "pedagogical_quality": {
+        "soft_quality_score": 0.85,
+        "soft_quality_warnings": [
+          "ALL_MILESTONE_EFFORTS_EQUAL"
+        ]
+      },
+      "failure_reasons_by_layer": {
+        "structural_validity": [],
+        "scheduling_feasibility": [],
+        "conditional_constraints": [
+          "UTILIZATION_OVER_90_PCT"
+        ],
+        "soft_quality_warnings": [
+          "ALL_MILESTONE_EFFORTS_EQUAL"
+        ]
+      },
+      "warnings": [
+        "UTILIZATION_OVER_90_PCT",
+        "ALL_MILESTONE_EFFORTS_EQUAL"
+      ]
+    },
+    {
+      "label": "M-05",
+      "scenario_id": "H_E2E_01_DISTRIBUTED_GO",
+      "arm": "arm_b_server_prefetch",
+      "wall_ms": 15030.14,
+      "milestones_count": 4,
+      "effort_values_minutes": [
+        540,
+        540,
+        540,
+        540
+      ],
+      "total_milestone_effort_minutes": 2160,
+      "available_capacity_minutes": 2280,
+      "capacity_utilization": 0.9474,
+      "warn_utilization_gt_90pct": true,
+      "warn_utilization_gt_100pct": false,
+      "effort_equal_ratio": 1.0,
+      "all_efforts_equal": true,
+      "unique_effort_values_count": 1,
+      "effort_stddev_minutes": 0.0,
+      "has_deferred_scope": false,
+      "scope_summary_mentions_fit": false,
+      "hard_violations": [],
+      "conditional_violations": [
+        "UTILIZATION_OVER_90_PCT"
+      ],
+      "soft_quality_warnings": [
+        "ALL_MILESTONE_EFFORTS_EQUAL"
+      ],
+      "diagnostics": {
+        "unique_effort_values_count": 1,
+        "effort_stddev_minutes": 0.0,
+        "has_deferred_scope": false,
+        "scope_summary_mentions_fit": false
+      },
+      "structural_validity": true,
+      "scheduling_feasibility": true,
+      "pedagogical_quality": {
+        "soft_quality_score": 0.85,
+        "soft_quality_warnings": [
+          "ALL_MILESTONE_EFFORTS_EQUAL"
+        ]
+      },
+      "failure_reasons_by_layer": {
+        "structural_validity": [],
+        "scheduling_feasibility": [],
+        "conditional_constraints": [
+          "UTILIZATION_OVER_90_PCT"
+        ],
+        "soft_quality_warnings": [
+          "ALL_MILESTONE_EFFORTS_EQUAL"
+        ]
+      },
+      "warnings": [
+        "UTILIZATION_OVER_90_PCT",
+        "ALL_MILESTONE_EFFORTS_EQUAL"
+      ]
+    },
+    {
+      "label": "M-06",
+      "scenario_id": "H_E2E_04_LAKEHOUSE_SPARK_ICEBERG",
+      "arm": "arm_a_tool_calling",
+      "wall_ms": 47072.06,
+      "milestones_count": 7,
+      "effort_values_minutes": [
+        420,
+        420,
+        420,
+        420,
+        420,
+        420,
+        420
+      ],
+      "total_milestone_effort_minutes": 2940,
+      "available_capacity_minutes": 2940,
+      "capacity_utilization": 1.0,
+      "warn_utilization_gt_90pct": true,
+      "warn_utilization_gt_100pct": false,
+      "effort_equal_ratio": 1.0,
+      "all_efforts_equal": true,
+      "unique_effort_values_count": 1,
+      "effort_stddev_minutes": 0.0,
+      "has_deferred_scope": false,
+      "scope_summary_mentions_fit": false,
+      "hard_violations": [],
+      "conditional_violations": [
+        "UTILIZATION_OVER_90_PCT"
+      ],
+      "soft_quality_warnings": [
+        "ALL_MILESTONE_EFFORTS_EQUAL"
+      ],
+      "diagnostics": {
+        "unique_effort_values_count": 1,
+        "effort_stddev_minutes": 0.0,
+        "has_deferred_scope": false,
+        "scope_summary_mentions_fit": false
+      },
+      "structural_validity": true,
+      "scheduling_feasibility": true,
+      "pedagogical_quality": {
+        "soft_quality_score": 0.85,
+        "soft_quality_warnings": [
+          "ALL_MILESTONE_EFFORTS_EQUAL"
+        ]
+      },
+      "failure_reasons_by_layer": {
+        "structural_validity": [],
+        "scheduling_feasibility": [],
+        "conditional_constraints": [
+          "UTILIZATION_OVER_90_PCT"
+        ],
+        "soft_quality_warnings": [
+          "ALL_MILESTONE_EFFORTS_EQUAL"
+        ]
+      },
+      "warnings": [
+        "UTILIZATION_OVER_90_PCT",
+        "ALL_MILESTONE_EFFORTS_EQUAL"
+      ]
+    },
+    {
+      "label": "M-07",
+      "scenario_id": "H_E2E_06_MLOPS_LLMOPS_PROD",
+      "arm": "arm_b_server_prefetch",
+      "wall_ms": 17330.98,
+      "milestones_count": 6,
+      "effort_values_minutes": [
+        480,
+        420,
+        540,
+        450,
+        510,
+        480
+      ],
+      "total_milestone_effort_minutes": 2880,
+      "available_capacity_minutes": 3480,
+      "capacity_utilization": 0.8276,
+      "warn_utilization_gt_90pct": false,
+      "warn_utilization_gt_100pct": false,
+      "effort_equal_ratio": 0.3333,
+      "all_efforts_equal": false,
+      "unique_effort_values_count": 5,
+      "effort_stddev_minutes": 38.73,
+      "has_deferred_scope": false,
+      "scope_summary_mentions_fit": false,
+      "hard_violations": [],
+      "conditional_violations": [],
+      "soft_quality_warnings": [],
+      "diagnostics": {
+        "unique_effort_values_count": 5,
+        "effort_stddev_minutes": 38.73,
+        "has_deferred_scope": false,
+        "scope_summary_mentions_fit": false
+      },
+      "structural_validity": true,
+      "scheduling_feasibility": true,
+      "pedagogical_quality": {
+        "soft_quality_score": 1.0,
+        "soft_quality_warnings": []
+      },
+      "failure_reasons_by_layer": {
+        "structural_validity": [],
+        "scheduling_feasibility": [],
+        "conditional_constraints": [],
+        "soft_quality_warnings": []
+      },
+      "warnings": []
+    },
+    {
+      "label": "M-08",
+      "scenario_id": "H_E2E_05_FULLSTACK_NEXTJS_PG",
+      "arm": "arm_a_tool_calling",
+      "wall_ms": 33150.25,
+      "milestones_count": 4,
+      "effort_values_minutes": [
+        540,
+        540,
+        540,
+        540
+      ],
+      "total_milestone_effort_minutes": 2160,
+      "available_capacity_minutes": 2280,
+      "capacity_utilization": 0.9474,
+      "warn_utilization_gt_90pct": true,
+      "warn_utilization_gt_100pct": false,
+      "effort_equal_ratio": 1.0,
+      "all_efforts_equal": true,
+      "unique_effort_values_count": 1,
+      "effort_stddev_minutes": 0.0,
+      "has_deferred_scope": false,
+      "scope_summary_mentions_fit": false,
+      "hard_violations": [],
+      "conditional_violations": [
+        "UTILIZATION_OVER_90_PCT"
+      ],
+      "soft_quality_warnings": [
+        "ALL_MILESTONE_EFFORTS_EQUAL"
+      ],
+      "diagnostics": {
+        "unique_effort_values_count": 1,
+        "effort_stddev_minutes": 0.0,
+        "has_deferred_scope": false,
+        "scope_summary_mentions_fit": false
+      },
+      "structural_validity": true,
+      "scheduling_feasibility": true,
+      "pedagogical_quality": {
+        "soft_quality_score": 0.85,
+        "soft_quality_warnings": [
+          "ALL_MILESTONE_EFFORTS_EQUAL"
+        ]
+      },
+      "failure_reasons_by_layer": {
+        "structural_validity": [],
+        "scheduling_feasibility": [],
+        "conditional_constraints": [
+          "UTILIZATION_OVER_90_PCT"
+        ],
+        "soft_quality_warnings": [
+          "ALL_MILESTONE_EFFORTS_EQUAL"
+        ]
+      },
+      "warnings": [
+        "UTILIZATION_OVER_90_PCT",
+        "ALL_MILESTONE_EFFORTS_EQUAL"
+      ]
+    },
+    {
+      "label": "M-09",
+      "scenario_id": "H_E2E_05_FULLSTACK_NEXTJS_PG",
+      "arm": "arm_b_server_prefetch",
+      "wall_ms": 12648.0,
+      "milestones_count": 4,
+      "effort_values_minutes": [
+        540,
+        540,
+        540,
+        540
+      ],
+      "total_milestone_effort_minutes": 2160,
+      "available_capacity_minutes": 2280,
+      "capacity_utilization": 0.9474,
+      "warn_utilization_gt_90pct": true,
+      "warn_utilization_gt_100pct": false,
+      "effort_equal_ratio": 1.0,
+      "all_efforts_equal": true,
+      "unique_effort_values_count": 1,
+      "effort_stddev_minutes": 0.0,
+      "has_deferred_scope": false,
+      "scope_summary_mentions_fit": false,
+      "hard_violations": [],
+      "conditional_violations": [
+        "UTILIZATION_OVER_90_PCT"
+      ],
+      "soft_quality_warnings": [
+        "ALL_MILESTONE_EFFORTS_EQUAL"
+      ],
+      "diagnostics": {
+        "unique_effort_values_count": 1,
+        "effort_stddev_minutes": 0.0,
+        "has_deferred_scope": false,
+        "scope_summary_mentions_fit": false
+      },
+      "structural_validity": true,
+      "scheduling_feasibility": true,
+      "pedagogical_quality": {
+        "soft_quality_score": 0.85,
+        "soft_quality_warnings": [
+          "ALL_MILESTONE_EFFORTS_EQUAL"
+        ]
+      },
+      "failure_reasons_by_layer": {
+        "structural_validity": [],
+        "scheduling_feasibility": [],
+        "conditional_constraints": [
+          "UTILIZATION_OVER_90_PCT"
+        ],
+        "soft_quality_warnings": [
+          "ALL_MILESTONE_EFFORTS_EQUAL"
+        ]
+      },
+      "warnings": [
+        "UTILIZATION_OVER_90_PCT",
+        "ALL_MILESTONE_EFFORTS_EQUAL"
+      ]
+    },
+    {
+      "label": "M-10",
+      "scenario_id": "H_E2E_02_EMBEDDED_RUST_RTOS",
+      "arm": "arm_b_server_prefetch",
+      "wall_ms": 17622.03,
+      "milestones_count": 6,
+      "effort_values_minutes": [
+        420,
+        480,
+        540,
+        480,
+        540,
+        600
+      ],
+      "total_milestone_effort_minutes": 3060,
+      "available_capacity_minutes": 3480,
+      "capacity_utilization": 0.8793,
+      "warn_utilization_gt_90pct": false,
+      "warn_utilization_gt_100pct": false,
+      "effort_equal_ratio": 0.3333,
+      "all_efforts_equal": false,
+      "unique_effort_values_count": 4,
+      "effort_stddev_minutes": 57.45,
+      "has_deferred_scope": false,
+      "scope_summary_mentions_fit": false,
+      "hard_violations": [],
+      "conditional_violations": [],
+      "soft_quality_warnings": [],
+      "diagnostics": {
+        "unique_effort_values_count": 4,
+        "effort_stddev_minutes": 57.45,
+        "has_deferred_scope": false,
+        "scope_summary_mentions_fit": false
+      },
+      "structural_validity": true,
+      "scheduling_feasibility": true,
+      "pedagogical_quality": {
+        "soft_quality_score": 1.0,
+        "soft_quality_warnings": []
+      },
+      "failure_reasons_by_layer": {
+        "structural_validity": [],
+        "scheduling_feasibility": [],
+        "conditional_constraints": [],
+        "soft_quality_warnings": []
+      },
+      "warnings": []
+    },
+    {
+      "label": "M-11",
+      "scenario_id": "H_E2E_01_DISTRIBUTED_GO",
+      "arm": "arm_a_tool_calling",
+      "wall_ms": 34925.7,
+      "milestones_count": 4,
+      "effort_values_minutes": [
+        540,
+        540,
+        540,
+        540
+      ],
+      "total_milestone_effort_minutes": 2160,
+      "available_capacity_minutes": 2280,
+      "capacity_utilization": 0.9474,
+      "warn_utilization_gt_90pct": true,
+      "warn_utilization_gt_100pct": false,
+      "effort_equal_ratio": 1.0,
+      "all_efforts_equal": true,
+      "unique_effort_values_count": 1,
+      "effort_stddev_minutes": 0.0,
+      "has_deferred_scope": false,
+      "scope_summary_mentions_fit": false,
+      "hard_violations": [],
+      "conditional_violations": [
+        "UTILIZATION_OVER_90_PCT"
+      ],
+      "soft_quality_warnings": [
+        "ALL_MILESTONE_EFFORTS_EQUAL"
+      ],
+      "diagnostics": {
+        "unique_effort_values_count": 1,
+        "effort_stddev_minutes": 0.0,
+        "has_deferred_scope": false,
+        "scope_summary_mentions_fit": false
+      },
+      "structural_validity": true,
+      "scheduling_feasibility": true,
+      "pedagogical_quality": {
+        "soft_quality_score": 0.85,
+        "soft_quality_warnings": [
+          "ALL_MILESTONE_EFFORTS_EQUAL"
+        ]
+      },
+      "failure_reasons_by_layer": {
+        "structural_validity": [],
+        "scheduling_feasibility": [],
+        "conditional_constraints": [
+          "UTILIZATION_OVER_90_PCT"
+        ],
+        "soft_quality_warnings": [
+          "ALL_MILESTONE_EFFORTS_EQUAL"
+        ]
+      },
+      "warnings": [
+        "UTILIZATION_OVER_90_PCT",
+        "ALL_MILESTONE_EFFORTS_EQUAL"
+      ]
+    },
+    {
+      "label": "M-12",
+      "scenario_id": "H_E2E_02_EMBEDDED_RUST_RTOS",
+      "arm": "arm_a_tool_calling",
+      "wall_ms": 51562.93,
+      "milestones_count": 7,
+      "effort_values_minutes": [
+        420,
+        540,
+        660,
+        600,
+        660,
+        480,
+        600
+      ],
+      "total_milestone_effort_minutes": 3960,
+      "available_capacity_minutes": 3480,
+      "capacity_utilization": 1.1379,
+      "warn_utilization_gt_90pct": true,
+      "warn_utilization_gt_100pct": true,
+      "effort_equal_ratio": 0.2857,
+      "all_efforts_equal": false,
+      "unique_effort_values_count": 5,
+      "effort_stddev_minutes": 83.98,
+      "has_deferred_scope": false,
+      "scope_summary_mentions_fit": false,
+      "hard_violations": [
+        "UTILIZATION_OVER_100_PCT"
+      ],
+      "conditional_violations": [],
+      "soft_quality_warnings": [],
+      "diagnostics": {
+        "unique_effort_values_count": 5,
+        "effort_stddev_minutes": 83.98,
+        "has_deferred_scope": false,
+        "scope_summary_mentions_fit": false
+      },
+      "structural_validity": true,
+      "scheduling_feasibility": false,
+      "pedagogical_quality": {
+        "soft_quality_score": 1.0,
+        "soft_quality_warnings": []
+      },
+      "failure_reasons_by_layer": {
+        "structural_validity": [],
+        "scheduling_feasibility": [
+          "UTILIZATION_OVER_100_PCT"
+        ],
+        "conditional_constraints": [],
+        "soft_quality_warnings": []
+      },
+      "warnings": [
+        "UTILIZATION_OVER_100_PCT"
+      ]
+    }
+  ]
+}

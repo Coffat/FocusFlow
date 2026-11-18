@@ -216,11 +216,54 @@ def _extract_known_dimensions_from_prompt(text: str) -> set[str]:
     return known
 
 
+def _parse_approved_milestones_from_prompt(text: str) -> list[dict[str, Any]]:
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("approved_milestones:"):
+            raw_json = stripped.split(":", 1)[1].strip()
+            try:
+                parsed = json.loads(raw_json)
+                if isinstance(parsed, list):
+                    return [item for item in parsed if isinstance(item, dict)]
+            except json.JSONDecodeError:
+                pass
+    return []
+
+
+def _parse_prefetched_resource_ids_from_prompt(text: str) -> list[str]:
+    if "[PREFETCHED_LEARNING_RESOURCES]" not in text:
+        return []
+    after = text.split("[PREFETCHED_LEARNING_RESOURCES]", 1)[1].strip()
+    first_line = after.splitlines()[0].strip() if after else ""
+    try:
+        parsed = json.loads(first_line)
+        if isinstance(parsed, list):
+            return [
+                str(item["resource_id"]).strip()
+                for item in parsed
+                if isinstance(item, dict) and item.get("resource_id")
+            ]
+    except json.JSONDecodeError:
+        pass
+    return []
+
+
 def _build_stub_tasks_from_prompt(
     text: str,
     discovered_concept_ids: list[str] | None = None,
     discovered_resource_ids: list[str] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    approved_milestones = _parse_approved_milestones_from_prompt(text)
+    seq_by_mid: dict[str, int] = {}
+    json_concepts: list[str] = []
+    for item in approved_milestones:
+        mid_val = str(item.get("milestone_id") or "").strip()
+        if mid_val and isinstance(item.get("sequence_order"), int):
+            seq_by_mid[mid_val] = int(item["sequence_order"])
+        for rc in item.get("required_concepts") or ():
+            if str(rc).strip():
+                json_concepts.append(str(rc).strip())
+
     explicit_mids = list(dict.fromkeys(_MILESTONE_ID_JSON_RE.findall(text)))
     if not explicit_mids and "MILESTONE_IDS:" in text:
         after_marker = text.split("MILESTONE_IDS:", 1)[1]
@@ -248,14 +291,17 @@ def _build_stub_tasks_from_prompt(
             slots_by_day[d_key] = (s_time, e_time)
 
     task_types = ("THEORY", "PRACTICE", "REVIEW")
-    concept_pool = discovered_concept_ids or ["py-syntax-variables", "fastapi-routing-pydantic"]
-    resource_id_pool = list(dict.fromkeys(discovered_resource_ids or []))
+    merged_concepts = list(dict.fromkeys([*(discovered_concept_ids or []), *json_concepts]))
+    concept_pool = merged_concepts or ["py-syntax-variables", "fastapi-routing-pydantic"]
+    prefetched_rids = _parse_prefetched_resource_ids_from_prompt(text)
+    resource_id_pool = list(dict.fromkeys([*(discovered_resource_ids or []), *prefetched_rids]))
 
     tasks: list[dict[str, Any]] = []
     dependencies: list[dict[str, Any]] = []
     day_offset = 0
 
     for idx, mid in enumerate(milestone_ids):
+        m_seq = seq_by_mid.get(mid, idx + 1)
         chosen_date = base_date + timedelta(days=day_offset)
         if slots_by_day:
             for step in range(14):
@@ -281,7 +327,7 @@ def _build_stub_tasks_from_prompt(
         em = total_end_m % 60
 
         task_id = f"T{idx + 1}"
-        t_type = task_types[idx % len(task_types)]
+        t_type = task_types[(m_seq - 1) % len(task_types)]
         assigned_concept = (
             concept_pool[idx % len(concept_pool)] if concept_pool else "py-syntax-variables"
         )
@@ -290,21 +336,21 @@ def _build_stub_tasks_from_prompt(
             {
                 "task_id": task_id,
                 "milestone_id": mid,
-                "title": f"Phiên tự học chuyên sâu #{idx + 1} ({t_type})",
+                "title": f"Phiên tự học chuyên sâu #{m_seq} ({t_type})",
                 "description": (
-                    f"Thực hành và ghi chú chủ động cho cột mốc #{idx + 1} "
+                    f"Thực hành và ghi chú chủ động cho cột mốc #{m_seq} "
                     f"theo chu trình Zimmerman SRL ({t_type})."
                 ),
                 "task_type": t_type,
                 "learning_objective": (
-                    f"Nắm vững kiến thức cốt lõi và vận dụng được nội dung cột mốc #{idx + 1}"
+                    f"Nắm vững kiến thức cốt lõi và vận dụng được nội dung cột mốc #{m_seq}"
                 ),
                 "completion_criteria": (
-                    f"Hoàn thành bài tập kiểm tra cột mốc #{idx + 1} và ghi chú tổng kết"
+                    f"Hoàn thành bài tập kiểm tra cột mốc #{m_seq} và ghi chú tổng kết"
                 ),
                 "concept_ids": list(dict.fromkeys([assigned_concept, *concept_pool])),
                 "covered_outcome_ids": [
-                    f"M{idx + 1}-O{outcome_index}" for outcome_index in range(1, 9)
+                    f"M{m_seq}-O{outcome_index}" for outcome_index in range(1, 9)
                 ],
                 "resource_ids": resource_id_pool[:3],
                 "estimated_minutes": duration_mins,
@@ -603,6 +649,10 @@ class StubLLMAdapter(LLMProviderPort):
                     for concept in match.split(",")
                     if concept.strip()
                 ]
+                for item in _parse_approved_milestones_from_prompt(effective_prompt):
+                    for rc in item.get("required_concepts") or ():
+                        if str(rc).strip():
+                            prompt_concepts.append(str(rc).strip())
                 concept_pool = list(dict.fromkeys([*prompt_concepts, *discovered_ids])) or [
                     "py-syntax-variables",
                     "py-control-flow-functions",

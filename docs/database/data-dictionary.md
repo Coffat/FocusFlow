@@ -250,6 +250,8 @@
 | `estimated_cost_usd` | `NUMERIC(10,6)` | No | `0.000000` | No | No | No | Yes | $\ge 0$ | Chi phí ước tính tính bằng USD dựa trên định mức giá token của model. |
 | `status` | `VARCHAR(20)` | No | `'SUCCESS'` | No | No | No | Yes | 4 trạng thái | Kết quả gọi: `'SUCCESS'`, `'FAILED'`, `'RATE_LIMITED'`, `'TIMEOUT'`. |
 | `error_message` | `TEXT` | Yes | None | No | No | No | No | Văn bản | Chi tiết thông báo lỗi nếu gọi thất bại. |
+| `idempotency_key` | `VARCHAR(255)` | Yes | None | No | No | Partial UQ | No | Chuỗi khóa attempt | Khóa lũy đẳng per-attempt (`uq_ai_usage_logs_idempotency_key`) bảo đảm không trùng lặp khi retry đồng thời (`Migration 0013`). |
+| `audit_metadata` | `JSONB` | Yes | None | No | No | No | No | Đối tượng JSONB | Metadata kiểm toán chi phí (`requested_model`, `resolved_model`, `pricing_version`, `usage_source`, `usage_completeness`, `cost_verification_status`, `thinking_tokens`, `attempt_no`, `reservation_id`) (`Migration 0013`). |
 | `created_at` | `TIMESTAMPTZ` | No | `NOW()` | No | No | No | No | Dấu thời gian UTC | Thời điểm ghi nhận lượt gọi AI. |
 
 ---
@@ -918,6 +920,7 @@
 | `idx_session_tasks_task_id` | `session_tasks` | `(task_id)` | B-Tree | Không | Tra cứu lịch sử phiên học của một nhiệm vụ; bảo vệ khóa ngoại `RESTRICT`. |
 | `idx_session_tasks_session_id` | `session_tasks` | `(session_id)` | B-Tree | Không | Lấy toàn bộ nhiệm vụ thực hiện trong một phiên học cụ thể. |
 | `idx_ai_usage_logs_user_action` | `ai_usage_logs` | `(user_id, action_type, created_at DESC)` | B-Tree | Không | Thống kê số lượng gọi AI và chi phí token theo từng loại nghiệp vụ. |
+| `uq_ai_usage_logs_idempotency_key` | `ai_usage_logs` | `(idempotency_key) WHERE idempotency_key IS NOT NULL` | Unique Partial B-Tree | Có | Bảo đảm tính lũy đẳng nguyên tử theo per-attempt key giữa các worker/session đồng thời mà không xung đột với dữ liệu legacy `NULL`. |
 | `idx_avail_slots_availability_day` | `availability_slots` | `(availability_id, day_of_week)` | B-Tree | Không | `HybridAvailabilityRuleEngine` nạp khung giờ rảnh của người học theo từng ngày trong tuần. |
 | `idx_goals_user_id` | `goals` | `(user_id)` | B-Tree | Không | Lấy danh sách mục tiêu học tập của người dùng. |
 | `idx_schedule_proposals_roadmap_status` | `schedule_proposals` | `(roadmap_id, status)` | B-Tree | Không | Lọc đề xuất lịch theo trạng thái để thực hiện phê duyệt (Strict Apply). |

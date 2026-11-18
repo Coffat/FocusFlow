@@ -1,0 +1,22 @@
+{
+  "start_date": "2026-11-16",
+  "window_days": 7,
+  "runs_count": 6,
+  "last_run_at": "2026-11-18T14:12:30+07:00",
+  "last_status": "ok",
+  "last_reports": [
+    "/Users/vuthang/Documents/FocusFlow/docs/experiments/scheduled_eval_7d/runs/20261118_140006_golden_planning_18_goals.json",
+    "/Users/vuthang/Documents/FocusFlow/docs/experiments/scheduled_eval_7d/runs/20261118_140006_hard_planning_6_goals.json"
+  ],
+  "last_rows_appended": 11,
+  "installed_at": "2026-11-17T10:19:12+07:00",
+  "first_slot_after": "2026-11-17T10:19:12+07:00",
+  "recorded_slots": [
+    "2026-11-16T21:00",
+    "2026-11-17T09:00",
+    "2026-11-17T14:00",
+    "2026-11-17T21:00",
+    "2026-11-18T09:00",
+    "2026-11-18T14:00"
+  ]
+}

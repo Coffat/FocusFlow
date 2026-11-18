@@ -789,9 +789,12 @@ Table ai_usage_logs {
   completion_tokens integer [not null, default: 0]
   total_tokens integer [not null, default: 0]
   latency_ms integer [not null, default: 0]
-  estimated_cost_usd numeric(10,6) [not null, default: 0]
+  estimated_cost_usd numeric(12,6) [not null, default: 0]
   status varchar(20) [not null, default: 'SUCCESS']
+  error_code varchar(80) [null]
   error_message text
+  idempotency_key varchar(255) [null] // uq_ai_usage_logs_idempotency_key WHERE idempotency_key IS NOT NULL
+  audit_metadata jsonb [null]
   created_at timestamptz [not null, default: `now()`]
 }
 
