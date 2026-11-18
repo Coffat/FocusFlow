@@ -52,7 +52,9 @@ describe('AiInsightBannerComponent', () => {
 
   it('khởi tạo thành công AiInsightBannerComponent dạng insight', () => {
     const el = fixture.nativeElement as HTMLElement;
-    expect(el.textContent).toContain('Focus AI Cognitive Insight');
+    expect(el.textContent).toContain('Phân tích Thích ứng SRL');
+    expect(el.textContent).not.toContain('Focus AI Cognitive Insight');
+    expect(el.querySelector('.bg-purple-100')).toBeFalsy();
     expect(el.textContent).toContain('Phân tích Nhận thức');
     expect(el.textContent).toContain('SRL Zimmerman');
     expect(el.textContent).toContain('Chuyển task khó vào 8h - 10h');
