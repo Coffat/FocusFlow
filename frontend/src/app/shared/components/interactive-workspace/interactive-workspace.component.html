@@ -1,0 +1,440 @@
+<!-- INTERACTIVE WORKSPACE CANVAS (Attio-Style Precision Board) -->
+<div class="hairline-card rounded-xl shadow-[0_16px_40px_-8px_rgba(17,17,17,0.06)] overflow-hidden border border-outline-variant/60 text-left">
+  <!-- Canvas OS Window Header -->
+  <div class="bg-surface-container-low/70 border-b border-outline-variant/40 px-5 py-3 flex flex-wrap items-center justify-between gap-4">
+    <!-- Window Dots & Path -->
+    <div class="flex items-center gap-3">
+      <div class="flex items-center gap-1.5" aria-hidden="true">
+        <span class="w-2.5 h-2.5 rounded-full bg-outline-variant/70 inline-block"></span>
+        <span class="w-2.5 h-2.5 rounded-full bg-outline-variant/50 inline-block"></span>
+        <span class="w-2.5 h-2.5 rounded-full bg-outline-variant/50 inline-block"></span>
+      </div>
+      <div class="h-3.5 w-px bg-outline-variant/40 mx-1 hidden sm:block"></div>
+      <div class="flex items-center gap-1.5 text-xs font-mono text-on-surface-variant">
+        <span class="material-symbols-outlined text-[14px]">terminal</span>
+        <span>focusflow.app</span>
+        <span class="text-outline-variant">/</span>
+        <span>lộ-trình</span>
+        <span class="text-outline-variant">/</span>
+        <span class="text-on-surface font-medium">kien-truc-he-thong-fullstack</span>
+      </div>
+    </div>
+
+    <!-- View Switcher Tabs -->
+    <div class="inline-flex p-1 rounded-xl bg-surface-container/90 border border-outline-variant/50 text-xs font-sans shadow-inner">
+      <button
+        type="button"
+        (click)="setTab('dag')"
+        [class]="activeTab() === 'dag'
+          ? 'px-3.5 py-1.5 rounded-lg bg-white shadow-[0_2px_8px_rgba(0,0,0,0.08)] text-primary font-semibold flex items-center gap-1.5 transition-all duration-200 border border-outline-variant/30 scale-[1.02]'
+          : 'px-3.5 py-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-white/50 flex items-center gap-1.5 transition-all duration-200 border border-transparent'"
+      >
+        <span class="material-symbols-outlined text-[14px]">account_tree</span>
+        <span>Cây Lộ trình</span>
+      </button>
+      <button
+        type="button"
+        (click)="setTab('schedule')"
+        [class]="activeTab() === 'schedule'
+          ? 'px-3.5 py-1.5 rounded-lg bg-white shadow-[0_2px_8px_rgba(0,0,0,0.08)] text-primary font-semibold flex items-center gap-1.5 transition-all duration-200 border border-outline-variant/30 scale-[1.02]'
+          : 'px-3.5 py-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-white/50 flex items-center gap-1.5 transition-all duration-200 border border-transparent'"
+      >
+        <span class="material-symbols-outlined text-[14px]">calendar_today</span>
+        <span>Lịch Thích ứng</span>
+      </button>
+      <button
+        type="button"
+        (click)="setTab('pomodoro')"
+        [class]="activeTab() === 'pomodoro'
+          ? 'px-3.5 py-1.5 rounded-lg bg-white shadow-[0_2px_8px_rgba(0,0,0,0.08)] text-primary font-semibold flex items-center gap-1.5 transition-all duration-200 border border-outline-variant/30 scale-[1.02]'
+          : 'px-3.5 py-1.5 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-white/50 flex items-center gap-1.5 transition-all duration-200 border border-transparent'"
+      >
+        <span class="material-symbols-outlined text-[14px]">hourglass_top</span>
+        <span>Chế độ Focus</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Canvas Body (Split 5/12 and 7/12 Attio Layout) -->
+  @switch (activeTab()) {
+    @case ('dag') {
+      <div class="grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-outline-variant/40 bg-white animate-tab-crossfade">
+        <!-- Left Column: DAG Knowledge Tree (5 Cols) -->
+        <div class="lg:col-span-5 p-5 md:p-6 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-[11px] font-sans uppercase tracking-wider text-on-surface-variant font-semibold">Cấu trúc Học phần</span>
+              <span class="text-xs font-mono text-primary font-semibold">65% Hoàn tất</span>
+            </div>
+            <h2 class="text-base font-semibold text-on-surface mb-2 font-sans">Giai đoạn 1: Nền tảng Backend &amp; Clean Architecture</h2>
+            <div class="w-full bg-surface-container h-1 rounded-full overflow-hidden mb-6">
+              <div class="bg-primary-container h-full w-[65%] rounded-full"></div>
+            </div>
+
+            <!-- Task List (DAG Node Cards) -->
+            <div class="space-y-3">
+              <!-- Task 1 (Mastered) -->
+              <div class="p-3.5 rounded-lg border border-outline-variant/40 bg-surface-container-low/40 flex items-start justify-between gap-3">
+                <div class="flex items-start gap-2.5">
+                  <span class="material-symbols-outlined text-primary text-[18px] mt-0.5" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                  <div>
+                    <p class="text-xs text-on-surface font-semibold leading-snug">PostgreSQL Indexing &amp; Optimization</p>
+                    <p class="text-[11px] font-mono text-on-surface-variant mt-0.5">3 phiên • 4.5 giờ học sâu</p>
+                  </div>
+                </div>
+                <span class="text-[10px] px-2 py-0.5 rounded border border-primary/20 bg-primary/10 text-primary font-medium whitespace-nowrap">Đã thuần thục ✓</span>
+              </div>
+
+              <!-- Task 2 (Active execution) -->
+              <div class="p-3.5 rounded-lg border border-primary/40 bg-secondary-container/20 flex items-start justify-between gap-3 shadow-sm">
+                <div class="flex items-start gap-2.5">
+                  <span class="w-3.5 h-3.5 rounded-full bg-primary-container breathing-dot mt-1 inline-block"></span>
+                  <div>
+                    <p class="text-xs text-on-surface font-semibold leading-snug">Hexagonal Ports &amp; Adapters Pattern</p>
+                    <p class="text-[11px] font-mono text-on-surface-variant mt-0.5">Pomodoro 25m • Trạng thái: Tích cực</p>
+                  </div>
+                </div>
+                <span class="text-[10px] px-2 py-0.5 rounded bg-primary-container text-white font-medium whitespace-nowrap">Đang thực thi</span>
+              </div>
+
+              <!-- Task 3 (Locked DAG Dependency) -->
+              <div class="p-3.5 rounded-lg border border-outline-variant/30 bg-surface-container-low/20 opacity-70 flex items-start justify-between gap-3">
+                <div class="flex items-start gap-2.5">
+                  <span class="material-symbols-outlined text-on-surface-variant text-[18px] mt-0.5">lock</span>
+                  <div>
+                    <p class="text-xs text-on-surface font-normal leading-snug">Event-Driven Architecture với Kafka</p>
+                    <p class="text-[11px] font-mono text-on-surface-variant mt-0.5">Mở khóa sau khi hoàn tất Hexagonal</p>
+                  </div>
+                </div>
+                <span class="text-[10px] px-2 py-0.5 rounded border border-outline-variant/50 bg-surface-container text-on-surface-variant whitespace-nowrap">Khóa</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- DAG Micro-indicator -->
+          <div class="mt-6 pt-4 border-t border-outline-variant/30 flex items-center justify-between text-xs font-mono text-on-surface-variant">
+            <span class="flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-[15px] text-primary">schema</span>
+              18 Điểm nút tri thức liên kết
+            </span>
+            <span class="hover:text-primary cursor-pointer transition-colors" (click)="scrollTo('capabilities', $event)">Xem toàn bộ sơ đồ →</span>
+          </div>
+        </div>
+
+        <!-- Right Column: Adaptive Time Dispatcher (7 Cols) -->
+        <div class="lg:col-span-7 p-5 md:p-6 flex flex-col justify-between relative bg-white">
+          <div>
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-2">
+                <span class="material-symbols-outlined text-[18px] text-primary">chevron_forward</span>
+                <h3 class="text-sm font-semibold text-on-surface font-sans">Lịch học thứ Sáu (Đồng bộ Google Calendar)</h3>
+              </div>
+              <span class="text-xs font-mono px-2 py-0.5 rounded bg-surface-container text-on-surface-variant border border-outline-variant/40">Hôm nay</span>
+            </div>
+
+            <!-- Time Slots Grid -->
+            <div class="space-y-2.5">
+              <!-- Slot 1: Done -->
+              <div class="flex items-center justify-between p-3 rounded-lg border border-outline-variant/30 bg-surface-container-low/30 text-xs">
+                <div class="flex items-center gap-3">
+                  <span class="font-mono text-on-surface-variant w-12 font-medium">19:30</span>
+                  <span class="w-1.5 h-1.5 rounded-full bg-outline-variant"></span>
+                  <span class="text-on-surface-variant line-through">SRS &amp; Thiết kế Database Schema</span>
+                </div>
+                <span class="font-mono text-on-surface-variant">Hoàn thành (25m)</span>
+              </div>
+
+              <!-- Slot 2: In Progress -->
+              <div class="flex items-center justify-between p-3 rounded-lg border border-primary/30 bg-secondary-container/20 text-xs">
+                <div class="flex items-center gap-3">
+                  <span class="font-mono text-primary font-semibold w-12">20:15</span>
+                  <span class="w-1.5 h-1.5 rounded-full bg-primary-container"></span>
+                  <span class="text-on-surface font-semibold">Viết Unit Tests cho Domain Layer</span>
+                </div>
+                <div class="flex items-center gap-1.5 font-mono text-primary font-medium">
+                  <span class="material-symbols-outlined text-[14px]">timer</span>
+                  <span>18m còn lại</span>
+                </div>
+              </div>
+
+              <!-- Slot 3: Shifted automatically -->
+              <div class="flex items-center justify-between p-3 rounded-lg border border-outline-variant/30 bg-surface-container-low/20 text-xs">
+                <div class="flex items-center gap-3">
+                  <span class="font-mono text-on-surface-variant w-12">21:15</span>
+                  <span class="w-1.5 h-1.5 rounded-full bg-tertiary-fixed-dim"></span>
+                  <span class="text-on-surface-variant">Review Microservices Communication</span>
+                </div>
+                <span class="font-mono text-tertiary font-medium">Tự động bù lịch</span>
+              </div>
+            </div>
+
+            <!-- Domino Shift Notification Card -->
+            <div class="mt-4 p-3.5 rounded-lg border border-primary/20 bg-primary/5 flex items-start gap-3">
+              <span class="material-symbols-outlined text-primary text-[18px] mt-0.5">auto_awesome</span>
+              <div class="text-xs font-sans leading-relaxed">
+                <span class="font-semibold text-primary">Domino Shift Kích Hoạt:</span>
+                <span class="text-on-surface-variant"> Đã tự động dời 1 buổi học sang tối Thứ Bảy (20:00 - 21:00) do lịch họp nhóm đột xuất lúc 21:00. Bạn có thể nghỉ ngơi trọn vẹn mà không lo trễ mục tiêu tuần.</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- AI Cursor Simulation Badge -->
+          <div class="mt-6 flex items-center justify-between pt-4 border-t border-outline-variant/30">
+            <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary-container text-white text-[11px] font-sans shadow-sm">
+              <span class="material-symbols-outlined text-[13px]">smart_toy</span>
+              <span>Trợ lý AI FocusFlow đã tối ưu hóa lịch trình</span>
+            </div>
+            <a class="text-xs font-mono text-primary font-medium hover:underline flex items-center gap-1" href="#capabilities" (click)="scrollTo('capabilities', $event)">
+              <span>Tùy chỉnh lịch học thích ứng</span>
+              <span class="material-symbols-outlined text-[13px]">chevron_right</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    }
+    @case ('schedule') {
+      <div class="grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-outline-variant/40 bg-white animate-tab-crossfade">
+        <!-- Left: Weekly Schedule Breakdown -->
+        <div class="lg:col-span-5 p-5 md:p-6 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-[11px] font-sans uppercase tracking-wider text-on-surface-variant font-semibold">Lịch Trình Thích Ứng (Mode B)</span>
+              <span class="text-xs font-mono text-primary font-semibold">Độ trễ: 0 ngày</span>
+            </div>
+            <h2 class="text-base font-semibold text-on-surface mb-2 font-sans">Nhịp Độ Học Tập Tuần Này (24.5 Giờ)</h2>
+            <div class="w-full bg-surface-container h-1 rounded-full overflow-hidden mb-6">
+              <div class="bg-primary-container h-full w-[78%] rounded-full"></div>
+            </div>
+
+            <div class="space-y-3">
+              <div class="p-3 rounded-lg border border-outline-variant/30 bg-surface-container-low/30 flex items-center justify-between text-xs">
+                <span class="font-medium text-on-surface">Thứ Hai — Thứ Năm</span>
+                <span class="font-mono text-primary font-semibold">16.5 giờ ✓ Đã xong</span>
+              </div>
+              <div class="p-3 rounded-lg border border-primary/40 bg-secondary-container/20 flex items-center justify-between text-xs">
+                <span class="font-semibold text-primary">Thứ Sáu (Hôm nay)</span>
+                <span class="font-mono text-primary font-semibold">3.5 giờ • Đang diễn ra</span>
+              </div>
+              <div class="p-3 rounded-lg border border-outline-variant/30 bg-surface-container-low/30 flex items-center justify-between text-xs">
+                <span class="font-medium text-on-surface">Thứ Bảy (Bù Domino Shift)</span>
+                <span class="font-mono text-on-surface-variant">4.5 giờ • Đã xếp lịch</span>
+              </div>
+              <div class="p-3 rounded-lg border border-outline-variant/30 bg-surface-container-low/20 flex items-center justify-between text-xs text-on-surface-variant opacity-75">
+                <span>Chủ Nhật (Nghỉ ngơi nhận thức)</span>
+                <span class="font-mono">Tự suy ngẫm SRL</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-6 pt-4 border-t border-outline-variant/30 flex items-center justify-between text-xs font-mono text-on-surface-variant">
+            <span class="flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-[15px] text-primary">sync</span>
+              Đồng bộ 2 chiều Google Calendar
+            </span>
+            <span class="text-primary font-medium">Chuẩn RFC 5545</span>
+          </div>
+        </div>
+
+        <!-- Right: Real-time Schedule Calendar View -->
+        <div class="lg:col-span-7 p-5 md:p-6 flex flex-col justify-between relative bg-white">
+          <div>
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-2">
+                <span class="material-symbols-outlined text-[18px] text-primary">calendar_month</span>
+                <h3 class="text-sm font-semibold text-on-surface font-sans">Bảng Điều Phối Lịch Học Tự Động Hóa</h3>
+              </div>
+              <span class="text-xs font-mono px-2 py-0.5 rounded bg-primary/10 text-primary font-semibold border border-primary/20">Auto-Calibrated</span>
+            </div>
+
+            <div class="space-y-2.5">
+              <div class="p-3 rounded-lg border border-outline-variant/30 bg-surface-container-low/20 flex items-center justify-between text-xs">
+                <div class="flex items-center gap-3">
+                  <span class="font-mono text-on-surface-variant w-24">08:30 - 17:30</span>
+                  <span class="text-on-surface-variant">Giờ làm việc &amp; Cuộc họp chuyên môn</span>
+                </div>
+                <span class="px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-mono text-[10px]">Lịch bận</span>
+              </div>
+              <div class="p-3 rounded-lg border border-primary/30 bg-secondary-container/20 flex items-center justify-between text-xs">
+                <div class="flex items-center gap-3">
+                  <span class="font-mono text-primary font-semibold w-24">19:30 - 21:00</span>
+                  <span class="text-on-surface font-semibold">Khối Học Sâu: Domain Service &amp; Integration</span>
+                </div>
+                <span class="px-2 py-0.5 rounded bg-primary-container text-white font-mono text-[10px]">Tối ưu hóa</span>
+              </div>
+              <div class="p-3 rounded-lg border border-outline-variant/30 bg-surface-container-low/20 flex items-center justify-between text-xs">
+                <div class="flex items-center gap-3">
+                  <span class="font-mono text-on-surface-variant w-24">21:15 - 22:00</span>
+                  <span class="text-on-surface-variant">Active Recall: Flashcard ôn tập chu kỳ 3</span>
+                </div>
+                <span class="px-2 py-0.5 rounded bg-surface-container text-on-surface-variant font-mono text-[10px]">Spaced Rep</span>
+              </div>
+            </div>
+
+            <div class="mt-4 p-3.5 rounded-lg border border-primary/20 bg-primary/5 flex items-start gap-3">
+              <span class="material-symbols-outlined text-primary text-[18px] mt-0.5">verified</span>
+              <div class="text-xs font-sans leading-relaxed">
+                <span class="font-semibold text-primary">Nguyên lý Zero Cognition Debt:</span>
+                <span class="text-on-surface-variant"> Hệ thống xếp lịch dựa trên năng lượng não bộ thực tế, không dồn ứ các bài học quá hạn sang ngày hôm sau để tránh gây kiệt sức.</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-6 flex items-center justify-between pt-4 border-t border-outline-variant/30">
+            <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary-container text-white text-[11px] font-sans shadow-sm">
+              <span class="material-symbols-outlined text-[13px]">tune</span>
+              <span>Lịch rảnh cá nhân hóa Mode B</span>
+            </div>
+            <a class="text-xs font-mono text-primary font-medium hover:underline flex items-center gap-1" href="#methodology" (click)="scrollTo('methodology', $event)">
+              <span>Tìm hiểu thuật toán xếp lịch</span>
+              <span class="material-symbols-outlined text-[13px]">chevron_right</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    }
+    @case ('pomodoro') {
+      <div class="grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-outline-variant/40 bg-white animate-tab-crossfade">
+        <!-- Left: Active Task & Cognitive Scratchpad -->
+        <div class="lg:col-span-5 p-5 md:p-6 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-[11px] font-sans uppercase tracking-wider text-on-surface-variant font-semibold">Tác Vụ Trọng Tâm</span>
+              <span class="text-xs font-mono text-primary font-semibold">Chu kỳ 2/4 Pomodoro</span>
+            </div>
+            <h2 class="text-base font-semibold text-on-surface mb-2 font-sans">Hexagonal Ports &amp; Adapters Pattern</h2>
+            <div class="w-full bg-surface-container h-1 rounded-full overflow-hidden mb-6">
+              <div class="bg-primary-container h-full w-[70%] rounded-full"></div>
+            </div>
+
+            <div class="space-y-3">
+              <div class="p-3 rounded-lg border border-outline-variant/30 bg-surface-container-low/30 flex items-center gap-2.5 text-xs">
+                <span class="material-symbols-outlined text-primary text-[16px]">check_box</span>
+                <span class="text-on-surface-variant line-through">Phân tích InputPort &amp; OutputPort contracts</span>
+              </div>
+              <div class="p-3 rounded-lg border border-primary/40 bg-secondary-container/20 flex items-center gap-2.5 text-xs">
+                <span class="w-3.5 h-3.5 rounded-full bg-primary-container breathing-dot inline-block"></span>
+                <span class="text-on-surface font-semibold">Triển khai Mocking Adapter cho Unit Test</span>
+              </div>
+              <div class="p-3 rounded-lg border border-outline-variant/30 bg-surface-container-low/20 flex items-center gap-2.5 text-xs text-on-surface-variant">
+                <span class="material-symbols-outlined text-[16px] text-outline-variant">check_box_outline_blank</span>
+                <span>Kiểm tra import-linter contracts 0 vi phạm</span>
+              </div>
+            </div>
+
+            <div class="mt-4 p-3.5 rounded-lg border border-outline-variant/40 bg-surface-container-low/50">
+              <div class="flex items-center justify-between mb-2">
+                <label for="scratchpad-input" class="text-[11px] font-mono uppercase tracking-wider text-on-surface-variant font-semibold flex items-center gap-1.5">
+                  <span class="material-symbols-outlined text-[14px] text-primary">edit_note</span>
+                  <span>Cognitive Scratchpad (Gõ thử nghiệm)</span>
+                </label>
+                <span class="text-[10px] font-mono text-outline">Tự lưu tức thì</span>
+              </div>
+              <textarea
+                id="scratchpad-input"
+                rows="2"
+                [value]="scratchpadNote()"
+                (input)="onScratchpadInput($event)"
+                placeholder="Ghi nhanh suy nghĩ xao nhãng để giữ nguyên dòng chảy tập trung..."
+                class="w-full text-xs text-on-surface bg-white rounded border border-outline-variant/60 p-2 font-sans focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all resize-none italic"
+              ></textarea>
+            </div>
+          </div>
+
+          <div class="mt-6 pt-4 border-t border-outline-variant/30 flex items-center justify-between text-xs font-mono text-on-surface-variant">
+            <span class="flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-[15px] text-primary">headphones</span>
+              Soundscape: Brown Noise
+            </span>
+            <span class="text-primary font-medium">Bảo toàn dòng chảy</span>
+          </div>
+        </div>
+
+        <!-- Right: Zen Pomodoro Display -->
+        <div class="lg:col-span-7 p-5 md:p-6 flex flex-col justify-between relative bg-white">
+          <div>
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-2">
+                <span class="material-symbols-outlined text-[18px] text-primary">timer</span>
+                <h3 class="text-sm font-semibold text-on-surface font-sans">Không Gian Học Sâu Pomodoro Zen</h3>
+              </div>
+              <span class="text-xs font-mono px-2 py-0.5 rounded bg-primary/10 text-primary font-semibold border border-primary/20">Flow State: 98%</span>
+            </div>
+
+            <div class="p-6 rounded-xl bg-surface-container-low/30 border border-outline-variant/40 text-center my-2 transition-all">
+              <span class="font-serif-headline text-5xl md:text-6xl text-on-surface font-normal tracking-tight block mb-2 tabular-nums">
+                {{ formattedTime() }}
+              </span>
+              <p class="text-xs font-mono text-primary font-semibold flex items-center justify-center gap-1.5">
+                @if (isTimerRunning()) {
+                  <span class="w-2 h-2 rounded-full bg-primary-container breathing-dot inline-block"></span>
+                  <span>ĐANG TẬP TRUNG CAO ĐỘ • KHÔNG GIAN PHẲNG</span>
+                } @else {
+                  <span class="w-2 h-2 rounded-full bg-outline-variant inline-block"></span>
+                  <span>TẠM DỪNG • SẴN SÀNG TIẾP TỤC</span>
+                }
+              </p>
+              <div class="mt-5 flex items-center justify-center gap-3">
+                <button
+                  type="button"
+                  (click)="toggleTimer()"
+                  class="px-5 py-2 rounded-full bg-on-surface text-white text-xs font-medium inline-flex items-center gap-1.5 shadow-sm hover:bg-primary transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                >
+                  @if (isTimerRunning()) {
+                    <span class="material-symbols-outlined text-[16px]">pause</span>
+                    <span>Tạm dừng</span>
+                  } @else {
+                    <span class="material-symbols-outlined text-[16px]">play_arrow</span>
+                    <span>Bắt đầu</span>
+                  }
+                </button>
+                <button
+                  type="button"
+                  (click)="resetTimer()"
+                  class="px-4 py-2 rounded-full bg-white border border-outline-variant/60 text-on-surface text-xs font-medium inline-flex items-center gap-1.5 hover:bg-surface-container-low transition-all duration-150 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                >
+                  <span class="material-symbols-outlined text-[16px]">restart_alt</span>
+                  <span>Đặt lại</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="mt-4 p-3.5 rounded-lg border border-primary/20 bg-primary/5 flex items-start gap-3">
+              <span class="material-symbols-outlined text-primary text-[18px] mt-0.5">shield</span>
+              <div class="text-xs font-sans leading-relaxed">
+                <span class="font-semibold text-primary">Lá Chắn Xao Nhãng (Distraction Shield):</span>
+                <span class="text-on-surface-variant"> Loại bỏ mọi thông báo ngoại lai. Bộ đếm Pomodoro hoạt động theo mốc thời gian chuẩn tuyệt đối, bảo toàn trạng thái chú ý sâu.</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-6 flex items-center justify-between pt-4 border-t border-outline-variant/30">
+            <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary-container text-white text-[11px] font-sans shadow-sm">
+              <span class="material-symbols-outlined text-[13px]">self_improvement</span>
+              <span>Chế độ Học Sâu Chống Kiệt Sức</span>
+            </div>
+            <a class="text-xs font-mono text-primary font-medium hover:underline flex items-center gap-1" href="#capabilities" (click)="scrollTo('capabilities', $event)">
+              <span>Khám phá chế độ Focus</span>
+              <span class="material-symbols-outlined text-[13px]">chevron_right</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    }
+  }
+
+  <!-- Canvas Footer Status Strip -->
+  <div class="bg-surface-container-low px-5 py-2.5 border-t border-outline-variant/40 flex flex-wrap items-center justify-between gap-3 text-xs font-sans text-on-surface-variant">
+    <div class="flex items-center gap-4">
+      <span class="flex items-center gap-1.5">
+        <span class="w-2 h-2 rounded-full bg-primary-container"></span>
+        <strong class="font-semibold text-on-surface">Chỉ số tập trung:</strong> 94/100 (Xuất sắc)
+      </span>
+      <span class="hidden sm:inline text-outline-variant">•</span>
+      <span class="hidden sm:inline">Chu kỳ phục hồi nhận thức: Ổn định</span>
+    </div>
+    <div class="flex items-center gap-2 font-mono text-[11px]">
+      <span class="material-symbols-outlined text-[14px] text-primary">verified</span>
+      <span>Attio Cell Sync Engine: v2.4-active</span>
+    </div>
+  </div>
+</div>

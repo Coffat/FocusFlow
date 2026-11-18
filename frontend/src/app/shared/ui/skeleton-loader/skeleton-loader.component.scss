@@ -1,0 +1,27 @@
+@keyframes shimmerSweep {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(235, 231, 231, 0.6) 0%,
+    rgba(255, 255, 255, 0.95) 50%,
+    rgba(235, 231, 231, 0.6) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmerSweep 1.6s infinite ease-in-out;
+  will-change: background-position;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-shimmer {
+    animation: none !important;
+    background: rgba(235, 231, 231, 0.6) !important;
+  }
+}
