@@ -8,11 +8,12 @@ import {
   signal,
 } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 
 export interface NavLink {
   label: string;
   href: string;
+  exact?: boolean;
 }
 
 @Component({
@@ -25,13 +26,15 @@ export interface NavLink {
 })
 export class FloatingNavbarComponent {
   private readonly platformId = inject(PLATFORM_ID);
+  private readonly router = inject(Router);
 
   readonly brandName = input<string>('FocusFlow');
   readonly navLinks = input<NavLink[]>([
-    { label: 'Phương pháp', href: '#methodology' },
-    { label: 'Tính năng', href: '#capabilities' },
-    { label: 'Kịch bản mẫu', href: '#scenarios' },
-    { label: 'Minh chứng', href: '#testimonials' },
+    { label: 'Trang chủ', href: '/', exact: true },
+    { label: 'Cách hoạt động', href: '/how-it-works' },
+    { label: 'Tính năng', href: '/features' },
+    { label: 'Bảng giá', href: '/pricing' },
+    { label: 'Hỏi đáp (FAQ)', href: '/faq' },
   ]);
   readonly isAuthenticated = input<boolean>(false);
   readonly dashboardUrl = input<string>('/dashboard');
@@ -39,7 +42,9 @@ export class FloatingNavbarComponent {
   readonly registerUrl = input<string>('/sign-up');
 
   readonly mobileMenuOpen = signal<boolean>(false);
-  readonly isScrolled = signal<boolean>(false);
+  readonly isScrolled = signal<boolean>(
+    isPlatformBrowser(this.platformId) && typeof window !== 'undefined' ? window.scrollY > 20 : false
+  );
 
   @HostListener('window:scroll')
   onWindowScroll(): void {
@@ -56,7 +61,30 @@ export class FloatingNavbarComponent {
     this.mobileMenuOpen.set(false);
   }
 
+  isLinkActive(href: string, exact = false): boolean {
+    if (!href.startsWith('/') || href.startsWith('/#')) {
+      return false;
+    }
+    const currentUrl = this.router.url.split('?')[0].split('#')[0];
+    const targetPath = href.split('?')[0].split('#')[0];
+    if (targetPath === '/') {
+      return currentUrl === '/' || currentUrl === '';
+    }
+    return exact ? currentUrl === targetPath : currentUrl === targetPath || currentUrl.startsWith(targetPath + '/');
+  }
+
   handleAnchorClick(href: string, event: Event): void {
+    if (href.startsWith('/#')) {
+      const elementId = href.substring(2);
+      this.scrollTo(elementId, event);
+      return;
+    }
+
+    if (href.startsWith('/')) {
+      this.closeMobileMenu();
+      return;
+    }
+
     if (href.startsWith('#')) {
       const elementId = href.substring(1);
       this.scrollTo(elementId, event);
@@ -68,9 +96,23 @@ export class FloatingNavbarComponent {
       event.preventDefault();
     }
     this.closeMobileMenu();
+
+    if (!isPlatformBrowser(this.platformId)) {
+      return;
+    }
+
     const element = document.getElementById(elementId);
     if (element && typeof element.scrollIntoView === 'function') {
       element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      this.router.navigate(['/'], { fragment: elementId }).then(() => {
+        setTimeout(() => {
+          const target = document.getElementById(elementId);
+          if (target && typeof target.scrollIntoView === 'function') {
+            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }, 150);
+      });
     }
   }
 }

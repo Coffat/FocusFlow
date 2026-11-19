@@ -7,6 +7,7 @@ describe('FloatingNavbarComponent', () => {
   let fixture: ComponentFixture<FloatingNavbarComponent>;
 
   beforeEach(async () => {
+    Object.defineProperty(window, 'scrollY', { value: 0, writable: true, configurable: true });
     await TestBed.configureTestingModule({
       imports: [FloatingNavbarComponent],
       providers: [provideRouter([])],
@@ -17,12 +18,24 @@ describe('FloatingNavbarComponent', () => {
     fixture.detectChanges();
   });
 
-  it('should initialize with default inputs and mobile menu closed', () => {
+  it('should initialize with default inputs, official logo, and mobile menu closed', () => {
     expect(component).toBeTruthy();
     expect(component.brandName()).toBe('FocusFlow');
     expect(component.isAuthenticated()).toBe(false);
     expect(component.mobileMenuOpen()).toBe(false);
-    expect(component.navLinks().length).toBe(4);
+    expect(component.navLinks().length).toBe(5);
+    expect(component.navLinks()).toEqual([
+      { label: 'Trang chủ', href: '/', exact: true },
+      { label: 'Cách hoạt động', href: '/how-it-works' },
+      { label: 'Tính năng', href: '/features' },
+      { label: 'Bảng giá', href: '/pricing' },
+      { label: 'Hỏi đáp (FAQ)', href: '/faq' },
+    ]);
+
+    const el = fixture.nativeElement as HTMLElement;
+    const logoImg = el.querySelector('img[src="assets/logo.svg"]');
+    expect(logoImg).toBeTruthy();
+    expect(el.textContent).not.toContain('Kịch bản mẫu');
   });
 
   it('should render unauthenticated links and CTA', () => {
@@ -65,14 +78,27 @@ describe('FloatingNavbarComponent', () => {
     expect(component.mobileMenuOpen()).toBe(false);
   });
 
-  it('should update isScrolled when window is scrolled past threshold', () => {
+  it('should identify active router links correctly', () => {
+    expect(component.isLinkActive('/', true)).toBe(true);
+    expect(component.isLinkActive('#capabilities')).toBe(false);
+    expect(component.isLinkActive('/#capabilities')).toBe(false);
+    expect(component.isLinkActive('/how-it-works')).toBe(false);
+    expect(component.isLinkActive('/features')).toBe(false);
+    expect(component.isLinkActive('/pricing')).toBe(false);
+    expect(component.isLinkActive('/faq')).toBe(false);
+  });
+
+  it('should initialize isScrolled synchronously from window.scrollY and update on scroll', () => {
     expect(component.isScrolled()).toBe(false);
 
-    Object.defineProperty(window, 'scrollY', { value: 50, writable: true });
+    Object.defineProperty(window, 'scrollY', { value: 50, writable: true, configurable: true });
+    const scrolledFixture = TestBed.createComponent(FloatingNavbarComponent);
+    expect(scrolledFixture.componentInstance.isScrolled()).toBe(true);
+
     component.onWindowScroll();
     expect(component.isScrolled()).toBe(true);
 
-    Object.defineProperty(window, 'scrollY', { value: 10, writable: true });
+    Object.defineProperty(window, 'scrollY', { value: 10, writable: true, configurable: true });
     component.onWindowScroll();
     expect(component.isScrolled()).toBe(false);
   });
