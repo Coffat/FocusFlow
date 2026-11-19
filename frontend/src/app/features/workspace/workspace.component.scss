@@ -1,0 +1,61 @@
+:host {
+  display: block;
+}
+
+.workspace-studio-title {
+  font-family: 'Newsreader', Georgia, serif;
+}
+
+.workspace-studio[data-ws-contrast='light'] {
+  --ws-surface-panel: rgba(255, 255, 255, 0.84);
+  --ws-panel-blur: blur(16px);
+  --ws-surface-control: rgba(255, 255, 255, 0.92);
+  --ws-surface-elevated: rgba(244, 245, 244, 0.92);
+  --ws-border: rgba(15, 23, 42, 0.14);
+  --ws-text-primary: #141715;
+  --ws-text-muted: #525954;
+  --ws-text-secondary: #525954;
+  --ws-accent: #005234;
+  --ws-accent-contrast: #ffffff;
+  --ws-danger: #ba1a1a;
+
+  --ws-note-cream: linear-gradient(165deg, #fff3a1 0%, #f7e479 100%);
+  --ws-note-cream-border: rgba(202, 178, 72, 0.35);
+  --ws-note-sage: linear-gradient(165deg, #c8f2d6 0%, #aee8c2 100%);
+  --ws-note-sage-border: rgba(114, 191, 142, 0.35);
+  --ws-note-lavender: linear-gradient(165deg, #e5d4ff 0%, #d5bcff 100%);
+  --ws-note-lavender-border: rgba(164, 134, 214, 0.35);
+  --ws-note-amber: linear-gradient(165deg, #ffa8a8 0%, #ff8c94 100%);
+  --ws-note-amber-border: rgba(219, 108, 118, 0.35);
+  --ws-note-text: #1c1917;
+  --ws-note-muted: #44403c;
+  --ws-note-subsurface: rgba(28, 25, 23, 0.06);
+  --ws-note-border-subtle: rgba(28, 25, 23, 0.14);
+}
+
+.workspace-studio[data-ws-contrast='dark'] {
+  --ws-surface-panel: rgba(18, 22, 32, 0.78);
+  --ws-panel-blur: blur(18px);
+  --ws-surface-control: rgba(28, 34, 48, 0.86);
+  --ws-surface-elevated: rgba(38, 46, 64, 0.9);
+  --ws-border: rgba(255, 255, 255, 0.16);
+  --ws-text-primary: #f2f0f0;
+  --ws-text-muted: #b8c0cc;
+  --ws-text-secondary: #b8c0cc;
+  --ws-accent: #8fd6ad;
+  --ws-accent-contrast: #002112;
+  --ws-danger: #ffb4ab;
+
+  --ws-note-cream: linear-gradient(165deg, #f3e38b 0%, #e8d474 100%);
+  --ws-note-cream-border: rgba(202, 178, 72, 0.32);
+  --ws-note-sage: linear-gradient(165deg, #b8e6c8 0%, #9fd9b4 100%);
+  --ws-note-sage-border: rgba(114, 191, 142, 0.32);
+  --ws-note-lavender: linear-gradient(165deg, #d9c8f5 0%, #c6b0ec 100%);
+  --ws-note-lavender-border: rgba(164, 134, 214, 0.32);
+  --ws-note-amber: linear-gradient(165deg, #f29b9b 0%, #e48289 100%);
+  --ws-note-amber-border: rgba(219, 108, 118, 0.32);
+  --ws-note-text: #1c1917;
+  --ws-note-muted: #44403c;
+  --ws-note-subsurface: rgba(28, 25, 23, 0.07);
+  --ws-note-border-subtle: rgba(28, 25, 23, 0.14);
+}

@@ -19,9 +19,10 @@ describe('AppFooterComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('hiển thị đầy đủ trạng thái hệ thống: Gemini 3.8 Flash và WCAG 2.2 AA', () => {
+  it('hiển thị đầy đủ trạng thái hệ thống: FocusFlow AI Harness và WCAG 2.2 AA', () => {
     const el = fixture.nativeElement as HTMLElement;
-    expect(el.textContent).toContain('Gemini 3.8 Flash via SSE');
+    expect(el.textContent).toContain('FocusFlow AI Harness • 2-Stage SSE');
+    expect(el.textContent).not.toContain('Gemini 3.8 Flash via SSE');
     expect(el.textContent).toContain('WCAG 2.2 AA');
     const footer = el.querySelector('footer');
     expect(footer?.className).not.toContain('fixed');

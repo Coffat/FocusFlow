@@ -8,6 +8,7 @@ from src.execution.domain.events.session_events import (
     StudySessionCompletedEvent,
 )
 from src.execution.domain.exceptions.execution_exceptions import (
+    ExecutionDomainError,
     InvalidSessionStateError,
     InvalidTaskDurationError,
     InvalidTaskStateError,
@@ -15,11 +16,19 @@ from src.execution.domain.exceptions.execution_exceptions import (
     TaskStalledInterventionRequiredError,
 )
 from src.execution.domain.models.study_session import (
+    STICKY_NOTE_ENVELOPE_PREFIX,
+    STUDIO_CONFIG_SENTINEL_PREFIX,
     DailyCheckin,
     SessionMode,
     SessionStatus,
+    StickyNotePayload,
+    StudioConfigPayload,
     StudySession,
     TimeSufficiency,
+    decode_sticky_note_content,
+    decode_studio_config,
+    encode_sticky_note_content,
+    encode_studio_config,
 )
 from src.execution.domain.models.task import Task, TaskDependency, TaskStatus
 from src.execution.domain.services.backlog_priority_ranker import BacklogPriorityRanker
@@ -383,3 +392,137 @@ class TestStudySessionDomainOS01:
             )
             == SessionStatus.PARTIAL_COMPLETED
         )
+
+    def test_resolve_pending_takeaway_promotes_qualifying_cancelled_sessions(self) -> None:
+        t0 = datetime(2026, 11, 18, 9, 0, tzinfo=UTC)
+
+        # Qualifying MVS (>= 10 min) cancelled due to missing takeaway -> PARTIAL_COMPLETED
+        s_mvs = StudySession(
+            user_id=uuid7(),
+            roadmap_id=uuid7(),
+            started_at=t0,
+            ended_at=t0 + timedelta(minutes=10),
+            planned_minutes=15,
+            actual_minutes=10,
+            status=SessionStatus.CANCELLED,
+            last_heartbeat_at=t0 + timedelta(minutes=10),
+            session_mode=SessionMode.MVS,
+            pending_takeaway=True,
+            created_at=t0,
+            updated_at=t0,
+        )
+        s_mvs.resolve_pending_takeaway(now=t0 + timedelta(minutes=20))
+        assert s_mvs.pending_takeaway is False
+        assert s_mvs.status == SessionStatus.PARTIAL_COMPLETED
+
+        # Qualifying STANDARD (>= 50% planned) -> PARTIAL_COMPLETED
+        s_std = StudySession(
+            user_id=uuid7(),
+            roadmap_id=uuid7(),
+            started_at=t0,
+            ended_at=t0 + timedelta(minutes=30),
+            planned_minutes=60,
+            actual_minutes=30,
+            status=SessionStatus.CANCELLED,
+            last_heartbeat_at=t0 + timedelta(minutes=30),
+            session_mode=SessionMode.STANDARD,
+            pending_takeaway=True,
+            created_at=t0,
+            updated_at=t0,
+        )
+        s_std.resolve_pending_takeaway(now=t0 + timedelta(minutes=35))
+        assert s_std.pending_takeaway is False
+        assert s_std.status == SessionStatus.PARTIAL_COMPLETED
+
+        # Non-qualifying STANDARD (< 50%) stays CANCELLED
+        s_short = StudySession(
+            user_id=uuid7(),
+            roadmap_id=uuid7(),
+            started_at=t0,
+            ended_at=t0 + timedelta(minutes=10),
+            planned_minutes=60,
+            actual_minutes=10,
+            status=SessionStatus.CANCELLED,
+            last_heartbeat_at=t0 + timedelta(minutes=10),
+            session_mode=SessionMode.STANDARD,
+            pending_takeaway=True,
+            created_at=t0,
+            updated_at=t0,
+        )
+        s_short.resolve_pending_takeaway(now=t0 + timedelta(minutes=15))
+        assert s_short.pending_takeaway is False
+        assert s_short.status == SessionStatus.CANCELLED
+
+
+class TestStickyNotesAndStudioConfigCodecs:
+    def test_sticky_note_envelope_round_trip_and_legacy_fallback(self) -> None:
+        payload = StickyNotePayload(
+            title="Ghi chú Postgres",
+            body="Nhớ dùng FOR UPDATE SKIP LOCKED cho sweeper.",
+            color="sage",
+            pinned=True,
+            pos_x=120.5,
+            pos_y=84.0,
+            z_index=3,
+            origin_session_id="sess-123",
+        )
+        encoded = encode_sticky_note_content(payload)
+        assert encoded.startswith(STICKY_NOTE_ENVELOPE_PREFIX)
+
+        decoded = decode_sticky_note_content(encoded)
+        assert decoded == payload
+
+        # Plain legacy note without prefix
+        legacy = decode_sticky_note_content("Plain legacy study note")
+        assert legacy == StickyNotePayload(
+            title="",
+            body="Plain legacy study note",
+            color="cream",
+            pinned=True,
+        )
+
+    def test_sticky_note_validation_errors(self) -> None:
+        with pytest.raises(ExecutionDomainError) as exc_color:
+            encode_sticky_note_content(StickyNotePayload(title="T", body="B", color="neon"))
+        assert exc_color.value.code == "INVALID_STICKY_NOTE_COLOR"
+
+        with pytest.raises(ExecutionDomainError) as exc_title:
+            encode_sticky_note_content(StickyNotePayload(title="x" * 201, body="B"))
+        assert exc_title.value.code == "INVALID_STICKY_NOTE_TITLE"
+
+        with pytest.raises(ExecutionDomainError) as exc_body:
+            encode_sticky_note_content(StickyNotePayload(title="T", body="y" * 5001))
+        assert exc_body.value.code == "INVALID_STICKY_NOTE_BODY"
+
+    def test_studio_config_codec_round_trip_and_validation(self) -> None:
+        cfg = StudioConfigPayload(
+            scene="cafe",
+            clock_style="flip",
+            clock_size="md",
+            show_seconds=False,
+            show_in_tab_title=True,
+            tab_guard_enabled=False,
+            zen_lock_enabled=True,
+            blocklist=("reddit.com", "x.com"),
+            parking_lot=(
+                {"id": "p1", "text": "Xem lại index B-tree", "created_at": "2026-11-18T10:00:00Z"},
+            ),
+        )
+        encoded = encode_studio_config(cfg)
+        assert encoded.startswith(STUDIO_CONFIG_SENTINEL_PREFIX)
+        assert decode_studio_config(encoded) == cfg
+
+        # Non-sentinel falls back to defaults
+        assert decode_studio_config("not-a-config") == StudioConfigPayload()
+
+        with pytest.raises(ExecutionDomainError) as exc_scene:
+            encode_studio_config(StudioConfigPayload(scene="spaceship"))
+        assert exc_scene.value.code == "INVALID_STUDIO_CONFIG"
+
+        with pytest.raises(ExecutionDomainError) as exc_style:
+            encode_studio_config(StudioConfigPayload(clock_style="sundial"))
+        assert exc_style.value.code == "INVALID_STUDIO_CONFIG"
+
+        with pytest.raises(ExecutionDomainError) as exc_size:
+            encode_studio_config(StudioConfigPayload(clock_size="xl"))
+        assert exc_size.value.code == "INVALID_STUDIO_CONFIG"

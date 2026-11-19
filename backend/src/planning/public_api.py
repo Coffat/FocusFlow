@@ -237,6 +237,18 @@ class RoadmapExecutionContextDTO:
 
 
 @dataclass(frozen=True, slots=True)
+class MilestoneExecutionContextDTO:
+    """Read-only milestone context exposed to Execution tasks."""
+
+    milestone_id: UUID
+    roadmap_id: UUID
+    sequence_order: int
+    title: str
+    learning_outcomes: tuple[str, ...] = ()
+    completion_criteria: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class ExecutionWeekScheduleBlockDTO:
     """ScheduleBlock + roadmap metadata exposed to Execution weekly schedule view."""
 
@@ -283,6 +295,11 @@ class PlanningExecutionBridgePort(Protocol):
         self,
         roadmap_ids: Sequence[UUID],
     ) -> dict[UUID, int]: ...
+
+    async def get_milestones_context(
+        self,
+        roadmap_ids: Sequence[UUID],
+    ) -> dict[UUID, MilestoneExecutionContextDTO]: ...
 
     async def verify_milestone_in_roadmap(
         self,

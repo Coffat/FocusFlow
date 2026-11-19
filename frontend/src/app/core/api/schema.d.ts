@@ -1096,6 +1096,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List learner workspace sticky notes */
+        get: operations["list_sticky_notes_api_v1_sessions_notes_get"];
+        put?: never;
+        /** Create a workspace sticky note */
+        post: operations["create_sticky_note_api_v1_sessions_notes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/notes/{note_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete an owned workspace sticky note */
+        delete: operations["delete_sticky_note_api_v1_sessions_notes__note_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update an owned workspace sticky note */
+        patch: operations["update_sticky_note_api_v1_sessions_notes__note_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/sessions/studio-config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get learner workspace studio configuration */
+        get: operations["get_studio_config_api_v1_sessions_studio_config_get"];
+        /** Create or update learner workspace studio configuration */
+        put: operations["upsert_studio_config_api_v1_sessions_studio_config_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions/active": {
         parameters: {
             query?: never;
@@ -1801,6 +1855,40 @@ export interface components {
             /** Weekly Commitment Hours */
             weekly_commitment_hours?: number | null;
             input_provenance?: components["schemas"]["GoalInputProvenanceSchema"];
+        };
+        /** CreateStickyNoteRequest */
+        CreateStickyNoteRequest: {
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Body
+             * @default
+             */
+            body: string;
+            /**
+             * Color
+             * @default cream
+             * @enum {string}
+             */
+            color: "cream" | "pink" | "sage" | "blue" | "amber" | "lavender";
+            /**
+             * Pinned
+             * @default true
+             */
+            pinned: boolean;
+            /** Pos X */
+            pos_x?: number | null;
+            /** Pos Y */
+            pos_y?: number | null;
+            /** Z Index */
+            z_index?: number | null;
+            /** Origin Session Id */
+            origin_session_id?: string | null;
+            /** Task Id */
+            task_id?: string | null;
         };
         /** CreateTaskRequest */
         CreateTaskRequest: {
@@ -2638,6 +2726,17 @@ export interface components {
              */
             updated_at: string;
         };
+        /** ParkingThoughtSchema */
+        ParkingThoughtSchema: {
+            /** Id */
+            id: string;
+            /** Text */
+            text: string;
+            /** Created At */
+            created_at?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /** PlanningConflictResponse */
         PlanningConflictResponse: {
             /** Code */
@@ -3195,6 +3294,54 @@ export interface components {
             /** Planned Minutes */
             planned_minutes?: number | null;
         };
+        /** StickyNoteResponse */
+        StickyNoteResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Task Id */
+            task_id?: string | null;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Body
+             * @default
+             */
+            body: string;
+            /**
+             * Color
+             * @default cream
+             */
+            color: string;
+            /**
+             * Pinned
+             * @default true
+             */
+            pinned: boolean;
+            /** Pos X */
+            pos_x?: number | null;
+            /** Pos Y */
+            pos_y?: number | null;
+            /** Z Index */
+            z_index?: number | null;
+            /** Origin Session Id */
+            origin_session_id?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
         /** StudyNoteResponse */
         StudyNoteResponse: {
             /**
@@ -3453,6 +3600,12 @@ export interface components {
             out_degree?: number | null;
             /** Milestone Sequence */
             milestone_sequence?: number | null;
+            /** Milestone Title */
+            milestone_title?: string | null;
+            /** Learning Outcomes */
+            learning_outcomes?: string[];
+            /** Completion Criteria */
+            completion_criteria?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -3493,6 +3646,16 @@ export interface components {
              * @default 0
              */
             overdue_tasks_count: number;
+            /**
+             * Completed Sessions Today
+             * @default 0
+             */
+            completed_sessions_today: number;
+            /**
+             * Studied Minutes Today
+             * @default 0
+             */
+            studied_minutes_today: number;
         };
         /** UpdateAvailabilityRequestDTO */
         UpdateAvailabilityRequestDTO: {
@@ -3565,6 +3728,23 @@ export interface components {
              */
             reject_invalid: boolean;
         };
+        /** UpdateStickyNoteRequest */
+        UpdateStickyNoteRequest: {
+            /** Title */
+            title?: string | null;
+            /** Body */
+            body?: string | null;
+            /** Color */
+            color?: ("cream" | "pink" | "sage" | "blue" | "amber" | "lavender") | null;
+            /** Pinned */
+            pinned?: boolean | null;
+            /** Pos X */
+            pos_x?: number | null;
+            /** Pos Y */
+            pos_y?: number | null;
+            /** Z Index */
+            z_index?: number | null;
+        };
         /** UpdateTaskRequest */
         UpdateTaskRequest: {
             /** Title */
@@ -3573,6 +3753,51 @@ export interface components {
             description?: string | null;
             /** Estimated Minutes */
             estimated_minutes?: number | null;
+        };
+        /** UpdateWorkspaceStudioConfigRequest */
+        UpdateWorkspaceStudioConfigRequest: {
+            /**
+             * Scene
+             * @default lofi-night
+             * @enum {string}
+             */
+            scene: "architectural" | "lofi-night" | "rain" | "cafe" | "library";
+            /**
+             * Clock Style
+             * @default ring
+             * @enum {string}
+             */
+            clock_style: "editorial" | "ring" | "flip" | "minimal";
+            /**
+             * Clock Size
+             * @default lg
+             * @enum {string}
+             */
+            clock_size: "md" | "lg";
+            /**
+             * Show Seconds
+             * @default true
+             */
+            show_seconds: boolean;
+            /**
+             * Show In Tab Title
+             * @default true
+             */
+            show_in_tab_title: boolean;
+            /**
+             * Tab Guard Enabled
+             * @default true
+             */
+            tab_guard_enabled: boolean;
+            /**
+             * Zen Lock Enabled
+             * @default false
+             */
+            zen_lock_enabled: boolean;
+            /** Blocklist */
+            blocklist?: string[];
+            /** Parking Lot */
+            parking_lot?: components["schemas"]["ParkingThoughtSchema"][];
         };
         /** UserProfileSchema */
         UserProfileSchema: {
@@ -3749,6 +3974,50 @@ export interface components {
             week_end: string;
             /** Items */
             items?: components["schemas"]["WeeklyScheduleItemResponse"][];
+        };
+        /** WorkspaceStudioConfigResponse */
+        WorkspaceStudioConfigResponse: {
+            /**
+             * Scene
+             * @default lofi-night
+             */
+            scene: string;
+            /**
+             * Clock Style
+             * @default ring
+             */
+            clock_style: string;
+            /**
+             * Clock Size
+             * @default lg
+             */
+            clock_size: string;
+            /**
+             * Show Seconds
+             * @default true
+             */
+            show_seconds: boolean;
+            /**
+             * Show In Tab Title
+             * @default true
+             */
+            show_in_tab_title: boolean;
+            /**
+             * Tab Guard Enabled
+             * @default true
+             */
+            tab_guard_enabled: boolean;
+            /**
+             * Zen Lock Enabled
+             * @default false
+             */
+            zen_lock_enabled: boolean;
+            /** Blocklist */
+            blocklist?: string[];
+            /** Parking Lot */
+            parking_lot?: components["schemas"]["ParkingThoughtSchema"][];
+            /** Updated At */
+            updated_at?: string | null;
         };
     };
     responses: never;
@@ -5928,6 +6197,176 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TodayFocusResponse"];
+                };
+            };
+        };
+    };
+    list_sticky_notes_api_v1_sessions_notes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StickyNoteResponse"][];
+                };
+            };
+        };
+    };
+    create_sticky_note_api_v1_sessions_notes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateStickyNoteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StickyNoteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_sticky_note_api_v1_sessions_notes__note_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                note_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_sticky_note_api_v1_sessions_notes__note_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                note_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateStickyNoteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StickyNoteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_studio_config_api_v1_sessions_studio_config_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceStudioConfigResponse"];
+                };
+            };
+        };
+    };
+    upsert_studio_config_api_v1_sessions_studio_config_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateWorkspaceStudioConfigRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceStudioConfigResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

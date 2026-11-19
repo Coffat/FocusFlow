@@ -1,3 +1,4 @@
+import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
@@ -16,6 +17,16 @@ from src.shared_kernel.domain.base import AggregateRoot, generate_uuid7
 MVS_MIN_QUALIFYING_MINUTES: int = 10
 STANDARD_PARTIAL_RATIO: float = 0.5
 SCRATCHPAD_MAX_CHARS: int = 10_000
+VALID_STICKY_NOTE_COLORS: frozenset[str] = frozenset(
+    {"cream", "pink", "sage", "blue", "amber", "lavender"}
+)
+STUDIO_CONFIG_SENTINEL_PREFIX: str = "<!--FF_STUDIO_CONFIG_V1-->"
+STICKY_NOTE_ENVELOPE_PREFIX: str = "<!--FF_STICKY_V1-->"
+VALID_STUDIO_SCENES: frozenset[str] = frozenset(
+    {"architectural", "lofi-night", "rain", "cafe", "library"}
+)
+VALID_STUDIO_CLOCK_STYLES: frozenset[str] = frozenset({"editorial", "ring", "flip", "minimal"})
+VALID_STUDIO_CLOCK_SIZES: frozenset[str] = frozenset({"md", "lg"})
 
 
 class SessionMode(StrEnum):
@@ -55,6 +66,196 @@ class TimeSufficiency(StrEnum):
     TOO_SHORT = "TOO_SHORT"
     JUST_RIGHT = "JUST_RIGHT"
     TOO_LONG = "TOO_LONG"
+
+
+@dataclass(frozen=True, slots=True)
+class StickyNotePayload:
+    """Structured sticky-note payload encoded inside StudyNote(GENERAL).content."""
+
+    title: str
+    body: str
+    color: str = "cream"
+    pinned: bool = True
+    pos_x: float | None = None
+    pos_y: float | None = None
+    z_index: int | None = None
+    origin_session_id: str | None = None
+
+
+def encode_sticky_note_content(payload: StickyNotePayload) -> str:
+    """Validate and encode a StickyNotePayload with the versioned envelope prefix."""
+    if payload.color not in VALID_STICKY_NOTE_COLORS:
+        raise ExecutionDomainError(
+            message=f"Màu ghi chú '{payload.color}' không hợp lệ.",
+            code="INVALID_STICKY_NOTE_COLOR",
+        )
+    if len(payload.title) > 200:
+        raise ExecutionDomainError(
+            message="Tiêu đề ghi chú tối đa 200 ký tự.",
+            code="INVALID_STICKY_NOTE_TITLE",
+        )
+    if len(payload.body) > 5000:
+        raise ExecutionDomainError(
+            message="Nội dung ghi chú tối đa 5000 ký tự.",
+            code="INVALID_STICKY_NOTE_BODY",
+        )
+    meta: dict[str, object] = {
+        "title": payload.title,
+        "color": payload.color,
+        "pinned": payload.pinned,
+        "pos_x": payload.pos_x,
+        "pos_y": payload.pos_y,
+        "z_index": payload.z_index,
+        "origin_session_id": payload.origin_session_id,
+    }
+    return f"{STICKY_NOTE_ENVELOPE_PREFIX}{json.dumps(meta, ensure_ascii=False)}\n{payload.body}"
+
+
+def decode_sticky_note_content(raw: str) -> StickyNotePayload:
+    """Decode a StickyNotePayload, falling back to plain legacy text if unprefixed."""
+    if not raw.startswith(STICKY_NOTE_ENVELOPE_PREFIX):
+        return StickyNotePayload(title="", body=raw, color="cream", pinned=True)
+
+    rest = raw[len(STICKY_NOTE_ENVELOPE_PREFIX) :]
+    if "\n" in rest:
+        meta_raw, body = rest.split("\n", 1)
+    else:
+        meta_raw, body = rest, ""
+
+    try:
+        meta = json.loads(meta_raw)
+    except json.JSONDecodeError:
+        return StickyNotePayload(title="", body=raw, color="cream", pinned=True)
+
+    if not isinstance(meta, dict):
+        return StickyNotePayload(title="", body=raw, color="cream", pinned=True)
+
+    color_val = str(meta.get("color") or "cream")
+    if color_val not in VALID_STICKY_NOTE_COLORS:
+        color_val = "cream"
+
+    raw_pos_x = meta.get("pos_x")
+    raw_pos_y = meta.get("pos_y")
+    raw_z = meta.get("z_index")
+    raw_origin = meta.get("origin_session_id")
+    return StickyNotePayload(
+        title=str(meta.get("title") or "")[:200],
+        body=body,
+        color=color_val,
+        pinned=bool(meta.get("pinned", True)),
+        pos_x=(
+            float(raw_pos_x)
+            if isinstance(raw_pos_x, (int, float)) and not isinstance(raw_pos_x, bool)
+            else None
+        ),
+        pos_y=(
+            float(raw_pos_y)
+            if isinstance(raw_pos_y, (int, float)) and not isinstance(raw_pos_y, bool)
+            else None
+        ),
+        z_index=(int(raw_z) if isinstance(raw_z, int) and not isinstance(raw_z, bool) else None),
+        origin_session_id=str(raw_origin) if raw_origin is not None else None,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class StudioConfigPayload:
+    """Workspace studio configuration encoded inside a sentinel StudyNote(GENERAL)."""
+
+    scene: str = "lofi-night"
+    clock_style: str = "ring"
+    clock_size: str = "lg"
+    show_seconds: bool = True
+    show_in_tab_title: bool = True
+    tab_guard_enabled: bool = True
+    zen_lock_enabled: bool = False
+    blocklist: tuple[str, ...] = ("facebook.com", "youtube.com", "tiktok.com")
+    parking_lot: tuple[dict[str, object], ...] = ()
+
+
+def encode_studio_config(payload: StudioConfigPayload) -> str:
+    """Validate and encode StudioConfigPayload with the sentinel prefix."""
+    if payload.scene not in VALID_STUDIO_SCENES:
+        raise ExecutionDomainError(
+            message=f"Chủ đề phòng học '{payload.scene}' không hợp lệ.",
+            code="INVALID_STUDIO_CONFIG",
+        )
+    if payload.clock_style not in VALID_STUDIO_CLOCK_STYLES:
+        raise ExecutionDomainError(
+            message=f"Kiểu đồng hồ '{payload.clock_style}' không hợp lệ.",
+            code="INVALID_STUDIO_CONFIG",
+        )
+    if payload.clock_size not in VALID_STUDIO_CLOCK_SIZES:
+        raise ExecutionDomainError(
+            message=f"Kích thước đồng hồ '{payload.clock_size}' không hợp lệ.",
+            code="INVALID_STUDIO_CONFIG",
+        )
+    data: dict[str, object] = {
+        "scene": payload.scene,
+        "clock_style": payload.clock_style,
+        "clock_size": payload.clock_size,
+        "show_seconds": payload.show_seconds,
+        "show_in_tab_title": payload.show_in_tab_title,
+        "tab_guard_enabled": payload.tab_guard_enabled,
+        "zen_lock_enabled": payload.zen_lock_enabled,
+        "blocklist": list(payload.blocklist),
+        "parking_lot": [dict(item) for item in payload.parking_lot],
+    }
+    return f"{STUDIO_CONFIG_SENTINEL_PREFIX}{json.dumps(data, ensure_ascii=False)}"
+
+
+def decode_studio_config(raw: str) -> StudioConfigPayload:
+    """Decode StudioConfigPayload from sentinel content, defaulting cleanly on invalid input."""
+    if not raw.startswith(STUDIO_CONFIG_SENTINEL_PREFIX):
+        return StudioConfigPayload()
+
+    json_part = raw[len(STUDIO_CONFIG_SENTINEL_PREFIX) :].strip()
+    try:
+        data = json.loads(json_part)
+    except json.JSONDecodeError:
+        return StudioConfigPayload()
+
+    if not isinstance(data, dict):
+        return StudioConfigPayload()
+
+    defaults = StudioConfigPayload()
+    scene = str(data.get("scene") or defaults.scene)
+    if scene not in VALID_STUDIO_SCENES:
+        scene = defaults.scene
+
+    clock_style = str(data.get("clock_style") or defaults.clock_style)
+    if clock_style not in VALID_STUDIO_CLOCK_STYLES:
+        clock_style = defaults.clock_style
+
+    clock_size = str(data.get("clock_size") or defaults.clock_size)
+    if clock_size not in VALID_STUDIO_CLOCK_SIZES:
+        clock_size = defaults.clock_size
+
+    raw_blocklist = data.get("blocklist")
+    blocklist = (
+        tuple(str(item) for item in raw_blocklist)
+        if isinstance(raw_blocklist, list)
+        else defaults.blocklist
+    )
+
+    raw_parking = data.get("parking_lot")
+    parking_lot = (
+        tuple(dict(item) for item in raw_parking if isinstance(item, dict))
+        if isinstance(raw_parking, list)
+        else defaults.parking_lot
+    )
+
+    return StudioConfigPayload(
+        scene=scene,
+        clock_style=clock_style,
+        clock_size=clock_size,
+        show_seconds=bool(data.get("show_seconds", defaults.show_seconds)),
+        show_in_tab_title=bool(data.get("show_in_tab_title", defaults.show_in_tab_title)),
+        tab_guard_enabled=bool(data.get("tab_guard_enabled", defaults.tab_guard_enabled)),
+        zen_lock_enabled=bool(data.get("zen_lock_enabled", defaults.zen_lock_enabled)),
+        blocklist=blocklist,
+        parking_lot=parking_lot,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -265,5 +466,15 @@ class StudySession(AggregateRoot):
     def resolve_pending_takeaway(self, *, now: datetime) -> None:
         if not self.pending_takeaway:
             raise InvalidSessionStateError("Phiên học này không có nghĩa vụ nợ Key Takeaway.")
+        if self.status == SessionStatus.CANCELLED:
+            qualifies_mvs = (
+                self.session_mode == SessionMode.MVS
+                and self.actual_minutes >= MVS_MIN_QUALIFYING_MINUTES
+            )
+            qualifies_standard = (
+                self.planned_minutes > 0 and self.actual_minutes * 2 >= self.planned_minutes
+            )
+            if qualifies_mvs or qualifies_standard:
+                self.status = SessionStatus.PARTIAL_COMPLETED
         self.pending_takeaway = False
         self.updated_at = now

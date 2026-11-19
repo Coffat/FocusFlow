@@ -19,12 +19,18 @@ from src.execution.application.ports.study_session_repository_port import (
 )
 from src.execution.application.ports.task_repository_port import TaskRepositoryPort
 from src.execution.application.use_cases.session_use_cases import (
+    CreateStickyNoteUseCase,
+    DeleteStickyNoteUseCase,
     FinalizeStudySessionUseCase,
     GetActiveSessionUseCase,
+    GetStudioConfigUseCase,
     GetTodayFocusUseCase,
     HeartbeatStudySessionUseCase,
+    ListStickyNotesUseCase,
     ResolvePendingTakeawayUseCase,
     StartStudySessionUseCase,
+    UpdateStickyNoteUseCase,
+    UpsertStudioConfigUseCase,
 )
 from src.execution.application.use_cases.task_use_cases import (
     AddTaskDependencyUseCase,
@@ -401,6 +407,46 @@ def get_resolve_pending_takeaway_use_case(
     )
 
 
+def get_list_sticky_notes_use_case(
+    session_repo: StudySessionRepositoryPort = Depends(get_study_session_repository),
+) -> ListStickyNotesUseCase:
+    return ListStickyNotesUseCase(session_repo=session_repo)
+
+
+def get_create_sticky_note_use_case(
+    session_repo: StudySessionRepositoryPort = Depends(get_study_session_repository),
+    uow: AsyncUnitOfWork = Depends(get_execution_uow),
+) -> CreateStickyNoteUseCase:
+    return CreateStickyNoteUseCase(session_repo=session_repo, uow=uow)
+
+
+def get_update_sticky_note_use_case(
+    session_repo: StudySessionRepositoryPort = Depends(get_study_session_repository),
+    uow: AsyncUnitOfWork = Depends(get_execution_uow),
+) -> UpdateStickyNoteUseCase:
+    return UpdateStickyNoteUseCase(session_repo=session_repo, uow=uow)
+
+
+def get_delete_sticky_note_use_case(
+    session_repo: StudySessionRepositoryPort = Depends(get_study_session_repository),
+    uow: AsyncUnitOfWork = Depends(get_execution_uow),
+) -> DeleteStickyNoteUseCase:
+    return DeleteStickyNoteUseCase(session_repo=session_repo, uow=uow)
+
+
+def get_studio_config_use_case(
+    session_repo: StudySessionRepositoryPort = Depends(get_study_session_repository),
+) -> GetStudioConfigUseCase:
+    return GetStudioConfigUseCase(session_repo=session_repo)
+
+
+def get_upsert_studio_config_use_case(
+    session_repo: StudySessionRepositoryPort = Depends(get_study_session_repository),
+    uow: AsyncUnitOfWork = Depends(get_execution_uow),
+) -> UpsertStudioConfigUseCase:
+    return UpsertStudioConfigUseCase(session_repo=session_repo, uow=uow)
+
+
 CurrentExecutionLearnerIdDep = Annotated[UUID, Depends(get_current_execution_learner_id)]
 ListTasksUseCaseDep = Annotated[ListTasksUseCase, Depends(get_list_tasks_use_case)]
 CreateManualTaskUseCaseDep = Annotated[
@@ -436,4 +482,20 @@ FinalizeStudySessionUseCaseDep = Annotated[
 ]
 ResolvePendingTakeawayUseCaseDep = Annotated[
     ResolvePendingTakeawayUseCase, Depends(get_resolve_pending_takeaway_use_case)
+]
+ListStickyNotesUseCaseDep = Annotated[
+    ListStickyNotesUseCase, Depends(get_list_sticky_notes_use_case)
+]
+CreateStickyNoteUseCaseDep = Annotated[
+    CreateStickyNoteUseCase, Depends(get_create_sticky_note_use_case)
+]
+UpdateStickyNoteUseCaseDep = Annotated[
+    UpdateStickyNoteUseCase, Depends(get_update_sticky_note_use_case)
+]
+DeleteStickyNoteUseCaseDep = Annotated[
+    DeleteStickyNoteUseCase, Depends(get_delete_sticky_note_use_case)
+]
+GetStudioConfigUseCaseDep = Annotated[GetStudioConfigUseCase, Depends(get_studio_config_use_case)]
+UpsertStudioConfigUseCaseDep = Annotated[
+    UpsertStudioConfigUseCase, Depends(get_upsert_studio_config_use_case)
 ]

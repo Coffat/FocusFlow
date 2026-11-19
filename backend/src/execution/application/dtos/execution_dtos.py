@@ -23,6 +23,9 @@ class TaskViewDTO:
     out_degree: int | None = None
     milestone_sequence: int | None = None
     roadmap_title: str | None = None
+    milestone_title: str | None = None
+    learning_outcomes: tuple[str, ...] = ()
+    completion_criteria: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,3 +76,36 @@ class TodayFocusViewDTO:
     focus_task: TaskViewDTO | None
     today_queue: tuple[TaskViewDTO, ...] = field(default_factory=tuple)
     overdue_tasks_count: int = 0
+    completed_sessions_today: int = 0
+    studied_minutes_today: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class StickyNoteViewDTO:
+    id: UUID
+    user_id: UUID
+    task_id: UUID | None
+    title: str
+    body: str
+    color: str
+    pinned: bool
+    pos_x: float | None
+    pos_y: float | None
+    z_index: int | None
+    origin_session_id: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class StudioConfigViewDTO:
+    scene: str
+    clock_style: str
+    clock_size: str
+    show_seconds: bool
+    show_in_tab_title: bool
+    tab_guard_enabled: bool
+    zen_lock_enabled: bool
+    blocklist: tuple[str, ...] = ()
+    parking_lot: tuple[dict[str, object], ...] = ()
+    updated_at: datetime | None = None

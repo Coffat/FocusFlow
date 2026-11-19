@@ -216,23 +216,13 @@
             }
           </div>
         </div>
-
-        @if (status() === 'ACTIVE' || status() === 'INITIALIZED') {
-          <div class="col-span-2">
-            <div class="text-neutral-400 truncate">Nhịp sinh học:</div>
-            <div class="font-medium text-neutral-800 flex items-center gap-1.5 mt-0.5 min-h-[1.25rem]">
-              <span class="material-symbols-outlined text-[14px] text-amber-600 shrink-0" aria-hidden="true">dark_mode</span>
-              <span class="truncate">Evening Flow (20:00 - 22:00)</span>
-            </div>
-          </div>
-        }
       </div>
 
       <!-- Domino Shift Policy Alert Note (for Paused) -->
       @if (status() === 'PAUSED') {
         <div class="mt-3 p-2.5 rounded-lg bg-amber-50/60 border border-amber-200/60 text-[11px] text-amber-900 leading-relaxed flex items-start gap-2">
           <span class="material-symbols-outlined text-[15px] text-amber-700 shrink-0 mt-0.5" aria-hidden="true">info</span>
-          <span>Lịch học tạm đóng băng. Khi kích hoạt lại, hạn chót sẽ tự động tịnh tiến (Domino Shift v2).</span>
+          <span>Lịch học tạm đóng băng. Khi kích hoạt lại, hệ thống sẽ tính lại đề xuất tịnh tiến lịch (Domino Shift).</span>
         </div>
       }
     </div>

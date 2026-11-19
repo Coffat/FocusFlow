@@ -132,4 +132,23 @@ describe('RoadmapCardComponent', () => {
     expect(cardInstance.progress()).toBe(75);
     expect(cardInstance.taskRatio()).toBe('(15/20 Tasks)');
   });
+
+  it('không hiển thị dữ liệu giả hardcoded khi thiếu nextTaskTitle và description', () => {
+    host.roadmap.set({
+      id: 'rm-104',
+      title: 'Học Tiếng Nhật N3',
+      status: 'ACTIVE',
+    });
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const text = el.textContent ?? '';
+    expect(text).not.toContain('FastAPI');
+    expect(text).not.toContain('Taskiq');
+    expect(text).not.toContain('Mốc 2: Ports & Adapters');
+    expect(text).not.toContain('Evening Flow');
+    expect(text).toContain('Đang thực thi theo lịch chính thức');
+    expect(text).toContain('Lộ trình học tập thích ứng phân rã theo đồ thị DAG và đồng bộ lịch rảnh cá nhân.');
+    expect(text).toContain('Lịch rảnh Mode A/B');
+  });
 });

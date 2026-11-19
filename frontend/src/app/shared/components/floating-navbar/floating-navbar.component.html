@@ -1,0 +1,158 @@
+<!-- FLOATING CAPSULE NAVBAR -->
+<header class="fixed top-3 sm:top-4 inset-x-0 z-50 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full select-none">
+  <nav
+    [class]="isScrolled()
+      ? 'rounded-full bg-white/95 backdrop-blur-xl border border-outline-variant/80 shadow-[0_12px_36px_-4px_rgba(17,17,17,0.12)] flex items-center justify-between gap-3 sm:gap-4 px-4 sm:px-6 py-2 min-h-[56px] transition-[background-color,box-shadow,border-color] duration-200'
+      : 'rounded-full bg-white/90 backdrop-blur-md border border-outline-variant/60 shadow-[0_4px_20px_-2px_rgba(17,17,17,0.05)] flex items-center justify-between gap-3 sm:gap-4 px-4 sm:px-6 py-2 min-h-[56px] transition-[background-color,box-shadow,border-color] duration-200'"
+    aria-label="Điều hướng chính"
+  >
+    <!-- Brand Logo -->
+    <a
+      routerLink="/"
+      class="flex items-center gap-2.5 group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-full whitespace-nowrap shrink-0"
+      aria-label="FocusFlow Trang chủ"
+    >
+      <div class="bg-neutral-50/80 border border-outline-variant/40 rounded-xl p-1 flex items-center justify-center shrink-0">
+        <img
+          src="assets/logo.svg"
+          alt=""
+          width="28"
+          height="28"
+          class="w-6 h-6 sm:w-7 sm:h-7 shrink-0 transition-transform group-hover:scale-105"
+        />
+      </div>
+      <div class="flex flex-col whitespace-nowrap">
+        <span class="text-base font-bold tracking-tight leading-tight font-sans">
+          @if (brandName() === 'FocusFlow') {
+            <span class="text-on-surface">Focus</span><span class="text-[#205C43]">Flow</span>
+          } @else {
+            <span class="text-on-surface">{{ brandName() }}</span>
+          }
+        </span>
+        <span class="text-[9px] tracking-wider uppercase text-on-surface-variant font-medium hidden sm:inline font-sans">
+          Plan Smarter • Do Better
+        </span>
+      </div>
+    </a>
+
+    <!-- Navigation Links (Desktop) -->
+    <div class="hidden md:flex items-center gap-1 lg:gap-2">
+      @for (link of navLinks(); track link.href) {
+        @if (link.href.startsWith('/') && !link.href.startsWith('/#')) {
+          <a
+            [routerLink]="link.href"
+            (click)="handleAnchorClick(link.href, $event)"
+            [class]="isLinkActive(link.href, link.exact)
+              ? 'whitespace-nowrap shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors duration-150 font-sans text-[#246B4A] bg-[#246B4A]/10 shadow-2xs'
+              : 'whitespace-nowrap shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors duration-150 font-sans text-on-surface-variant hover:text-[#246B4A] hover:bg-surface-container-low/80'"
+          >
+            {{ link.label }}
+          </a>
+        } @else {
+          <a
+            [href]="link.href"
+            (click)="handleAnchorClick(link.href, $event)"
+            class="whitespace-nowrap shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors duration-150 font-sans text-on-surface-variant hover:text-[#246B4A] hover:bg-surface-container-low/80"
+          >
+            {{ link.label }}
+          </a>
+        }
+      }
+    </div>
+
+    <!-- Actions -->
+    <div class="flex items-center gap-2 sm:gap-2.5 whitespace-nowrap shrink-0">
+      @if (isAuthenticated()) {
+        <a
+          [routerLink]="dashboardUrl()"
+          class="whitespace-nowrap shrink-0 inline-flex items-center justify-center gap-1.5 bg-primary text-white hover:bg-primary-container px-4 py-1.5 rounded-full text-xs font-semibold font-sans transition-colors duration-150 shadow-sm hover:shadow-[0_4px_20px_rgba(36,107,74,0.3)]"
+        >
+          <span>Vào Dashboard</span>
+          <span class="material-symbols-outlined text-[15px]" aria-hidden="true">arrow_forward</span>
+        </a>
+      } @else {
+        <a
+          [routerLink]="loginUrl()"
+          class="whitespace-nowrap shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors duration-150 font-sans text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low/80"
+        >
+          Đăng nhập
+        </a>
+        <a
+          [routerLink]="registerUrl()"
+          class="whitespace-nowrap shrink-0 inline-flex items-center justify-center bg-on-surface text-white hover:bg-primary px-4 py-1.5 rounded-full text-xs font-semibold font-sans transition-colors duration-150 shadow-sm hover:shadow-[0_4px_20px_rgba(36,107,74,0.3)]"
+        >
+          Bắt đầu ngay
+        </a>
+      }
+
+      <!-- Mobile Hamburger Toggle -->
+      <button
+        type="button"
+        (click)="toggleMobileMenu()"
+        class="md:hidden w-8 h-8 rounded-full flex items-center justify-center text-on-surface hover:bg-surface-container transition-colors shrink-0"
+        aria-label="Mở menu di động"
+        [attr.aria-expanded]="mobileMenuOpen()"
+      >
+        <span class="material-symbols-outlined text-[20px]">
+          {{ mobileMenuOpen() ? 'close' : 'menu' }}
+        </span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Mobile Dropdown Navigation -->
+  @if (mobileMenuOpen()) {
+    <div class="mt-2 md:hidden rounded-2xl bg-white/95 backdrop-blur-md border border-outline-variant/60 shadow-lg p-4 flex flex-col gap-2">
+      @for (link of navLinks(); track link.href) {
+        @if (link.href.startsWith('/') && !link.href.startsWith('/#')) {
+          <a
+            [routerLink]="link.href"
+            (click)="handleAnchorClick(link.href, $event)"
+            [class]="isLinkActive(link.href, link.exact)
+              ? 'text-sm font-semibold text-[#246B4A] bg-[#246B4A]/10 py-2 px-3 rounded-xl flex items-center justify-between'
+              : 'text-sm font-medium text-on-surface hover:text-[#246B4A] py-2 px-3 rounded-xl hover:bg-surface-container'"
+          >
+            <span>{{ link.label }}</span>
+            @if (isLinkActive(link.href, link.exact)) {
+              <span class="w-1.5 h-1.5 rounded-full bg-[#246B4A]"></span>
+            }
+          </a>
+        } @else {
+          <a
+            [href]="link.href"
+            (click)="handleAnchorClick(link.href, $event)"
+            class="text-sm font-medium text-on-surface hover:text-[#246B4A] py-2 px-3 rounded-xl hover:bg-surface-container"
+          >
+            {{ link.label }}
+          </a>
+        }
+      }
+      <div class="pt-2 border-t border-outline-variant/30 flex items-center justify-between gap-2">
+        @if (isAuthenticated()) {
+          <a
+            [routerLink]="dashboardUrl()"
+            (click)="closeMobileMenu()"
+            class="w-full text-center py-2 rounded-full bg-primary text-white text-xs font-semibold"
+          >
+            Vào Dashboard
+          </a>
+        } @else {
+          <a
+            [routerLink]="loginUrl()"
+            (click)="closeMobileMenu()"
+            class="text-xs font-semibold text-on-surface-variant hover:text-on-surface px-3.5 py-1.5 rounded-full"
+          >
+            Đăng nhập
+          </a>
+          <a
+            [routerLink]="registerUrl()"
+            (click)="closeMobileMenu()"
+            class="py-1.5 px-4 rounded-full bg-on-surface text-white text-xs font-semibold"
+          >
+            Bắt đầu ngay
+          </a>
+        }
+      </div>
+    </div>
+  }
+</header>

@@ -8,7 +8,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.account.public_api import create_calendar_sync_facade
-from src.execution.infrastructure.orm.session_orm import StudySessionORM
+from src.execution.infrastructure.orm.session_orm import SessionTaskORM, StudySessionORM
 from src.execution.infrastructure.orm.task_orm import TaskORM
 from src.execution.public_api import (
     NotificationServicePort,
@@ -79,17 +79,14 @@ async def sweep_abandoned_study_sessions(
                 # 1. Minimum Viable Session (MVS): actual_minutes >= 10
                 # 2. Standard Session: actual_minutes >= 0.5 * planned_minutes
                 # 3. Or at least one session task completed
-                has_completed_task = False
+                st_rows: list[SessionTaskORM] = []
                 try:
-                    st_result = await cast(Any, session).execute(
-                        text(
-                            "SELECT 1 FROM session_tasks WHERE session_id = :sid AND status_after_session = 'COMPLETED' LIMIT 1"
-                        ),
-                        {"sid": s.id},
-                    )
-                    has_completed_task = st_result.scalar_one_or_none() is not None
+                    st_stmt = select(SessionTaskORM).where(SessionTaskORM.session_id == s.id)
+                    st_rows = list((await session.execute(st_stmt)).scalars().all())
                 except Exception:
-                    pass
+                    st_rows = []
+
+                has_completed_task = any(st.status_after_session == "COMPLETED" for st in st_rows)
 
                 is_partial = False
                 if s.session_mode == "MVS" and s.actual_minutes >= 10:
@@ -106,7 +103,29 @@ async def sweep_abandoned_study_sessions(
 
                 s.status = new_status
                 s.ended_at = end_time
+                s.pending_takeaway = True
                 s.updated_at = current_time
+
+                incomplete_task_ids: list[UUID] = []
+                for st in st_rows:
+                    if st.status_after_session != "COMPLETED":
+                        st.status_after_session = "TODO"
+                        st.updated_at = current_time
+                        incomplete_task_ids.append(st.task_id)
+
+                if incomplete_task_ids:
+                    task_stmt = select(TaskORM).where(TaskORM.id.in_(incomplete_task_ids))
+                    if bind is not None and getattr(bind.dialect, "name", "") == "postgresql":
+                        task_stmt = task_stmt.with_for_update(skip_locked=True)
+                    task_rows = list((await session.execute(task_stmt)).scalars().all())
+                    for task_row in task_rows:
+                        if task_row.status != "COMPLETED":
+                            task_row.status = "TODO"
+                            task_row.scheduled_date = None
+                            task_row.scheduled_start = None
+                            task_row.scheduled_end = None
+                            task_row.official_schedule_id = None
+                            task_row.updated_at = current_time
 
                 recovered_seconds = int(s.actual_minutes) * 60
                 event = StudySessionAbandonedEvent(

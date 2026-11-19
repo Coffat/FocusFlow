@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time, timedelta
 from uuid import UUID
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from src.account.public_api import UserQueryPort
 from src.execution.application.dtos.execution_dtos import (
+    StickyNoteViewDTO,
+    StudioConfigViewDTO,
     StudySessionViewDTO,
     TaskViewDTO,
     TodayFocusViewDTO,
@@ -16,7 +19,6 @@ from src.execution.application.ports.study_session_repository_port import (
 from src.execution.application.ports.task_repository_port import TaskRepositoryPort
 from src.execution.application.use_cases.task_use_cases import (
     _build_task_views,
-    _resolve_user_today,
     _verify_writable_for_task,
 )
 from src.execution.domain.exceptions.execution_exceptions import (
@@ -30,16 +32,23 @@ from src.execution.domain.exceptions.execution_exceptions import (
 )
 from src.execution.domain.models.study_session import (
     MVS_MIN_QUALIFYING_MINUTES,
+    STUDIO_CONFIG_SENTINEL_PREFIX,
     AlignmentFlag,
     DailyCheckin,
     NoteType,
     SessionMode,
     SessionStatus,
     SessionTask,
+    StickyNotePayload,
+    StudioConfigPayload,
     StudyNote,
     StudySession,
     TimeSufficiency,
     VerificationStatus,
+    decode_sticky_note_content,
+    decode_studio_config,
+    encode_sticky_note_content,
+    encode_studio_config,
 )
 from src.execution.domain.models.task import TaskStatus
 from src.execution.domain.services.takeaway_guard import TakeawayGuard
@@ -73,6 +82,30 @@ async def _build_session_view(
     )
 
 
+async def _resolve_user_day_window_utc(
+    user_query_port: UserQueryPort | None,
+    user_id: UUID,
+    now: datetime,
+) -> tuple[date, datetime, datetime]:
+    user_tz = ZoneInfo("UTC")
+    if user_query_port is not None:
+        user_snap = await user_query_port.get_user_by_id(user_id)
+        if user_snap is not None and user_snap.timezone:
+            raw_tz = user_snap.timezone.strip()
+            if raw_tz:
+                try:
+                    user_tz = ZoneInfo(raw_tz)
+                except ZoneInfoNotFoundError:
+                    user_tz = ZoneInfo("UTC")
+
+    ref_now = now if now.tzinfo is not None else now.replace(tzinfo=UTC)
+    local_today = ref_now.astimezone(user_tz).date()
+    local_start = datetime.combine(local_today, time.min, tzinfo=user_tz)
+    start_utc = local_start.astimezone(UTC)
+    end_utc = (local_start + timedelta(days=1)).astimezone(UTC)
+    return local_today, start_utc, end_utc
+
+
 class GetTodayFocusUseCase:
     """Return active session, pending_takeaway debt, today's focus task & queue in user's timezone."""
 
@@ -96,7 +129,11 @@ class GetTodayFocusUseCase:
         now: datetime | None = None,
     ) -> TodayFocusViewDTO:
         effective_now = now or datetime.now(UTC)
-        local_today = await _resolve_user_today(self._user_query_port, user_id, effective_now)
+        local_today, start_utc, end_utc = await _resolve_user_day_window_utc(
+            self._user_query_port,
+            user_id,
+            effective_now,
+        )
 
         active = await self._session_repo.get_active_for_user(user_id)
         active_view = (
@@ -108,6 +145,17 @@ class GetTodayFocusUseCase:
             await _build_session_view(self._session_repo, pending) if pending is not None else None
         )
 
+        completed_today = await self._session_repo.list_completed_for_user_between(
+            user_id, start_utc, end_utc
+        )
+        qualifying_sessions = [
+            s
+            for s in completed_today
+            if s.status in (SessionStatus.COMPLETED, SessionStatus.PARTIAL_COMPLETED)
+        ]
+        completed_sessions_today = len(qualifying_sessions)
+        studied_minutes_today = sum(int(s.actual_minutes) for s in qualifying_sessions)
+
         roadmaps = await self._bridge.get_user_roadmaps_context(user_id)
         active_roadmaps = [r for r in roadmaps if r.status == "ACTIVE"]
         if not active_roadmaps:
@@ -118,12 +166,15 @@ class GetTodayFocusUseCase:
                 focus_task=None,
                 today_queue=(),
                 overdue_tasks_count=0,
+                completed_sessions_today=completed_sessions_today,
+                studied_minutes_today=studied_minutes_today,
             )
 
         rids = [r.roadmap_id for r in active_roadmaps]
         title_map = {r.roadmap_id: r.title for r in active_roadmaps}
         all_tasks = await self._task_repo.list_by_roadmap_ids(rids)
         deps = await self._task_repo.list_dependencies_by_roadmap_ids(rids)
+        milestones_context = await self._bridge.get_milestones_context(rids)
 
         all_views = _build_task_views(
             all_tasks,
@@ -131,6 +182,7 @@ class GetTodayFocusUseCase:
             today=local_today,
             roadmap_titles=title_map,
             all_roadmap_tasks=all_tasks,
+            milestones_context=milestones_context,
         )
         today_queue = [
             v
@@ -157,6 +209,8 @@ class GetTodayFocusUseCase:
             focus_task=focus_task,
             today_queue=tuple(today_queue),
             overdue_tasks_count=overdue_count,
+            completed_sessions_today=completed_sessions_today,
+            studied_minutes_today=studied_minutes_today,
         )
 
 
@@ -625,3 +679,294 @@ class ResolvePendingTakeawayUseCase:
             view = await _build_session_view(self._session_repo, saved)
             await self._uow.commit()
             return view
+
+
+def _to_sticky_note_view(note: StudyNote) -> StickyNoteViewDTO:
+    payload = decode_sticky_note_content(note.content)
+    return StickyNoteViewDTO(
+        id=note.id,
+        user_id=note.user_id,
+        task_id=note.task_id,
+        title=payload.title,
+        body=payload.body,
+        color=payload.color,
+        pinned=payload.pinned,
+        pos_x=payload.pos_x,
+        pos_y=payload.pos_y,
+        z_index=payload.z_index,
+        origin_session_id=payload.origin_session_id,
+        created_at=note.created_at,
+        updated_at=note.updated_at,
+    )
+
+
+def _to_studio_config_view(
+    payload: StudioConfigPayload,
+    updated_at: datetime | None,
+) -> StudioConfigViewDTO:
+    return StudioConfigViewDTO(
+        scene=payload.scene,
+        clock_style=payload.clock_style,
+        clock_size=payload.clock_size,
+        show_seconds=payload.show_seconds,
+        show_in_tab_title=payload.show_in_tab_title,
+        tab_guard_enabled=payload.tab_guard_enabled,
+        zen_lock_enabled=payload.zen_lock_enabled,
+        blocklist=payload.blocklist,
+        parking_lot=payload.parking_lot,
+        updated_at=updated_at,
+    )
+
+
+class ListStickyNotesUseCase:
+    """List learner sticky notes (StudyNote GENERAL excluding studio config sentinel)."""
+
+    def __init__(self, *, session_repo: StudySessionRepositoryPort) -> None:
+        self._session_repo = session_repo
+
+    async def execute(self, *, user_id: UUID) -> list[StickyNoteViewDTO]:
+        notes = await self._session_repo.list_general_notes_for_user(user_id)
+        return [
+            _to_sticky_note_view(n)
+            for n in notes
+            if not n.content.startswith(STUDIO_CONFIG_SENTINEL_PREFIX)
+        ]
+
+
+class CreateStickyNoteUseCase:
+    """Create a sticky note stored as StudyNote(note_type=GENERAL, session_id=None)."""
+
+    def __init__(
+        self,
+        *,
+        session_repo: StudySessionRepositoryPort,
+        uow: AsyncUnitOfWork,
+    ) -> None:
+        self._session_repo = session_repo
+        self._uow = uow
+
+    async def execute(
+        self,
+        *,
+        user_id: UUID,
+        title: str = "",
+        body: str = "",
+        color: str = "cream",
+        pinned: bool = True,
+        pos_x: float | None = None,
+        pos_y: float | None = None,
+        z_index: int | None = None,
+        origin_session_id: str | None = None,
+        task_id: UUID | None = None,
+        now: datetime | None = None,
+    ) -> StickyNoteViewDTO:
+        effective_now = now or datetime.now(UTC)
+        encoded = encode_sticky_note_content(
+            StickyNotePayload(
+                title=title,
+                body=body,
+                color=color,
+                pinned=pinned,
+                pos_x=pos_x,
+                pos_y=pos_y,
+                z_index=z_index,
+                origin_session_id=origin_session_id,
+            )
+        )
+        note = StudyNote(
+            id=generate_uuid7(),
+            user_id=user_id,
+            session_id=None,
+            task_id=task_id,
+            note_type=NoteType.GENERAL,
+            content=encoded,
+            alignment_flag=AlignmentFlag.UNCHECKED,
+            verification_status=VerificationStatus.PENDING_PROVE,
+            created_at=effective_now,
+            updated_at=effective_now,
+        )
+        async with self._uow:
+            saved = await self._session_repo.upsert_study_note(note)
+            await self._uow.commit()
+        return _to_sticky_note_view(saved)
+
+
+class UpdateStickyNoteUseCase:
+    """Update an owned sticky note with IDOR protection (NOTE_NOT_FOUND -> 404)."""
+
+    def __init__(
+        self,
+        *,
+        session_repo: StudySessionRepositoryPort,
+        uow: AsyncUnitOfWork,
+    ) -> None:
+        self._session_repo = session_repo
+        self._uow = uow
+
+    async def execute(
+        self,
+        *,
+        user_id: UUID,
+        note_id: UUID,
+        title: str | None = None,
+        body: str | None = None,
+        color: str | None = None,
+        pinned: bool | None = None,
+        pos_x: float | None = None,
+        pos_y: float | None = None,
+        z_index: int | None = None,
+        now: datetime | None = None,
+    ) -> StickyNoteViewDTO:
+        effective_now = now or datetime.now(UTC)
+        async with self._uow:
+            note = await self._session_repo.get_study_note_by_id(note_id)
+            if (
+                note is None
+                or note.user_id != user_id
+                or note.note_type != NoteType.GENERAL
+                or note.content.startswith(STUDIO_CONFIG_SENTINEL_PREFIX)
+            ):
+                raise ExecutionDomainError(
+                    message="Không tìm thấy ghi chú.",
+                    code="NOTE_NOT_FOUND",
+                )
+            current = decode_sticky_note_content(note.content)
+            encoded = encode_sticky_note_content(
+                StickyNotePayload(
+                    title=title if title is not None else current.title,
+                    body=body if body is not None else current.body,
+                    color=color if color is not None else current.color,
+                    pinned=pinned if pinned is not None else current.pinned,
+                    pos_x=pos_x if pos_x is not None else current.pos_x,
+                    pos_y=pos_y if pos_y is not None else current.pos_y,
+                    z_index=z_index if z_index is not None else current.z_index,
+                    origin_session_id=current.origin_session_id,
+                )
+            )
+            note.content = encoded
+            note.updated_at = effective_now
+            saved = await self._session_repo.upsert_study_note(note)
+            await self._uow.commit()
+        return _to_sticky_note_view(saved)
+
+
+class DeleteStickyNoteUseCase:
+    """Delete an owned sticky note with IDOR protection (NOTE_NOT_FOUND -> 404)."""
+
+    def __init__(
+        self,
+        *,
+        session_repo: StudySessionRepositoryPort,
+        uow: AsyncUnitOfWork,
+    ) -> None:
+        self._session_repo = session_repo
+        self._uow = uow
+
+    async def execute(
+        self,
+        *,
+        user_id: UUID,
+        note_id: UUID,
+    ) -> None:
+        async with self._uow:
+            note = await self._session_repo.get_study_note_by_id(note_id)
+            if (
+                note is None
+                or note.user_id != user_id
+                or note.note_type != NoteType.GENERAL
+                or note.content.startswith(STUDIO_CONFIG_SENTINEL_PREFIX)
+            ):
+                raise ExecutionDomainError(
+                    message="Không tìm thấy ghi chú.",
+                    code="NOTE_NOT_FOUND",
+                )
+            await self._session_repo.delete_study_note(note_id)
+            await self._uow.commit()
+
+
+class GetStudioConfigUseCase:
+    """Load the user's studio configuration sentinel record or return defaults."""
+
+    def __init__(self, *, session_repo: StudySessionRepositoryPort) -> None:
+        self._session_repo = session_repo
+
+    async def execute(self, *, user_id: UUID) -> StudioConfigViewDTO:
+        notes = await self._session_repo.list_general_notes_for_user(user_id)
+        sentinel = next(
+            (n for n in notes if n.content.startswith(STUDIO_CONFIG_SENTINEL_PREFIX)),
+            None,
+        )
+        if sentinel is None:
+            return _to_studio_config_view(StudioConfigPayload(), updated_at=None)
+        return _to_studio_config_view(
+            decode_studio_config(sentinel.content),
+            updated_at=sentinel.updated_at,
+        )
+
+
+class UpsertStudioConfigUseCase:
+    """Create or update the user's studio configuration sentinel record."""
+
+    def __init__(
+        self,
+        *,
+        session_repo: StudySessionRepositoryPort,
+        uow: AsyncUnitOfWork,
+    ) -> None:
+        self._session_repo = session_repo
+        self._uow = uow
+
+    async def execute(
+        self,
+        *,
+        user_id: UUID,
+        scene: str = "lofi-night",
+        clock_style: str = "ring",
+        clock_size: str = "lg",
+        show_seconds: bool = True,
+        show_in_tab_title: bool = True,
+        tab_guard_enabled: bool = True,
+        zen_lock_enabled: bool = False,
+        blocklist: Sequence[str] = ("facebook.com", "youtube.com", "tiktok.com"),
+        parking_lot: Sequence[dict[str, object]] = (),
+        now: datetime | None = None,
+    ) -> StudioConfigViewDTO:
+        effective_now = now or datetime.now(UTC)
+        payload = StudioConfigPayload(
+            scene=scene,
+            clock_style=clock_style,
+            clock_size=clock_size,
+            show_seconds=show_seconds,
+            show_in_tab_title=show_in_tab_title,
+            tab_guard_enabled=tab_guard_enabled,
+            zen_lock_enabled=zen_lock_enabled,
+            blocklist=tuple(blocklist),
+            parking_lot=tuple(dict(item) for item in parking_lot),
+        )
+        encoded = encode_studio_config(payload)
+        async with self._uow:
+            notes = await self._session_repo.list_general_notes_for_user(user_id)
+            sentinel = next(
+                (n for n in notes if n.content.startswith(STUDIO_CONFIG_SENTINEL_PREFIX)),
+                None,
+            )
+            if sentinel is None:
+                note = StudyNote(
+                    id=generate_uuid7(),
+                    user_id=user_id,
+                    session_id=None,
+                    task_id=None,
+                    note_type=NoteType.GENERAL,
+                    content=encoded,
+                    alignment_flag=AlignmentFlag.UNCHECKED,
+                    verification_status=VerificationStatus.PENDING_PROVE,
+                    created_at=effective_now,
+                    updated_at=effective_now,
+                )
+            else:
+                note = sentinel
+                note.content = encoded
+                note.updated_at = effective_now
+            saved = await self._session_repo.upsert_study_note(note)
+            await self._uow.commit()
+        return _to_studio_config_view(payload, updated_at=saved.updated_at)

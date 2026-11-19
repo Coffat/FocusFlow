@@ -348,6 +348,7 @@ async def test_mock_calendar_fault_injections() -> None:
 @pytest.mark.asyncio
 async def test_initiate_google_calendar_auth_use_case() -> None:
     settings = Settings(
+        calendar_provider="google",
         google_client_id="test_client_id",
         google_redirect_uri="http://localhost:8000/callback",
     )

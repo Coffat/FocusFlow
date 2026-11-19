@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from uuid import UUID
@@ -37,7 +37,7 @@ from src.execution.domain.services.dag_cycle_validator import (
     DagTaskNode,
 )
 from src.execution.domain.services.takeaway_guard import TakeawayGuard
-from src.planning.public_api import PlanningExecutionBridgePort
+from src.planning.public_api import MilestoneExecutionContextDTO, PlanningExecutionBridgePort
 from src.shared_kernel.application.uow import AsyncUnitOfWork
 from src.shared_kernel.domain.base import generate_uuid7
 from src.shared_kernel.domain.exceptions import DomainError
@@ -75,6 +75,7 @@ def _build_task_views(
     today: date,
     roadmap_titles: dict[UUID, str] | None = None,
     all_roadmap_tasks: Sequence[Task] | None = None,
+    milestones_context: Mapping[UUID, MilestoneExecutionContextDTO] | None = None,
 ) -> list[TaskViewDTO]:
     status_source = all_roadmap_tasks if all_roadmap_tasks is not None else tasks
     status_by_id: dict[UUID, TaskStatus] = {t.id: t.status for t in status_source}
@@ -91,6 +92,7 @@ def _build_task_views(
             for d in deps
             if d.is_mandatory and d.predecessor_id in status_by_id
         )
+        ms_ctx = milestones_context.get(task.milestone_id) if milestones_context else None
         views.append(
             TaskViewDTO(
                 task=task,
@@ -98,7 +100,11 @@ def _build_task_views(
                 is_blocked=is_blocked,
                 is_stalled=task.is_stalled(),
                 predecessor_ids=pred_ids,
+                milestone_sequence=ms_ctx.sequence_order if ms_ctx else None,
                 roadmap_title=roadmap_titles.get(task.roadmap_id) if roadmap_titles else None,
+                milestone_title=ms_ctx.title if ms_ctx else None,
+                learning_outcomes=ms_ctx.learning_outcomes if ms_ctx else (),
+                completion_criteria=ms_ctx.completion_criteria if ms_ctx else None,
             )
         )
     return views
@@ -152,6 +158,7 @@ class ListTasksUseCase:
         title_map = {r.roadmap_id: r.title for r in roadmaps}
         all_tasks = await self._task_repo.list_by_roadmap_ids(rids)
         deps = await self._task_repo.list_dependencies_by_roadmap_ids(rids)
+        milestones_context = await self._bridge.get_milestones_context(rids)
         today = await _resolve_user_today(self._user_query_port, user_id, effective_now)
 
         filtered = all_tasks
@@ -165,6 +172,7 @@ class ListTasksUseCase:
             today=today,
             roadmap_titles=title_map,
             all_roadmap_tasks=all_tasks,
+            milestones_context=milestones_context,
         )
 
 
@@ -404,12 +412,14 @@ class GetWeeklyScheduleUseCase:
         title_map = {b.roadmap_id: b.roadmap_title for b in blocks}
         all_tasks = await self._task_repo.list_by_roadmap_ids(roadmap_ids)
         deps = await self._task_repo.list_dependencies_by_roadmap_ids(roadmap_ids)
+        milestones_context = await self._bridge.get_milestones_context(roadmap_ids)
         task_views = _build_task_views(
             all_tasks,
             deps,
             today=today,
             roadmap_titles=title_map,
             all_roadmap_tasks=all_tasks,
+            milestones_context=milestones_context,
         )
         view_by_id = {v.task.id: v for v in task_views}
 

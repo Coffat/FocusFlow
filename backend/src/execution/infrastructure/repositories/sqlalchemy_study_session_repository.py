@@ -309,3 +309,45 @@ class SqlAlchemyStudySessionRepository(StudySessionRepositoryPort):
         )
         rows = list((await self._session.execute(stmt)).scalars().all())
         return [self._note_to_domain(r) for r in rows]
+
+    async def list_completed_for_user_between(
+        self,
+        user_id: UUID,
+        start_utc: datetime,
+        end_utc: datetime,
+    ) -> list[StudySession]:
+        stmt = (
+            select(StudySessionORM)
+            .where(
+                StudySessionORM.user_id == user_id,
+                StudySessionORM.status.in_(("COMPLETED", "PARTIAL_COMPLETED")),
+                StudySessionORM.ended_at.is_not(None),
+                StudySessionORM.ended_at >= start_utc,
+                StudySessionORM.ended_at < end_utc,
+            )
+            .order_by(StudySessionORM.ended_at.asc())
+        )
+        rows = list((await self._session.execute(stmt)).scalars().all())
+        return [self._to_domain(r) for r in rows]
+
+    async def list_general_notes_for_user(self, user_id: UUID) -> list[StudyNote]:
+        stmt = (
+            select(StudyNoteORM)
+            .where(
+                StudyNoteORM.user_id == user_id,
+                StudyNoteORM.note_type == NoteType.GENERAL.value,
+            )
+            .order_by(StudyNoteORM.updated_at.desc(), StudyNoteORM.created_at.desc())
+        )
+        rows = list((await self._session.execute(stmt)).scalars().all())
+        return [self._note_to_domain(r) for r in rows]
+
+    async def get_study_note_by_id(self, note_id: UUID) -> StudyNote | None:
+        row = await self._session.get(StudyNoteORM, note_id)
+        return self._note_to_domain(row) if row is not None else None
+
+    async def delete_study_note(self, note_id: UUID) -> None:
+        row = await self._session.get(StudyNoteORM, note_id)
+        if row is not None:
+            await self._session.delete(row)
+            await self._session.flush()

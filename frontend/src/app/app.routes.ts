@@ -6,13 +6,29 @@ import { authGuard } from './guards/auth.guard';
 export const routes: Routes = [
   {
     path: '',
+    pathMatch: 'full',
+    loadComponent: () => import('./features/landing/landing.component').then(m => m.LandingComponent)
+  },
+  {
+    path: 'how-it-works',
+    loadComponent: () => import('./features/how-it-works/how-it-works.component').then(m => m.HowItWorksComponent)
+  },
+  {
+    path: 'features',
+    loadComponent: () => import('./features/features/features.component').then(m => m.FeaturesComponent)
+  },
+  {
+    path: 'pricing',
+    loadComponent: () => import('./features/pricing/pricing.component').then(m => m.PricingComponent)
+  },
+  {
+    path: 'faq',
+    loadComponent: () => import('./features/faq/faq.component').then(m => m.FaqComponent)
+  },
+  {
+    path: '',
     component: AuthLayoutComponent,
     children: [
-      {
-        path: '',
-        redirectTo: 'sign-in',
-        pathMatch: 'full'
-      },
       {
         path: 'sign-in',
         loadComponent: () => import('./features/auth/sign-in/sign-in.component').then(m => m.SignInComponent)

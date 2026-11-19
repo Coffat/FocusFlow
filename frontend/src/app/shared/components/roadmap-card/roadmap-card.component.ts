@@ -103,36 +103,30 @@ export class RoadmapCardComponent {
     if ('tags' in rm && Array.isArray(rm.tags) && rm.tags.length > 0) {
       return rm.tags;
     }
-    const title = (rm.title || '').toLowerCase();
-    if (title.includes('fastapi') || title.includes('python')) {
-      return ['Backend', 'Python', 'Hexagonal Architecture'];
+    if ('category' in rm && typeof rm.category === 'string' && rm.category.trim()) {
+      return [rm.category.trim()];
     }
-    if (title.includes('aws') || title.includes('cloud')) {
-      return ['Cloud', 'DevOps', 'AWS'];
-    }
-    if (title.includes('angular') || title.includes('frontend')) {
-      return ['Frontend', 'Angular 21', 'TypeScript'];
-    }
-    if (title.includes('ielts') || title.includes('english')) {
-      return ['Ngoại ngữ', 'IELTS', 'Academic'];
-    }
-    return ['Lộ trình', 'Tự học', 'AI Powered'];
+    return ['Lộ trình tự học'];
   });
 
   readonly timeCommitment = computed<string>(() => {
-    const st = this.status();
-    if (st === 'PAUSED') return '8 giờ / tuần';
-    if (st === 'COMPLETED') return '48 giờ học';
-    return '12 giờ / tuần';
+    const rm = this.roadmap();
+    if ('totalTasks' in rm && typeof rm.totalTasks === 'number' && rm.totalTasks > 0) {
+      return `${rm.totalTasks} tác vụ`;
+    }
+    if (this.status() === 'COMPLETED') {
+      return 'Đã hoàn tất';
+    }
+    return 'Lịch rảnh Mode A/B';
   });
 
   readonly currentMilestone = computed<string>(() => {
     const rm = this.roadmap();
     if ('nextTaskTitle' in rm && rm.nextTaskTitle) return rm.nextTaskTitle;
     const st = this.status();
-    if (st === 'PAUSED') return 'Chờ kích hoạt lại khi hoàn thành Master FastAPI';
+    if (st === 'PAUSED') return 'Đang tạm dừng — chờ kích hoạt lại';
     if (st === 'COMPLETED') return 'Đã hoàn thành toàn bộ cột mốc';
-    return 'Mốc 2: Ports & Adapters';
+    return 'Đang thực thi theo lịch chính thức';
   });
 
   readonly remainingDaysText = computed<string>(() => {
@@ -179,11 +173,7 @@ export class RoadmapCardComponent {
     }
   });
 
-  readonly completedRating = computed<string>(() => {
-    const title = (this.roadmap().title || '').toLowerCase();
-    if (title.includes('ielts')) return 'Target 7.5 Đạt chuẩn';
-    return 'Xuất sắc (9.2/10)';
-  });
+  readonly completedRating = computed<string>(() => 'Hoàn thành 100% mục tiêu');
 
   readonly category = computed<string>(() => {
     const rm = this.roadmap();
@@ -194,7 +184,7 @@ export class RoadmapCardComponent {
   readonly description = computed<string>(() => {
     const rm = this.roadmap();
     if ('description' in rm && rm.description) return rm.description;
-    return 'Chinh phục kiến trúc phân lớp Ports & Adapters, Domain-Driven Design, Repository Pattern và xử lý nền với Taskiq.';
+    return 'Lộ trình học tập thích ứng phân rã theo đồ thị DAG và đồng bộ lịch rảnh cá nhân.';
   });
 
   toggleMenu(event: MouseEvent): void {
