@@ -1,0 +1,363 @@
+<!-- FLOATING CAPSULE NAVBAR -->
+<app-floating-navbar [isAuthenticated]="authService.isAuthenticated()" />
+
+<!-- MAIN CANVAS -->
+<main class="flex-grow pt-24 sm:pt-28 bg-surface text-on-surface selection:bg-primary selection:text-white">
+
+  <!-- ======================================================================
+       SECTION 1: HERO & BILLING TOGGLE
+       ====================================================================== -->
+  <section class="relative pt-8 pb-12 md:pb-16 border-b border-outline-variant overflow-hidden">
+    <div class="absolute inset-0 grid-axis opacity-25 pointer-events-none" aria-hidden="true"></div>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
+      <!-- Eyebrow Badge Capsule -->
+      <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-surface-container-lowest border border-outline-variant shadow-sm mb-6">
+        <span class="w-2 h-2 rounded-full bg-primary-container animate-pulse" aria-hidden="true"></span>
+        <span class="text-xs font-semibold uppercase tracking-wider text-on-surface-variant font-sans">
+          Minh Bạch Về Giá Trị • Đầu Tư Học Thuật
+        </span>
+      </div>
+
+      <!-- Main Headline in Newsreader Serif -->
+      <h1 class="font-serif-headline text-3xl sm:text-5xl lg:text-[56px] text-on-surface tracking-tight leading-[1.15] mb-4">
+        Đầu Tư Cho Kiến Trúc Nhận Thức &amp;<br class="hidden sm:inline" />
+        <span class="italic text-primary font-normal">Kỷ Luật Học Tập Dài Hạn</span>
+      </h1>
+
+      <!-- Subheadline -->
+      <p class="text-base sm:text-lg text-on-surface-variant max-w-2xl mx-auto leading-relaxed font-sans font-normal mb-8">
+        Không gây áp lực tài chính. Lựa chọn mức đồng hành phù hợp với mục tiêu tự học của bạn. Nâng cấp hoặc quay lại gói miễn phí bất kỳ lúc nào mà không mất dữ liệu.
+      </p>
+
+      <!-- Billing Cycle Toggle -->
+      <div class="inline-flex items-center justify-center p-1.5 bg-surface-container-low rounded-full border border-outline-variant shadow-sm">
+        <div class="flex items-center gap-1">
+          <button
+            type="button"
+            (click)="setBillingCycle('monthly')"
+            [class]="billingCycle() === 'monthly'
+              ? 'px-5 py-2 text-xs font-semibold rounded-full bg-surface-container-lowest text-on-surface shadow-sm transition-all duration-200 cursor-pointer'
+              : 'px-5 py-2 text-xs font-medium rounded-full text-on-surface-variant hover:text-on-surface transition-all duration-200 cursor-pointer'"
+          >
+            Theo Tháng
+          </button>
+
+          <button
+            type="button"
+            (click)="setBillingCycle('annual')"
+            [class]="billingCycle() === 'annual'
+              ? 'px-5 py-2 text-xs font-semibold rounded-full bg-surface-container-lowest text-on-surface shadow-sm transition-all duration-200 flex items-center gap-2 cursor-pointer'
+              : 'px-5 py-2 text-xs font-medium rounded-full text-on-surface-variant hover:text-on-surface transition-all duration-200 flex items-center gap-2 cursor-pointer'"
+          >
+            <span>Theo Năm (Tiết kiệm 20%)</span>
+            <span class="px-2 py-0.5 text-[10px] uppercase font-bold tracking-wide rounded-full bg-[#E8F5E9] text-[#005234] border border-[#A1E9BF]">
+              Tặng 2 Tháng
+            </span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================================================================
+       SECTION 2: 2-COLUMN BALANCED PRICING TIERS (SRS v1.3)
+       ====================================================================== -->
+  <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-16">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-10 items-stretch">
+
+      <!-- TIER 1: FREE FOREVER (GÓI CƠ BẢN MIỄN PHÍ) -->
+      <div class="bg-surface-container-lowest rounded-2xl border border-outline-variant p-8 lg:p-10 flex flex-col justify-between transition-all duration-200 hover:border-outline shadow-sm hover:shadow-md">
+        <div>
+          <!-- Header Tag -->
+          <div class="flex items-center justify-between mb-4">
+            <span class="text-xs font-semibold uppercase tracking-wider text-on-surface-variant font-sans">
+              Học Phí 0đ Trọn Đời
+            </span>
+            <span class="text-xs font-mono text-on-surface-variant px-2.5 py-1 rounded bg-surface-container">
+              GÓI 01
+            </span>
+          </div>
+
+          <h2 class="font-serif-headline text-2xl sm:text-3xl text-on-surface mb-2">
+            Gói Miễn Phí (Free)
+          </h2>
+          <p class="text-xs sm:text-sm text-on-surface-variant leading-relaxed mb-6 min-h-[40px]">
+            Toàn bộ công cụ cấu trúc cốt lõi để thiết lập kỷ luật học tập cá nhân không chi phí.
+          </p>
+
+          <!-- Price Display -->
+          <div class="flex items-baseline gap-2 mb-8 pb-6 border-b border-outline-variant/60">
+            <span class="text-4xl sm:text-5xl font-serif-headline text-on-surface">0đ</span>
+            <span class="text-xs sm:text-sm text-on-surface-variant font-sans">/ trọn đời</span>
+          </div>
+
+          <!-- Feature List -->
+          <div class="text-xs font-semibold uppercase tracking-wider text-on-surface-variant mb-4 font-sans">
+            Đặc quyền bao gồm:
+          </div>
+          <ul class="space-y-3.5 mb-8 text-xs sm:text-sm text-on-surface">
+            <li class="flex items-start gap-3">
+              <span class="material-symbols-outlined text-primary-container text-base mt-0.5" aria-hidden="true">check</span>
+              <span><strong>Tối đa 3 lộ trình</strong> học tập kích hoạt đồng thời (ACTIVE)</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="material-symbols-outlined text-primary-container text-base mt-0.5" aria-hidden="true">check</span>
+              <span><strong>30 lượt AI / tháng</strong> (hạn ngạch phân rã &amp; cố vấn Bloom DAG)</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="material-symbols-outlined text-primary-container text-base mt-0.5" aria-hidden="true">check</span>
+              <span>Study Workspace Studio với <strong>Pomodoro &amp; MVS 10–15 phút</strong></span>
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="material-symbols-outlined text-primary-container text-base mt-0.5" aria-hidden="true">check</span>
+              <span>Đồng bộ lịch <strong>WebCal (.ics) trên 1 thiết bị</strong> chính</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="material-symbols-outlined text-primary-container text-base mt-0.5" aria-hidden="true">check</span>
+              <span>Cổng kiểm định <strong>3-Tier Validation Gate</strong> &amp; TakeawayGuard</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="material-symbols-outlined text-primary-container text-base mt-0.5" aria-hidden="true">check</span>
+              <span>Không yêu cầu thẻ tín dụng khi đăng ký</span>
+            </li>
+          </ul>
+        </div>
+
+        <!-- CTA Button -->
+        <button
+          type="button"
+          (click)="selectPlan('free')"
+          class="w-full py-3.5 px-6 rounded-full border border-outline-variant bg-surface-container-lowest text-on-surface font-semibold text-xs sm:text-sm font-sans hover:bg-surface-container transition-all duration-200 cursor-pointer shadow-sm hover:scale-[1.01] active:scale-[0.99]"
+        >
+          Bắt đầu miễn phí
+        </button>
+      </div>
+
+      <!-- TIER 2: PREMIUM / PRO (GÓI NÂNG CAO) -->
+      <div class="bg-surface-container-lowest rounded-2xl border-2 border-on-surface p-8 lg:p-10 flex flex-col justify-between relative shadow-[0_8px_32px_rgba(0,0,0,0.08)] transition-all duration-200 hover:shadow-[0_12px_40px_rgba(0,0,0,0.12)]">
+        <!-- Elevated Capsule Badge -->
+        <div class="absolute -top-3.5 left-1/2 -translate-x-1/2">
+          <span class="bg-on-surface text-white text-[11px] font-semibold uppercase tracking-wider px-4 py-1.5 rounded-full shadow-sm font-sans">
+            Khuyên dùng • Phổ biến nhất
+          </span>
+        </div>
+
+        <div>
+          <!-- Header Tag -->
+          <div class="flex items-center justify-between mb-4 mt-2">
+            <span class="text-xs font-semibold uppercase tracking-wider text-primary font-sans">
+              Năng Lực Toàn Diện
+            </span>
+            <span class="text-xs font-mono text-primary font-bold px-2.5 py-1 rounded bg-[#E8F5E9] border border-[#A1E9BF]">
+              GÓI 02
+            </span>
+          </div>
+
+          <h2 class="font-serif-headline text-2xl sm:text-3xl text-on-surface mb-2">
+            Gói Nâng Cao (Premium)
+          </h2>
+          <p class="text-xs sm:text-sm text-on-surface-variant leading-relaxed mb-6 min-h-[40px]">
+            Dành cho đồ án chuyên sâu, luận văn tốt nghiệp và người học theo đuổi sự xuất chúng.
+          </p>
+
+          <!-- Price Display -->
+          <div class="flex items-baseline gap-2 mb-8 pb-6 border-b border-outline-variant/60">
+            <span class="text-4xl sm:text-5xl font-serif-headline text-on-surface">
+              {{ premiumMonthlyPrice() }}
+            </span>
+            <span class="text-xs sm:text-sm text-on-surface-variant font-sans">
+              {{ premiumBillingNote() }}
+            </span>
+          </div>
+
+          <!-- Feature List -->
+          <div class="text-xs font-semibold uppercase tracking-wider text-on-surface-variant mb-4 font-sans">
+            Mọi quyền lợi của Gói Free, cùng với:
+          </div>
+          <ul class="space-y-3.5 mb-8 text-xs sm:text-sm text-on-surface font-medium">
+            <li class="flex items-start gap-3">
+              <span class="material-symbols-outlined text-primary-container text-base mt-0.5" aria-hidden="true">check</span>
+              <span><strong>Không giới hạn số lộ trình</strong> học tập đồng thời</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="material-symbols-outlined text-primary-container text-base mt-0.5" aria-hidden="true">check</span>
+              <span><strong>300 lượt AI / tháng</strong> (ưu tiên 2-Stage SSE streaming độ trễ thấp)</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="material-symbols-outlined text-primary-container text-base mt-0.5" aria-hidden="true">check</span>
+              <span>Động cơ <strong>Domino Shift tự động bù lịch</strong> không tiêu tốn hạn ngạch AI</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="material-symbols-outlined text-primary-container text-base mt-0.5" aria-hidden="true">check</span>
+              <span>Chế độ kiểm chứng năng lực <strong>Prove Mode &amp; Weekly AI Review</strong></span>
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="material-symbols-outlined text-primary-container text-base mt-0.5" aria-hidden="true">check</span>
+              <span>Đồng bộ <strong>WebCal (.ics) trên đa thiết bị không giới hạn</strong></span>
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="material-symbols-outlined text-primary-container text-base mt-0.5" aria-hidden="true">check</span>
+              <span>Trọn bộ <strong>5 không gian âm thanh</strong> Focus Chamber chuyên biệt</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="material-symbols-outlined text-primary-container text-base mt-0.5" aria-hidden="true">check</span>
+              <span>Kênh hỗ trợ giải đáp học thuật <strong>ưu tiên 1-on-1 trong 4 giờ</strong></span>
+            </li>
+          </ul>
+        </div>
+
+        <!-- CTA Button -->
+        <button
+          type="button"
+          (click)="selectPlan('premium')"
+          class="w-full py-3.5 px-6 rounded-full bg-on-surface text-white hover:bg-primary font-semibold text-xs sm:text-sm font-sans transition-all duration-200 shadow-md hover:shadow-lg cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
+        >
+          Nâng cấp Premium ngay
+        </button>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ======================================================================
+       SECTION 3: SATISFACTION GUARANTEE STRIP
+       ====================================================================== -->
+  <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-16 text-center">
+    <div class="inline-flex items-center justify-center gap-3 py-3 px-6 rounded-full bg-surface-container-low border border-outline-variant shadow-sm text-left">
+      <span class="material-symbols-outlined text-primary-container text-xl shrink-0" aria-hidden="true">verified_user</span>
+      <p class="text-xs sm:text-sm text-on-surface font-sans">
+        <strong>Cam kết hoàn tiền trong 14 ngày không điều kiện.</strong> Nếu FocusFlow không giúp bạn nâng tầm kỷ luật tự học, chúng tôi hoàn lại 100% học phí không thắc mắc.
+      </p>
+    </div>
+  </section>
+
+  <!-- ======================================================================
+       SECTION 4: DETAILED CAPABILITY MATRIX (4 CATEGORIES)
+       ====================================================================== -->
+  <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-20">
+    <div class="border-b border-outline-variant pb-4 mb-8">
+      <span class="text-xs font-semibold uppercase tracking-wider text-on-surface-variant font-sans">
+        Đặc Tả Năng Lực Kỹ Thuật (SRS v1.3)
+      </span>
+      <h3 class="font-serif-headline text-2xl sm:text-3xl text-on-surface mt-1">
+        Bảng Đối Chiếu Năng Lực Chi Tiết
+      </h3>
+    </div>
+
+    <div class="overflow-x-auto bg-surface-container-lowest border border-outline-variant rounded-2xl shadow-sm">
+      <table class="w-full text-left border-collapse min-w-[640px]">
+        <thead>
+          <tr class="border-b border-outline-variant bg-surface-container-low text-xs font-semibold text-on-surface-variant uppercase tracking-wider font-sans">
+            <th class="py-4 px-6 w-1/2">Tính năng &amp; Phân hệ hệ thống</th>
+            <th class="py-4 px-4 w-1/4 text-center">Gói Miễn Phí (0đ)</th>
+            <th class="py-4 px-4 w-1/4 text-center text-primary font-bold">Gói Premium</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-outline-variant/60 text-xs sm:text-sm font-sans">
+          @for (category of capabilityMatrix; track category.title) {
+            <!-- Category Header Row -->
+            <tr class="bg-surface-container/60">
+              <td colspan="3" class="py-2.5 px-6 font-semibold text-xs tracking-wider uppercase text-on-surface-variant">
+                {{ category.title }}
+              </td>
+            </tr>
+
+            <!-- Category Rows -->
+            @for (row of category.rows; track row.name) {
+              <tr class="hover:bg-surface-container-lowest/80 transition-colors">
+                <td class="py-3.5 px-6 font-medium text-on-surface">
+                  {{ row.name }}
+                </td>
+                <td class="py-3.5 px-4 text-center text-on-surface-variant">
+                  {{ row.freeValue }}
+                </td>
+                <td class="py-3.5 px-4 text-center font-semibold text-on-surface">
+                  {{ row.premiumValue }}
+                </td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ======================================================================
+       SECTION 5: CAMPUS & RESEARCH LABS BANNER
+       ====================================================================== -->
+  <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-20">
+    <div class="bg-surface-container-low rounded-2xl border border-outline-variant p-8 md:p-12 flex flex-col md:flex-row items-center justify-between gap-8 shadow-sm">
+      <div class="max-w-xl">
+        <div class="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-on-surface-variant font-sans mb-2">
+          <span class="material-symbols-outlined text-sm" aria-hidden="true">account_balance</span>
+          <span>Hợp Tác Đào Tạo &amp; Viện Nghiên Cứu</span>
+        </div>
+        <h3 class="font-serif-headline text-2xl sm:text-3xl text-on-surface mb-3">
+          Triển khai FocusFlow cho Giảng đường, Viện Nghiên cứu &amp; Phòng Lab
+        </h3>
+        <p class="text-xs sm:text-sm text-on-surface-variant leading-relaxed font-sans">
+          Trang bị cho sinh viên, học viên cao học và nhóm nghiên cứu giải pháp quản lý tiến độ khoa học với bản quyền tập trung, hỗ trợ tích hợp schema giáo trình riêng và cam kết bảo mật cấp viện.
+        </p>
+      </div>
+
+      <div class="shrink-0 w-full md:w-auto">
+        <a
+          href="mailto:support@focusflow.edu.vn?subject=Yeu%20cau%20Hop%20tac%20Giang%20duong%20FocusFlow"
+          class="w-full md:w-auto px-6 py-3.5 rounded-full bg-on-surface text-white font-semibold text-xs sm:text-sm font-sans hover:bg-primary transition-all duration-200 inline-flex items-center justify-center gap-2 shadow-sm cursor-pointer"
+        >
+          <span>Liên hệ Hợp tác Học thuật</span>
+          <span class="material-symbols-outlined text-base" aria-hidden="true">arrow_forward</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================================================================
+       SECTION 6: MINI-FAQ ON PAYMENT & BILLING
+       ====================================================================== -->
+  <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-20">
+    <div class="max-w-3xl mx-auto">
+      <div class="text-center mb-10">
+        <span class="text-xs font-semibold uppercase tracking-wider text-on-surface-variant font-sans">
+          Giải Đáp Nhanh
+        </span>
+        <h3 class="font-serif-headline text-2xl sm:text-3xl text-on-surface mt-1">
+          Câu Hỏi Thường Gặp Về Gói Học Phí
+        </h3>
+      </div>
+
+      <div class="divide-y divide-outline-variant border-t border-b border-outline-variant">
+        @for (faq of miniFaqItems; track faq.question; let idx = $index) {
+          <div class="py-5">
+            <button
+              type="button"
+              (click)="toggleFaq(idx)"
+              class="w-full flex justify-between items-center text-left text-sm sm:text-base font-semibold text-on-surface hover:text-primary transition-colors cursor-pointer select-none"
+              [attr.aria-expanded]="isFaqOpen(idx)"
+            >
+              <span>{{ faq.question }}</span>
+              <span
+                class="material-symbols-outlined text-on-surface-variant transition-transform duration-200 shrink-0 ml-4"
+                [class.rotate-180]="isFaqOpen(idx)"
+                aria-hidden="true"
+              >
+                expand_more
+              </span>
+            </button>
+
+            @if (isFaqOpen(idx)) {
+              <p class="text-xs sm:text-sm text-on-surface-variant mt-3 pr-6 leading-relaxed font-sans animate-fadeIn">
+                {{ faq.answer }}
+              </p>
+            }
+          </div>
+        }
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- FOOTER -->
+<app-landing-footer />

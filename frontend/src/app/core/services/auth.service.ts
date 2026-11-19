@@ -31,6 +31,9 @@ export class AuthService {
   private static readonly PUBLIC_ROUTES = new Set<string>([
     '/',
     '/how-it-works',
+    '/features',
+    '/pricing',
+    '/faq',
     '/sign-in',
     '/sign-up',
     '/forgot-password',

@@ -27,15 +27,15 @@ describe('FloatingNavbarComponent', () => {
     expect(component.navLinks()).toEqual([
       { label: 'Trang chủ', href: '/', exact: true },
       { label: 'Cách hoạt động', href: '/how-it-works' },
-      { label: 'Tính năng', href: '/#capabilities' },
-      { label: 'Kịch bản mẫu', href: '/#scenarios' },
-      { label: 'Minh chứng', href: '/#testimonials' },
+      { label: 'Tính năng', href: '/features' },
+      { label: 'Bảng giá', href: '/pricing' },
+      { label: 'Hỏi đáp (FAQ)', href: '/faq' },
     ]);
 
     const el = fixture.nativeElement as HTMLElement;
     const logoImg = el.querySelector('img[src="assets/logo.svg"]');
     expect(logoImg).toBeTruthy();
-    expect(el.textContent).toContain('Kịch bản mẫu');
+    expect(el.textContent).not.toContain('Kịch bản mẫu');
   });
 
   it('should render unauthenticated links and CTA', () => {
@@ -45,29 +45,36 @@ describe('FloatingNavbarComponent', () => {
     expect(el.textContent).not.toContain('Vào Dashboard');
   });
 
-  it('should render dashboard CTA when authenticated', () => {
+  it('should render authenticated CTA when isAuthenticated is true', () => {
     fixture.componentRef.setInput('isAuthenticated', true);
     fixture.detectChanges();
-
     const el = fixture.nativeElement as HTMLElement;
     expect(el.textContent).toContain('Vào Dashboard');
   });
 
-  it('should toggle mobile menu open and closed', () => {
+  it('should toggle and close mobile menu', () => {
     expect(component.mobileMenuOpen()).toBe(false);
 
-    component.toggleMobileMenu();
-    expect(component.mobileMenuOpen()).toBe(true);
-
-    component.toggleMobileMenu();
-    expect(component.mobileMenuOpen()).toBe(false);
-  });
-
-  it('should close mobile menu explicitly', () => {
     component.toggleMobileMenu();
     expect(component.mobileMenuOpen()).toBe(true);
 
     component.closeMobileMenu();
+    expect(component.mobileMenuOpen()).toBe(false);
+  });
+
+  it('should handle smooth scrolling and close mobile menu', () => {
+    const scrollSpy = vi.fn();
+    Element.prototype.scrollIntoView = scrollSpy;
+
+    component.toggleMobileMenu();
+    expect(component.mobileMenuOpen()).toBe(true);
+
+    const fakeEvent = new Event('click');
+    const preventSpy = vi.spyOn(fakeEvent, 'preventDefault');
+
+    component.scrollTo('capabilities', fakeEvent);
+
+    expect(preventSpy).toHaveBeenCalled();
     expect(component.mobileMenuOpen()).toBe(false);
   });
 
@@ -76,6 +83,9 @@ describe('FloatingNavbarComponent', () => {
     expect(component.isLinkActive('#capabilities')).toBe(false);
     expect(component.isLinkActive('/#capabilities')).toBe(false);
     expect(component.isLinkActive('/how-it-works')).toBe(false);
+    expect(component.isLinkActive('/features')).toBe(false);
+    expect(component.isLinkActive('/pricing')).toBe(false);
+    expect(component.isLinkActive('/faq')).toBe(false);
   });
 
   it('should initialize isScrolled synchronously from window.scrollY and update on scroll', () => {

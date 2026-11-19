@@ -32,9 +32,9 @@ export class FloatingNavbarComponent {
   readonly navLinks = input<NavLink[]>([
     { label: 'Trang chủ', href: '/', exact: true },
     { label: 'Cách hoạt động', href: '/how-it-works' },
-    { label: 'Tính năng', href: '/#capabilities' },
-    { label: 'Kịch bản mẫu', href: '/#scenarios' },
-    { label: 'Minh chứng', href: '/#testimonials' },
+    { label: 'Tính năng', href: '/features' },
+    { label: 'Bảng giá', href: '/pricing' },
+    { label: 'Hỏi đáp (FAQ)', href: '/faq' },
   ]);
   readonly isAuthenticated = input<boolean>(false);
   readonly dashboardUrl = input<string>('/dashboard');

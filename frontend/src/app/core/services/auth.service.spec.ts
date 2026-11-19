@@ -187,8 +187,8 @@ describe('AuthService (Angular 21 Signals & State Reactivity)', () => {
     });
   });
 
-  it('handleSessionExpired() chỉ clearSession mà không điều hướng khi đang ở trang công khai (/, /how-it-works, /auth/*)', () => {
-    for (const publicUrl of ['/', '/how-it-works#top', '/auth/sign-in']) {
+  it('handleSessionExpired() chỉ clearSession mà không điều hướng khi đang ở trang công khai (/features, /, /auth/*)', () => {
+    for (const publicUrl of ['/', '/features?tab=1', '/how-it-works#top', '/pricing', '/faq', '/auth/sign-in']) {
       mockRouter.navigate.mockClear();
       mockRouter.url = publicUrl;
       service.setUser(mockUser);

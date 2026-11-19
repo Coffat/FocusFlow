@@ -14,6 +14,18 @@ export const routes: Routes = [
     loadComponent: () => import('./features/how-it-works/how-it-works.component').then(m => m.HowItWorksComponent)
   },
   {
+    path: 'features',
+    loadComponent: () => import('./features/features/features.component').then(m => m.FeaturesComponent)
+  },
+  {
+    path: 'pricing',
+    loadComponent: () => import('./features/pricing/pricing.component').then(m => m.PricingComponent)
+  },
+  {
+    path: 'faq',
+    loadComponent: () => import('./features/faq/faq.component').then(m => m.FaqComponent)
+  },
+  {
     path: '',
     component: AuthLayoutComponent,
     children: [

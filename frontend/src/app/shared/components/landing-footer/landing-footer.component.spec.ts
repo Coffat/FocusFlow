@@ -17,34 +17,35 @@ describe('LandingFooterComponent', () => {
     fixture.detectChanges();
   });
 
-  it('should initialize with default inputs and render standard footer elements', () => {
+  it('should render default brand logo, copyright, status pill, and 5 public links', () => {
     expect(component).toBeTruthy();
-    expect(component.brandName()).toBe('FocusFlow');
-    expect(component.links().length).toBe(5);
-
     const el = fixture.nativeElement as HTMLElement;
-    expect(el.textContent).toContain('Focus');
-    expect(el.textContent).toContain('Flow');
-    expect(el.textContent).toContain('SRL Learning Harness');
+    expect(el.textContent).toContain('FocusFlow');
+    expect(el.querySelector('img[src="assets/logo.svg"]')).toBeTruthy();
+    expect(el.textContent).toContain(
+      '© 2026 FocusFlow — Hệ thống Điều phối Lộ trình Tự học Thích ứng (SRL Learning Harness).'
+    );
     expect(el.textContent).toContain('3-Tier Validation Gate • 2-Stage SSE');
 
     const anchorHrefs = Array.from(el.querySelectorAll('a')).map((a) => a.getAttribute('href'));
     expect(anchorHrefs).toEqual([
       '/',
       '/how-it-works',
-      '/#capabilities',
-      '/#scenarios',
-      '/#testimonials',
+      '/features',
+      '/pricing',
+      '/faq',
     ]);
   });
 
   it('should accept custom links and statusText', () => {
-    fixture.componentRef.setInput('statusText', 'Custom Engine Status');
-    fixture.componentRef.setInput('links', [{ label: 'Privacy', href: '/privacy' }]);
+    fixture.componentRef.setInput('statusText', 'Hệ thống hoạt động bình thường');
+    fixture.componentRef.setInput('links', [{ label: 'Liên hệ', href: '/contact' }]);
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
-    expect(el.textContent).toContain('Custom Engine Status');
-    expect(el.textContent).toContain('Privacy');
+    expect(el.textContent).toContain('Hệ thống hoạt động bình thường');
+    expect(el.textContent).toContain('Liên hệ');
+    const link = el.querySelector('a');
+    expect(link?.getAttribute('href')).toBe('/contact');
   });
 });
