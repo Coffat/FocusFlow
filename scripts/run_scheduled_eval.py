@@ -325,7 +325,7 @@ def _parse_iso_datetime(raw: Any, fallback_tz: Any) -> datetime | None:
         return None
     if parsed.tzinfo is None:
         return parsed.replace(tzinfo=fallback_tz)
-    return parsed.astimezone(fallback_tz)
+    return parsed
 
 
 def find_current_slot(now_local: datetime) -> datetime:
