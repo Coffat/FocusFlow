@@ -97,6 +97,28 @@ describe('AiSseService', () => {
     expect(received[0].error).toBe('Thông báo lỗi từ message.');
   });
 
+  it('giữ metadata tiến độ logical subjob theo milestone', () => {
+    const received: AiStreamChunkEvent[] = [];
+    service.observeJobStream('/api/v1/roadmaps/jobs/job-progress/stream').subscribe({
+      next: event => received.push(event),
+    });
+
+    fakeEventSource.emit('chunk', {
+      stage: 'DECOMPOSING_MILESTONES',
+      progress: 71,
+      milestone_sequence: 4,
+      completed_count: 2,
+      total_count: 6,
+      from_checkpoint: true,
+    });
+
+    expect(received[0].stage).toBe('DECOMPOSING_MILESTONES');
+    expect(received[0].milestone_sequence).toBe(4);
+    expect(received[0].completed_count).toBe(2);
+    expect(received[0].total_count).toBe(6);
+    expect(received[0].from_checkpoint).toBe(true);
+  });
+
   it('giữ kết nối để EventSource tự nối lại khi lỗi mạng chỉ là tạm thời', () => {
     let transportError: unknown;
     service
