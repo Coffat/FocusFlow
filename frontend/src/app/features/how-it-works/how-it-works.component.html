@@ -1,0 +1,878 @@
+<!-- FLOATING CAPSULE NAVBAR -->
+<app-floating-navbar [isAuthenticated]="authService.isAuthenticated()" />
+
+<!-- MAIN CANVAS -->
+<main class="flex-grow pt-24 sm:pt-28 bg-surface text-on-surface selection:bg-primary selection:text-white">
+
+  <!-- ======================================================================
+       SECTION 1: HERO & ARCHITECTURAL TELEMETRY STRIP + 3 CORE ENTITIES
+       ====================================================================== -->
+  <section class="relative pt-10 pb-16 md:pb-24 border-b border-outline-variant overflow-hidden">
+    <!-- Subtle Grid Axis Backdrop -->
+    <div class="absolute inset-0 grid-axis opacity-30 pointer-events-none" aria-hidden="true"></div>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+      <div class="max-w-4xl mx-auto text-center">
+        <!-- Eyebrow Badge Capsule -->
+        <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-surface-container-lowest border border-outline-variant shadow-sm mb-6">
+          <span class="w-2 h-2 rounded-full bg-primary-container animate-pulse" aria-hidden="true"></span>
+          <span class="text-xs font-semibold uppercase tracking-wider text-on-surface-variant font-sans">
+            Phương Pháp Luận &amp; Kiến Trúc Điều Phối SRL
+          </span>
+        </div>
+
+        <!-- Main Headline in Newsreader Serif -->
+        <h1 class="font-serif-headline text-3xl sm:text-5xl lg:text-6xl text-on-surface tracking-tight leading-[1.15] mb-6">
+          Cách FocusFlow Kiến Tạo Lộ Trình &amp;<br class="hidden sm:inline" />
+          <span class="italic text-primary font-normal">Bảo Toàn Nhịp Độ Tự Học Chuyên Sâu</span>
+        </h1>
+
+        <!-- Subheadline -->
+        <p class="text-base sm:text-lg md:text-xl text-on-surface-variant max-w-3xl mx-auto leading-relaxed font-sans font-normal mb-8">
+          Vận hành theo chu trình 6 bước SRL của Zimmerman (<span class="text-on-surface font-medium">Understand → Plan → Schedule → Adapt → Learn → Improve</span>). Phân tách rạch ròi 3 thực thể cốt lõi: không ép giờ bằng LLM ảo giác, không phá vỡ nhịp sống thực.
+        </p>
+
+        <!-- CTA Action Cluster -->
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+          <button
+            type="button"
+            (click)="startJourney()"
+            class="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-on-surface text-white hover:bg-primary px-8 py-3.5 rounded-full text-sm font-semibold font-sans transition-all duration-200 shadow-sm hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+          >
+            <span>Bắt đầu lộ trình ngay</span>
+            <span class="material-symbols-outlined text-[18px]" aria-hidden="true">arrow_forward</span>
+          </button>
+          <a
+            href="#architecture"
+            (click)="scrollTo('architecture', $event)"
+            class="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-surface-container-lowest border border-outline-variant hover:bg-surface-container text-on-surface px-7 py-3.5 rounded-full text-sm font-semibold font-sans transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+          >
+            <span class="material-symbols-outlined text-[18px] text-on-surface-variant" aria-hidden="true">account_tree</span>
+            <span>Khám phá 4 giai đoạn điều phối</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Telemetry Strip Anchors (4 Metrics) -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mt-16 pt-8 border-t border-outline-variant/80">
+        <div class="bg-surface-container-lowest p-4 rounded-lg border border-outline-variant/60 shadow-xs">
+          <p class="text-[11px] font-semibold text-secondary uppercase tracking-widest font-sans">Chu trình vận hành</p>
+          <p class="font-serif-headline text-2xl text-on-surface mt-1">6 Bước Khép Kín</p>
+          <p class="text-xs text-on-surface-variant mt-1">Mô hình SRL Zimmerman 3 pha</p>
+        </div>
+        <div class="bg-surface-container-lowest p-4 rounded-lg border border-outline-variant/60 shadow-xs">
+          <p class="text-[11px] font-semibold text-secondary uppercase tracking-widest font-sans">Cổng kiểm định</p>
+          <p class="font-serif-headline text-2xl text-on-surface mt-1">3-Tier Validation</p>
+          <p class="text-xs text-on-surface-variant mt-1">Schema • Engine • Pedagogical Judge</p>
+        </div>
+        <div class="bg-surface-container-lowest p-4 rounded-lg border border-outline-variant/60 shadow-xs">
+          <p class="text-[11px] font-semibold text-secondary uppercase tracking-widest font-sans">Tối ưu giờ rảnh</p>
+          <p class="font-serif-headline text-2xl text-primary-container mt-1">0 AI Credit</p>
+          <p class="text-xs text-on-surface-variant mt-1">Động cơ tất định Mode A / Mode B</p>
+        </div>
+        <div class="bg-surface-container-lowest p-4 rounded-lg border border-outline-variant/60 shadow-xs">
+          <p class="text-[11px] font-semibold text-secondary uppercase tracking-widest font-sans">Bảo toàn tri thức</p>
+          <p class="font-serif-headline text-2xl text-on-surface mt-1">Learner Model 4×3</p>
+          <p class="text-xs text-on-surface-variant mt-1">TakeawayGuard &amp; Prove Mode</p>
+        </div>
+      </div>
+
+      <!-- 3 CORE ENTITIES SWITCHER (The Foundation of Architectural Focus) -->
+      <div class="mt-14 bg-surface-container-low border border-outline-variant rounded-2xl p-6 sm:p-8">
+        <div class="max-w-3xl mb-6">
+          <span class="text-xs font-semibold text-primary uppercase tracking-wider font-sans">Nguyên Tắc Kiến Trúc Cốt Lõi</span>
+          <h2 class="font-serif-headline text-2xl sm:text-3xl text-on-surface mt-1">
+            Phân Tách Rạch Ròi 3 Thực Thể Độc Lập
+          </h2>
+          <p class="text-xs sm:text-sm text-on-surface-variant mt-2 font-sans leading-relaxed">
+            Hầu hết ứng dụng tự học AI thất bại vì gộp chung nội dung học với lịch học. FocusFlow tách biệt hoàn toàn giữa <strong class="text-on-surface font-semibold">Roadmap</strong>, <strong class="text-on-surface font-semibold">Schedule</strong>, và <strong class="text-on-surface font-semibold">Learner Model</strong>:
+          </p>
+        </div>
+
+        <!-- Entity Tabs -->
+        <div class="flex flex-wrap gap-2 pb-6 border-b border-outline-variant" role="tablist" aria-label="3 Thực thể cốt lõi">
+          <button
+            type="button"
+            role="tab"
+            [attr.aria-selected]="activeEntityTab() === 'roadmap'"
+            (click)="setEntityTab('roadmap')"
+            [class]="activeEntityTab() === 'roadmap'
+              ? 'px-4 py-2 rounded-full bg-primary text-white text-xs font-semibold shadow-xs transition-all'
+              : 'px-4 py-2 rounded-full bg-surface-container-lowest border border-outline-variant text-on-surface-variant hover:text-on-surface text-xs font-medium transition-all'"
+          >
+            1. Roadmap (Học gì, thứ tự nào)
+          </button>
+          <button
+            type="button"
+            role="tab"
+            [attr.aria-selected]="activeEntityTab() === 'schedule'"
+            (click)="setEntityTab('schedule')"
+            [class]="activeEntityTab() === 'schedule'
+              ? 'px-4 py-2 rounded-full bg-primary text-white text-xs font-semibold shadow-xs transition-all'
+              : 'px-4 py-2 rounded-full bg-surface-container-lowest border border-outline-variant text-on-surface-variant hover:text-on-surface text-xs font-medium transition-all'"
+          >
+            2. Schedule (Học khi nào, quỹ giờ rảnh)
+          </button>
+          <button
+            type="button"
+            role="tab"
+            [attr.aria-selected]="activeEntityTab() === 'learner-model'"
+            (click)="setEntityTab('learner-model')"
+            [class]="activeEntityTab() === 'learner-model'
+              ? 'px-4 py-2 rounded-full bg-primary text-white text-xs font-semibold shadow-xs transition-all'
+              : 'px-4 py-2 rounded-full bg-surface-container-lowest border border-outline-variant text-on-surface-variant hover:text-on-surface text-xs font-medium transition-all'"
+          >
+            3. Learner Model (Học như thế nào, 4×3)
+          </button>
+        </div>
+
+        <!-- Active Entity Tab Content Panel -->
+        <div class="mt-6">
+          @switch (activeEntityTab()) {
+            @case ('roadmap') {
+              <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+                <div class="lg:col-span-7 space-y-3">
+                  <span class="text-xs font-mono text-primary font-semibold">ENTITY: ROADMAP (ESTIMATED_EFFORT)</span>
+                  <h3 class="font-serif-headline text-xl text-on-surface">Cấu trúc tri thức Đồ thị Có hướng Không chu trình (DAG)</h3>
+                  <p class="text-sm text-on-surface-variant leading-relaxed font-sans">
+                    Định nghĩa các cột mốc (<code class="text-xs bg-surface-container px-1.5 py-0.5 rounded">milestones</code>) và bài học (<code class="text-xs bg-surface-container px-1.5 py-0.5 rounded">tasks</code>) theo quan hệ tiên quyết chặt chẽ. Mỗi task mang ước lượng công sức chuẩn hóa (<code class="text-xs bg-surface-container px-1.5 py-0.5 rounded">estimated_effort</code>).
+                  </p>
+                  <ul class="text-xs text-on-surface-variant space-y-1.5 pt-2">
+                    <li class="flex items-center gap-2">
+                      <span class="material-symbols-outlined text-[16px] text-primary">check_circle</span>
+                      <span>Được cố định sau khi người học phê duyệt Cấp độ 1 (Milestones Review).</span>
+                    </li>
+                    <li class="flex items-center gap-2">
+                      <span class="material-symbols-outlined text-[16px] text-primary">check_circle</span>
+                      <span>Hoàn toàn độc lập với quỹ giờ rảnh — không bị phá vỡ khi bạn bận việc đột xuất.</span>
+                    </li>
+                  </ul>
+                </div>
+                <div class="lg:col-span-5 bg-surface-container-lowest border border-outline-variant p-4 rounded-xl">
+                  <div class="flex items-center justify-between text-xs pb-2 border-b border-outline-variant text-on-surface-variant font-mono">
+                    <span>DAG GRAPH ENGINE</span>
+                    <span class="text-primary font-semibold">NO_CYCLE_GUARANTEE</span>
+                  </div>
+                  <div class="py-4 space-y-2 font-mono text-xs">
+                    <div class="p-2.5 rounded bg-primary/10 border border-primary/20 text-on-surface flex items-center justify-between">
+                      <span>M1: Nền tảng Kiến trúc Phân tán</span>
+                      <span class="text-primary font-semibold">12h • APPROVED</span>
+                    </div>
+                    <div class="text-center text-outline text-xs">↓ depends_on</div>
+                    <div class="p-2.5 rounded bg-surface border border-outline-variant text-on-surface flex items-center justify-between">
+                      <span>M2: Đồng thuận Raft &amp; Paxos</span>
+                      <span class="text-secondary">18h • QUEUED</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            }
+            @case ('schedule') {
+              <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+                <div class="lg:col-span-7 space-y-3">
+                  <span class="text-xs font-mono text-primary font-semibold">ENTITY: OFFICIAL_SCHEDULE (SCHEDULE_BLOCKS)</span>
+                  <h3 class="font-serif-headline text-xl text-on-surface">Động cơ Xếp lịch Tất định Mode A / Mode B (0 AI Credit)</h3>
+                  <p class="text-sm text-on-surface-variant leading-relaxed font-sans">
+                    Phân bổ các bài học vào quỹ giờ rảnh thực tế bằng thuật toán giải ràng buộc tất định (Deterministic Constraint Satisfaction). Khi bạn đổi giờ rảnh, hệ thống chỉ chạy lại bài toán xếp lịch mà <strong class="text-on-surface">không tạo lại Roadmap</strong>.
+                  </p>
+                  <ul class="text-xs text-on-surface-variant space-y-1.5 pt-2">
+                    <li class="flex items-center gap-2">
+                      <span class="material-symbols-outlined text-[16px] text-primary">check_circle</span>
+                      <span>AI chỉ tạo bản nháp <code>ScheduleProposal(DRAFT)</code>; chỉ khi bạn bấm <strong>Áp dụng</strong> mới ghi nhận vào <code>OfficialSchedule</code>.</span>
+                    </li>
+                    <li class="flex items-center gap-2">
+                      <span class="material-symbols-outlined text-[16px] text-primary">check_circle</span>
+                      <span>Đồng bộ 2 chiều qua Google Calendar OAuth2 và WebCal (.ics RFC 5545).</span>
+                    </li>
+                  </ul>
+                </div>
+                <div class="lg:col-span-5 bg-surface-container-lowest border border-outline-variant p-4 rounded-xl">
+                  <div class="flex items-center justify-between text-xs pb-2 border-b border-outline-variant text-on-surface-variant font-mono">
+                    <span>DETERMINISTIC ENGINE</span>
+                    <span class="text-primary font-semibold">0 CREDIT COST</span>
+                  </div>
+                  <div class="py-4 space-y-2 text-xs">
+                    <div class="flex items-center justify-between p-2 rounded bg-surface border border-outline-variant">
+                      <span class="font-medium">Mode A: Quỹ giờ cố định</span>
+                      <span class="font-mono text-secondary">T2, T4, T6 (20:00 - 21:30)</span>
+                    </div>
+                    <div class="flex items-center justify-between p-2 rounded bg-primary/10 border border-primary/20">
+                      <span class="font-medium text-primary">Mode B: Khung năng lượng</span>
+                      <span class="font-mono text-primary font-semibold">Sáng 06:30 • Tối 21:00</span>
+                    </div>
+                    <p class="text-[11px] text-on-surface-variant pt-1 italic font-sans">
+                      Soft Overflow cảnh báo nếu phiên học vượt khung &le; 30 phút.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            }
+            @case ('learner-model') {
+              <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+                <div class="lg:col-span-7 space-y-3">
+                  <span class="text-xs font-mono text-primary font-semibold">ENTITY: LEARNER_MODEL (4×3 MATRIX)</span>
+                  <h3 class="font-serif-headline text-xl text-on-surface">Hồ sơ Nhận thức Bền vững Xuyên suốt Mọi Lộ trình</h3>
+                  <p class="text-sm text-on-surface-variant leading-relaxed font-sans">
+                    Lưu giữ tại bảng <code class="text-xs bg-surface-container px-1.5 py-0.5 rounded">learner_profiles</code>, <code class="text-xs bg-surface-container px-1.5 py-0.5 rounded">learner_memory_items</code>. Cấu trúc 4 khía cạnh nhận thức kết hợp 3 cấp độ bằng chứng (<code class="text-xs bg-surface-container px-1.5 py-0.5 rounded">EXPLICIT</code>, <code class="text-xs bg-surface-container px-1.5 py-0.5 rounded">OBSERVED</code>, <code class="text-xs bg-surface-container px-1.5 py-0.5 rounded">INFERRED</code>).
+                  </p>
+                  <ul class="text-xs text-on-surface-variant space-y-1.5 pt-2">
+                    <li class="flex items-center gap-2">
+                      <span class="material-symbols-outlined text-[16px] text-primary">check_circle</span>
+                      <span>Không bị xóa khi Roadmap kết thúc — tiến hóa qua từng phiên học và đợt phản tư tuần.</span>
+                    </li>
+                    <li class="flex items-center gap-2">
+                      <span class="material-symbols-outlined text-[16px] text-primary">check_circle</span>
+                      <span>Học sâu nhịp độ sinh học: tự động tinh chỉnh độ dài Pomodoro (25/45/90p) và MVS (10-15p).</span>
+                    </li>
+                  </ul>
+                </div>
+                <div class="lg:col-span-5 bg-surface-container-lowest border border-outline-variant p-4 rounded-xl">
+                  <div class="flex items-center justify-between text-xs pb-2 border-b border-outline-variant text-on-surface-variant font-mono">
+                    <span>MEMORY 4×3 MATRIX</span>
+                    <span class="text-primary font-semibold">LONG-TERM SRL</span>
+                  </div>
+                  <div class="py-3 grid grid-cols-2 gap-2 text-[11px] font-sans">
+                    <div class="p-2 rounded bg-surface border border-outline-variant">
+                      <span class="font-medium text-on-surface block">Năng lực cốt lõi</span>
+                      <span class="text-secondary">Mastery vector 84%</span>
+                    </div>
+                    <div class="p-2 rounded bg-surface border border-outline-variant">
+                      <span class="font-medium text-on-surface block">Khung năng lượng</span>
+                      <span class="text-secondary">Sáng sớm &amp; Đêm muộn</span>
+                    </div>
+                    <div class="p-2 rounded bg-surface border border-outline-variant">
+                      <span class="font-medium text-on-surface block">Điểm mù nhận thức</span>
+                      <span class="text-secondary">Mistake Taxonomy: Slip</span>
+                    </div>
+                    <div class="p-2 rounded bg-surface border border-outline-variant">
+                      <span class="font-medium text-on-surface block">Khả năng chịu đựng</span>
+                      <span class="text-secondary">Pomodoro 45m tối ưu</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            }
+          }
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================================================================
+       SECTION 2: THE 4-STEP ARCHITECTURE OF FLOW (BENTO 2X2)
+       ====================================================================== -->
+  <section class="py-20 md:py-28 border-b border-outline-variant bg-surface" id="architecture">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <!-- Section Header -->
+      <div class="flex flex-col md:flex-row md:items-end justify-between mb-14 pb-6 border-b border-outline-variant">
+        <div>
+          <span class="text-xs font-semibold text-primary uppercase tracking-widest font-sans">Chu Trình Thực Thi Tuyệt Đối</span>
+          <h2 class="font-serif-headline text-3xl sm:text-4xl text-on-surface mt-2">
+            Kiến Trúc 4 Giai Đoạn Điều Phối (Architecture of Flow)
+          </h2>
+        </div>
+        <p class="text-sm text-on-surface-variant max-w-md mt-4 md:mt-0 font-sans leading-relaxed">
+          Được thiết kế dựa trên công thái học nhận thức: từng phiên học tiến triển liền mạch từ chẩn đoán ban đầu đến đắm chìm không gián đoạn và củng cố tri thức dài hạn.
+        </p>
+      </div>
+
+      <!-- 4-Stage Bento Flow Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+
+        <!-- STAGE 01: Understand & Plan -->
+        <div class="hairline-card p-6 sm:p-8 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-5">
+              <span class="text-xs font-semibold uppercase tracking-wider text-primary bg-primary/10 px-3 py-1 custom-pill">
+                Giai Đoạn 01
+              </span>
+              <span class="font-serif-headline text-4xl text-surface-container-highest select-none font-light">01</span>
+            </div>
+            <h3 class="font-serif-headline text-2xl text-on-surface mb-3">
+              Chẩn Đoán Ngữ Cảnh &amp; Lập Lộ Trình Hybrid RAG
+            </h3>
+            <p class="text-sm text-on-surface-variant leading-relaxed mb-6 font-sans">
+              FocusFlow kích hoạt phỏng vấn thích ứng <strong>Pedagogy Grill-Me</strong> để làm rõ nền tảng kiến thức (<code class="text-xs bg-surface-container px-1 py-0.5 rounded">KNOWLEDGE_BASELINE</code>) và thời gian thực tế (<code class="text-xs bg-surface-container px-1 py-0.5 rounded">LEARNING_CONSTRAINTS</code>). Dữ liệu tài liệu được nạp qua Hybrid RAG (kết hợp <code class="text-xs bg-surface-container px-1 py-0.5 rounded">tsvector</code> và <code class="text-xs bg-surface-container px-1 py-0.5 rounded">pgvector</code> HNSW), đóng gói an toàn trong thẻ <code class="text-xs bg-surface-container px-1 py-0.5 rounded">&lt;untrusted_knowledge_context&gt;</code> phòng chống Prompt Injection.
+            </p>
+          </div>
+
+          <!-- Inlaid Architectural Preview 1 -->
+          <div class="bg-surface border border-outline-variant rounded-xl p-4">
+            <div class="flex items-center justify-between text-xs font-mono text-secondary pb-2 border-b border-outline-variant">
+              <span>AI PEDAGOGY GRILL-ME</span>
+              <span class="text-primary font-semibold">FEASIBILITY: FIT_CAPACITY</span>
+            </div>
+            <div class="pt-3 space-y-2.5 font-sans">
+              <div class="flex justify-between text-xs">
+                <span class="text-on-surface-variant">Tỷ lệ tương thích quỹ giờ rảnh</span>
+                <span class="font-semibold text-primary">94% (Rất khả thi)</span>
+              </div>
+              <div class="w-full bg-surface-container h-1.5 rounded-full overflow-hidden">
+                <div class="bg-primary-container h-full w-[94%] rounded-full"></div>
+              </div>
+              <div class="flex items-center justify-between pt-1 text-[11px] text-secondary font-mono">
+                <span>Duyệt Cấp độ 1: 5 Milestones</span>
+                <span>Ước tính: 24.5 giờ học</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- STAGE 02: Schedule & Verify -->
+        <div class="hairline-card p-6 sm:p-8 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-5">
+              <span class="text-xs font-semibold uppercase tracking-wider text-secondary bg-surface-container px-3 py-1 custom-pill">
+                Giai Đoạn 02
+              </span>
+              <span class="font-serif-headline text-4xl text-surface-container-highest select-none font-light">02</span>
+            </div>
+            <h3 class="font-serif-headline text-2xl text-on-surface mb-3">
+              Xếp Lịch Tất Định Mode A/B &amp; Cổng Kiểm Duyệt 3 Tầng
+            </h3>
+            <p class="text-sm text-on-surface-variant leading-relaxed mb-6 font-sans">
+              Thay vì để AI tự do xếp giờ hỗn loạn, động cơ áp dụng <strong>3-Tier Validation Gate</strong> (Tier 1 Schema Pydantic, Tier 2 Spatio-Temporal Engine &amp; DAG, Tier 3 Pedagogical AI Judge). Trải qua luồng 2-Stage SSE Streaming (<code class="text-xs bg-surface-container px-1 py-0.5 rounded">RESERVE → COMMIT/RELEASE</code>), AI chỉ sinh bản nháp <code class="text-xs bg-surface-container px-1 py-0.5 rounded">ScheduleProposal(DRAFT)</code>. Chỉ thao tác <strong class="text-on-surface">Apply</strong> của người học mới ghi vào lịch chính thức.
+            </p>
+          </div>
+
+          <!-- Inlaid Architectural Preview 2: Mode A/B Switcher -->
+          <div class="bg-surface border border-outline-variant rounded-xl p-4">
+            <div class="flex items-center justify-between text-xs pb-2 border-b border-outline-variant">
+              <span class="font-mono text-secondary">3-TIER GATE VERIFIED</span>
+              <div class="flex items-center gap-1">
+                <button
+                  type="button"
+                  (click)="setScheduleMode('A')"
+                  [class]="previewScheduleMode() === 'A' ? 'bg-primary text-white' : 'bg-surface-container text-secondary'"
+                  class="px-2 py-0.5 rounded text-[11px] font-semibold transition-colors"
+                >
+                  Mode A
+                </button>
+                <button
+                  type="button"
+                  (click)="setScheduleMode('B')"
+                  [class]="previewScheduleMode() === 'B' ? 'bg-primary text-white' : 'bg-surface-container text-secondary'"
+                  class="px-2 py-0.5 rounded text-[11px] font-semibold transition-colors"
+                >
+                  Mode B
+                </button>
+              </div>
+            </div>
+            <div class="pt-3 grid grid-cols-3 gap-2 text-center text-xs font-mono">
+              <div class="p-2 border border-primary/20 bg-primary/10 rounded">
+                <span class="text-[10px] text-primary block">TIER 1</span>
+                <span class="font-semibold text-on-surface">Pydantic v2</span>
+                <span class="text-[10px] text-primary block mt-0.5">PASS</span>
+              </div>
+              <div class="p-2 border border-primary/20 bg-primary/10 rounded">
+                <span class="text-[10px] text-primary block">TIER 2</span>
+                <span class="font-semibold text-on-surface">DAG Engine</span>
+                <span class="text-[10px] text-primary block mt-0.5">PASS</span>
+              </div>
+              <div class="p-2 border border-primary/20 bg-primary/10 rounded">
+                <span class="text-[10px] text-primary block">TIER 3</span>
+                <span class="font-semibold text-on-surface">AI Judge</span>
+                <span class="text-[10px] text-primary block mt-0.5">PASS</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- STAGE 03: Execute & Guard (With Interactive TakeawayGuard Validator) -->
+        <div class="hairline-card p-6 sm:p-8 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-5">
+              <span class="text-xs font-semibold uppercase tracking-wider text-secondary bg-surface-container px-3 py-1 custom-pill">
+                Giai Đoạn 03
+              </span>
+              <span class="font-serif-headline text-4xl text-surface-container-highest select-none font-light">03</span>
+            </div>
+            <h3 class="font-serif-headline text-2xl text-on-surface mb-3">
+              Thực Thi Tại Study Workspace Studio &amp; TakeawayGuard
+            </h3>
+            <p class="text-sm text-on-surface-variant leading-relaxed mb-6 font-sans">
+              Không gian tĩnh lặng bảo vệ chú ý tối thượng: đồng hồ <strong>Timestamp-Delta</strong> (Pomodoro 25/45/90p, MVS 10-15p, Stopwatch), <strong>Focus Shield</strong> (Tab Guard, Focus Score, Zen Lock, Parking Lot), và Sticky Notes 6 màu. Heartbeat 60s &amp; Auto-Recovery Sweeper khôi phục trạng thái <code class="text-xs bg-surface-container px-1 py-0.5 rounded">PARTIAL_COMPLETED</code>. Cuối phiên, <strong>TakeawayGuard</strong> kiểm chứng phản tư không tốn AI credit.
+            </p>
+          </div>
+
+          <!-- Inlaid Architectural Preview 3: Live TakeawayGuard Validator Demo -->
+          <div class="bg-surface border border-outline-variant rounded-xl p-4">
+            <div class="flex items-center justify-between text-xs font-mono text-secondary pb-2 border-b border-outline-variant">
+              <span>INTERACTIVE TAKEAWAYGUARD VALIDATOR</span>
+              <span class="text-[11px] font-semibold" [class]="takeawayValidation().valid ? 'text-primary' : 'text-error'">
+                {{ takeawayValidation().valid ? 'GUARD: PASS' : 'GUARD: INCOMPLETE' }}
+              </span>
+            </div>
+            <div class="pt-3 space-y-2">
+              <input
+                type="text"
+                [ngModel]="takeawayInput()"
+                (ngModelChange)="setTakeawayInput($event)"
+                placeholder="Nhập thử đúc kết sau buổi học (≥ 30 ký tự, ≥ 6 từ)..."
+                class="w-full text-xs font-sans p-2 rounded border border-outline-variant bg-surface-container-lowest text-on-surface focus:outline-none focus:border-primary"
+              />
+              <div class="flex items-center justify-between text-[11px] font-mono">
+                <span [class]="takeawayValidation().lengthOk ? 'text-primary font-medium' : 'text-secondary'">
+                  Ký tự: {{ takeawayValidation().length }}/30 {{ takeawayValidation().lengthOk ? '✓' : '' }}
+                </span>
+                <span [class]="takeawayValidation().distinctWordsOk ? 'text-primary font-medium' : 'text-secondary'">
+                  Từ phân biệt: {{ takeawayValidation().distinctWords }}/6 {{ takeawayValidation().distinctWordsOk ? '✓' : '' }}
+                </span>
+                <span [class]="takeawayValidation().noRepetitionOk ? 'text-primary font-medium' : 'text-error'">
+                  Lặp ký tự: {{ takeawayValidation().noRepetitionOk ? 'Hợp lệ ✓' : 'Lặp quá mức ✗' }}
+                </span>
+              </div>
+              <p class="text-[11px] text-on-surface-variant font-sans italic">
+                {{ takeawayValidation().message }}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- STAGE 04: Prove, Adapt & Improve -->
+        <div class="hairline-card p-6 sm:p-8 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-5">
+              <span class="text-xs font-semibold uppercase tracking-wider text-secondary bg-surface-container px-3 py-1 custom-pill">
+                Giai Đoạn 04
+              </span>
+              <span class="font-serif-headline text-4xl text-surface-container-highest select-none font-light">04</span>
+            </div>
+            <h3 class="font-serif-headline text-2xl text-on-surface mb-3">
+              Kiểm Chứng Prove Mode &amp; 3 Chiến Lược Thích Ứng
+            </h3>
+            <p class="text-sm text-on-surface-variant leading-relaxed mb-6 font-sans">
+              Xóa bỏ ảo tưởng hiểu biết (illusion of competence) bằng <strong>Prove Mode</strong> (Active Recall Probing, Calibration Gap, Mistake Taxonomy). Khi trễ hạn hoặc tạm dừng, áp dụng <strong>3 Chiến lược Thích ứng</strong>: Domino Shift khi Pause/Resume (không tăng <code class="text-xs bg-surface-container px-1 py-0.5 rounded">reschedule_count</code>), AI Overdue Recovery từ mục <em>Needs Attention</em>, và cầu dao an toàn <code class="text-xs bg-surface-container px-1 py-0.5 rounded">STALLED</code> khi trễ $\ge 3$ lần.
+            </p>
+          </div>
+
+          <!-- Inlaid Architectural Preview 4: 3 Adaptive Strategies Switcher -->
+          <div class="bg-surface border border-outline-variant rounded-xl p-4">
+            <div class="flex items-center justify-between text-xs font-mono text-secondary pb-2 border-b border-outline-variant">
+              <span>3 ADAPTIVE PROTOCOLS</span>
+              <span class="text-primary font-semibold">SRS v1.3 BUSR-04</span>
+            </div>
+            <div class="pt-3">
+              <div class="flex gap-1 mb-2.5">
+                <button
+                  type="button"
+                  (click)="setAdaptiveStrategy('domino')"
+                  [class]="previewAdaptiveStrategy() === 'domino' ? 'bg-primary text-white' : 'bg-surface-container text-secondary'"
+                  class="flex-1 py-1 text-[11px] font-sans font-semibold rounded transition-colors"
+                >
+                  Domino Shift
+                </button>
+                <button
+                  type="button"
+                  (click)="setAdaptiveStrategy('recovery')"
+                  [class]="previewAdaptiveStrategy() === 'recovery' ? 'bg-primary text-white' : 'bg-surface-container text-secondary'"
+                  class="flex-1 py-1 text-[11px] font-sans font-semibold rounded transition-colors"
+                >
+                  Overdue Recovery
+                </button>
+                <button
+                  type="button"
+                  (click)="setAdaptiveStrategy('stalled')"
+                  [class]="previewAdaptiveStrategy() === 'stalled' ? 'bg-primary text-white' : 'bg-surface-container text-secondary'"
+                  class="flex-1 py-1 text-[11px] font-sans font-semibold rounded transition-colors"
+                >
+                  STALLED Breaker
+                </button>
+              </div>
+
+              <div class="p-2.5 bg-surface-container-lowest rounded border border-outline-variant text-xs font-sans text-on-surface-variant">
+                @switch (previewAdaptiveStrategy()) {
+                  @case ('domino') {
+                    <p class="leading-relaxed">
+                      <strong class="text-on-surface font-semibold">Domino Shift:</strong> Khi người học tạm dừng hoặc nghỉ giữa phiên, hệ thống tự động đẩy nhẹ các block kế tiếp trong ngày mà <strong class="text-primary">không tăng chỉ số reschedule_count</strong>, bảo toàn động lực tâm lý.
+                    </p>
+                  }
+                  @case ('recovery') {
+                    <p class="leading-relaxed">
+                      <strong class="text-on-surface font-semibold">AI Overdue Recovery:</strong> Task quá hạn được gom có trật tự vào khu vực <em>Needs Attention</em>. Tuyệt đối không tự ý dời ngày học trong âm thầm; người học tự chọn giải pháp dồn bài hoặc bù giờ.
+                    </p>
+                  }
+                  @case ('stalled') {
+                    <p class="leading-relaxed">
+                      <strong class="text-on-surface font-semibold">Cầu dao STALLED:</strong> Khi một tác vụ bị hoãn $\ge 3$ lần, cầu dao tự động ngắt chuỗi dời lịch vô tận, kích hoạt phiên Mini-Reflection để tháo gỡ điểm nghẽn tâm lý hoặc hạ độ khó.
+                    </p>
+                  }
+                }
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================================================================
+       SECTION 3: METHODOLOGICAL CONTRAST TABLE
+       ====================================================================== -->
+  <section class="py-20 md:py-28 border-b border-outline-variant bg-surface-container-low" id="comparison">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="max-w-3xl mb-14">
+        <span class="text-xs font-semibold text-secondary uppercase tracking-widest font-sans">Bảng Đối Chiếu Phương Pháp Luận</span>
+        <h2 class="font-serif-headline text-3xl sm:text-4xl text-on-surface mt-2">
+          FocusFlow Adaptive System vs. Tự Học Rời Rạc Truyền Thống
+        </h2>
+        <p class="text-sm text-on-surface-variant mt-3 font-sans leading-relaxed">
+          Lý do vì sao việc tự học ngẫu hứng và hỏi đáp LLM thông thường nhanh chóng sụp đổ trước bối cảnh xao nhãng, so sánh với kỷ luật kiến trúc của FocusFlow.
+        </p>
+      </div>
+
+      <!-- Minimalist Editorial Table -->
+      <div class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-xs">
+        <!-- Table Header (12 Columns) -->
+        <div class="grid grid-cols-12 border-b border-outline-variant bg-surface p-4 text-xs font-semibold text-secondary uppercase tracking-wider font-sans">
+          <div class="col-span-12 sm:col-span-4 font-mono">Chiều Đánh Giá Kỹ Thuật</div>
+          <div class="col-span-6 sm:col-span-4 text-primary">FocusFlow Learning Harness</div>
+          <div class="col-span-6 sm:col-span-4 text-secondary">Tự Học Rời Rạc &amp; LLM Chat</div>
+        </div>
+
+        <!-- Table Body Rows -->
+        <div class="divide-y divide-outline-variant/60 font-sans">
+          <!-- Row 1 -->
+          <div class="grid grid-cols-12 p-4 sm:p-5 items-center hover:bg-surface-container-low/50 transition-colors">
+            <div class="col-span-12 sm:col-span-4 font-semibold text-sm text-on-surface mb-1 sm:mb-0">
+              1. Kiến trúc Lộ trình &amp; Tiên quyết (DAG)
+            </div>
+            <div class="col-span-12 sm:col-span-4 text-xs text-primary-container font-medium flex items-start gap-2 mb-2 sm:mb-0">
+              <span class="material-symbols-outlined text-[16px] text-primary shrink-0 mt-0.5">check_circle</span>
+              <span>Đồ thị DAG bất biến sau khi phê duyệt, kiểm tra khả thi FIT_CAPACITY, không chu trình.</span>
+            </div>
+            <div class="col-span-12 sm:col-span-4 text-xs text-on-surface-variant flex items-start gap-2">
+              <span class="material-symbols-outlined text-[16px] text-outline shrink-0 mt-0.5">cancel</span>
+              <span>Danh sách gạch đầu dòng phẳng, thiếu liên kết tiên quyết, dễ hổng kiến thức nền tảng.</span>
+            </div>
+          </div>
+
+          <!-- Row 2 -->
+          <div class="grid grid-cols-12 p-4 sm:p-5 items-center hover:bg-surface-container-low/50 transition-colors">
+            <div class="col-span-12 sm:col-span-4 font-semibold text-sm text-on-surface mb-1 sm:mb-0">
+              2. Xếp lịch &amp; Biến động Giờ rảnh
+            </div>
+            <div class="col-span-12 sm:col-span-4 text-xs text-primary-container font-medium flex items-start gap-2 mb-2 sm:mb-0">
+              <span class="material-symbols-outlined text-[16px] text-primary shrink-0 mt-0.5">check_circle</span>
+              <span>Động cơ tất định Mode A/B tốn 0 AI credit khi đổi giờ rảnh, không bao giờ tạo lại lộ trình.</span>
+            </div>
+            <div class="col-span-12 sm:col-span-4 text-xs text-on-surface-variant flex items-start gap-2">
+              <span class="material-symbols-outlined text-[16px] text-outline shrink-0 mt-0.5">cancel</span>
+              <span>Chặn lịch cứng nhắc hoặc hỏi lại chatbot gây ảo giác phân bổ và hao tốn token liên tục.</span>
+            </div>
+          </div>
+
+          <!-- Row 3 -->
+          <div class="grid grid-cols-12 p-4 sm:p-5 items-center hover:bg-surface-container-low/50 transition-colors">
+            <div class="col-span-12 sm:col-span-4 font-semibold text-sm text-on-surface mb-1 sm:mb-0">
+              3. Cơ chế Phê duyệt &amp; Kiểm soát An toàn
+            </div>
+            <div class="col-span-12 sm:col-span-4 text-xs text-primary-container font-medium flex items-start gap-2 mb-2 sm:mb-0">
+              <span class="material-symbols-outlined text-[16px] text-primary shrink-0 mt-0.5">check_circle</span>
+              <span>Human-in-the-Loop (DRAFT → Apply), 3-Tier Gate ngăn chặn hoàn toàn lịch học chồng chéo.</span>
+            </div>
+            <div class="col-span-12 sm:col-span-4 text-xs text-on-surface-variant flex items-start gap-2">
+              <span class="material-symbols-outlined text-[16px] text-outline shrink-0 mt-0.5">cancel</span>
+              <span>Tin tưởng mù quáng vào kết quả sinh ngẫu nhiên của AI, không có cơ chế rà soát ràng buộc.</span>
+            </div>
+          </div>
+
+          <!-- Row 4 -->
+          <div class="grid grid-cols-12 p-4 sm:p-5 items-center hover:bg-surface-container-low/50 transition-colors">
+            <div class="col-span-12 sm:col-span-4 font-semibold text-sm text-on-surface mb-1 sm:mb-0">
+              4. Môi trường Thực thi &amp; Chống Sao nhãng
+            </div>
+            <div class="col-span-12 sm:col-span-4 text-xs text-primary-container font-medium flex items-start gap-2 mb-2 sm:mb-0">
+              <span class="material-symbols-outlined text-[16px] text-primary shrink-0 mt-0.5">check_circle</span>
+              <span>Study Workspace Studio với Timestamp-Delta, Focus Shield (Tab Guard, Zen Lock, Parking Lot).</span>
+            </div>
+            <div class="col-span-12 sm:col-span-4 text-xs text-on-surface-variant flex items-start gap-2">
+              <span class="material-symbols-outlined text-[16px] text-outline shrink-0 mt-0.5">cancel</span>
+              <span>Mở hàng chục tab trình duyệt hỗn loạn, dễ sa đà vào mạng xã hội và âm nhạc thương mại.</span>
+            </div>
+          </div>
+
+          <!-- Row 5 -->
+          <div class="grid grid-cols-12 p-4 sm:p-5 items-center hover:bg-surface-container-low/50 transition-colors">
+            <div class="col-span-12 sm:col-span-4 font-semibold text-sm text-on-surface mb-1 sm:mb-0">
+              5. Xử lý Trễ hạn &amp; Trì hoãn
+            </div>
+            <div class="col-span-12 sm:col-span-4 text-xs text-primary-container font-medium flex items-start gap-2 mb-2 sm:mb-0">
+              <span class="material-symbols-outlined text-[16px] text-primary shrink-0 mt-0.5">check_circle</span>
+              <span>Domino Shift không phạt dời, gom trễ hạn vào Needs Attention, cầu dao STALLED khi trễ ≥ 3 lần.</span>
+            </div>
+            <div class="col-span-12 sm:col-span-4 text-xs text-on-surface-variant flex items-start gap-2">
+              <span class="material-symbols-outlined text-[16px] text-outline shrink-0 mt-0.5">cancel</span>
+              <span>Tâm lý tội lỗi tích tụ (guilt spiral), dồn ứ hàng loạt tác vụ dẫn tới nản lòng và bỏ dở.</span>
+            </div>
+          </div>
+
+          <!-- Row 6 -->
+          <div class="grid grid-cols-12 p-4 sm:p-5 items-center hover:bg-surface-container-low/50 transition-colors">
+            <div class="col-span-12 sm:col-span-4 font-semibold text-sm text-on-surface mb-1 sm:mb-0">
+              6. Kiểm chứng Đúc kết &amp; Trí nhớ Dài hạn
+            </div>
+            <div class="col-span-12 sm:col-span-4 text-xs text-primary-container font-medium flex items-start gap-2 mb-2 sm:mb-0">
+              <span class="material-symbols-outlined text-[16px] text-primary shrink-0 mt-0.5">check_circle</span>
+              <span>TakeawayGuard (≥ 30 ký tự, ≥ 6 từ), Prove Mode đo khoảng cách tự tin, cập nhật Learner Model 4×3.</span>
+            </div>
+            <div class="col-span-12 sm:col-span-4 text-xs text-on-surface-variant flex items-start gap-2">
+              <span class="material-symbols-outlined text-[16px] text-outline shrink-0 mt-0.5">cancel</span>
+              <span>Đọc thụ động tạo ảo giác hiểu biết, không có cổng kiểm chứng, quên 80% kiến thức sau 48h.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================================================================
+       SECTION 4: ATMOSPHERIC STUDIO & LIVE WEB AUDIO MIXER
+       ====================================================================== -->
+  <section class="py-20 md:py-28 border-b border-outline-variant bg-surface" id="audio-science">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+
+        <!-- Left Column: Audio Science Narrative -->
+        <div class="lg:col-span-6 space-y-6">
+          <div class="inline-flex items-center gap-2 px-3 py-1 bg-surface-container-lowest border border-outline-variant custom-pill">
+            <span class="material-symbols-outlined text-[15px] text-primary-container" aria-hidden="true">graphic_eq</span>
+            <span class="text-xs font-semibold uppercase tracking-wider text-secondary font-sans">
+              Khoa Học Âm Thanh &amp; Môi Trường Bối Cảnh
+            </span>
+          </div>
+
+          <h2 class="font-serif-headline text-3xl sm:text-4xl text-on-surface leading-tight">
+            Không Gian Học Tập Tập Trung:<br />
+            Âm Thanh Tổng Hợp Web Audio API
+          </h2>
+
+          <p class="text-sm sm:text-base text-on-surface-variant leading-relaxed font-sans">
+            Các nghiên cứu khoa học thần kinh chỉ ra rằng âm nhạc thương mại có lời sẽ kích hoạt vùng ngôn ngữ Broca và Wernicke ở vỏ não, âm thầm làm suy giảm quá trình mã hóa trí nhớ sâu. FocusFlow trang bị bộ tạo sóng âm toán học trực tiếp qua <strong>Web Audio API</strong>: không tải file nhạc nặng, lọc sạch tiếng ồn môi trường và neo giữ bối cảnh tâm lý.
+          </p>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+            <div class="border border-outline-variant p-4 rounded-lg bg-surface-container-lowest shadow-xs">
+              <span class="text-[11px] font-semibold text-secondary uppercase tracking-widest block font-sans">Brown &amp; Pink Noise</span>
+              <span class="font-serif-headline text-lg text-on-surface mt-1 block">Màn Chắn Tiếng Ồn Thực Tế</span>
+              <p class="text-xs text-on-surface-variant mt-1.5 font-sans leading-relaxed">
+                Phổ tần số dốc -6dB/octave triệt tiêu tiếng nói chuyện và tạp âm sinh hoạt ngẫu nhiên.
+              </p>
+            </div>
+            <div class="border border-outline-variant p-4 rounded-lg bg-surface-container-lowest shadow-xs">
+              <span class="text-[11px] font-semibold text-secondary uppercase tracking-widest block font-sans">5 Bối Cảnh Không Gian</span>
+              <span class="font-serif-headline text-lg text-on-surface mt-1 block">Contextual Anchoring</span>
+              <p class="text-xs text-on-surface-variant mt-1.5 font-sans leading-relaxed">
+                Gắn liền ký ức học tập với bối cảnh thị giác và âm học đặc trưng của Study Workspace Studio.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Interactive Studio & Live Audio Mixer Card -->
+        <div class="lg:col-span-6">
+          <div class="hairline-card p-6 sm:p-7 bg-surface-container-lowest shadow-md">
+
+            <!-- Card Header & Live Badge -->
+            <div class="flex items-center justify-between pb-4 border-b border-outline-variant">
+              <div>
+                <span class="text-xs font-semibold text-primary uppercase tracking-wider font-sans">Live Studio Soundscape</span>
+                <p class="font-serif-headline text-xl text-on-surface mt-0.5">Bàn Điều Khiển Âm Thanh Thực Tế</p>
+              </div>
+              <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-container border border-outline-variant text-xs font-mono">
+                <span
+                  class="w-2 h-2 rounded-full"
+                  [class]="ambientAudio.isAnySoundPlaying() ? 'bg-primary-container animate-ping' : 'bg-outline'"
+                  aria-hidden="true"
+                ></span>
+                <span class="text-on-surface font-medium">
+                  {{ ambientAudio.isAnySoundPlaying() ? 'ĐANG PHÁT' : 'SẴN SÀNG' }}
+                </span>
+              </div>
+            </div>
+
+            <!-- Scene Selector (5 Scenes) -->
+            <div class="py-5">
+              <span class="text-xs font-medium text-secondary block mb-2.5 font-sans">1. Chọn không gian bối cảnh:</span>
+              <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                @for (scene of sceneOptions; track scene.id) {
+                  <button
+                    type="button"
+                    (click)="selectScene(scene.id)"
+                    [class]="selectedSceneId() === scene.id
+                      ? 'p-2.5 rounded-lg border-2 border-primary bg-primary/5 text-left transition-all'
+                      : 'p-2.5 rounded-lg border border-outline-variant bg-surface hover:bg-surface-container text-left transition-all'"
+                  >
+                    <div class="flex items-center gap-2">
+                      <span class="material-symbols-outlined text-[18px]" [style.color]="scene.accentColor" aria-hidden="true">
+                        {{ scene.icon }}
+                      </span>
+                      <span class="text-xs font-semibold text-on-surface block truncate font-sans">{{ scene.label }}</span>
+                    </div>
+                    <span class="text-[10px] text-on-surface-variant block mt-1 truncate font-sans">{{ scene.sublabel }}</span>
+                  </button>
+                }
+              </div>
+            </div>
+
+            <!-- Live Web Audio Sound Channels & Waveform Visualizer -->
+            <div class="pt-4 border-t border-outline-variant">
+              <div class="flex items-center justify-between mb-3">
+                <span class="text-xs font-medium text-secondary font-sans">2. Bật/tắt 5 kênh sóng âm trực tiếp:</span>
+
+                <!-- Animated Waveform Visualizer -->
+                <div class="flex items-end gap-1 h-6 px-2 py-1 rounded bg-surface border border-outline-variant" aria-hidden="true">
+                  <span class="waveform-bar" [class.playing]="ambientAudio.isAnySoundPlaying()"></span>
+                  <span class="waveform-bar" [class.playing]="ambientAudio.isAnySoundPlaying()"></span>
+                  <span class="waveform-bar" [class.playing]="ambientAudio.isAnySoundPlaying()"></span>
+                  <span class="waveform-bar" [class.playing]="ambientAudio.isAnySoundPlaying()"></span>
+                  <span class="waveform-bar" [class.playing]="ambientAudio.isAnySoundPlaying()"></span>
+                  <span class="waveform-bar" [class.playing]="ambientAudio.isAnySoundPlaying()"></span>
+                  <span class="waveform-bar" [class.playing]="ambientAudio.isAnySoundPlaying()"></span>
+                </div>
+              </div>
+
+              <!-- 5 Channel Toggles -->
+              <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-5">
+                @for (channel of ambientAudio.channels(); track channel.id) {
+                  <button
+                    type="button"
+                    (click)="toggleAudioChannel(channel.id)"
+                    [class]="channel.active
+                      ? 'px-3 py-2 rounded-lg border border-primary bg-primary text-white text-xs font-semibold flex items-center justify-between transition-all shadow-xs'
+                      : 'px-3 py-2 rounded-lg border border-outline-variant bg-surface hover:bg-surface-container text-on-surface-variant text-xs font-medium flex items-center justify-between transition-all'"
+                  >
+                    <span class="truncate font-sans">{{ channel.label }}</span>
+                    <span class="material-symbols-outlined text-[15px]" aria-hidden="true">
+                      {{ channel.active ? 'volume_up' : 'volume_off' }}
+                    </span>
+                  </button>
+                }
+              </div>
+
+              <!-- Master Play/Pause Action Bar -->
+              <div class="flex items-center justify-between p-3.5 rounded-xl bg-surface border border-outline-variant">
+                <div class="flex items-center gap-3">
+                  <button
+                    type="button"
+                    (click)="toggleMasterAudio()"
+                    class="w-10 h-10 rounded-full bg-on-surface hover:bg-primary text-white flex items-center justify-center transition-all duration-200 shadow-sm active:scale-95 cursor-pointer"
+                    [attr.aria-label]="ambientAudio.isAnySoundPlaying() ? 'Tạm dừng toàn bộ âm thanh' : 'Phát thử âm thanh không gian'"
+                  >
+                    <span class="material-symbols-outlined text-[20px]" aria-hidden="true">
+                      {{ ambientAudio.isAnySoundPlaying() ? 'pause' : 'play_arrow' }}
+                    </span>
+                  </button>
+                  <div>
+                    <p class="text-xs font-semibold text-on-surface font-sans">
+                      {{ ambientAudio.isAnySoundPlaying() ? 'Đang phát sóng âm Web Audio' : 'Bấm để nghe thử không gian thực tế' }}
+                    </p>
+                    <p class="text-[11px] text-on-surface-variant font-sans">
+                      Tự động dừng khi rời trang • Không tiêu hao dung lượng mạng
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================================================================
+       SECTION 5: ARCHITECTURAL ONBOARDING CTA
+       ====================================================================== -->
+  <section class="py-24 md:py-32 bg-surface-container-low relative overflow-hidden" id="get-started">
+    <!-- Subtle Radial Background Glow -->
+    <div class="absolute inset-0 grid-axis opacity-25 pointer-events-none" aria-hidden="true"></div>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
+      <div class="max-w-4xl mx-auto">
+      <!-- Eyebrow Pill -->
+      <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-surface-container-lowest border border-outline-variant custom-pill mb-6">
+        <span class="text-xs font-semibold uppercase tracking-wider text-primary font-sans">
+          Khởi Tạo Lộ Trình Tự Học Thích Ứng
+        </span>
+      </div>
+
+      <!-- Main Heading -->
+      <h2 class="font-serif-headline text-3xl sm:text-5xl lg:text-5xl text-on-surface tracking-tight leading-tight mb-4">
+        Kiến Tạo Nhịp Độ Tự Học Chuyên Sâu Của Bạn
+      </h2>
+
+      <!-- Description -->
+      <p class="text-sm sm:text-base md:text-lg text-on-surface-variant max-w-2xl mx-auto leading-relaxed mb-8 font-sans">
+        Nhập mục tiêu học tập bạn muốn chinh phục. FocusFlow sẽ chẩn đoán năng lực, đề xuất lộ trình DAG khả thi và tối ưu hóa lịch học theo quỹ giờ rảnh của riêng bạn.
+      </p>
+
+      <!-- Quick Goal Input & CTA -->
+      <div class="max-w-xl mx-auto mb-6">
+        <div class="flex flex-col sm:flex-row items-center gap-2 bg-surface-container-lowest border border-outline-variant p-1.5 rounded-2xl sm:rounded-full shadow-sm focus-within:border-primary">
+          <input
+            type="text"
+            [ngModel]="quickGoalInput()"
+            (ngModelChange)="setQuickGoal($event)"
+            (keyup.enter)="startJourney()"
+            placeholder="Ví dụ: Chinh phục IELTS 7.5 trong 12 tuần..."
+            class="w-full sm:flex-1 px-4 py-3 bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none font-sans"
+          />
+          <button
+            type="button"
+            (click)="startJourney()"
+            class="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-6 py-3 rounded-xl sm:rounded-full bg-on-surface hover:bg-primary text-white text-xs font-semibold font-sans transition-all duration-200 shadow-xs hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+          >
+            <span>Khởi tạo ngay</span>
+            <span class="material-symbols-outlined text-[16px]" aria-hidden="true">arrow_forward</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 1-Click Popular Goal Inspiration Tags -->
+      <div class="flex flex-wrap items-center justify-center gap-2 max-w-2xl mx-auto text-xs font-sans">
+        <span class="text-secondary font-medium mr-1">Gợi ý nhanh:</span>
+        <button
+          type="button"
+          (click)="setQuickGoal('Chinh phục IELTS 7.5 trong 12 tuần')"
+          class="px-3 py-1 rounded-full bg-surface-container border border-outline-variant text-on-surface-variant hover:text-primary hover:border-primary transition-colors cursor-pointer"
+        >
+          IELTS 7.5 (12 tuần)
+        </button>
+        <button
+          type="button"
+          (click)="setQuickGoal('Hệ thống Phân tán & Microservices với Go')"
+          class="px-3 py-1 rounded-full bg-surface-container border border-outline-variant text-on-surface-variant hover:text-primary hover:border-primary transition-colors cursor-pointer"
+        >
+          Hệ thống Phân tán Go
+        </button>
+        <button
+          type="button"
+          (click)="setQuickGoal('Deep Learning & LLM Finetuning')"
+          class="px-3 py-1 rounded-full bg-surface-container border border-outline-variant text-on-surface-variant hover:text-primary hover:border-primary transition-colors cursor-pointer"
+        >
+          Deep Learning &amp; LLM
+        </button>
+        <button
+          type="button"
+          (click)="setQuickGoal('Luyện thi AWS Certified Solutions Architect')"
+          class="px-3 py-1 rounded-full bg-surface-container border border-outline-variant text-on-surface-variant hover:text-primary hover:border-primary transition-colors cursor-pointer"
+        >
+          AWS Solutions Architect
+        </button>
+      </div>
+
+      <!-- Trust & Data Sovereignty Note -->
+      <p class="text-xs text-on-surface-variant mt-8 font-sans">
+        Toàn quyền sở hữu dữ liệu • Xuất lịch WebCal và ghi chú Markdown bất cứ lúc nào • Miễn phí bắt đầu
+      </p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- SHARED FOOTER -->
+<app-landing-footer />
