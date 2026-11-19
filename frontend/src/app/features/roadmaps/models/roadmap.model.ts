@@ -299,7 +299,14 @@ export interface DraftKnowledgeAttachment {
 export type PlanningStep = 1 | 2 | 3 | 4;
 
 export interface SseProgressState {
-  stage: 'IDLE' | 'RESERVED' | 'STREAMING' | 'VALIDATING_TIER_1_2_3' | 'COMPLETED' | 'FAILED';
+  stage:
+    | 'IDLE'
+    | 'RESERVED'
+    | 'STREAMING'
+    | 'DECOMPOSING_MILESTONES'
+    | 'VALIDATING_TIER_1_2_3'
+    | 'COMPLETED'
+    | 'FAILED';
   progress: number;
   message: string;
   retryCount: number;

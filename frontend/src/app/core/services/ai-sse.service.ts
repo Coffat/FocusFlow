@@ -17,10 +17,20 @@ export type SseEventType =
 
 export interface AiStreamChunkEvent<T = unknown> {
   readonly eventType?: SseEventType;
-  readonly stage: 'RESERVED' | 'STREAMING' | 'VALIDATING_TIER_1_2_3' | 'COMPLETED' | 'FAILED';
+  readonly stage:
+    | 'RESERVED'
+    | 'STREAMING'
+    | 'DECOMPOSING_MILESTONES'
+    | 'VALIDATING_TIER_1_2_3'
+    | 'COMPLETED'
+    | 'FAILED';
   readonly progress: number;
   readonly deltaText?: string;
   readonly delta_text?: string;
+  readonly milestone_sequence?: number;
+  readonly completed_count?: number;
+  readonly total_count?: number;
+  readonly from_checkpoint?: boolean;
   readonly retry_attempt?: number;
   readonly violations?: components['schemas']['ConstraintViolationSchema'][];
   readonly payload?: T;
