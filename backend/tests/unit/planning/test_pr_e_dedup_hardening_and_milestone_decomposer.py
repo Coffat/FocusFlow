@@ -1072,6 +1072,18 @@ async def test_milestone_scoped_decomposer_prefetch_isolated_retry_and_apply_rou
         decomposer_architecture_mode="milestone_scoped",
     )
 
+    job = await sse_store.get_job_for_user(job_id=job_id, user_id=user_id)
+    milestone_progress_events = [
+        event
+        for event in job.events
+        if isinstance(event.data.get("milestone_sequence"), int)
+    ]
+    assert len(milestone_progress_events) == 3
+    assert {event.data["milestone_sequence"] for event in milestone_progress_events} == {1, 2, 3}
+    assert [event.data["completed_count"] for event in milestone_progress_events] == [1, 2, 3]
+    assert all(event.data["total_count"] == 3 for event in milestone_progress_events)
+    assert all(event.data["from_checkpoint"] is False for event in milestone_progress_events)
+
     # Prefetched on server (3 milestones), zero LLM tool calls, and ONLY M2 retried (3 + 1 = 4 calls)
     assert len(kb.resource_calls) == 3
     assert llm.m2_calls == 2
