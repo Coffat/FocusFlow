@@ -10,6 +10,10 @@ export const routes: Routes = [
     loadComponent: () => import('./features/landing/landing.component').then(m => m.LandingComponent)
   },
   {
+    path: 'how-it-works',
+    loadComponent: () => import('./features/how-it-works/how-it-works.component').then(m => m.HowItWorksComponent)
+  },
+  {
     path: '',
     component: AuthLayoutComponent,
     children: [
