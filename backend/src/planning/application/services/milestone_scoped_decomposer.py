@@ -8,7 +8,7 @@ import heapq
 import json
 import logging
 import math
-from collections.abc import Callable, Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from typing import Any
@@ -110,6 +110,83 @@ class ReconciledGlobalProposal:
     tasks: list[dict[str, Any]]
     dependencies: list[dict[str, Any]]
     namespace_map: dict[tuple[int, str], str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class MilestoneSubjobProgress:
+    """Progress emitted after one logical milestone subjob completes successfully."""
+
+    milestone_sequence: int
+    completed_count: int
+    total_count: int
+    from_checkpoint: bool
+
+
+def calculate_dynamic_subjob_concurrency(milestone_count: int, *, ceiling: int) -> int:
+    """Return a bounded worker count that keeps milestone fan-out to at most two waves."""
+    if milestone_count <= 0:
+        return 0
+    dynamic_target = 1 if milestone_count == 1 else max(2, math.ceil(milestone_count / 2))
+    return min(milestone_count, dynamic_target, max(1, int(ceiling)))
+
+
+def calculate_milestone_subjob_timeout(
+    *,
+    pipeline_remaining_seconds: float,
+    attempt_cap_seconds: float,
+    finalization_reserve_seconds: float,
+) -> float:
+    """Protect merge and global validation time from milestone LLM calls."""
+    available = pipeline_remaining_seconds - finalization_reserve_seconds
+    if available <= 0:
+        raise TimeoutError(
+            "Milestone subjob cannot start without consuming the proposal finalization budget"
+        )
+    return min(attempt_cap_seconds, available)
+
+
+async def run_dynamic_subjob_pool[T, R](
+    *,
+    items: Sequence[T],
+    worker_count: int,
+    run_one: Callable[[T], Awaitable[R]],
+) -> list[R | BaseException]:
+    """Run every item once with work-stealing semantics and ordered results."""
+    if not items:
+        return []
+
+    queue: asyncio.Queue[tuple[int, T]] = asyncio.Queue()
+    for index, item in enumerate(items):
+        queue.put_nowait((index, item))
+
+    results: dict[int, R | BaseException] = {}
+
+    async def _worker() -> None:
+        while True:
+            try:
+                index, item = queue.get_nowait()
+            except asyncio.QueueEmpty:
+                return
+            try:
+                results[index] = await run_one(item)
+            except asyncio.CancelledError:
+                raise
+            except BaseException as exc:
+                results[index] = exc
+            finally:
+                queue.task_done()
+
+    workers = [
+        asyncio.create_task(_worker()) for _ in range(min(len(items), max(1, int(worker_count))))
+    ]
+    try:
+        await asyncio.gather(*workers)
+    finally:
+        for worker in workers:
+            if not worker.done():
+                worker.cancel()
+
+    return [results[index] for index in range(len(items))]
 
 
 def compute_milestone_content_hash(
@@ -732,7 +809,7 @@ class MilestoneScopedTaskDecomposer:
         user_id: UUID | None = None,
         goal_id: UUID | None = None,
         roadmap_id: UUID | None = None,
-        max_concurrency: int = 2,
+        max_concurrency: int = 4,
         checkpoint_store: MilestoneCheckpointStorePort | None = None,
         quota: Any = None,
         reservation_id: UUID | None = None,
@@ -998,6 +1075,7 @@ class MilestoneScopedTaskDecomposer:
         start_date: date | None = None,
         max_milestone_retries: int = 1,
         on_retry_callback: Callable[[int, Sequence[ConstraintViolationDTO]], Any] | None = None,
+        on_progress_callback: Callable[[MilestoneSubjobProgress], Any] | None = None,
         daily_workload_cap_minutes: int | None = None,
         buffer_minutes_per_week: int = 0,
         allow_partial_schedule: bool = True,
@@ -1019,6 +1097,7 @@ class MilestoneScopedTaskDecomposer:
             settings.ai_sse_pipeline_timeout_seconds
         )
         min_retry_remaining = float(settings.ai_min_retry_remaining_seconds)
+        finalization_reserve = float(settings.ai_proposal_finalize_reserve_seconds)
 
         registry = build_planning_prompt_registry()
         decomposer_tpl = registry.latest(TASK_DECOMPOSER_SKILL.skill_id)
@@ -1090,7 +1169,11 @@ class MilestoneScopedTaskDecomposer:
             sorted_milestones,
             indexed_sources=indexed_sources,
         )
-        llm_semaphore = asyncio.Semaphore(self._max_concurrency)
+        subjob_concurrency = calculate_dynamic_subjob_concurrency(
+            len(sorted_milestones),
+            ceiling=self._max_concurrency,
+        )
+        llm_semaphore = asyncio.Semaphore(subjob_concurrency)
         max_attempts_per_milestone = 1 + max(0, min(1, int(max_milestone_retries)))
         effective_cp_store = (
             checkpoint_store if checkpoint_store is not None else self._checkpoint_store
@@ -1211,13 +1294,12 @@ class MilestoneScopedTaskDecomposer:
             async with llm_semaphore:
                 for attempt in range(1, max_attempts_per_milestone + 1):
                     remaining_seconds = pipeline_deadline - asyncio.get_running_loop().time()
-                    if remaining_seconds <= 0:
-                        raise TimeoutError(
-                            "Milestone-scoped decomposition exceeded pipeline budget"
-                        )
-
                     attempt_cap = float(settings.ai_task_decomposer_timeout_seconds)
-                    decomposer_timeout = min(attempt_cap, remaining_seconds)
+                    decomposer_timeout = calculate_milestone_subjob_timeout(
+                        pipeline_remaining_seconds=remaining_seconds,
+                        attempt_cap_seconds=attempt_cap,
+                        finalization_reserve_seconds=finalization_reserve,
+                    )
                     exec_mgr = AIExecutionManager(
                         provider=self._llm,
                         quota=self._quota,
@@ -1251,20 +1333,6 @@ class MilestoneScopedTaskDecomposer:
                             release_on_failure=False,
                         )
                     except TimeoutError:
-                        remaining_for_retry = pipeline_deadline - asyncio.get_running_loop().time()
-                        if (
-                            attempt < max_attempts_per_milestone
-                            and remaining_for_retry >= min_retry_remaining
-                        ):
-                            m_retry_history.append(
-                                {
-                                    "milestone_id": str(milestone.id),
-                                    "sequence_order": milestone.sequence_order,
-                                    "attempt": attempt,
-                                    "violations": [{"rule_code": "MILESTONE_CALL_TIMEOUT"}],
-                                }
-                            )
-                            continue
                         raise
                     m_prompt_tokens += int(exec_res.prompt_tokens or 0)
                     m_completion_tokens += int(exec_res.completion_tokens or 0)
@@ -1341,7 +1409,9 @@ class MilestoneScopedTaskDecomposer:
                             "violations": [v.to_dict() for v in local_violations],
                         }
                     )
-                    remaining_for_retry = pipeline_deadline - asyncio.get_running_loop().time()
+                    remaining_for_retry = (
+                        pipeline_deadline - asyncio.get_running_loop().time() - finalization_reserve
+                    )
                     if (
                         attempt < max_attempts_per_milestone
                         and remaining_for_retry >= min_retry_remaining
@@ -1370,9 +1440,32 @@ class MilestoneScopedTaskDecomposer:
                 violations=[v.to_dict() for v in last_local_violations],
             )
 
-        raw_milestone_results = await asyncio.gather(
-            *(_run_single_milestone(m) for m in sorted_milestones),
-            return_exceptions=True,
+        completed_count = 0
+        progress_lock = asyncio.Lock()
+
+        async def _run_and_report(
+            milestone: Milestone,
+        ) -> tuple[MilestoneDecompositionOutcome, BufferedWorkflowRepo]:
+            nonlocal completed_count
+            result = await _run_single_milestone(milestone)
+            async with progress_lock:
+                completed_count += 1
+                if on_progress_callback is not None:
+                    progress = MilestoneSubjobProgress(
+                        milestone_sequence=milestone.sequence_order,
+                        completed_count=completed_count,
+                        total_count=len(sorted_milestones),
+                        from_checkpoint=result[0].from_checkpoint,
+                    )
+                    maybe_coro = on_progress_callback(progress)
+                    if asyncio.iscoroutine(maybe_coro):
+                        await maybe_coro
+            return result
+
+        raw_milestone_results = await run_dynamic_subjob_pool(
+            items=sorted_milestones,
+            worker_count=subjob_concurrency,
+            run_one=_run_and_report,
         )
 
         milestone_results: list[tuple[MilestoneDecompositionOutcome, BufferedWorkflowRepo]] = []

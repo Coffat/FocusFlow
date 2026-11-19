@@ -63,6 +63,7 @@ from src.planning.application.services.learning_quality import (
 )
 from src.planning.application.services.milestone_scoped_decomposer import (
     MilestoneScopedTaskDecomposer,
+    MilestoneSubjobProgress,
 )
 from src.planning.application.services.preliminary_feasibility_service import (
     resolve_effective_milestones_for_proposal,
@@ -609,6 +610,32 @@ class ExecuteScheduleProposalGenerationUseCase:
                     },
                 )
 
+            async def _on_milestone_progress(progress: MilestoneSubjobProgress) -> None:
+                progress_percent = min(
+                    82,
+                    60 + round(22 * progress.completed_count / progress.total_count),
+                )
+                source_label = "checkpoint" if progress.from_checkpoint else "AI"
+                message = (
+                    f"Đã hoàn tất cột mốc #{progress.milestone_sequence} từ {source_label} "
+                    f"({progress.completed_count}/{progress.total_count})."
+                )
+                await self._sse.append_event(
+                    job_id=job_id,
+                    event="chunk",
+                    status="STREAMING",
+                    data={
+                        "stage": "DECOMPOSING_MILESTONES",
+                        "progress": progress_percent,
+                        "milestone_sequence": progress.milestone_sequence,
+                        "completed_count": progress.completed_count,
+                        "total_count": progress.total_count,
+                        "from_checkpoint": progress.from_checkpoint,
+                        "delta_text": message,
+                        "deltaText": message,
+                    },
+                )
+
             has_scripted_monolithic_queue = bool(
                 getattr(self._llm, "_canned_responses", None)
                 or getattr(self._llm, "_responses", None)
@@ -629,7 +656,7 @@ class ExecuteScheduleProposalGenerationUseCase:
                     goal_id=roadmap.goal_id,
                     roadmap_id=roadmap_id,
                     max_concurrency=int(
-                        getattr(get_settings(), "ai_decomposer_max_concurrency", 2)
+                        getattr(get_settings(), "ai_decomposer_max_concurrency", 4)
                     ),
                     checkpoint_store=self._checkpoint_store,
                     quota=self._quota_facade,
@@ -646,6 +673,7 @@ class ExecuteScheduleProposalGenerationUseCase:
                     start_date=roadmap.start_date or effective_now.date(),
                     max_milestone_retries=min(1, max(0, int(max_retries))),
                     on_retry_callback=_on_retry,
+                    on_progress_callback=_on_milestone_progress,
                     reference_date=effective_now.date(),
                 )
             else:

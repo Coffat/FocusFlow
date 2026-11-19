@@ -538,7 +538,7 @@ def test_production_default_decomposer_architecture_mode_is_milestone_scoped() -
     cfg = Settings(_env_file=None)
     assert cfg.decomposer_architecture_mode == "milestone_scoped"
     assert cfg.ai_max_concurrent_llm_requests == 4
-    assert cfg.ai_decomposer_max_concurrency == 2
+    assert cfg.ai_decomposer_max_concurrency == 4
 
 
 @pytest.mark.asyncio
@@ -1074,9 +1074,7 @@ async def test_milestone_scoped_decomposer_prefetch_isolated_retry_and_apply_rou
 
     job = await sse_store.get_job_for_user(job_id=job_id, user_id=user_id)
     milestone_progress_events = [
-        event
-        for event in job.events
-        if isinstance(event.data.get("milestone_sequence"), int)
+        event for event in job.events if isinstance(event.data.get("milestone_sequence"), int)
     ]
     assert len(milestone_progress_events) == 3
     assert {event.data["milestone_sequence"] for event in milestone_progress_events} == {1, 2, 3}

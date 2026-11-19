@@ -29,16 +29,22 @@ def test_dynamic_subjob_concurrency_respects_configured_ceiling() -> None:
 
 
 def test_milestone_subjob_timeout_reserves_finalization_budget() -> None:
-    assert calculate_milestone_subjob_timeout(
-        pipeline_remaining_seconds=55.0,
-        attempt_cap_seconds=36.0,
-        finalization_reserve_seconds=14.0,
-    ) == 36.0
-    assert calculate_milestone_subjob_timeout(
-        pipeline_remaining_seconds=30.0,
-        attempt_cap_seconds=36.0,
-        finalization_reserve_seconds=14.0,
-    ) == 16.0
+    assert (
+        calculate_milestone_subjob_timeout(
+            pipeline_remaining_seconds=55.0,
+            attempt_cap_seconds=36.0,
+            finalization_reserve_seconds=14.0,
+        )
+        == 36.0
+    )
+    assert (
+        calculate_milestone_subjob_timeout(
+            pipeline_remaining_seconds=30.0,
+            attempt_cap_seconds=36.0,
+            finalization_reserve_seconds=14.0,
+        )
+        == 16.0
+    )
 
 
 def test_milestone_subjob_timeout_fails_before_consuming_finalization_budget() -> None:

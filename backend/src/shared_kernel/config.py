@@ -104,11 +104,12 @@ class Settings(BaseSettings):
     ai_min_critic_remaining_seconds: float = 6.0
     ai_min_judge_remaining_seconds: float = 3.0
     ai_min_retry_remaining_seconds: float = 12.0
+    ai_proposal_finalize_reserve_seconds: float = 14.0
 
     enable_tier3_judge: bool = True
     decomposer_architecture_mode: Literal["monolithic", "milestone_scoped"] = "milestone_scoped"
     ai_max_concurrent_llm_requests: int = 4
-    ai_decomposer_max_concurrency: int = 2
+    ai_decomposer_max_concurrency: int = 4
     ai_harness_v2_enabled: bool = False
     clarification_engine_v2_enabled: bool = True
     knowledge_rag_enabled: bool = True
@@ -175,6 +176,7 @@ class Settings(BaseSettings):
             "ai_min_critic_remaining_seconds",
             "ai_min_judge_remaining_seconds",
             "ai_min_retry_remaining_seconds",
+            "ai_proposal_finalize_reserve_seconds",
         )
         for field_name in stage_fields:
             val = float(getattr(self, field_name))
@@ -200,6 +202,11 @@ class Settings(BaseSettings):
         if self.ai_task_decomposer_timeout_seconds > self.ai_sse_pipeline_timeout_seconds:
             raise ValueError(
                 "ai_task_decomposer_timeout_seconds cannot exceed ai_sse_pipeline_timeout_seconds"
+            )
+        if self.ai_proposal_finalize_reserve_seconds >= self.ai_sse_pipeline_timeout_seconds:
+            raise ValueError(
+                "ai_proposal_finalize_reserve_seconds must be smaller than "
+                "ai_sse_pipeline_timeout_seconds"
             )
         return self
 

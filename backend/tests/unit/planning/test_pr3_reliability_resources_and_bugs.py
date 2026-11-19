@@ -593,9 +593,9 @@ async def test_litellm_adapter_uses_bounded_httpx_http11_pool_and_disables_afc()
 def test_concurrency_pacing_and_decomposer_defaults() -> None:
     cfg = Settings(_env_file=None)
     assert cfg.ai_max_concurrent_llm_requests == 4
-    assert cfg.ai_decomposer_max_concurrency == 2
+    assert cfg.ai_decomposer_max_concurrency == 4
     decomposer = MilestoneScopedTaskDecomposer(llm_provider=StubLLMAdapter())
-    assert decomposer._max_concurrency == 2
+    assert decomposer._max_concurrency == 4
 
 
 @pytest.mark.asyncio
