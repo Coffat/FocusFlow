@@ -28,6 +28,17 @@ export type User = UserProfile;
   providedIn: 'root'
 })
 export class AuthService {
+  private static readonly PUBLIC_ROUTES = new Set<string>([
+    '/',
+    '/pricing',
+    '/faq',
+    '/sign-in',
+    '/sign-up',
+    '/forgot-password',
+    '/verify-otp',
+    '/otp-validation',
+  ]);
+
   private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
 
@@ -360,6 +371,10 @@ export class AuthService {
 
   handleSessionExpired(): void {
     this.clearSession();
+    const currentPath = (this.router.url ?? '').split('?')[0].split('#')[0] || '/';
+    if (AuthService.PUBLIC_ROUTES.has(currentPath) || currentPath.startsWith('/auth')) {
+      return;
+    }
     this.router.navigate(['/sign-in'], { queryParams: { expired: '1' } });
   }
 }

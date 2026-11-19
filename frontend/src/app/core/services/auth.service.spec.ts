@@ -8,7 +8,7 @@ import { AUTH_ENDPOINTS } from '../../constant/api.constant';
 describe('AuthService (Angular 21 Signals & State Reactivity)', () => {
   let service: AuthService;
   let httpTesting: HttpTestingController;
-  let mockRouter: { navigate: ReturnType<typeof vi.fn> };
+  let mockRouter: { url: string; navigate: ReturnType<typeof vi.fn> };
   let mockStorage: Record<string, string> = {};
 
   const mockUser: User = {
@@ -40,6 +40,7 @@ describe('AuthService (Angular 21 Signals & State Reactivity)', () => {
     TestBed.resetTestingModule();
     mockStorage = {};
     mockRouter = {
+      url: '/dashboard',
       navigate: vi.fn()
     };
 
@@ -174,7 +175,8 @@ describe('AuthService (Angular 21 Signals & State Reactivity)', () => {
     expect(localStorage.getItem('access_token')).toBe('fake-jwt');
   });
 
-  it('handleSessionExpired() điều hướng người dùng về trang /sign-in với query param expired=1', () => {
+  it('handleSessionExpired() điều hướng người dùng về trang /sign-in với query param expired=1 khi đang ở trang được bảo vệ', () => {
+    mockRouter.url = '/dashboard';
     service.setUser(mockUser);
     service.handleSessionExpired();
 
@@ -183,5 +185,19 @@ describe('AuthService (Angular 21 Signals & State Reactivity)', () => {
     expect(mockRouter.navigate).toHaveBeenCalledWith(['/sign-in'], {
       queryParams: { expired: '1' }
     });
+  });
+
+  it('handleSessionExpired() chỉ clearSession mà không điều hướng khi đang ở trang công khai (/, /pricing, /faq, /auth/*)', () => {
+    for (const publicUrl of ['/', '/pricing', '/faq', '/auth/sign-in']) {
+      mockRouter.navigate.mockClear();
+      mockRouter.url = publicUrl;
+      service.setUser(mockUser);
+
+      service.handleSessionExpired();
+
+      expect(service.currentUser()).toBeNull();
+      expect(service.isAuthenticated()).toBe(false);
+      expect(mockRouter.navigate).not.toHaveBeenCalled();
+    }
   });
 });

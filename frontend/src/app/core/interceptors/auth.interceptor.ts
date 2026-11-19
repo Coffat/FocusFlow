@@ -35,11 +35,13 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
 
   return next(authReq).pipe(
     catchError((error: HttpErrorResponse) => {
-      // Avoid infinite loop if refresh endpoint itself returns 401
+      // Avoid infinite loop or public session-probe redirect when refresh/login/me/logout returns 401
       if (
         error.status === 401 &&
         !req.url.includes('/api/v1/auth/refresh') &&
-        !req.url.includes('/api/v1/auth/login')
+        !req.url.includes('/api/v1/auth/login') &&
+        !req.url.includes('/api/v1/auth/me') &&
+        !req.url.includes('/api/v1/auth/logout')
       ) {
         if (!isRefreshing) {
           isRefreshing = true;

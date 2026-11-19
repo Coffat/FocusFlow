@@ -1,0 +1,44 @@
+/* ==========================================================================
+   FocusFlow Pricing Architectural Stylesheet
+   Standards: Newsreader Serif, Geist Sans, Hairline 1px, Reduced Motion
+   ========================================================================== */
+
+:host {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  width: 100%;
+}
+
+.grid-axis {
+  background-image: linear-gradient(to right, rgba(0, 0, 0, 0.045) 1px, transparent 1px),
+                    linear-gradient(to bottom, rgba(0, 0, 0, 0.045) 1px, transparent 1px);
+  background-size: 72px 72px;
+}
+
+.font-serif-headline {
+  font-family: var(--font-serif, 'Newsreader', Georgia, serif);
+  font-feature-settings: 'cv01' on, 'cv02' on;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fadeIn {
+    animation: none;
+    opacity: 1;
+  }
+}
