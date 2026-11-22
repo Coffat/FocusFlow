@@ -89,7 +89,7 @@ jobs:
         env:
           LLM_PROVIDER: mock
           PAYMENT_PROVIDER: local_mock
-          CALENDAR_PROVIDER: local_mock
+          CALENDAR_PROVIDER: google
       - name: Wait for backend and frontend
         run: |
           for attempt in $(seq 1 60); do
