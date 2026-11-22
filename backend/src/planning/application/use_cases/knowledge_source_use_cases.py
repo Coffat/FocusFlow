@@ -1,4 +1,6 @@
+import asyncio
 import hashlib
+import logging
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -6,7 +8,16 @@ from uuid import UUID
 
 from uuid6 import uuid7
 
-from src.planning.application.knowledge import DocumentExtractor, SafeUrlFetcher, SemanticChunker
+from src.planning.application.knowledge import (
+    DocumentExtractor,
+    InvalidDocumentError,
+    SafeUrlFetcher,
+    SafeUrlFetchError,
+    SemanticChunker,
+    UnsafeUrlError,
+    sanitize_filename,
+    validate_uploaded_document,
+)
 from src.planning.application.ports.knowledge_file_store_port import KnowledgeFileStorePort
 from src.planning.application.ports.knowledge_source_repository_port import (
     KnowledgeSourceRepositoryPort,
@@ -22,9 +33,45 @@ from src.shared_kernel.application.embedding_port import EmbeddingProviderPort
 from src.shared_kernel.application.uow import AsyncUnitOfWork
 from src.shared_kernel.config import get_settings
 
+logger = logging.getLogger(__name__)
+
+_ALLOWED_UPLOAD_TYPES: frozenset[KnowledgeSourceType] = frozenset(
+    {
+        KnowledgeSourceType.PDF,
+        KnowledgeSourceType.DOCX,
+        KnowledgeSourceType.TXT,
+    }
+)
+
 
 class KnowledgeSourceNotFoundError(LookupError):
     code = "KNOWLEDGE_SOURCE_NOT_FOUND"
+
+
+class InvalidKnowledgeSourceError(ValueError):
+    code = "INVALID_KNOWLEDGE_SOURCE"
+
+
+def _sanitize_ingestion_error(exc: Exception) -> str:
+    """Return a safe, user-facing error message without leaking internal infrastructure details."""
+    if isinstance(
+        exc,
+        (
+            InvalidDocumentError,
+            InvalidKnowledgeSourceError,
+            UnsafeUrlError,
+            SafeUrlFetchError,
+        ),
+    ):
+        return str(exc)
+    if isinstance(exc, TimeoutError):
+        return "Quá thời gian xử lý nguồn học liệu, vui lòng thử lại sau"
+    if (
+        isinstance(exc, ValueError)
+        and str(exc) == "Không trích xuất được nội dung văn bản từ học liệu"
+    ):
+        return str(exc)
+    return "Không thể xử lý nguồn học liệu do lỗi hệ thống"
 
 
 class CreateKnowledgeSourceUseCase:
@@ -36,12 +83,18 @@ class CreateKnowledgeSourceUseCase:
         file_store: KnowledgeFileStorePort,
         uow: AsyncUnitOfWork,
         max_file_bytes: int,
+        docx_max_entries: int = 500,
+        docx_max_uncompressed_bytes: int = 50 * 1024 * 1024,
+        docx_max_compression_ratio: float = 100.0,
     ) -> None:
         self._goals = goal_repository
         self._sources = source_repository
         self._files = file_store
         self._uow = uow
         self._max_file_bytes = max_file_bytes
+        self._docx_max_entries = docx_max_entries
+        self._docx_max_uncompressed_bytes = docx_max_uncompressed_bytes
+        self._docx_max_compression_ratio = docx_max_compression_ratio
 
     async def create_file(
         self,
@@ -51,17 +104,36 @@ class CreateKnowledgeSourceUseCase:
         title: str,
         filename: str,
         content: bytes,
+        content_type: str | None = None,
     ) -> KnowledgeSource:
         goal = await self._goals.get_by_id_for_user(goal_id, user_id)
         if goal is None:
             raise KnowledgeSourceNotFoundError("Goal not found")
         if not content or len(content) > self._max_file_bytes:
-            raise ValueError("Tệp học liệu phải có dung lượng từ 1 byte đến 20 MB")
-        suffix = Path(filename).suffix.lower().lstrip(".")
+            raise InvalidKnowledgeSourceError("Tệp học liệu phải có dung lượng từ 1 byte đến 20 MB")
+
+        safe_filename = sanitize_filename(filename)
+        suffix = Path(safe_filename).suffix.lower().lstrip(".")
         try:
             source_type = KnowledgeSourceType(suffix.upper())
         except ValueError as exc:
-            raise ValueError("Chỉ hỗ trợ tệp PDF, DOCX hoặc TXT") from exc
+            raise InvalidKnowledgeSourceError("Chỉ hỗ trợ tệp PDF, DOCX hoặc TXT") from exc
+        if source_type not in _ALLOWED_UPLOAD_TYPES:
+            raise InvalidKnowledgeSourceError("Chỉ hỗ trợ tệp PDF, DOCX hoặc TXT")
+
+        try:
+            validate_uploaded_document(
+                content,
+                source_type,
+                content_type=content_type,
+                max_bytes=self._max_file_bytes,
+                docx_max_entries=self._docx_max_entries,
+                docx_max_uncompressed_bytes=self._docx_max_uncompressed_bytes,
+                docx_max_compression_ratio=self._docx_max_compression_ratio,
+            )
+        except InvalidDocumentError as exc:
+            raise InvalidKnowledgeSourceError(str(exc)) from exc
+
         now = datetime.now(UTC)
         source_id = uuid7()
         uri = await self._files.save(source_id, suffix, content)
@@ -70,12 +142,12 @@ class CreateKnowledgeSourceUseCase:
             user_id=user_id,
             goal_id=goal_id,
             source_type=source_type,
-            title=title.strip() or filename,
+            title=title.strip() or safe_filename,
             source_uri=uri,
             content_hash=hashlib.sha256(content).hexdigest(),
             ingestion_status=KnowledgeIngestionStatus.PENDING,
             chunk_count=0,
-            provenance_metadata={"original_filename": Path(filename).name},
+            provenance_metadata={"original_filename": safe_filename},
             error_detail=None,
             created_at=now,
             updated_at=now,
@@ -84,8 +156,13 @@ class CreateKnowledgeSourceUseCase:
             async with self._uow:
                 saved = await self._sources.save_source(source)
                 await self._uow.commit()
-        except Exception:
-            await self._files.delete(uri)
+        except BaseException:
+            try:
+                await asyncio.shield(self._files.delete(uri))
+            except Exception:
+                logger.warning(
+                    "Failed to delete temp file for source %s after intake error", source_id
+                )
             raise
         return saved
 
@@ -96,7 +173,7 @@ class CreateKnowledgeSourceUseCase:
         if goal is None:
             raise KnowledgeSourceNotFoundError("Goal not found")
         normalized_url = url.strip()
-        SafeUrlFetcher._validate_shape(normalized_url)
+        SafeUrlFetcher.validate_url(normalized_url)
         now = datetime.now(UTC)
         source = KnowledgeSource(
             id=uuid7(),
@@ -143,11 +220,19 @@ class IngestKnowledgeSourceUseCase:
         source = await self._sources.get_source_for_user(source_id, user_id)
         if source is None:
             raise KnowledgeSourceNotFoundError("Knowledge source not found")
-        now = datetime.now(UTC)
-        async with self._uow:
-            await self._sources.save_source(source.mark_processing(now=now))
-            await self._uow.commit()
+
+        temp_file_uri = (
+            source.source_uri
+            if source.source_type is not KnowledgeSourceType.URL and source.source_uri
+            else None
+        )
+
         try:
+            now = datetime.now(UTC)
+            async with self._uow:
+                await self._sources.save_source(source.mark_processing(now=now))
+                await self._uow.commit()
+
             if source.source_type is KnowledgeSourceType.URL:
                 fetched = await self._fetcher.fetch(source.source_uri or "")
                 content = fetched.content
@@ -159,6 +244,7 @@ class IngestKnowledgeSourceUseCase:
                 content_hash = source.content_hash
                 detected = source.source_type
                 provenance = dict(source.provenance_metadata)
+
             sections = await self._extractor.extract(content, detected)
             semantic_chunks = self._chunker.chunk(sections)
             if not semantic_chunks:
@@ -209,15 +295,31 @@ class IngestKnowledgeSourceUseCase:
                 await self._uow.commit()
             return saved
         except Exception as exc:
+            safe_detail = _sanitize_ingestion_error(exc)
+            logger.warning(
+                "Knowledge source ingestion failed for source_id=%s source_type=%s code=%s",
+                source.id,
+                source.source_type.value,
+                getattr(exc, "code", type(exc).__name__),
+            )
             status_source = (
-                source.quarantine(detail=str(exc), now=datetime.now(UTC))
+                source.quarantine(detail=safe_detail, now=datetime.now(UTC))
                 if getattr(exc, "code", "") == "KNOWLEDGE_SOURCE_QUARANTINED"
-                else source.mark_failed(detail=str(exc), now=datetime.now(UTC))
+                else source.mark_failed(detail=safe_detail, now=datetime.now(UTC))
             )
             async with self._uow:
                 await self._sources.save_source(status_source)
                 await self._uow.commit()
             raise
+        finally:
+            if temp_file_uri is not None:
+                try:
+                    await asyncio.shield(self._files.delete(temp_file_uri))
+                except Exception:
+                    logger.warning(
+                        "Failed to clean up temporary knowledge file for source_id=%s",
+                        source.id,
+                    )
 
     @staticmethod
     def _detect_url_type(content_type: str, url: str) -> KnowledgeSourceType:
