@@ -1,14 +1,16 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { provideHttpClient } from '@angular/common/http';
-import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter, Router, ActivatedRoute } from '@angular/router';
 import { signal } from '@angular/core';
 import { of } from 'rxjs';
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { DashboardComponent } from './dashboard.component';
-import { DashboardService } from './services/dashboard.service';
+import { DashboardService, EMPTY_DASHBOARD_SUMMARY } from './services/dashboard.service';
 import { AvailabilityService } from '../../core/services/availability.service';
 import { CalendarIntegrationService } from '../../core/services/calendar-integration.service';
+import { RoadmapWizardHostComponent } from '../roadmaps/components/dialogs/roadmap-wizard-host/roadmap-wizard-host.component';
 
 describe('DashboardComponent', () => {
   let component: DashboardComponent;
@@ -215,6 +217,139 @@ describe('DashboardComponent', () => {
 
       expect(component.prerequisiteDialogOpen()).toBe(false);
       expect(component.wizardOpen()).toBe(true);
+    });
+  });
+
+  describe('FE-SYNC-02: Đồng bộ Dashboard sau khi áp dụng lộ trình từ Roadmap Wizard', () => {
+    it('phát roadmapApplied từ app-roadmap-wizard-host sẽ đóng wizard, chuyển trạng thái khỏi new-user và gọi loadSummary()', () => {
+      service.setState('new-user');
+      component.wizardOpen.set(true);
+      fixture.detectChanges();
+
+      const loadSummarySpy = vi
+        .spyOn(service, 'loadSummary')
+        .mockReturnValue(of(EMPTY_DASHBOARD_SUMMARY));
+
+      const wizardDebugEl = fixture.debugElement.query(By.directive(RoadmapWizardHostComponent));
+      expect(wizardDebugEl).toBeTruthy();
+      const wizardHost = wizardDebugEl.componentInstance as RoadmapWizardHostComponent;
+
+      wizardHost.roadmapApplied.emit('rm-new-1');
+      fixture.detectChanges();
+
+      expect(component.wizardOpen()).toBe(false);
+      expect(component.currentState()).toBe('normal');
+      expect(loadSummarySpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('chỉ phát closeWizard (hủy hoặc apply thất bại) chỉ đóng wizard và KHÔNG gọi lại loadSummary()', () => {
+      component.wizardOpen.set(true);
+      fixture.detectChanges();
+
+      const loadSummarySpy = vi
+        .spyOn(service, 'loadSummary')
+        .mockReturnValue(of(EMPTY_DASHBOARD_SUMMARY));
+
+      const wizardDebugEl = fixture.debugElement.query(By.directive(RoadmapWizardHostComponent));
+      const wizardHost = wizardDebugEl.componentInstance as RoadmapWizardHostComponent;
+
+      wizardHost.closeWizard.emit();
+      fixture.detectChanges();
+
+      expect(component.wizardOpen()).toBe(false);
+      expect(loadSummarySpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('FE-SYNC-05: Human-in-the-loop Adaptation Workflow trên Dashboard', () => {
+    it('onConfirmAdaptation() gọi POST /api/v1/roadmaps/{id}/reoptimize-schedule tạo bản nháp DRAFT và điều hướng tới /roadmaps/{id}', () => {
+      const httpMock = TestBed.inject(HttpTestingController);
+      httpMock.match('/api/v1/auth/me').forEach((req) => req.flush({}));
+      httpMock.match('/api/v1/evaluation/dashboard-summary').forEach((req) => req.flush({}));
+
+      service.summary.set({
+        ...EMPTY_DASHBOARD_SUMMARY,
+        activeRoadmaps: [
+          {
+            id: 'rm-adapt-1',
+            title: 'Lộ trình FastAPI Production',
+            category: 'Backend',
+            progressPercentage: 50,
+            totalTasks: 10,
+            completedTasks: 5,
+            nextTaskTitle: 'Task 6',
+            deadline: '2026-12-20',
+          },
+        ],
+        adaptationStatus: {
+          hasDominoShift: true,
+          affectedTasksCount: 3,
+          rescheduleReason: 'Trễ 3 phiên',
+          needsAttention: true,
+          alertMessage: 'Có 3 phiên cần tái phân bổ',
+        },
+      });
+      component.openAdaptationModal();
+      fixture.detectChanges();
+
+      expect(component.adaptationContext()).toEqual({
+        roadmapId: 'rm-adapt-1',
+        roadmapTitle: 'Lộ trình FastAPI Production',
+        missedSessionsCount: 3,
+        currentDeadline: '2026-12-20',
+      });
+
+      component.onConfirmAdaptation({
+        strategy: 'DOMINO_SHIFT',
+        roadmapId: 'rm-adapt-1',
+      });
+
+      const req = httpMock.expectOne('/api/v1/roadmaps/rm-adapt-1/reoptimize-schedule');
+      expect(req.request.method).toBe('POST');
+      expect(req.request.withCredentials).toBe(true);
+      req.flush({
+        id: 'prop-draft-1',
+        roadmap_id: 'rm-adapt-1',
+        status: 'DRAFT',
+        tasks: [],
+        dependencies: [],
+        is_valid: true,
+      });
+
+      expect(component.adaptationModalOpen()).toBe(false);
+      expect(component.adaptationError()).toBeNull();
+      expect(router.navigate).toHaveBeenCalledWith(['/roadmaps', 'rm-adapt-1']);
+      httpMock.verify();
+    });
+
+    it('khi POST reoptimize-schedule thất bại, giữ modal mở, hiển thị lỗi và KHÔNG điều hướng', () => {
+      const httpMock = TestBed.inject(HttpTestingController);
+      httpMock.match('/api/v1/auth/me').forEach((req) => req.flush({}));
+      httpMock.match('/api/v1/evaluation/dashboard-summary').forEach((req) => req.flush({}));
+      vi.clearAllMocks();
+
+      component.openAdaptationModal();
+      component.onConfirmAdaptation({
+        strategy: 'DOMINO_SHIFT',
+        roadmapId: 'rm-adapt-err',
+      });
+
+      const req = httpMock.expectOne('/api/v1/roadmaps/rm-adapt-err/reoptimize-schedule');
+      req.flush(
+        { message: 'Không đủ khung giờ rảnh để tái tối ưu.' },
+        { status: 409, statusText: 'Conflict' }
+      );
+      fixture.detectChanges();
+
+      expect(component.adaptationModalOpen()).toBe(true);
+      expect(component.adaptationError()).toContain('Không đủ khung giờ rảnh');
+      expect(router.navigate).not.toHaveBeenCalled();
+
+      const compiled = fixture.nativeElement as HTMLElement;
+      expect(compiled.querySelector('[data-testid="adaptation-error-banner"]')?.textContent).toContain(
+        'Không đủ khung giờ rảnh'
+      );
+      httpMock.verify();
     });
   });
 });

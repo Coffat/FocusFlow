@@ -20,6 +20,8 @@ import {
   formatEffortMinutes,
 } from '../../models/roadmap.model';
 import { FitCapacityScopePanelComponent } from '../shared/fit-capacity-scope-panel/fit-capacity-scope-panel.component';
+import { ProveModeService } from '../../services/prove-mode.service';
+import { ProveModeDialogComponent } from '../dialogs/prove-mode-dialog/prove-mode-dialog.component';
 
 @Component({
   selector: 'app-roadmap-page',
@@ -30,6 +32,7 @@ import { FitCapacityScopePanelComponent } from '../shared/fit-capacity-scope-pan
     RouterLink,
     BadgeDirective,
     FitCapacityScopePanelComponent,
+    ProveModeDialogComponent,
   ],
   templateUrl: './roadmap-page.component.html',
   styleUrl: './roadmap-page.component.scss',
@@ -38,11 +41,17 @@ import { FitCapacityScopePanelComponent } from '../shared/fit-capacity-scope-pan
 export class RoadmapPageComponent implements OnInit {
   readonly roadmapService = inject(RoadmapService);
   readonly availabilityService = inject(AvailabilityService);
+  readonly proveModeService = inject(ProveModeService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
 
   readonly Number = Number;
+
+  // Prove Mode Dialog State (UC-20 / FR-REPORT-003)
+  readonly proveDialogOpen = signal<boolean>(false);
+  readonly proveMilestoneId = signal<string | null>(null);
+  readonly proveMilestoneTitle = signal<string>('');
 
   // Local Form Signals for Creating a New Goal & Roadmap
   readonly showCreateForm = signal<boolean>(false);
@@ -398,6 +407,16 @@ export class RoadmapPageComponent implements OnInit {
 
   onArchiveRoadmap(roadmapId: string): void {
     this.roadmapService.archiveRoadmap(roadmapId);
+  }
+
+  openProveMode(milestoneId: string, milestoneTitle: string): void {
+    this.proveMilestoneId.set(milestoneId);
+    this.proveMilestoneTitle.set(milestoneTitle);
+    this.proveDialogOpen.set(true);
+  }
+
+  closeProveMode(): void {
+    this.proveDialogOpen.set(false);
   }
 
   onApproveFitCapacity(roadmapId: string, confirmedVersion: number): void {

@@ -1,6 +1,41 @@
+from dataclasses import dataclass
 from datetime import timedelta
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 from uuid import UUID
+
+RefreshTokenInspectStatus = Literal[
+    "ACTIVE",
+    "REUSE_DETECTED",
+    "FAMILY_REVOKED",
+    "NOT_FOUND",
+    "CORRUPTED",
+]
+
+RefreshTokenRotateStatus = Literal[
+    "ROTATED",
+    "REUSE_DETECTED",
+    "FAMILY_REVOKED",
+    "NOT_FOUND",
+    "EXPIRED",
+]
+
+
+@dataclass(frozen=True, slots=True)
+class RefreshTokenInspectResult:
+    """Result of atomically inspecting a refresh token and detecting reuse."""
+
+    status: RefreshTokenInspectStatus
+    user_id: str | None = None
+    family_id: str | None = None
+    remaining_ttl: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class RefreshTokenRotateResult:
+    """Result of atomically rotating an active refresh token in Redis."""
+
+    status: RefreshTokenRotateStatus
+    remaining_ttl: int = 0
 
 
 class TokenProviderPort(Protocol):
@@ -32,6 +67,29 @@ class RefreshTokenRepositoryPort(Protocol):
         family_id: str,
         expires_days: int | None = None,
     ) -> None: ...
+
+    async def save_rotated_refresh_token(
+        self,
+        token_hash: str,
+        user_id: str,
+        family_id: str,
+        expires_days: int | None = None,
+    ) -> bool: ...
+
+    async def inspect_refresh_token_atomic(
+        self,
+        token_hash: str,
+    ) -> RefreshTokenInspectResult: ...
+
+    async def rotate_refresh_token_atomic(
+        self,
+        old_token_hash: str,
+        new_token_hash: str,
+        user_id: str,
+        family_id: str,
+        rotated_at: str | None = None,
+        max_ttl_seconds: int | None = None,
+    ) -> RefreshTokenRotateResult: ...
 
     async def get_refresh_token(self, token_hash: str) -> dict[str, Any] | None: ...
 

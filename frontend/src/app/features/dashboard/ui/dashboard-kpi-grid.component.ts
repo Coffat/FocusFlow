@@ -45,11 +45,11 @@ import { KpiCardComponent } from '../../../shared/components/kpi-card/kpi-card.c
         footerText="Độ chính xác cao"
       />
 
-      <!-- Card 4: Pomodoro hoàn tất -->
+      <!-- Card 4: Phiên học hoàn tất -->
       <app-kpi-card
-        label="Pomodoro hoàn tất"
+        label="Phiên học hoàn tất"
         [value]="kpi().pomodoroCompleted + ' phiên'"
-        target="25m/phiên"
+        target="Trong tháng"
         icon="timer"
         tone="moss"
         [progress]="kpi().pomodoroTargetRate"

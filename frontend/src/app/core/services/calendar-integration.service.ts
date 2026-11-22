@@ -4,6 +4,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { Observable, catchError, finalize, of, tap } from 'rxjs';
 import { MessageService } from 'primeng/api';
 import { components } from '../api/schema';
+import { API_ENDPOINTS } from '../constants/api-endpoints';
 
 export type CalendarConnectionResponseDTO = components['schemas']['CalendarConnectionResponseDTO'];
 export type InitiateCalendarAuthResponseDTO = components['schemas']['InitiateCalendarAuthResponseDTO'];
@@ -29,7 +30,7 @@ export class CalendarIntegrationService {
   loadStatus(): Observable<CalendarConnectionResponseDTO> {
     this._isLoading.set(true);
     return this.http
-      .get<CalendarConnectionResponseDTO>('/api/v1/account/calendar/status', {
+      .get<CalendarConnectionResponseDTO>(API_ENDPOINTS.CALENDAR.STATUS, {
         withCredentials: true,
       })
       .pipe(
@@ -59,7 +60,7 @@ export class CalendarIntegrationService {
     this._isLoading.set(true);
     this.http
       .post<InitiateCalendarAuthResponseDTO>(
-        '/api/v1/account/calendar/google/authorize',
+        API_ENDPOINTS.CALENDAR.GOOGLE_AUTHORIZE,
         {
           sync_type: 'two_way',
           return_to: returnTo,
@@ -98,7 +99,7 @@ export class CalendarIntegrationService {
     this._isLoading.set(true);
     return this.http
       .post<CalendarConnectionResponseDTO>(
-        '/api/v1/account/calendar/disconnect',
+        API_ENDPOINTS.CALENDAR.DISCONNECT,
         {},
         { withCredentials: true }
       )

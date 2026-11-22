@@ -4,7 +4,6 @@ from typing import Annotated
 from uuid import UUID
 
 import jwt
-import redis.asyncio as redis
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt.exceptions import ExpiredSignatureError, PyJWTError
@@ -27,7 +26,9 @@ from src.account.public_api import (
     create_user_query_port,
 )
 from src.evaluation.public_api import (
+    PauseRecordPort,
     ScheduleChangeLogPort,
+    create_pause_record_port,
     create_schedule_change_log_port,
 )
 from src.execution.public_api import (
@@ -107,8 +108,7 @@ from src.shared_kernel.infrastructure.database.sqlalchemy_uow import (
     SqlAlchemyUnitOfWork,
 )
 from src.shared_kernel.infrastructure.external_ai.circuit_breaker import (
-    CircuitBreakingLLMProvider,
-    RedisCircuitStateStore,
+    wrap_with_circuit_breaker,
 )
 from src.shared_kernel.infrastructure.external_ai.embedding_adapter import LiteLLMEmbeddingAdapter
 from src.shared_kernel.infrastructure.external_ai.litellm_adapter import (
@@ -118,7 +118,6 @@ from src.shared_kernel.infrastructure.outbox.repository import SqlAlchemyOutboxR
 from src.shared_kernel.infrastructure.workflow.repository import SqlAlchemyWorkflowRepository
 
 security_bearer = HTTPBearer(auto_error=False)
-_ai_redis_client: redis.Redis | None = None
 
 
 # --- Database & Unit of Work Dependencies ---
@@ -193,12 +192,16 @@ def get_create_knowledge_source_use_case(
     file_store: LocalKnowledgeFileStore = Depends(get_knowledge_file_store),
     uow: AsyncUnitOfWork = Depends(get_planning_uow),
 ) -> CreateKnowledgeSourceUseCase:
+    settings = get_settings()
     return CreateKnowledgeSourceUseCase(
         goal_repository=goal_repository,
         source_repository=source_repository,
         file_store=file_store,
         uow=uow,
-        max_file_bytes=get_settings().knowledge_file_max_bytes,
+        max_file_bytes=settings.knowledge_file_max_bytes,
+        docx_max_entries=settings.knowledge_docx_max_entries,
+        docx_max_uncompressed_bytes=settings.knowledge_docx_max_uncompressed_bytes,
+        docx_max_compression_ratio=settings.knowledge_docx_max_compression_ratio,
     )
 
 
@@ -221,7 +224,14 @@ def get_ingest_knowledge_source_use_case(
             max_bytes=settings.knowledge_url_max_bytes,
             timeout_seconds=settings.knowledge_url_timeout_seconds,
         ),
-        extractor=DocumentExtractor(),
+        extractor=DocumentExtractor(
+            max_file_bytes=settings.knowledge_file_max_bytes,
+            max_extracted_chars=settings.knowledge_max_extracted_chars,
+            pdf_max_pages=settings.knowledge_pdf_max_pages,
+            docx_max_entries=settings.knowledge_docx_max_entries,
+            docx_max_uncompressed_bytes=settings.knowledge_docx_max_uncompressed_bytes,
+            docx_max_compression_ratio=settings.knowledge_docx_max_compression_ratio,
+        ),
         chunker=SemanticChunker(),
         uow=uow,
     )
@@ -276,6 +286,12 @@ def get_planning_schedule_change_log_port(
     return create_schedule_change_log_port(session)
 
 
+def get_planning_pause_record_port(
+    session: AsyncSession = Depends(get_planning_db_session),
+) -> PauseRecordPort:
+    return create_pause_record_port(session)
+
+
 def get_planning_learner_memory_port(
     session: AsyncSession = Depends(get_planning_db_session),
 ) -> LearnerMemoryQueryPort:
@@ -297,21 +313,9 @@ def get_planning_outbox_repository(
 def get_llm_provider() -> LLMProviderPort:
     provider: LLMProviderPort = LiteLLMAdapter()
     settings = get_settings()
-    if not settings.ai_harness_v2_enabled:
+    if not settings.ai_circuit_breaker_enabled:
         return provider
-    global _ai_redis_client
-    if _ai_redis_client is None:
-        _ai_redis_client = redis.from_url(settings.redis_url, decode_responses=True)
-    state = RedisCircuitStateStore(
-        _ai_redis_client,
-        window_seconds=settings.ai_circuit_window_seconds,
-        open_seconds=settings.ai_circuit_open_seconds,
-    )
-    return CircuitBreakingLLMProvider(
-        provider,
-        state,
-        failure_threshold=settings.ai_circuit_failure_threshold,
-    )
+    return wrap_with_circuit_breaker(provider, provider_name="litellm")
 
 
 def get_sse_job_store() -> SseJobPort:
@@ -930,12 +934,14 @@ def get_pause_roadmap_use_case(
     schedule_change_log_port: ScheduleChangeLogPort = Depends(
         get_planning_schedule_change_log_port
     ),
+    pause_record_port: PauseRecordPort = Depends(get_planning_pause_record_port),
 ) -> PauseRoadmapUseCase:
     return PauseRoadmapUseCase(
         roadmap_repo=roadmap_repo,
         schedule_repo=schedule_repo,
         uow=uow,
         schedule_change_log_port=schedule_change_log_port,
+        pause_record_port=pause_record_port,
     )
 
 
@@ -950,6 +956,7 @@ def get_resume_roadmap_use_case(
     schedule_change_log_port: ScheduleChangeLogPort = Depends(
         get_planning_schedule_change_log_port
     ),
+    pause_record_port: PauseRecordPort = Depends(get_planning_pause_record_port),
 ) -> ResumeRoadmapUseCase:
     return ResumeRoadmapUseCase(
         goal_repo=goal_repo,
@@ -960,6 +967,7 @@ def get_resume_roadmap_use_case(
         block_repo=block_repo,
         user_query_port=user_query_port,
         schedule_change_log_port=schedule_change_log_port,
+        pause_record_port=pause_record_port,
     )
 
 
@@ -1096,4 +1104,5 @@ CreateKnowledgeSourceUseCaseDep = Annotated[
 KnowledgeSourceRepositoryDep = Annotated[
     KnowledgeSourceRepositoryPort, Depends(get_knowledge_source_repository)
 ]
+GoalRepositoryDep = Annotated[GoalRepositoryPort, Depends(get_goal_repository)]
 RoadmapRepositoryDep = Annotated[RoadmapRepositoryPort, Depends(get_roadmap_repository)]

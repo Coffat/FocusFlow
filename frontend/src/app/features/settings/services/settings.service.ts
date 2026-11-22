@@ -1,10 +1,15 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
+import { API_ENDPOINTS } from '../../../core/constants/api-endpoints';
 import type {
   UserPreferences,
   AIQuotaResponseDTO,
   ChangePasswordRequestDTO,
+  WebcalStatusResponseDTO,
+  WebcalRotateResponseDTO,
+  WebcalRevokeResponseDTO,
+  AccountDataExportDTO,
 } from '../models/settings.model';
 
 const PREFERENCES_STORAGE_KEY = 'focusflow_user_preferences';
@@ -28,7 +33,14 @@ export class SettingsService {
   readonly preferences = signal<UserPreferences>(this.getInitialPreferences());
   readonly quota = signal<AIQuotaResponseDTO | null>(null);
   readonly quotaLoading = signal<boolean>(false);
+  readonly quotaError = signal<string | null>(null);
   readonly passwordSaving = signal<boolean>(false);
+  readonly webcalStatus = signal<WebcalStatusResponseDTO | null>(null);
+  readonly webcalUrl = signal<string | null>(null);
+  readonly webcalLoading = signal<boolean>(false);
+  readonly webcalError = signal<string | null>(null);
+  readonly exportLoading = signal<boolean>(false);
+  readonly exportError = signal<string | null>(null);
 
   private getInitialPreferences(): UserPreferences {
     try {
@@ -54,24 +66,17 @@ export class SettingsService {
 
   async loadQuota(): Promise<void> {
     this.quotaLoading.set(true);
+    this.quotaError.set(null);
     try {
       const data = await firstValueFrom(
-        this.http.get<AIQuotaResponseDTO>('/api/v1/account/quota', {
+        this.http.get<AIQuotaResponseDTO>(API_ENDPOINTS.SETTINGS.QUOTA, {
           withCredentials: true,
         }),
       );
       this.quota.set(data);
     } catch {
-      // Fallback with realistic initial mock if quota endpoint is unreachable
-      this.quota.set({
-        monthly_limit: 10,
-        used_calls: 2,
-        reserved_calls: 0,
-        remaining_calls: 8,
-        tokens_consumed: 3450,
-        cycle_start: new Date(Date.now() - 7 * 86400000).toISOString(),
-        cycle_end: new Date(Date.now() + 23 * 86400000).toISOString(),
-      });
+      this.quota.set(null);
+      this.quotaError.set('Không thể tải thông tin hạn ngạch AI. Vui lòng thử lại.');
     } finally {
       this.quotaLoading.set(false);
     }
@@ -81,7 +86,7 @@ export class SettingsService {
     this.passwordSaving.set(true);
     try {
       const response = await firstValueFrom(
-        this.http.post<{ message: string }>('/api/v1/account/change-password', req, {
+        this.http.post<{ message: string }>(API_ENDPOINTS.SETTINGS.CHANGE_PASSWORD, req, {
           withCredentials: true,
         }),
       );
@@ -91,10 +96,89 @@ export class SettingsService {
     }
   }
 
-  async resetWebCalToken(): Promise<{ webcal_url: string }> {
-    // Generates or regenerates WebCal token
-    return {
-      webcal_url: 'webcal://focusflow.app/api/v1/calendar/feed.ics?token=ff_live_' + Math.random().toString(36).substring(2, 12),
-    };
+  async loadWebcalStatus(): Promise<void> {
+    this.webcalLoading.set(true);
+    this.webcalError.set(null);
+    try {
+      const status = await firstValueFrom(
+        this.http.get<WebcalStatusResponseDTO>(API_ENDPOINTS.CALENDAR.WEBCAL_STATUS, {
+          withCredentials: true,
+        }),
+      );
+      this.webcalStatus.set(status);
+    } catch {
+      this.webcalError.set('Không thể tải trạng thái liên kết WebCal. Vui lòng thử lại.');
+    } finally {
+      this.webcalLoading.set(false);
+    }
+  }
+
+  async rotateWebcalToken(): Promise<WebcalRotateResponseDTO | null> {
+    this.webcalLoading.set(true);
+    this.webcalError.set(null);
+    try {
+      const res = await firstValueFrom(
+        this.http.post<WebcalRotateResponseDTO>(
+          API_ENDPOINTS.CALENDAR.WEBCAL_ROTATE,
+          {},
+          { withCredentials: true },
+        ),
+      );
+      this.webcalUrl.set(res.webcal_url);
+      this.webcalStatus.set({
+        has_active_token: true,
+        is_active: true,
+        rotated_at: res.rotated_at,
+        last_used_at: this.webcalStatus()?.last_used_at ?? null,
+      });
+      return res;
+    } catch {
+      this.webcalError.set('Không thể tạo hoặc xoay vòng liên kết WebCal. Vui lòng thử lại.');
+      return null;
+    } finally {
+      this.webcalLoading.set(false);
+    }
+  }
+
+  async revokeWebcalToken(): Promise<boolean> {
+    this.webcalLoading.set(true);
+    this.webcalError.set(null);
+    try {
+      await firstValueFrom(
+        this.http.delete<WebcalRevokeResponseDTO>(API_ENDPOINTS.CALENDAR.WEBCAL_REVOKE, {
+          withCredentials: true,
+        }),
+      );
+      this.webcalUrl.set(null);
+      this.webcalStatus.set({
+        has_active_token: false,
+        is_active: false,
+        rotated_at: null,
+        last_used_at: null,
+      });
+      return true;
+    } catch {
+      this.webcalError.set('Không thể thu hồi liên kết WebCal. Vui lòng thử lại.');
+      return false;
+    } finally {
+      this.webcalLoading.set(false);
+    }
+  }
+
+  async exportAccountData(): Promise<AccountDataExportDTO | null> {
+    this.exportLoading.set(true);
+    this.exportError.set(null);
+    try {
+      return await firstValueFrom(
+        this.http.get<AccountDataExportDTO>(API_ENDPOINTS.SETTINGS.EXPORT, {
+          withCredentials: true,
+        }),
+      );
+    } catch {
+      this.exportError.set('Không thể xuất dữ liệu cá nhân lúc này. Vui lòng thử lại sau.');
+      return null;
+    } finally {
+      this.exportLoading.set(false);
+    }
   }
 }

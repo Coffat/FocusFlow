@@ -345,6 +345,23 @@ async def test_mock_calendar_fault_injections() -> None:
 # ==============================================================================
 # 3. ACCOUNT CALENDAR USE CASES TESTS
 # ==============================================================================
+class InMemoryOAuthStateStore:
+    def __init__(self) -> None:
+        self._nonces: dict[str, tuple[UUID, datetime]] = {}
+
+    async def store_nonce(self, nonce: str, user_id: UUID, ttl_seconds: int = 300) -> None:
+        self._nonces[nonce] = (user_id, datetime.now(UTC) + timedelta(seconds=ttl_seconds))
+
+    async def consume_nonce(self, nonce: str) -> UUID | None:
+        entry = self._nonces.pop(nonce, None)
+        if entry is None:
+            return None
+        user_id, expires_at = entry
+        if datetime.now(UTC) >= expires_at:
+            return None
+        return user_id
+
+
 @pytest.mark.asyncio
 async def test_initiate_google_calendar_auth_use_case() -> None:
     settings = Settings(
@@ -352,7 +369,12 @@ async def test_initiate_google_calendar_auth_use_case() -> None:
         google_client_id="test_client_id",
         google_redirect_uri="http://localhost:8000/callback",
     )
-    use_case = InitiateGoogleCalendarAuthUseCase(settings=settings)
+    state_store = InMemoryOAuthStateStore()
+    use_case = InitiateGoogleCalendarAuthUseCase(
+        state_store=state_store,
+        secret_key=settings.secret_key,
+        settings=settings,
+    )
     user_id = uuid4()
 
     # 1. Inbound Freebusy flow
@@ -363,20 +385,25 @@ async def test_initiate_google_calendar_auth_use_case() -> None:
     assert "calendar.calendarlist.readonly" in resp_inbound.authorization_url
     assert "calendar.app.created" not in resp_inbound.authorization_url
 
-    # Verify state contains user_id and sync_type
+    # Verify signed state contains user_id, sync_type, nonce, exp, purpose
+    payload_b64, signature = resp_inbound.state.split(".")
+    assert len(signature) == 64
     decoded_state = json.loads(
-        base64.urlsafe_b64decode(resp_inbound.state.encode("utf-8")).decode("utf-8")
+        base64.urlsafe_b64decode(payload_b64.encode("utf-8")).decode("utf-8")
     )
     assert decoded_state["user_id"] == str(user_id)
     assert decoded_state["sync_type"] == "inbound"
     assert decoded_state["return_to"] == "/settings"
+    assert decoded_state["purpose"] == "google_calendar_oauth"
+    assert decoded_state["nonce"]
 
     # Custom return_to
     resp_custom = await use_case.execute(
         user_id, InitiateCalendarAuthRequestDTO(sync_type="two_way", return_to="/schedule")
     )
+    custom_payload_b64, _ = resp_custom.state.split(".")
     decoded_custom = json.loads(
-        base64.urlsafe_b64decode(resp_custom.state.encode("utf-8")).decode("utf-8")
+        base64.urlsafe_b64decode(custom_payload_b64.encode("utf-8")).decode("utf-8")
     )
     assert decoded_custom["return_to"] == "/schedule"
 
@@ -411,18 +438,25 @@ async def test_handle_google_calendar_oauth_callback_use_case() -> None:
     )
     repo = InMemoryCalendarConnectionRepository()
     adapter = InMemoryCalendarAdapter()
+    state_store = InMemoryOAuthStateStore()
+    init_uc = InitiateGoogleCalendarAuthUseCase(
+        state_store=state_store,
+        secret_key=settings.secret_key,
+        settings=settings,
+    )
     use_case = HandleGoogleCalendarOAuthCallbackUseCase(
         repository=repo,
         calendar_provider=adapter,
+        state_store=state_store,
+        secret_key=settings.secret_key,
         settings=settings,
         http_client=_fake_google_oauth_client(),
     )
 
     user_id = uuid4()
-    state_payload = {"user_id": str(user_id), "sync_type": "two_way"}
-    state_str = base64.urlsafe_b64encode(json.dumps(state_payload).encode("utf-8")).decode("utf-8")
+    init_resp = await init_uc.execute(user_id, InitiateCalendarAuthRequestDTO(sync_type="two_way"))
 
-    request = CalendarOAuthCallbackRequestDTO(code="oauth_auth_code", state=state_str)
+    request = CalendarOAuthCallbackRequestDTO(code="oauth_auth_code", state=init_resp.state)
     result = await use_case.execute(user_id, request)
 
     assert result.connected is True
@@ -439,9 +473,14 @@ async def test_handle_google_calendar_oauth_callback_use_case() -> None:
     assert decrypted_token == "google_refresh_token_test"
 
     # Verify fail-closed when provider is not google or client_secret is missing
+    init_resp_2 = await init_uc.execute(
+        user_id, InitiateCalendarAuthRequestDTO(sync_type="two_way")
+    )
     mock_provider_uc = HandleGoogleCalendarOAuthCallbackUseCase(
         repository=repo,
         calendar_provider=adapter,
+        state_store=state_store,
+        secret_key=settings.secret_key,
         settings=Settings(
             calendar_provider="mock",
             google_client_id="id",
@@ -450,11 +489,19 @@ async def test_handle_google_calendar_oauth_callback_use_case() -> None:
         ),
     )
     with pytest.raises(CalendarAuthError, match="CALENDAR_PROVIDER_NOT_CONFIGURED"):
-        await mock_provider_uc.execute(user_id, request)
+        await mock_provider_uc.execute(
+            user_id,
+            CalendarOAuthCallbackRequestDTO(code="oauth_auth_code", state=init_resp_2.state),
+        )
 
+    init_resp_3 = await init_uc.execute(
+        user_id, InitiateCalendarAuthRequestDTO(sync_type="two_way")
+    )
     missing_secret_uc = HandleGoogleCalendarOAuthCallbackUseCase(
         repository=repo,
         calendar_provider=adapter,
+        state_store=state_store,
+        secret_key=settings.secret_key,
         settings=Settings(
             calendar_provider="google",
             google_client_id="id",
@@ -463,7 +510,10 @@ async def test_handle_google_calendar_oauth_callback_use_case() -> None:
         ),
     )
     with pytest.raises(CalendarAuthError, match="CALENDAR_OAUTH_NOT_CONFIGURED"):
-        await missing_secret_uc.execute(user_id, request)
+        await missing_secret_uc.execute(
+            user_id,
+            CalendarOAuthCallbackRequestDTO(code="oauth_auth_code", state=init_resp_3.state),
+        )
 
 
 @pytest.mark.asyncio
@@ -482,20 +532,25 @@ async def test_handle_google_calendar_callback_get_redirect() -> None:
     )
     repo = InMemoryCalendarConnectionRepository()
     adapter = InMemoryCalendarAdapter()
+    state_store = InMemoryOAuthStateStore()
+    init_uc = InitiateGoogleCalendarAuthUseCase(
+        state_store=state_store,
+        secret_key=settings.secret_key,
+        settings=settings,
+    )
     use_case = HandleGoogleCalendarOAuthCallbackUseCase(
         repository=repo,
         calendar_provider=adapter,
+        state_store=state_store,
+        secret_key=settings.secret_key,
         settings=settings,
         http_client=_fake_google_oauth_client(),
     )
 
     user_id = uuid4()
-    state_payload = {
-        "user_id": str(user_id),
-        "sync_type": "two_way",
-        "return_to": "/schedule",
-    }
-    state_str = base64.urlsafe_b64encode(json.dumps(state_payload).encode("utf-8")).decode("utf-8")
+    init_resp = await init_uc.execute(
+        user_id, InitiateCalendarAuthRequestDTO(sync_type="two_way", return_to="/schedule")
+    )
     scope = {"type": "http", "method": "GET", "headers": []}
     req = Request(scope)
 
@@ -503,7 +558,8 @@ async def test_handle_google_calendar_callback_get_redirect() -> None:
     response = await handle_google_calendar_callback_get(
         request=req,
         code="mock_auth_code",
-        state=state_str,
+        state=init_resp.state,
+        user_id=user_id,
         use_case=use_case,
     )
     assert response.status_code == 302
@@ -514,12 +570,16 @@ async def test_handle_google_calendar_callback_get_redirect() -> None:
     # 2. Error case (e.g. invalid code triggering CalendarAuthError) -> 302 redirect with ?calendar_connected=error
     from unittest.mock import AsyncMock
 
+    init_err_resp = await init_uc.execute(
+        user_id, InitiateCalendarAuthRequestDTO(sync_type="two_way", return_to="/schedule")
+    )
     error_use_case = AsyncMock()
     error_use_case.execute.side_effect = CalendarAuthError("Invalid auth code")
     err_response = await handle_google_calendar_callback_get(
         request=req,
         code="bad_code",
-        state=state_str,
+        state=init_err_resp.state,
+        user_id=user_id,
         use_case=error_use_case,
     )
     assert err_response.status_code == 302
@@ -528,18 +588,17 @@ async def test_handle_google_calendar_callback_get_redirect() -> None:
     assert "http://localhost:3000/schedule" in err_response.headers["location"]
 
     # 3. return_to already contains query parameters -> join with & instead of ?
-    state_with_query = {
-        "user_id": str(user_id),
-        "sync_type": "two_way",
-        "return_to": "/settings?tab=calendar&focus=calendar",
-    }
-    state_query_str = base64.urlsafe_b64encode(json.dumps(state_with_query).encode("utf-8")).decode(
-        "utf-8"
+    init_query_resp = await init_uc.execute(
+        user_id,
+        InitiateCalendarAuthRequestDTO(
+            sync_type="two_way", return_to="/settings?tab=calendar&focus=calendar"
+        ),
     )
     response_with_query = await handle_google_calendar_callback_get(
         request=req,
         code="mock_auth_code",
-        state=state_query_str,
+        state=init_query_resp.state,
+        user_id=user_id,
         use_case=use_case,
     )
     assert response_with_query.status_code == 302

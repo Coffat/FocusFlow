@@ -380,8 +380,15 @@ async def test_webhook_router_header_verification(
     )
     await conn_repo.save(conn)
 
+    from starlette.requests import Request as StarletteRequest
+
+    fake_request = StarletteRequest(
+        {"type": "http", "method": "POST", "headers": [], "client": ("127.0.0.1", 12345)}
+    )
+
     # 1. Valid 3 headers -> 200 OK / accepted
     resp = await handle_google_calendar_webhook(
+        request=fake_request,
         x_goog_channel_id=channel_id,
         x_goog_resource_id=resource_id,
         x_goog_channel_token=secret_token,
@@ -393,6 +400,7 @@ async def test_webhook_router_header_verification(
 
     # 2. Channel sync ping -> 200 OK channel verified
     sync_resp = await handle_google_calendar_webhook(
+        request=fake_request,
         x_goog_channel_id=channel_id,
         x_goog_resource_id=resource_id,
         x_goog_channel_token=secret_token,
@@ -404,6 +412,7 @@ async def test_webhook_router_header_verification(
     # 3. Missing header -> 403 Forbidden
     with pytest.raises(HTTPException) as exc_info:
         await handle_google_calendar_webhook(
+            request=fake_request,
             x_goog_channel_id=None,
             x_goog_resource_id=resource_id,
             x_goog_channel_token=secret_token,
@@ -414,6 +423,7 @@ async def test_webhook_router_header_verification(
     # 4. Unknown channel ID -> 403 Forbidden
     with pytest.raises(HTTPException) as exc_info:
         await handle_google_calendar_webhook(
+            request=fake_request,
             x_goog_channel_id="chan_unknown",
             x_goog_resource_id=resource_id,
             x_goog_channel_token=secret_token,
@@ -424,6 +434,7 @@ async def test_webhook_router_header_verification(
     # 5. Resource ID mismatch -> 403 Forbidden
     with pytest.raises(HTTPException) as exc_info:
         await handle_google_calendar_webhook(
+            request=fake_request,
             x_goog_channel_id=channel_id,
             x_goog_resource_id="wrong_res_id",
             x_goog_channel_token=secret_token,
@@ -434,6 +445,7 @@ async def test_webhook_router_header_verification(
     # 6. Invalid token hash -> 403 Forbidden
     with pytest.raises(HTTPException) as exc_info:
         await handle_google_calendar_webhook(
+            request=fake_request,
             x_goog_channel_id=channel_id,
             x_goog_resource_id=resource_id,
             x_goog_channel_token="wrong_token_tampered",

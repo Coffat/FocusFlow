@@ -1,15 +1,41 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { signal } from '@angular/core';
+import { computed, signal } from '@angular/core';
 import { MessageService, ConfirmationService } from 'primeng/api';
 import { ProfilePageComponent } from './profile-page.component';
 import { ProfileService } from '../services/profile.service';
-import type { ProfileResponseDTO, LearnerMemoryResponseDTO } from '../models/profile.model';
+import type {
+  ProfileResponseDTO,
+  LearnerMemoryResponseDTO,
+  LearnerSrlProfileDTO,
+} from '../models/profile.model';
 
 describe('ProfilePageComponent', () => {
   let component: ProfilePageComponent;
   let fixture: ComponentFixture<ProfilePageComponent>;
+
+  const coldStartSrl: LearnerSrlProfileDTO = {
+    total_completed_sessions: 1,
+    is_cold_start: true,
+    min_sessions_required: 3,
+    optimal_focus_duration_mins: null,
+    estimation_bias_factor: null,
+    weekly_completion_rate: 0,
+    peak_productivity_slots: [],
+    last_aggregated_at: null,
+  };
+
+  const adaptiveSrl: LearnerSrlProfileDTO = {
+    total_completed_sessions: 6,
+    is_cold_start: false,
+    min_sessions_required: 3,
+    optimal_focus_duration_mins: 32,
+    estimation_bias_factor: 1.18,
+    weekly_completion_rate: 0.85,
+    peak_productivity_slots: ['MORNING', 'EVENING'],
+    last_aggregated_at: '2026-01-05T10:00:00Z',
+  };
 
   const mockProfile: ProfileResponseDTO = {
     id: '11111111-1111-1111-1111-111111111111',
@@ -19,6 +45,7 @@ describe('ProfilePageComponent', () => {
     role: 'learner',
     tier: 'PRO',
     created_at: '2026-01-01T00:00:00Z',
+    srl_profile: coldStartSrl,
   };
 
   const mockMemory: LearnerMemoryResponseDTO = {
@@ -42,7 +69,8 @@ describe('ProfilePageComponent', () => {
     learnerMemory: ReturnType<typeof signal<readonly LearnerMemoryResponseDTO[]>>;
     memoryLoading: ReturnType<typeof signal<boolean>>;
     memoryError: ReturnType<typeof signal<string | null>>;
-    srlMetrics: ReturnType<typeof signal<any>>;
+    srlProfile: ReturnType<typeof computed<LearnerSrlProfileDTO | null>>;
+    isSrlColdStart: ReturnType<typeof computed<boolean>>;
     loadProfile: ReturnType<typeof vi.fn>;
     updateProfile: ReturnType<typeof vi.fn>;
     loadLearnerMemory: ReturnType<typeof vi.fn>;
@@ -54,18 +82,23 @@ describe('ProfilePageComponent', () => {
   let mockConfirmationService: { confirm: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
+    const profileSignal = signal<ProfileResponseDTO | null>(mockProfile);
+    const srlProfileComputed = computed<LearnerSrlProfileDTO | null>(
+      () => profileSignal()?.srl_profile ?? null,
+    );
+    const isSrlColdStartComputed = computed<boolean>(
+      () => srlProfileComputed()?.is_cold_start ?? true,
+    );
+
     mockProfileService = {
-      profile: signal<ProfileResponseDTO | null>(mockProfile),
+      profile: profileSignal,
       profileLoading: signal(false),
       profileSaving: signal(false),
       learnerMemory: signal<readonly LearnerMemoryResponseDTO[]>([mockMemory]),
       memoryLoading: signal(false),
       memoryError: signal(null),
-      srlMetrics: signal({
-        optSessionMinutes: 45,
-        completionRateBias: 1.05,
-        learningStyle: 'Sequential Deep Work',
-      }),
+      srlProfile: srlProfileComputed,
+      isSrlColdStart: isSrlColdStartComputed,
       loadProfile: vi.fn().mockResolvedValue(undefined),
       updateProfile: vi.fn().mockResolvedValue(mockProfile),
       loadLearnerMemory: vi.fn().mockResolvedValue(undefined),
@@ -162,5 +195,48 @@ describe('ProfilePageComponent', () => {
         header: 'Xác nhận Đặt lại Cold Start',
       })
     );
+  });
+
+  it('hiển thị banner chưa đủ dữ liệu và không hiển thị số liệu giả lập khi is_cold_start = true', () => {
+    const el: HTMLElement = fixture.nativeElement;
+    const banner = el.querySelector('[data-testid="srl-insufficient-data-banner"]');
+    const badge = el.querySelector('[data-testid="srl-state-badge"]');
+    const optimalFocus = el.querySelector('[data-testid="srl-optimal-focus"]');
+    const estimationBias = el.querySelector('[data-testid="srl-estimation-bias"]');
+    const peakSlots = el.querySelector('[data-testid="srl-peak-slots"]');
+
+    expect(banner).toBeTruthy();
+    expect(banner?.textContent).toContain('Chưa đủ dữ liệu học tập (1/3 phiên hoàn thành)');
+    expect(badge?.textContent).toContain('SRL: Chưa đủ dữ liệu');
+    expect(optimalFocus?.textContent?.trim()).toBe('—');
+    expect(estimationBias?.textContent?.trim()).toBe('—');
+    expect(peakSlots?.textContent?.trim()).toBe('—');
+
+    const fullText = el.textContent ?? '';
+    expect(fullText).not.toContain('Sequential Deep Work');
+    expect(fullText).not.toContain('1.05x');
+    expect(fullText).not.toContain('45 phút / phiên');
+  });
+
+  it('hiển thị các chỉ số SRL thật từ backend khi is_cold_start = false', () => {
+    mockProfileService.profile.set({
+      ...mockProfile,
+      srl_profile: adaptiveSrl,
+    });
+    fixture.detectChanges();
+
+    const el: HTMLElement = fixture.nativeElement;
+    const banner = el.querySelector('[data-testid="srl-insufficient-data-banner"]');
+    const badge = el.querySelector('[data-testid="srl-state-badge"]');
+    const optimalFocus = el.querySelector('[data-testid="srl-optimal-focus"]');
+    const estimationBias = el.querySelector('[data-testid="srl-estimation-bias"]');
+    const peakSlots = el.querySelector('[data-testid="srl-peak-slots"]');
+
+    expect(banner).toBeNull();
+    expect(badge?.textContent).toContain('SRL: Đang thích ứng');
+    expect(optimalFocus?.textContent).toContain('32');
+    expect(optimalFocus?.textContent).toContain('phút / phiên');
+    expect(estimationBias?.textContent?.trim()).toBe('1.18x');
+    expect(peakSlots?.textContent?.trim()).toBe('Buổi sáng, Buổi tối');
   });
 });

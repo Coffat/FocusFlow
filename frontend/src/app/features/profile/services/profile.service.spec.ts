@@ -42,15 +42,16 @@ describe('ProfileService', () => {
     httpMock.verify();
   });
 
-  it('khởi tạo thành công ProfileService với giá trị mặc định', () => {
+  it('khởi tạo thành công ProfileService với giá trị mặc định (cold start, không hardcode SRL)', () => {
     expect(service).toBeTruthy();
     expect(service.profile()).toBeNull();
     expect(service.profileLoading()).toBe(false);
     expect(service.learnerMemory()).toEqual([]);
-    expect(service.srlMetrics().optSessionMinutes).toBe(45);
+    expect(service.srlProfile()).toBeNull();
+    expect(service.isSrlColdStart()).toBe(true);
   });
 
-  it('loadProfile tải thông tin người dùng từ backend thành công', async () => {
+  it('loadProfile tải thông tin người dùng và phản ánh srl_profile thật từ backend', async () => {
     const mockProfile: ProfileResponseDTO = {
       id: '11111111-1111-1111-1111-111111111111',
       email: 'user@focusflow.ai',
@@ -59,6 +60,16 @@ describe('ProfileService', () => {
       role: 'learner',
       tier: 'PRO',
       created_at: '2026-01-01T00:00:00Z',
+      srl_profile: {
+        total_completed_sessions: 5,
+        is_cold_start: false,
+        min_sessions_required: 3,
+        optimal_focus_duration_mins: 35,
+        estimation_bias_factor: 1.15,
+        weekly_completion_rate: 0.8,
+        peak_productivity_slots: ['MORNING', 'EVENING'],
+        last_aggregated_at: '2026-01-02T00:00:00Z',
+      },
     };
 
     const loadPromise = service.loadProfile();
@@ -68,7 +79,40 @@ describe('ProfileService', () => {
 
     await loadPromise;
     expect(service.profile()).toEqual(mockProfile);
+    expect(service.srlProfile()).toEqual(mockProfile.srl_profile);
+    expect(service.isSrlColdStart()).toBe(false);
     expect(service.profileLoading()).toBe(false);
+  });
+
+  it('loadProfile giữ isSrlColdStart = true khi backend trả về trạng thái chưa đủ dữ liệu', async () => {
+    const mockColdStartProfile: ProfileResponseDTO = {
+      id: '11111111-1111-1111-1111-111111111111',
+      email: 'user@focusflow.ai',
+      full_name: 'Người học mới',
+      timezone: 'Asia/Ho_Chi_Minh',
+      role: 'learner',
+      tier: 'FREE',
+      created_at: '2026-01-01T00:00:00Z',
+      srl_profile: {
+        total_completed_sessions: 1,
+        is_cold_start: true,
+        min_sessions_required: 3,
+        optimal_focus_duration_mins: null,
+        estimation_bias_factor: null,
+        weekly_completion_rate: 0,
+        peak_productivity_slots: [],
+        last_aggregated_at: null,
+      },
+    };
+
+    const loadPromise = service.loadProfile();
+    const req = httpMock.expectOne('/api/v1/account/profile');
+    req.flush(mockColdStartProfile);
+
+    await loadPromise;
+    expect(service.isSrlColdStart()).toBe(true);
+    expect(service.srlProfile()?.total_completed_sessions).toBe(1);
+    expect(service.srlProfile()?.optimal_focus_duration_mins).toBeNull();
   });
 
   it('loadProfile fallback sang authService khi request gặp lỗi', async () => {
@@ -178,7 +222,7 @@ describe('ProfileService', () => {
     expect(service.learnerMemory()[0].epistemic_level).toBe('EXPLICIT');
   });
 
-  it('resetLearnerMemory gửi confirm và làm rỗng mảng memory', async () => {
+  it('resetLearnerMemory gửi confirm, làm rỗng mảng memory và đồng bộ lại profile', async () => {
     service.learnerMemory.set([
       {
         id: '22222222-2222-2222-2222-222222222222',
@@ -201,7 +245,31 @@ describe('ProfileService', () => {
     expect(req.request.body).toEqual({ confirm: true });
     req.flush(null, { status: 204, statusText: 'No Content' });
 
+    await Promise.resolve();
+    const profileReq = httpMock.expectOne('/api/v1/account/profile');
+    expect(profileReq.request.method).toBe('GET');
+    profileReq.flush({
+      id: '11111111-1111-1111-1111-111111111111',
+      email: 'user@focusflow.ai',
+      full_name: 'Test User',
+      timezone: 'Asia/Ho_Chi_Minh',
+      role: 'learner',
+      tier: 'PRO',
+      created_at: '2026-01-01T00:00:00Z',
+      srl_profile: {
+        total_completed_sessions: 0,
+        is_cold_start: true,
+        min_sessions_required: 3,
+        optimal_focus_duration_mins: null,
+        estimation_bias_factor: null,
+        weekly_completion_rate: 0,
+        peak_productivity_slots: [],
+        last_aggregated_at: null,
+      },
+    } satisfies ProfileResponseDTO);
+
     await resetPromise;
     expect(service.learnerMemory()).toEqual([]);
+    expect(service.isSrlColdStart()).toBe(true);
   });
 });

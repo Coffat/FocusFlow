@@ -6,6 +6,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -74,7 +75,7 @@ export class RoadmapsHubComponent implements OnInit {
   // SCR-08 Adaptation Modal Dialog State
   readonly adaptationModalOpen = signal<boolean>(false);
   readonly adaptationRoadmapId = signal<string | null>(null);
-  readonly adaptationRoadmapTitle = signal<string>('AWS Certified Solutions Architect');
+  readonly adaptationRoadmapTitle = signal<string>('');
 
   readonly starterTemplates: readonly StarterTemplate[] = DEFAULT_STARTER_TEMPLATES;
 
@@ -199,6 +200,21 @@ export class RoadmapsHubComponent implements OnInit {
     this.wizardOpen.set(false);
   }
 
+  onRoadmapApplied(_roadmapId: string): void {
+    this.wizardOpen.set(false);
+    if (this.activeFilter() !== 'ALL') {
+      this.activeFilter.set('ALL');
+    }
+    this.messageService?.add({
+      severity: 'success',
+      summary: 'Áp dụng lộ trình thành công',
+      detail: 'Lộ trình học tập mới đã được kích hoạt và đồng bộ vào danh sách.',
+    });
+    if (!this.roadmapService.loading()) {
+      this.roadmapService.loadRoadmaps();
+    }
+  }
+
   onSelectTemplate(tpl: StarterTemplate): void {
     this.checkAvailabilityAndProceed(() => {
       this.wizardInitialTitle.set(tpl.title);
@@ -232,6 +248,28 @@ export class RoadmapsHubComponent implements OnInit {
     }
   }
 
+  private extractHttpErrorMessage(err: unknown, fallback: string): string {
+    if (err instanceof HttpErrorResponse) {
+      const body = err.error;
+      if (typeof body === 'string' && body.trim().length > 0) {
+        return body.trim();
+      }
+      if (body && typeof body === 'object') {
+        const record = body as Record<string, unknown>;
+        if (typeof record['message'] === 'string' && record['message'].trim().length > 0) {
+          return record['message'].trim();
+        }
+        if (typeof record['detail'] === 'string' && record['detail'].trim().length > 0) {
+          return record['detail'].trim();
+        }
+      }
+      if (typeof err.message === 'string' && err.message.trim().length > 0) {
+        return err.message.trim();
+      }
+    }
+    return fallback;
+  }
+
   private executePause(id: string): void {
     this.roadmapService.pauseRoadmap(id).subscribe({
       next: () => {
@@ -242,14 +280,14 @@ export class RoadmapsHubComponent implements OnInit {
         });
         this.roadmapService.loadRoadmaps();
       },
-      error: () => {
-        this.roadmapService.roadmaps.update(list =>
-          list.map(r => (r.id === id ? { ...r, status: 'PAUSED' } : r))
-        );
+      error: (err: unknown) => {
         this.messageService?.add({
-          severity: 'warn',
-          summary: 'Đã tạm dừng',
-          detail: 'Lộ trình đã được tạm dừng (Domino Shift v2).',
+          severity: 'error',
+          summary: 'Tạm dừng thất bại',
+          detail: this.extractHttpErrorMessage(
+            err,
+            'Không thể tạm dừng lộ trình. Vui lòng thử lại.'
+          ),
         });
       },
     });
@@ -268,9 +306,7 @@ export class RoadmapsHubComponent implements OnInit {
       null;
 
     this.adaptationRoadmapId.set(target?.id ?? roadmapId ?? null);
-    this.adaptationRoadmapTitle.set(
-      target?.title || 'AWS Certified Solutions Architect'
-    );
+    this.adaptationRoadmapTitle.set(target?.title ?? '');
     this.adaptationModalOpen.set(true);
   }
 
@@ -296,14 +332,14 @@ export class RoadmapsHubComponent implements OnInit {
         });
         this.roadmapService.loadRoadmaps();
       },
-      error: () => {
-        this.roadmapService.roadmaps.update(list =>
-          list.map(r => (r.id === id ? { ...r, status: 'ACTIVE' } : r))
-        );
+      error: (err: unknown) => {
         this.messageService?.add({
-          severity: 'success',
-          summary: 'Đã kích hoạt',
-          detail: 'Lộ trình đã hoạt động trở lại.',
+          severity: 'error',
+          summary: 'Kích hoạt lại thất bại',
+          detail: this.extractHttpErrorMessage(
+            err,
+            'Không thể kích hoạt lại lộ trình. Vui lòng thử lại.'
+          ),
         });
       },
     });
@@ -320,16 +356,30 @@ export class RoadmapsHubComponent implements OnInit {
         rejectLabel: 'Hủy bỏ',
         acceptButtonStyleClass: 'p-button-danger',
         accept: () => {
-          this.roadmapService.archiveRoadmap(id);
-          this.messageService?.add({
-            severity: 'info',
-            summary: 'Đã lưu trữ',
-            detail: 'Lộ trình đã được lưu trữ thành công.',
-          });
+          this.executeArchive(id);
         },
       });
     } else {
-      this.roadmapService.archiveRoadmap(id);
+      this.executeArchive(id);
     }
+  }
+
+  private executeArchive(id: string): void {
+    this.roadmapService.archiveRoadmap(id, {
+      onSuccess: () => {
+        this.messageService?.add({
+          severity: 'info',
+          summary: 'Đã lưu trữ',
+          detail: 'Lộ trình đã được lưu trữ thành công.',
+        });
+      },
+      onError: (detail: string) => {
+        this.messageService?.add({
+          severity: 'error',
+          summary: 'Lưu trữ thất bại',
+          detail,
+        });
+      },
+    });
   }
 }

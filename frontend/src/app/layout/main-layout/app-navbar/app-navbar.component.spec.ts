@@ -3,8 +3,13 @@ import { provideRouter, Router } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
+import { of } from 'rxjs';
 import { AppNavbarComponent } from './app-navbar.component';
 import { AuthService } from '../../../core/services/auth.service';
+import {
+  NotificationService,
+  type NotificationItemDTO,
+} from '../../../core/services/notification.service';
 
 describe('AppNavbarComponent', () => {
   let component: AppNavbarComponent;
@@ -13,6 +18,15 @@ describe('AppNavbarComponent', () => {
   let mockAuthService: {
     currentUser: ReturnType<typeof signal<any>>;
     logout: ReturnType<typeof vi.fn>;
+  };
+  let mockNotificationService: {
+    items: ReturnType<typeof signal<NotificationItemDTO[]>>;
+    unreadCount: ReturnType<typeof signal<number>>;
+    loading: ReturnType<typeof signal<boolean>>;
+    error: ReturnType<typeof signal<string | null>>;
+    loadNotifications: ReturnType<typeof vi.fn>;
+    markRead: ReturnType<typeof vi.fn>;
+    markAllRead: ReturnType<typeof vi.fn>;
   };
 
   const mockUser = {
@@ -33,6 +47,26 @@ describe('AppNavbarComponent', () => {
       currentUser: signal(mockUser),
       logout: vi.fn(),
     };
+    mockNotificationService = {
+      items: signal<NotificationItemDTO[]>([]),
+      unreadCount: signal<number>(0),
+      loading: signal<boolean>(false),
+      error: signal<string | null>(null),
+      loadNotifications: vi.fn(),
+      markRead: vi.fn().mockImplementation((id: string) =>
+        of({
+          id,
+          notification_type: 'SCHEDULE_APPLIED',
+          title: 'Lịch học mới',
+          content: 'Đã áp dụng lịch học.',
+          resource_url: '/schedule',
+          is_read: true,
+          read_at: '2026-11-21T09:15:00Z',
+          created_at: '2026-11-21T09:00:00Z',
+        }),
+      ),
+      markAllRead: vi.fn().mockReturnValue(of({ updated_count: 1 })),
+    };
 
     await TestBed.configureTestingModule({
       imports: [AppNavbarComponent],
@@ -41,6 +75,7 @@ describe('AppNavbarComponent', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         { provide: AuthService, useValue: mockAuthService },
+        { provide: NotificationService, useValue: mockNotificationService },
       ],
     }).compileComponents();
 
@@ -48,6 +83,7 @@ describe('AppNavbarComponent', () => {
     component = fixture.componentInstance;
     router = TestBed.inject(Router);
     vi.spyOn(router, 'navigate').mockResolvedValue(true);
+    vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
     fixture.detectChanges();
   });
 
@@ -159,5 +195,77 @@ describe('AppNavbarComponent', () => {
     expect(component.isUserMenuOpen()).toBe(false);
     expect(mockAuthService.logout).toHaveBeenCalled();
     expect(router.navigate).toHaveBeenCalledWith(['/sign-in']);
+  });
+
+  describe('FE-MOCK-08: Trung tâm thông báo trên Navbar Bell', () => {
+    it('tự động tải thông báo khi người dùng đã đăng nhập và hiển thị unread badge', () => {
+      expect(mockNotificationService.loadNotifications).toHaveBeenCalledTimes(1);
+
+      mockNotificationService.unreadCount.set(3);
+      fixture.detectChanges();
+
+      const el = fixture.nativeElement as HTMLElement;
+      const badge = el.querySelector('[data-testid="notification-unread-badge"]');
+      expect(badge?.textContent?.trim()).toBe('3');
+    });
+
+    it('mở popover thông báo, hiển thị danh sách và gọi markRead + điều hướng khi bấm item chưa đọc', () => {
+      const unreadItem: NotificationItemDTO = {
+        id: 'notif-1',
+        notification_type: 'SCHEDULE_APPLIED',
+        title: 'Lịch học chính thức đã được áp dụng',
+        content: 'Lộ trình TypeScript đã sẵn sàng.',
+        resource_url: '/schedule',
+        is_read: false,
+        read_at: null,
+        created_at: '2026-11-21T09:00:00Z',
+      };
+      mockNotificationService.items.set([unreadItem]);
+      mockNotificationService.unreadCount.set(1);
+
+      const el = fixture.nativeElement as HTMLElement;
+      const bellBtn = el.querySelector('[data-testid="notification-bell-btn"]') as HTMLButtonElement;
+      bellBtn.click();
+      fixture.detectChanges();
+
+      expect(el.querySelector('[data-testid="notification-popover"]')).toBeTruthy();
+      const itemBtn = el.querySelector('[data-testid="notification-item"]') as HTMLButtonElement;
+      expect(itemBtn.textContent).toContain('Lịch học chính thức đã được áp dụng');
+
+      itemBtn.click();
+      fixture.detectChanges();
+
+      expect(mockNotificationService.markRead).toHaveBeenCalledWith('notif-1');
+      expect(component.isNotificationsOpen()).toBe(false);
+      expect(router.navigateByUrl).toHaveBeenCalledWith('/schedule');
+    });
+
+    it('gọi markAllRead khi nhấn nút Đánh dấu tất cả đã đọc', () => {
+      mockNotificationService.unreadCount.set(2);
+      component.toggleNotifications();
+      fixture.detectChanges();
+
+      const el = fixture.nativeElement as HTMLElement;
+      const markAllBtn = el.querySelector('[data-testid="notification-mark-all-btn"]') as HTMLButtonElement;
+      markAllBtn.click();
+
+      expect(mockNotificationService.markAllRead).toHaveBeenCalledTimes(1);
+    });
+
+    it('hiển thị trạng thái lỗi và nút Thử lại khi tải thông báo thất bại', () => {
+      mockNotificationService.error.set('Không thể tải thông báo. Vui lòng thử lại.');
+      component.toggleNotifications();
+      fixture.detectChanges();
+
+      const el = fixture.nativeElement as HTMLElement;
+      expect(el.querySelector('[data-testid="notification-error"]')?.textContent).toContain(
+        'Không thể tải thông báo. Vui lòng thử lại.',
+      );
+
+      mockNotificationService.loadNotifications.mockClear();
+      const retryBtn = el.querySelector('[data-testid="notification-retry-btn"]') as HTMLButtonElement;
+      retryBtn.click();
+      expect(mockNotificationService.loadNotifications).toHaveBeenCalledTimes(1);
+    });
   });
 });

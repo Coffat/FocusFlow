@@ -1147,4 +1147,99 @@ describe('RoadmapService (WBS 6.3 AI Planning & Approval Store)', () => {
     );
     expect(service.clarificationQuestions().length).toBe(1);
   });
+
+  it('lưu active job vào sessionStorage khi khởi chạy SSE và xóa sạch khi hoàn tất hoặc lỗi (AUD-MED-07)', () => {
+    const sseSubject = new Subject<AiStreamChunkEvent<Record<string, unknown>>>();
+    const saveSpy = vi.spyOn(aiSseService, 'saveActiveJob');
+    const clearSpy = vi.spyOn(aiSseService, 'clearActiveJob');
+    vi.spyOn(aiSseService, 'observeJobStream').mockReturnValue(sseSubject.asObservable());
+
+    service.generateMilestonesWithAi(mockRoadmap.id);
+
+    const jobReq = httpTesting.expectOne(
+      API_ENDPOINTS.ROADMAPS.MILESTONES_GENERATE_JOBS(mockRoadmap.id)
+    );
+    const ticket: SseJobTicketResponse = {
+      job_id: 'job-f5-1',
+      reservation_id: 'res-f5-1',
+      roadmap_id: mockRoadmap.id,
+      job_type: 'MILESTONES',
+      status: 'RESERVED',
+      stream_url: '/api/v1/roadmaps/jobs/job-f5-1/stream',
+      jobId: 'job-f5-1',
+      reservationId: 'res-f5-1',
+      streamUrl: '/api/v1/roadmaps/jobs/job-f5-1/stream',
+    };
+    jobReq.flush(ticket);
+
+    expect(saveSpy).toHaveBeenCalledWith(mockRoadmap.id, 'MILESTONES', {
+      jobId: 'job-f5-1',
+      streamUrl: '/api/v1/roadmaps/jobs/job-f5-1/stream',
+    });
+
+    sseSubject.next({
+      eventType: 'completed',
+      stage: 'COMPLETED',
+      progress: 100,
+      payload: { milestones: [] },
+    });
+    sseSubject.complete();
+
+    expect(clearSpy).toHaveBeenCalledWith(mockRoadmap.id, 'MILESTONES');
+
+    // Completion triggers loadRoadmapDetail
+    const detailReq = httpTesting.expectOne(API_ENDPOINTS.ROADMAPS.DETAIL(mockRoadmap.id));
+    detailReq.flush({
+      ...mockRoadmap,
+      milestones: [],
+      official_schedule: null,
+      scheduled_tasks: [],
+      current_draft_proposal: null,
+    } satisfies RoadmapDetailResponse);
+  });
+
+  it('tự động nối lại luồng SSE đang chạy khi loadRoadmapDetail chạy lại sau F5 (AUD-MED-07)', () => {
+    const sseSubject = new Subject<AiStreamChunkEvent<Record<string, unknown>>>();
+    vi.spyOn(aiSseService, 'getActiveJob').mockImplementation((roadmapId, stage) =>
+      roadmapId === mockRoadmap.id && stage === 'PROPOSAL'
+        ? {
+            jobId: 'job-prop-f5',
+            streamUrl: '/api/v1/roadmaps/jobs/job-prop-f5/stream',
+            roadmapId,
+            stage,
+            startedAt: Date.now(),
+          }
+        : null
+    );
+    const clearSpy = vi.spyOn(aiSseService, 'clearActiveJob');
+    const observeSpy = vi
+      .spyOn(aiSseService, 'observeJobStream')
+      .mockReturnValue(sseSubject.asObservable());
+
+    service.loadRoadmapDetail(mockRoadmap.id);
+
+    const detailReq = httpTesting.expectOne(API_ENDPOINTS.ROADMAPS.DETAIL(mockRoadmap.id));
+    detailReq.flush({
+      ...mockRoadmap,
+      milestones: [],
+      official_schedule: null,
+      scheduled_tasks: [],
+      current_draft_proposal: null,
+    } satisfies RoadmapDetailResponse);
+
+    expect(observeSpy).toHaveBeenCalledWith('/api/v1/roadmaps/jobs/job-prop-f5/stream');
+    expect(service.sseProgress().isStreaming).toBe(true);
+
+    sseSubject.next({
+      eventType: 'failed',
+      stage: 'FAILED',
+      progress: 100,
+      error: 'AI failed',
+    });
+    sseSubject.complete();
+
+    expect(clearSpy).toHaveBeenCalledWith(mockRoadmap.id, 'PROPOSAL');
+    expect(service.sseProgress().isStreaming).toBe(false);
+    expect(service.sseProgress().stage).toBe('FAILED');
+  });
 });

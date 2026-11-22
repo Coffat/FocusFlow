@@ -140,6 +140,11 @@ class MockRefreshTokenRepository:
     ) -> None:
         pass
 
+    async def save_rotated_refresh_token(
+        self, token_hash: str, user_id: str, family_id: str, expires_days: int | None = None
+    ) -> bool:
+        return True
+
     async def get_refresh_token(self, token_hash: str) -> dict[str, Any] | None:
         return None
 

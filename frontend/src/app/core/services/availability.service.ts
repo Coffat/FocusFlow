@@ -3,6 +3,7 @@ import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, catchError, finalize, forkJoin, of, tap } from 'rxjs';
 import { API_ENDPOINTS } from '../constants/api-endpoints';
 import { CalendarIntegrationService } from './calendar-integration.service';
+import { EntityInvalidationService } from './entity-invalidation.service';
 import {
   AllowedWindowDTO,
   AvailabilityMode,
@@ -169,7 +170,10 @@ export function createDefaultSchedule(): WeeklyScheduleDTO {
 })
 export class AvailabilityService {
   private readonly http = inject(HttpClient);
+  private readonly entityInvalidation = inject(EntityInvalidationService);
   readonly calendarService = inject(CalendarIntegrationService);
+
+  private fetchSeq = 0;
 
   // Core signals
   readonly profile = signal<AvailabilityResponseDTO | null>(null);
@@ -597,6 +601,7 @@ export class AvailabilityService {
   }
 
   fetchAvailability(): Observable<AvailabilityResponseDTO | null> {
+    const seq = ++this.fetchSeq;
     this.loading.set(true);
     this.errorMessage.set(null);
 
@@ -604,6 +609,9 @@ export class AvailabilityService {
       .get<AvailabilityResponseDTO>(API_ENDPOINTS.SETTINGS.AVAILABILITY, { withCredentials: true })
       .pipe(
         tap(res => {
+          if (seq !== this.fetchSeq) {
+            return;
+          }
           this.profile.set(res);
           if (res.mode) {
             this.activeMode.set(res.mode);
@@ -623,12 +631,16 @@ export class AvailabilityService {
           }
         }),
         catchError((err: HttpErrorResponse) => {
-          const message = err.error?.message || err.message || 'Không thể tải cấu hình thời gian rảnh.';
-          this.errorMessage.set(message);
+          if (seq === this.fetchSeq) {
+            const message = err.error?.message || err.message || 'Không thể tải cấu hình thời gian rảnh.';
+            this.errorMessage.set(message);
+          }
           return of(null);
         }),
         finalize(() => {
-          this.loading.set(false);
+          if (seq === this.fetchSeq) {
+            this.loading.set(false);
+          }
         })
       );
   }
@@ -700,6 +712,7 @@ export class AvailabilityService {
             }
           }
           this.saveSuccessMessage.set('Đã lưu cấu hình thời gian rảnh thành công!');
+          this.entityInvalidation.invalidate('schedule', 'dashboard');
           callback?.(res);
         }),
         catchError((err: HttpErrorResponse) => {

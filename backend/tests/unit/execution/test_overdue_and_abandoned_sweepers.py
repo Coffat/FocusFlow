@@ -1,4 +1,4 @@
-from collections import namedtuple
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from uuid import UUID
@@ -6,9 +6,6 @@ from uuid import UUID
 import pytest
 from uuid6 import uuid7
 
-from src.evaluation.presentation.tasks import (
-    sweep_overdue_tasks_and_anti_loop as evaluation_sweep_overdue_tasks,
-)
 from src.execution.infrastructure.orm.session_orm import SessionTaskORM, StudySessionORM
 from src.execution.infrastructure.orm.task_orm import TaskORM
 from src.execution.presentation.tasks import (
@@ -17,20 +14,32 @@ from src.execution.presentation.tasks import (
     sweep_abandoned_study_sessions,
     sweep_overdue_tasks_and_anti_loop,
 )
+from src.planning.domain.exceptions.planning_exceptions import RescheduleBudgetExhaustedError
 from src.shared_kernel.infrastructure.outbox.models import OutboxEventORM
 
-RoadmapRow = namedtuple(
-    "RoadmapRow",
-    [
-        "id",
-        "user_id",
-        "title",
-        "weekly_reschedule_budget",
-        "weekly_reschedule_used",
-        "budget_week_start",
-    ],
-)
-UserRow = namedtuple("UserRow", ["id", "email"])
+
+@dataclass
+class RoadmapRow:
+    id: UUID
+    user_id: UUID
+    title: str
+    weekly_reschedule_budget: int
+    weekly_reschedule_used: int
+    budget_week_start: date | None
+    status: str = "ACTIVE"
+    target_date: date | None = None
+    updated_at: datetime | None = None
+
+
+@dataclass
+class UserRow:
+    id: UUID
+    email: str
+    full_name: str = "FocusFlow Learner"
+    role: str = "LEARNER"
+    tier: str = "FREE"
+    is_locked: bool = False
+    timezone: str = "UTC"
 
 
 class MockQueryResult:
@@ -80,6 +89,17 @@ class MockAsyncSession:
     def add(self, obj: Any) -> None:
         self.added.append(obj)
 
+    async def flush(self) -> None:
+        return None
+
+    async def get(self, model: Any, pk: Any) -> Any:
+        model_name = getattr(model, "__name__", "").upper()
+        if "USER" in model_name:
+            return self.users.get(pk)
+        if "ROADMAP" in model_name:
+            return self.roadmaps.get(pk)
+        return None
+
     async def execute(self, stmt: Any, params: dict[str, Any] | None = None) -> MockQueryResult:
         self.executed_statements.append((stmt, params))
         stmt_str = str(stmt).upper()
@@ -119,21 +139,24 @@ class MockAsyncSession:
                 return MockQueryResult([t for t in self.tasks if t.id in id_set])
             return MockQueryResult(self.tasks)
 
-        # 4. Roadmaps select
+        # 4. Official schedules select
+        if "OFFICIAL_SCHEDULES" in stmt_str and "SELECT" in stmt_str:
+            return MockQueryResult([])
+
+        # 5. Roadmaps select
         if "ROADMAPS" in stmt_str and "SELECT" in stmt_str:
-            if params and "rid" in params:
-                r = self.roadmaps.get(params["rid"])
+            compiled_params = stmt.compile().params if hasattr(stmt, "compile") else {}
+            id_filter = next(
+                (v for k, v in compiled_params.items() if "id" in k),
+                None,
+            )
+            if isinstance(id_filter, (list, tuple, set)):
+                id_set = set(id_filter)
+                return MockQueryResult([r for r in self.roadmaps.values() if r.id in id_set])
+            if isinstance(id_filter, UUID):
+                r = self.roadmaps.get(id_filter)
                 return MockQueryResult([r] if r else [])
             return MockQueryResult(list(self.roadmaps.values()))
-
-        # 5. Roadmaps update
-        if "ROADMAPS" in stmt_str and "UPDATE" in stmt_str:
-            if params and "rid" in params and "new_used" in params:
-                rid = params["rid"]
-                if rid in self.roadmaps:
-                    old = self.roadmaps[rid]
-                    self.roadmaps[rid] = old._replace(weekly_reschedule_used=params["new_used"])
-            return MockQueryResult([])
 
         # 6. Users select
         if "USERS" in stmt_str and "SELECT" in stmt_str:
@@ -459,6 +482,7 @@ async def test_sweep_overdue_tasks_anti_loop_and_notifications() -> None:
 
 @pytest.mark.asyncio
 async def test_deduct_overdue_reschedule_budget() -> None:
+    now = datetime(2026, 11, 18, 12, 0, 0, tzinfo=UTC)
     roadmap_id = uuid7()
     user_id = uuid7()
 
@@ -474,28 +498,16 @@ async def test_deduct_overdue_reschedule_budget() -> None:
     session = MockAsyncSession(roadmaps=[roadmap_row])
 
     # 1. Normal deduction: used 1 -> 2
-    new_used = await deduct_overdue_reschedule_budget(roadmap_id, session=session)  # type: ignore[arg-type]
+    new_used = await deduct_overdue_reschedule_budget(roadmap_id, session=session, now=now)  # type: ignore[arg-type]
     assert new_used == 2
 
     # 2. Another deduction: used 2 -> 3
-    new_used = await deduct_overdue_reschedule_budget(roadmap_id, session=session)  # type: ignore[arg-type]
+    new_used = await deduct_overdue_reschedule_budget(roadmap_id, session=session, now=now)  # type: ignore[arg-type]
     assert new_used == 3
 
-    # 3. Exhausted budget: used 3 >= 3 -> raises ValueError
-    with pytest.raises(ValueError, match="Weekly reschedule budget exhausted"):
-        await deduct_overdue_reschedule_budget(roadmap_id, session=session)  # type: ignore[arg-type]
-
-
-@pytest.mark.asyncio
-async def test_evaluation_sweeper_delegation() -> None:
-    now = datetime(2026, 11, 18, 12, 0, 0, tzinfo=UTC)
-    session = MockAsyncSession(tasks=[])
-
-    def session_factory() -> MockAsyncSession:
-        return session
-
-    res = await evaluation_sweep_overdue_tasks(session_factory=session_factory, now=now)
-    assert res == 0
+    # 3. Exhausted budget: used 3 >= 3 -> raises RescheduleBudgetExhaustedError
+    with pytest.raises(RescheduleBudgetExhaustedError):
+        await deduct_overdue_reschedule_budget(roadmap_id, session=session, now=now)  # type: ignore[arg-type]
 
 
 @pytest.mark.asyncio
@@ -512,19 +524,16 @@ async def test_default_notification_service_handles_missing_email() -> None:
 
 @pytest.mark.asyncio
 async def test_no_duplicate_taskiq_cron_registrations() -> None:
-    from src.evaluation.presentation.tasks import (
-        sweep_overdue_tasks_and_anti_loop as evaluation_task,
-    )
+    import src.evaluation.presentation.tasks as evaluation_tasks_mod
     from src.execution.presentation.tasks import (
         sweep_overdue_tasks_and_anti_loop as execution_task,
     )
 
     exec_labels = getattr(execution_task, "labels", {})
-    eval_labels = getattr(evaluation_task, "labels", {})
 
     # Execution sweeper holds the single scheduled daily cron at 17:05 UTC (00:05 UTC+7)
     assert "schedule" in exec_labels
     assert exec_labels["schedule"] == [{"cron": "5 17 * * *"}]
 
-    # Evaluation sweeper delegates without duplicate cron schedule registration
-    assert "schedule" not in eval_labels or eval_labels["schedule"] == []
+    # Duplicate delegating task removed from evaluation module (AUD-LOW-06)
+    assert not hasattr(evaluation_tasks_mod, "sweep_overdue_tasks_and_anti_loop")

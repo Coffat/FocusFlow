@@ -1,13 +1,13 @@
 import logging
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
-from typing import Any, cast
+from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.account.public_api import create_calendar_sync_facade
+from src.account.public_api import create_user_query_port
 from src.execution.infrastructure.orm.session_orm import SessionTaskORM, StudySessionORM
 from src.execution.infrastructure.orm.task_orm import TaskORM
 from src.execution.public_api import (
@@ -15,7 +15,10 @@ from src.execution.public_api import (
     OverdueTaskAlertEvent,
     StudySessionAbandonedEvent,
 )
-from src.planning.public_api import TaskStalledThresholdReachedEvent
+from src.planning.public_api import (
+    TaskStalledThresholdReachedEvent,
+    create_planning_execution_bridge,
+)
 from src.shared_kernel.infrastructure.database.session import async_session_factory
 from src.shared_kernel.infrastructure.outbox.models import OutboxEventORM
 from src.shared_kernel.infrastructure.worker.broker import broker
@@ -197,31 +200,10 @@ async def sweep_overdue_tasks_and_anti_loop(
                 return 0
 
             # INVARIANT: NEVER mutate t.scheduled_date!
-            # Group tasks by roadmap to check roadmap metadata and user mapping
+            # Group tasks by roadmap to check roadmap metadata and user mapping via Planning port.
             roadmap_ids = list({t.roadmap_id for t in overdue_tasks})
-            roadmaps_by_id: dict[UUID, Any] = {}
-            try:
-                roadmap_rows = await cast(Any, session).execute(
-                    text(
-                        "SELECT id, user_id, title, weekly_reschedule_budget, weekly_reschedule_used, budget_week_start "
-                        "FROM roadmaps WHERE id = ANY(:rids)"
-                    ),
-                    {"rids": roadmap_ids},
-                )
-                roadmaps_by_id = {row.id: row for row in roadmap_rows.all()}
-            except Exception:
-                # Fallback for sqlite / non-postgres in tests
-                try:
-                    roadmap_rows = await cast(Any, session).execute(
-                        text(
-                            "SELECT id, user_id, title, weekly_reschedule_budget, weekly_reschedule_used, budget_week_start FROM roadmaps"
-                        )
-                    )
-                    roadmaps_by_id = {
-                        row.id: row for row in roadmap_rows.all() if row.id in roadmap_ids
-                    }
-                except Exception:
-                    pass
+            planning_bridge = create_planning_execution_bridge(session)
+            roadmaps_by_id = await planning_bridge.get_roadmaps_context_by_ids(roadmap_ids)
 
             # 1. Anti-loop circuit-breaker:
             # When reschedule_count >= 3, derive or mark /isStalled = true
@@ -254,17 +236,13 @@ async def sweep_overdue_tasks_and_anti_loop(
 
             # 2. Reset weekly reschedule budget if new week (SRS v1.3 UC-25 Reset Budget)
             current_monday = effective_today - timedelta(days=effective_today.weekday())
-            try:
-                await cast(Any, session).execute(
-                    text(
-                        "UPDATE roadmaps "
-                        "SET weekly_reschedule_used = 0, budget_week_start = :monday "
-                        "WHERE id = ANY(:rids) AND (budget_week_start IS NULL OR budget_week_start < :monday)"
-                    ),
-                    {"rids": roadmap_ids, "monday": current_monday},
-                )
-            except Exception as exc:
-                logger.warning("Could not reset weekly reschedule budget: %s", exc)
+            reset_count = await planning_bridge.reset_weekly_reschedule_budgets(
+                roadmap_ids=roadmap_ids,
+                current_monday=current_monday,
+                now=current_time,
+            )
+            if reset_count > 0:
+                roadmaps_by_id = await planning_bridge.get_roadmaps_context_by_ids(roadmap_ids)
 
             # 3. Dispatch overdue alert notification via Transactional Outbox (UC-25, BUSR-23)
             # Notification deduplication: check if an overdue alert for this user and date has already been emitted today
@@ -277,24 +255,9 @@ async def sweep_overdue_tasks_and_anti_loop(
             user_ids = list(user_tasks.keys())
             users_by_id: dict[UUID, str] = {}
             if user_ids:
-                try:
-                    user_rows = await cast(Any, session).execute(
-                        text("SELECT id, email FROM users WHERE id = ANY(:uids)"),
-                        {"uids": user_ids},
-                    )
-                    users_by_id = {row.id: (row.email or "") for row in user_rows.all()}
-                except Exception:
-                    try:
-                        user_rows = await cast(Any, session).execute(
-                            text("SELECT id, email FROM users")
-                        )
-                        users_by_id = {
-                            row.id: (row.email or "")
-                            for row in user_rows.all()
-                            if row.id in user_ids
-                        }
-                    except Exception:
-                        pass
+                user_query = create_user_query_port(session)
+                user_snapshots = await user_query.get_users_by_ids(user_ids)
+                users_by_id = {uid: (snap.email or "") for uid, snap in user_snapshots.items()}
 
             today_start = datetime(
                 effective_today.year,
@@ -306,7 +269,7 @@ async def sweep_overdue_tasks_and_anti_loop(
                 tzinfo=UTC,
             )
             already_notified_user_ids: set[UUID] = set()
-            try:
+            if user_ids:
                 alert_rows = await session.execute(
                     select(OutboxEventORM.aggregate_id).where(
                         OutboxEventORM.aggregate_type == "User",
@@ -323,26 +286,6 @@ async def sweep_overdue_tasks_and_anti_loop(
                     )
                     if isinstance(uid, UUID):
                         already_notified_user_ids.add(uid)
-            except Exception:
-                try:
-                    alert_rows = await cast(Any, session).execute(
-                        text(
-                            "SELECT aggregate_id FROM outbox_events "
-                            "WHERE aggregate_type = 'User' AND event_type = 'OverdueTaskAlertEvent' "
-                            "AND created_at >= :today_start"
-                        ),
-                        {"today_start": today_start},
-                    )
-                    for row in alert_rows.all():
-                        uid = (
-                            row[0]
-                            if isinstance(row, (tuple, list))
-                            else getattr(row, "aggregate_id", row)
-                        )
-                        if isinstance(uid, UUID):
-                            already_notified_user_ids.add(uid)
-                except Exception:
-                    pass
 
             for user_id, tasks in user_tasks.items():
                 if user_id in already_notified_user_ids:
@@ -399,47 +342,15 @@ async def deduct_overdue_reschedule_budget(
     roadmap_id: UUID,
     *,
     session: AsyncSession,
+    now: datetime | None = None,
 ) -> int:
     """Deduct 1 from weekly_reschedule_budget when overdue reschedule is initiated (UC-23, ADR-010).
 
-    Returns the new weekly_reschedule_used count.
-    Raises ValueError if weekly reschedule budget is exhausted.
+    Delegates to PlanningExecutionBridgePort to preserve bounded context isolation.
     """
-    row = await cast(Any, session).execute(
-        text(
-            "SELECT weekly_reschedule_budget, weekly_reschedule_used FROM roadmaps WHERE id = :rid"
-        ),
-        {"rid": roadmap_id},
+    current_time = now or datetime.now(UTC)
+    bridge = create_planning_execution_bridge(session)
+    return await bridge.deduct_overdue_reschedule_budget(
+        roadmap_id=roadmap_id,
+        now=current_time,
     )
-    roadmap = row.one_or_none()
-    if roadmap is None:
-        raise ValueError(f"Roadmap {roadmap_id} not found")
-
-    budget = int(roadmap.weekly_reschedule_budget)
-    used = int(roadmap.weekly_reschedule_used)
-    if used >= budget:
-        raise ValueError(f"Weekly reschedule budget exhausted ({used}/{budget})")
-
-    new_used = used + 1
-    await cast(Any, session).execute(
-        text("UPDATE roadmaps SET weekly_reschedule_used = :new_used WHERE id = :rid"),
-        {"rid": roadmap_id, "new_used": new_used},
-    )
-    return new_used
-
-
-@broker.task
-async def sync_external_google_calendar(user_id: str) -> None:
-    """Synchronize OfficialSchedule with Google Calendar OAuth2 (UC-13)."""
-    return None
-
-
-@broker.task
-async def sync_schedule_blocks_to_google(schedule_id: str, user_id: str) -> None:
-    """Outbound sync worker: syncs ScheduleBlock entities to Google Calendar (UC-17)."""
-    async with async_session_factory() as session:
-        facade = create_calendar_sync_facade(session)
-        await facade.sync_schedule_blocks_to_google(
-            schedule_id=UUID(schedule_id),
-            user_id=UUID(user_id),
-        )

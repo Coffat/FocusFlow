@@ -36,3 +36,12 @@ class UserRepositoryPort(Protocol):
     async def create_or_init_quota(self, user_id: UUID, tier: str = "FREE") -> Any:
         """Create and initialize default AI quota record for user."""
         ...
+
+    async def upgrade_user_to_premium(
+        self,
+        user_id: UUID,
+        *,
+        premium_monthly_limit: int = 300,
+    ) -> None:
+        """Atomically upgrade user's tier to PREMIUM and raise AI quota monthly_limit."""
+        ...

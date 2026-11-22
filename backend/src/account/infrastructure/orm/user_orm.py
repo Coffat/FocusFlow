@@ -54,6 +54,9 @@ class UserORM(Base):
         onupdate=lambda: datetime.now(UTC),
     )
 
+    def is_admin(self) -> bool:
+        return self.role == "ADMIN"
+
 
 class AIQuotaORM(Base):
     __tablename__ = "ai_quotas"

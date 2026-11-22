@@ -57,4 +57,28 @@ describe('AdaptationModalDialogComponent', () => {
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     expect(closeSpy).toHaveBeenCalled();
   });
+
+  it('không render dữ liệu giả định mặc định như Master FastAPI, +2 ngày hay 30/11/2026', () => {
+    const compiled = fixture.nativeElement as HTMLElement;
+    const text = compiled.textContent ?? '';
+    expect(text).not.toContain('Master FastAPI');
+    expect(text).not.toContain('+2 ngày');
+    expect(text).not.toContain('30/11/2026');
+    expect(text).not.toContain('02/12/2026');
+  });
+
+  it('hiển thị banner lỗi khi có errorMessage và vô hiệu hóa nút xác nhận khi submitting', () => {
+    fixture.componentRef.setInput('errorMessage', 'Không thể tái tối ưu lịch học.');
+    fixture.componentRef.setInput('submitting', true);
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    const errorBanner = compiled.querySelector('[data-testid="adaptation-error-banner"]');
+    const confirmBtn = compiled.querySelector(
+      '[data-testid="adaptation-confirm-btn"]'
+    ) as HTMLButtonElement;
+
+    expect(errorBanner?.textContent).toContain('Không thể tái tối ưu lịch học.');
+    expect(confirmBtn.disabled).toBe(true);
+  });
 });

@@ -1,5 +1,4 @@
-import base64
-import json
+from datetime import UTC, datetime
 from uuid import UUID
 
 import httpx
@@ -11,11 +10,13 @@ from src.account.application.dtos.calendar import (
 from src.account.application.ports.calendar_connection_repository_port import (
     CalendarConnectionRepositoryPort,
 )
+from src.account.application.ports.oauth_state_store_port import OAuthStateStorePort
 from src.account.domain.models.calendar_connection import CalendarConnection
 from src.account.domain.ports.calendar_provider_port import (
     CalendarAuthError,
     CalendarProviderPort,
 )
+from src.account.domain.services.oauth_state import verify_signed_oauth_state
 from src.shared_kernel.application.uow import AsyncUnitOfWork
 from src.shared_kernel.config import Settings, get_settings
 from src.shared_kernel.infrastructure.security.encryption import (
@@ -33,13 +34,17 @@ class HandleGoogleCalendarOAuthCallbackUseCase:
         self,
         repository: CalendarConnectionRepositoryPort,
         calendar_provider: CalendarProviderPort,
+        state_store: OAuthStateStorePort,
+        secret_key: str | None = None,
         settings: Settings | None = None,
         http_client: httpx.AsyncClient | None = None,
         uow: AsyncUnitOfWork | None = None,
     ) -> None:
         self._repository = repository
         self._calendar_provider = calendar_provider
+        self._state_store = state_store
         self._settings = settings or get_settings()
+        self._secret_key = secret_key if secret_key is not None else self._settings.secret_key
         self._http_client = http_client
         self._uow = uow
 
@@ -48,20 +53,24 @@ class HandleGoogleCalendarOAuthCallbackUseCase:
         user_id: UUID,
         request: CalendarOAuthCallbackRequestDTO,
     ) -> CalendarConnectionResponseDTO:
-        # Decode and verify CSRF state
-        sync_type = "two_way"
-        effective_redirect_uri = self._settings.google_redirect_uri
-        if request.state:
-            try:
-                decoded_bytes = base64.urlsafe_b64decode(request.state.encode("utf-8"))
-                state_data = json.loads(decoded_bytes.decode("utf-8"))
-                state_user_id = state_data.get("user_id")
-                if state_user_id and str(user_id) != state_user_id:
-                    raise CalendarAuthError("State mismatch: CSRF or user discrepancy detected.")
-                sync_type = state_data.get("sync_type", "two_way")
-                effective_redirect_uri = state_data.get("redirect_uri") or effective_redirect_uri
-            except (ValueError, json.JSONDecodeError, UnicodeDecodeError):
-                pass
+        # Fail closed: require valid HMAC-signed, unexpired, user-bound, one-time OAuth state.
+        if not request.state:
+            raise CalendarAuthError("Missing OAuth state parameter.")
+
+        verified_state = verify_signed_oauth_state(
+            state=request.state,
+            secret_key=self._secret_key,
+            now=datetime.now(UTC),
+        )
+        if verified_state.user_id != user_id:
+            raise CalendarAuthError("State mismatch: CSRF or user discrepancy detected.")
+
+        stored_user_id = await self._state_store.consume_nonce(verified_state.nonce)
+        if stored_user_id is None or stored_user_id != user_id:
+            raise CalendarAuthError("OAuth state nonce is invalid, expired, or already used.")
+
+        sync_type = verified_state.sync_type
+        effective_redirect_uri = verified_state.redirect_uri or self._settings.google_redirect_uri
 
         # Exchange authorization code for refresh token
         provider_name = self._settings.calendar_provider.strip().lower()
@@ -77,7 +86,6 @@ class HandleGoogleCalendarOAuthCallbackUseCase:
                 "CALENDAR_OAUTH_NOT_CONFIGURED: Missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET."
             )
 
-        client = self._http_client or httpx.AsyncClient(timeout=15.0)
         token_payload = {
             "client_id": self._settings.google_client_id,
             "client_secret": self._settings.google_client_secret,
@@ -86,7 +94,11 @@ class HandleGoogleCalendarOAuthCallbackUseCase:
             "redirect_uri": effective_redirect_uri,
         }
         try:
-            resp = await client.post(GOOGLE_TOKEN_URL, data=token_payload)
+            if self._http_client is not None:
+                resp = await self._http_client.post(GOOGLE_TOKEN_URL, data=token_payload)
+            else:
+                async with httpx.AsyncClient(timeout=15.0) as client:
+                    resp = await client.post(GOOGLE_TOKEN_URL, data=token_payload)
             if resp.is_error:
                 raise CalendarAuthError(
                     f"OAuth code exchange failed ({resp.status_code}): {resp.text}"

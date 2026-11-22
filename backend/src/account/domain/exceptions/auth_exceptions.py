@@ -51,3 +51,13 @@ class InvalidOtpError(AuthError):
 
     def __init__(self, message: str = "Invalid or expired verification code."):
         super().__init__(message)
+
+
+class SessionStoreUnavailableError(AuthError):
+    """Raised when the backing session store (Redis) is unreachable or fails during token rotation."""
+
+    def __init__(
+        self,
+        message: str = "Authentication session store is temporarily unavailable.",
+    ):
+        super().__init__(message)

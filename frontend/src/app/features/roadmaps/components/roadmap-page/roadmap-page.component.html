@@ -2068,9 +2068,32 @@
                             {{ group.milestone.title }}
                           </h4>
                         </div>
-                        <span class="system-badge">
-                          {{ group.tasks.length }} nhiệm vụ
-                        </span>
+                        <div class="flex flex-wrap items-center gap-2">
+                          @if (proveModeService.proofByMilestone()[group.milestone.id]; as proofSummary) {
+                            <span
+                              appBadge
+                              [attr.data-testid]="'milestone-proof-badge-' + group.milestone.id"
+                              [variant]="proofSummary.status === 'PASSED' ? 'success' : 'secondary'"
+                            >
+                              @if (proofSummary.score !== null) {
+                                {{ proofSummary.status }} &bull; {{ proofSummary.score }}/100
+                              } @else {
+                                {{ proofSummary.status }}
+                              }
+                            </span>
+                          }
+                          <button
+                            type="button"
+                            data-testid="open-prove-mode-btn"
+                            (click)="openProveMode(group.milestone.id, group.milestone.title)"
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border border-[#246B4A]/30 bg-emerald-50/70 text-[#246B4A] hover:bg-[#246B4A] hover:text-white transition-colors cursor-pointer"
+                          >
+                            <span>Chứng minh kiến thức</span>
+                          </button>
+                          <span class="system-badge">
+                            {{ group.tasks.length }} nhiệm vụ
+                          </span>
+                        </div>
                       </div>
 
                       <div class="space-y-2 mt-2">
@@ -2242,4 +2265,12 @@
       </div>
     </div>
   }
+
+  <!-- Prove Mode Modal (UC-20 / FR-REPORT-003) -->
+  <app-prove-mode-dialog
+    [open]="proveDialogOpen()"
+    [milestoneId]="proveMilestoneId()"
+    [milestoneTitle]="proveMilestoneTitle()"
+    (closeModal)="closeProveMode()"
+  />
 </div>

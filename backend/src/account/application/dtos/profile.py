@@ -1,5 +1,6 @@
 import re
 import zoneinfo
+from datetime import datetime
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -16,6 +17,17 @@ class UpdateProfileRequestDTO(BaseModel):
         return v
 
 
+class LearnerSrlProfileDTO(BaseModel):
+    total_completed_sessions: int = 0
+    is_cold_start: bool = True
+    min_sessions_required: int = 3
+    optimal_focus_duration_mins: int | None = None
+    estimation_bias_factor: float | None = None
+    weekly_completion_rate: float = 0.0
+    peak_productivity_slots: list[str] = Field(default_factory=list)
+    last_aggregated_at: datetime | None = None
+
+
 class ProfileResponseDTO(BaseModel):
     id: str
     email: str
@@ -24,6 +36,7 @@ class ProfileResponseDTO(BaseModel):
     role: str
     tier: str
     created_at: str
+    srl_profile: LearnerSrlProfileDTO | None = None
 
 
 class AIQuotaResponseDTO(BaseModel):

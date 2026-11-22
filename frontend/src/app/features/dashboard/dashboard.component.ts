@@ -8,6 +8,8 @@ import {
   computed,
 } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
+import { finalize } from 'rxjs';
+import { MessageService } from 'primeng/api';
 import {
   LucideAngularModule,
   LUCIDE_ICONS,
@@ -17,6 +19,7 @@ import {
 import { AuthService } from '../../core/services/auth.service';
 import { AvailabilityService } from '../../core/services/availability.service';
 import { TranslationService } from '../../core/services/translation.service';
+import { parseHttpErrorMessage } from '../../core/utils/error-parser.util';
 import { DashboardService } from './services/dashboard.service';
 import { DashboardDataState } from './models/dashboard.model';
 import { DashboardKpiGridComponent } from './ui/dashboard-kpi-grid.component';
@@ -28,8 +31,12 @@ import { DashboardTodayQueueComponent } from './ui/dashboard-today-queue.compone
 import { DashboardAiInsightsComponent } from './ui/dashboard-ai-insights.component';
 import { StarterTemplate } from '../../shared/components/blueprint-empty-state/blueprint-empty-state.component';
 import { PlanningStep, PriorKnowledgeLevel } from '../roadmaps/models/roadmap.model';
+import { RoadmapService } from '../roadmaps/services/roadmap.service';
 import { RoadmapWizardHostComponent } from '../roadmaps/components/dialogs/roadmap-wizard-host/roadmap-wizard-host.component';
-import { AdaptationModalDialogComponent } from '../roadmaps/components/dialogs/adaptation-modal-dialog/adaptation-modal-dialog.component';
+import {
+  AdaptationConfirmEvent,
+  AdaptationModalDialogComponent,
+} from '../roadmaps/components/dialogs/adaptation-modal-dialog/adaptation-modal-dialog.component';
 import { PrerequisiteAvailabilityDialogComponent } from '../roadmaps/components/dialogs/prerequisite-availability-dialog/prerequisite-availability-dialog.component';
 
 @Component({
@@ -63,9 +70,11 @@ export class DashboardComponent implements OnInit {
   readonly authService = inject(AuthService);
   readonly dashboardService = inject(DashboardService);
   readonly availabilityService = inject(AvailabilityService);
+  readonly roadmapService = inject(RoadmapService);
   readonly translationService = inject(TranslationService);
   readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
+  private readonly messageService = inject(MessageService, { optional: true });
 
   readonly currentUser = this.authService.currentUser;
   readonly summary = this.dashboardService.summary;
@@ -89,6 +98,22 @@ export class DashboardComponent implements OnInit {
 
   // SCR-08 Adaptation Modal Dialog State
   readonly adaptationModalOpen = signal<boolean>(false);
+  readonly adaptationSubmitting = signal<boolean>(false);
+  readonly adaptationError = signal<string | null>(null);
+
+  readonly adaptationContext = computed(() => {
+    const currentSummary = this.summary();
+    const primaryRoadmap = currentSummary.activeRoadmaps[0] ?? null;
+    const rawDeadline = primaryRoadmap?.deadline ?? '';
+    const currentDeadline =
+      rawDeadline && rawDeadline !== 'Chưa xác định' ? rawDeadline : '';
+    return {
+      roadmapId: primaryRoadmap?.id ?? null,
+      roadmapTitle: primaryRoadmap?.title ?? '',
+      missedSessionsCount: currentSummary.adaptationStatus.affectedTasksCount ?? 0,
+      currentDeadline,
+    };
+  });
 
   ngOnInit(): void {
     if (!this.currentUser()?.email) {
@@ -145,6 +170,15 @@ export class DashboardComponent implements OnInit {
     this.wizardOpen.set(false);
   }
 
+  onRoadmapApplied(_roadmapId: string): void {
+    this.wizardOpen.set(false);
+    const state = this.currentState();
+    if (state === 'new-user' || state === 'unscheduled') {
+      this.dashboardService.setState('normal');
+    }
+    this.dashboardService.loadSummary().subscribe();
+  }
+
   onSelectStarterTemplate(tpl: StarterTemplate): void {
     this.checkAvailabilityAndProceed(() => {
       this.wizardInitialTitle.set(tpl.title);
@@ -156,11 +190,58 @@ export class DashboardComponent implements OnInit {
   }
 
   openAdaptationModal(): void {
+    this.adaptationError.set(null);
     this.adaptationModalOpen.set(true);
   }
 
   closeAdaptationModal(): void {
+    if (this.adaptationSubmitting()) {
+      return;
+    }
     this.adaptationModalOpen.set(false);
+    this.adaptationError.set(null);
+  }
+
+  onConfirmAdaptation(event: AdaptationConfirmEvent): void {
+    const roadmapId = event.roadmapId ?? this.adaptationContext().roadmapId;
+    if (!roadmapId) {
+      this.adaptationError.set(
+        'Chưa tìm thấy lộ trình học tập đang hoạt động để tạo bản nháp tái tối ưu lịch trình.'
+      );
+      return;
+    }
+
+    this.adaptationSubmitting.set(true);
+    this.adaptationError.set(null);
+
+    this.roadmapService
+      .reoptimizeSchedule(roadmapId)
+      .pipe(
+        finalize(() => {
+          this.adaptationSubmitting.set(false);
+        })
+      )
+      .subscribe({
+        next: () => {
+          this.adaptationModalOpen.set(false);
+          this.adaptationError.set(null);
+          this.messageService?.add({
+            severity: 'info',
+            summary: 'Đã tạo bản nháp đề xuất (DRAFT)',
+            detail:
+              'Bản nháp tái tối ưu lịch học đã sẵn sàng để bạn xem xét và xác nhận trước khi áp dụng.',
+          });
+          this.router.navigate(['/roadmaps', roadmapId]);
+        },
+        error: (err: unknown) => {
+          this.adaptationError.set(
+            parseHttpErrorMessage(
+              err,
+              'Không thể tạo bản nháp tái tối ưu lịch học. Vui lòng thử lại.'
+            )
+          );
+        },
+      });
   }
 
   signOut(): void {

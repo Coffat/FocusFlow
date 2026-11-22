@@ -43,10 +43,35 @@
         </h2>
 
         <p class="text-xs sm:text-sm text-[#555555] leading-relaxed">
-          Lộ trình <strong class="text-[#111111]">{{ roadmapTitle() }}</strong> đang có
-          <strong class="font-mono text-[#B45309]">{{ missedSessionsCount() }} phiên học</strong> ({{ missedMinutes() }} phút) cần tái phân bổ. Hãy chọn chiến lược thích ứng phù hợp với nhịp sinh học của bạn.
+          @if (roadmapTitle()) {
+            Lộ trình <strong class="text-[#111111]">{{ roadmapTitle() }}</strong>
+          } @else {
+            Lộ trình học tập hiện tại
+          }
+          @if (missedSessionsCount() > 0) {
+            đang có
+            <strong class="font-mono text-[#B45309]">{{ missedSessionsCount() }} phiên học</strong>
+            @if (missedMinutes() > 0) {
+              <span>({{ missedMinutes() }} phút)</span>
+            }
+            cần tái phân bổ.
+          } @else {
+            đã sẵn sàng tạo bản nháp tái tối ưu lịch học để bạn xem xét trước khi áp dụng.
+          }
+          Hãy chọn chiến lược thích ứng phù hợp với nhịp sinh học của bạn.
         </p>
       </div>
+
+      @if (errorMessage(); as errMsg) {
+        <div
+          role="alert"
+          aria-live="assertive"
+          data-testid="adaptation-error-banner"
+          class="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-xs sm:text-sm text-red-700"
+        >
+          {{ errMsg }}
+        </div>
+      }
 
       <!-- 3 STRATEGY RADIO CARDS -->
       <div class="mt-6 space-y-3" role="radiogroup" aria-label="Chiến lược tái cân bằng lộ trình">
@@ -81,7 +106,7 @@
             <div class="flex-1 space-y-2">
               <div class="flex flex-wrap items-center justify-between gap-2">
                 <span class="text-sm font-bold text-[#111111]">
-                  Phương án 1: Dời lịch Domino (+2 ngày)
+                  Phương án 1: Dời lịch Domino
                 </span>
                 <span class="px-2.5 py-0.5 rounded-full bg-[#EBF3EE] text-[#246B4A] border border-[#246B4A]/30 text-[10px] font-mono font-bold uppercase">
                   Khuyên dùng
@@ -89,18 +114,27 @@
               </div>
 
               <p class="text-xs text-[#555555] leading-relaxed">
-                Dời toàn bộ các cột mốc tiếp theo lùi lại 2 ngày, giữ nguyên hạn mức học tập mỗi ngày, bảo vệ nhịp độ chống kiệt sức và không tăng <code class="font-mono text-[11px]">reschedule_count</code>.
+                Tịnh tiến các phiên học tiếp theo theo khung giờ rảnh thực tế, giữ nguyên hạn mức học tập mỗi ngày, bảo vệ nhịp độ chống kiệt sức và không tăng <code class="font-mono text-[11px]">reschedule_count</code>.
               </p>
 
-              <div class="p-2.5 rounded-lg bg-[#FFFFFF] border border-[#DCDCDC] flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
-                <span class="text-[#8E8E8A]">
-                  Hạn cũ: <span class="line-through">{{ currentDeadline() }}</span>
-                </span>
-                <span class="text-[#246B4A] font-semibold">── tịnh tiến +2 ngày ──→</span>
-                <span class="font-bold text-[#246B4A]">
-                  Hạn mới: {{ shiftedDeadline() }}
-                </span>
-              </div>
+              @if (currentDeadline() && shiftedDeadline()) {
+                <div class="p-2.5 rounded-lg bg-[#FFFFFF] border border-[#DCDCDC] flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+                  <span class="text-[#8E8E8A]">
+                    Hạn cũ: <span class="line-through">{{ currentDeadline() }}</span>
+                  </span>
+                  <span class="text-[#246B4A] font-semibold">── tịnh tiến theo lịch rảnh ──→</span>
+                  <span class="font-bold text-[#246B4A]">
+                    Hạn mới: {{ shiftedDeadline() }}
+                  </span>
+                </div>
+              } @else if (currentDeadline()) {
+                <div class="p-2.5 rounded-lg bg-[#FFFFFF] border border-[#DCDCDC] flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+                  <span class="text-[#555555]">
+                    Hạn hiện tại: <strong class="text-[#111111]">{{ currentDeadline() }}</strong>
+                  </span>
+                  <span class="text-[#246B4A] font-medium">Bản nháp sẽ tính lại mốc phù hợp</span>
+                </div>
+              }
             </div>
           </div>
         </button>
@@ -141,7 +175,11 @@
                 <span class="text-[10px] font-mono text-[#555555]">Giữ nguyên Deadline</span>
               </div>
               <p class="text-xs text-[#555555] leading-relaxed">
-                Giữ nguyên ngày kết thúc dự kiến ({{ currentDeadline() }}) bằng cách phân bổ thêm các phiên học bù vào khung giờ trống Thứ Bảy &amp; Chủ Nhật tuần này.
+                @if (currentDeadline()) {
+                  Giữ nguyên ngày kết thúc dự kiến ({{ currentDeadline() }}) bằng cách phân bổ thêm các phiên học bù vào khung giờ trống Thứ Bảy &amp; Chủ Nhật tuần này.
+                } @else {
+                  Phân bổ thêm các phiên học bù vào khung giờ trống Thứ Bảy &amp; Chủ Nhật tuần này để giữ nhịp tiến độ mục tiêu.
+                }
               </p>
             </div>
           </div>
@@ -195,8 +233,9 @@
         <button
           type="button"
           (click)="onClose()"
+          [disabled]="submitting()"
           data-testid="adaptation-cancel-btn"
-          class="w-full sm:w-auto px-4 py-2 rounded-full text-xs font-medium text-[#555555] hover:text-[#111111] hover:bg-[#F3F3F1] transition-colors cursor-pointer"
+          class="w-full sm:w-auto px-4 py-2 rounded-full text-xs font-medium text-[#555555] hover:text-[#111111] hover:bg-[#F3F3F1] disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
         >
           Để sau
         </button>
@@ -204,11 +243,16 @@
         <button
           type="button"
           (click)="onConfirm()"
+          [disabled]="submitting()"
           data-testid="adaptation-confirm-btn"
-          class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-full bg-[#246B4A] hover:bg-[#1B5338] text-white text-xs sm:text-sm font-semibold transition-colors cursor-pointer"
+          class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-full bg-[#246B4A] hover:bg-[#1B5338] disabled:opacity-60 disabled:cursor-not-allowed text-white text-xs sm:text-sm font-semibold transition-colors cursor-pointer"
         >
-          <span>Áp dụng lộ trình mới</span>
-          <span class="font-mono text-xs" aria-hidden="true">→</span>
+          @if (submitting()) {
+            <span>Đang tạo bản nháp đề xuất...</span>
+          } @else {
+            <span>Tạo bản nháp đề xuất</span>
+            <span class="font-mono text-xs" aria-hidden="true">→</span>
+          }
         </button>
       </div>
     </div>

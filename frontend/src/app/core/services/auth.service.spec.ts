@@ -5,7 +5,7 @@ import { Router } from '@angular/router';
 import { AuthService, User } from './auth.service';
 import { AUTH_ENDPOINTS } from '../../constant/api.constant';
 
-describe('AuthService (Angular 21 Signals & State Reactivity)', () => {
+describe('AuthService (Angular 21 Signals & HttpOnly Cookie Auth)', () => {
   let service: AuthService;
   let httpTesting: HttpTestingController;
   let mockRouter: { url: string; navigate: ReturnType<typeof vi.fn> };
@@ -18,6 +18,20 @@ describe('AuthService (Angular 21 Signals & State Reactivity)', () => {
     role: 'learner',
     tier: 'free',
     createdAt: '2026-11-01T00:00:00Z'
+  };
+
+  const mockBackendAuthResponse = {
+    access_token: 'server-issued-jwt',
+    token_type: 'bearer',
+    expires_in: 900,
+    user: {
+      id: 'user-login-1',
+      email: 'test@focusflow.io',
+      full_name: 'Logged In User',
+      role: 'learner',
+      tier: 'free',
+      created_at: '2026-11-01T00:00:00Z'
+    }
   };
 
   beforeAll(() => {
@@ -72,16 +86,16 @@ describe('AuthService (Angular 21 Signals & State Reactivity)', () => {
     expect(service.isLoading()).toBe(false);
   });
 
-  it('setUser() cập nhật signal currentUser và kích hoạt computed isAuthenticated chuyển sang true', () => {
-    service.setUser(mockUser, 'test-access-token');
+  it('setUser() cập nhật signal currentUser, kích hoạt isAuthenticated và KHÔNG lưu access_token vào localStorage', () => {
+    service.setUser(mockUser);
 
     expect(service.currentUser()).toEqual(mockUser);
     expect(service.isAuthenticated()).toBe(true);
-    expect(localStorage.getItem('access_token')).toBe('test-access-token');
+    expect(localStorage.getItem('access_token')).toBeNull();
   });
 
-  it('clearUser() đưa currentUser về null và isAuthenticated chuyển sang false, xoá token khỏi localStorage', () => {
-    service.setUser(mockUser, 'test-access-token');
+  it('clearUser() đưa currentUser về null và isAuthenticated chuyển sang false', () => {
+    service.setUser(mockUser);
     expect(service.isAuthenticated()).toBe(true);
 
     service.clearUser();
@@ -103,12 +117,18 @@ describe('AuthService (Angular 21 Signals & State Reactivity)', () => {
     httpTesting.expectNone(AUTH_ENDPOINTS.ME);
   });
 
-  it('checkSession() gọi HTTP GET /auth/me và cập nhật signals khi backend trả về session hợp lệ', () => {
-    let sessionResult: boolean | undefined;
+  it('checkSession() gộp nhiều subscriber đồng thời thành 1 HTTP GET /auth/me duy nhất (shareReplay) và reset sau finalize', () => {
+    let sub1Result: boolean | undefined;
+    let sub2Result: boolean | undefined;
+
     service.checkSession().subscribe(res => {
-      sessionResult = res;
+      sub1Result = res;
+    });
+    service.checkSession().subscribe(res => {
+      sub2Result = res;
     });
 
+    // Only ONE HTTP request must be issued for concurrent callers (e.g. initAuth + authGuard)
     const req = httpTesting.expectOne(AUTH_ENDPOINTS.ME);
     expect(req.request.method).toBe('GET');
     expect(req.request.withCredentials).toBe(true);
@@ -122,7 +142,8 @@ describe('AuthService (Angular 21 Signals & State Reactivity)', () => {
       created_at: '2026-11-02T10:00:00Z'
     });
 
-    expect(sessionResult).toBe(true);
+    expect(sub1Result).toBe(true);
+    expect(sub2Result).toBe(true);
     expect(service.currentUser()).toEqual({
       id: 'session-user-999',
       email: 'session@focusflow.io',
@@ -132,6 +153,17 @@ describe('AuthService (Angular 21 Signals & State Reactivity)', () => {
       createdAt: '2026-11-02T10:00:00Z'
     });
     expect(service.isAuthenticated()).toBe(true);
+
+    // After clearing user, a subsequent checkSession() issues a fresh GET /auth/me (finalize cleared cache)
+    service.clearUser();
+    let sub3Result: boolean | undefined;
+    service.checkSession().subscribe(res => {
+      sub3Result = res;
+    });
+
+    const secondReq = httpTesting.expectOne(AUTH_ENDPOINTS.ME);
+    secondReq.flush(null, { status: 401, statusText: 'Unauthorized' });
+    expect(sub3Result).toBe(false);
   });
 
   it('checkSession() xử lý lỗi 401/500, xoá session và trả về false', () => {
@@ -148,31 +180,50 @@ describe('AuthService (Angular 21 Signals & State Reactivity)', () => {
     expect(service.isAuthenticated()).toBe(false);
   });
 
-  it('login() cập nhật signal isLoading trong suốt vòng đời request và cập nhật currentUser khi thành công', () => {
+  it('login() / signIn() dùng withCredentials và không lưu access_token vào localStorage', () => {
     expect(service.isLoading()).toBe(false);
 
     service.login({ email: 'test@focusflow.io', password: 'password123' }).subscribe();
     expect(service.isLoading()).toBe(true);
 
-    const req = httpTesting.expectOne(AUTH_ENDPOINTS.LOGIN);
-    expect(req.request.method).toBe('POST');
-    req.flush({
-      access_token: 'fake-jwt',
-      token_type: 'bearer',
-      user: {
-        id: 'user-login-1',
-        email: 'test@focusflow.io',
-        full_name: 'Logged In User',
-        role: 'learner',
-        tier: 'free',
-        created_at: '2026-11-01T00:00:00Z'
-      }
-    });
+    const loginReq = httpTesting.expectOne(AUTH_ENDPOINTS.LOGIN);
+    expect(loginReq.request.method).toBe('POST');
+    expect(loginReq.request.withCredentials).toBe(true);
+    loginReq.flush(mockBackendAuthResponse);
 
     expect(service.isLoading()).toBe(false);
     expect(service.currentUser()?.fullName).toBe('Logged In User');
     expect(service.isAuthenticated()).toBe(true);
-    expect(localStorage.getItem('access_token')).toBe('fake-jwt');
+    expect(localStorage.getItem('access_token')).toBeNull();
+
+    service.signIn({ email: 'test@focusflow.io', password: 'password123', rememberMe: true }).subscribe();
+    const signInReq = httpTesting.expectOne(AUTH_ENDPOINTS.LOGIN);
+    expect(signInReq.request.withCredentials).toBe(true);
+    signInReq.flush(mockBackendAuthResponse);
+    expect(localStorage.getItem('access_token')).toBeNull();
+  });
+
+  it('signUp(), refreshToken(), signOut() dùng withCredentials và không ghi access_token vào localStorage', () => {
+    service.signUp({ fullName: 'Test User', email: 'test@focusflow.io', password: 'Password123!' }).subscribe();
+    const regReq = httpTesting.expectOne(AUTH_ENDPOINTS.REGISTER);
+    expect(regReq.request.withCredentials).toBe(true);
+    regReq.flush(mockBackendAuthResponse);
+    expect(service.isAuthenticated()).toBe(true);
+    expect(localStorage.getItem('access_token')).toBeNull();
+
+    service.refreshToken().subscribe();
+    const refreshReq = httpTesting.expectOne(AUTH_ENDPOINTS.REFRESH_TOKEN);
+    expect(refreshReq.request.withCredentials).toBe(true);
+    refreshReq.flush(mockBackendAuthResponse);
+    expect(service.isAuthenticated()).toBe(true);
+    expect(localStorage.getItem('access_token')).toBeNull();
+
+    service.signOut();
+    const logoutReq = httpTesting.expectOne(AUTH_ENDPOINTS.LOGOUT);
+    expect(logoutReq.request.withCredentials).toBe(true);
+    logoutReq.flush({});
+    expect(service.isAuthenticated()).toBe(false);
+    expect(localStorage.getItem('access_token')).toBeNull();
   });
 
   it('handleSessionExpired() điều hướng người dùng về trang /sign-in với query param expired=1 khi đang ở trang được bảo vệ', () => {

@@ -22,14 +22,26 @@ from src.account.application.use_cases.calendar.renew_expiring_calendar_webhooks
 from src.account.application.use_cases.calendar.sync_schedule_blocks_use_case import (
     SyncScheduleBlocksToGoogleUseCase,
 )
+from src.account.application.use_cases.calendar.webcal_use_cases import (
+    GetWebcalIcsFeedUseCase,
+    GetWebcalStatusUseCase,
+    RevokeWebcalTokenUseCase,
+    RotateWebcalTokenUseCase,
+    WebcalTokenInvalidError,
+)
 
 __all__ = [
     "DisconnectGoogleCalendarUseCase",
     "GetCalendarConnectionStatusUseCase",
+    "GetWebcalIcsFeedUseCase",
+    "GetWebcalStatusUseCase",
     "HandleGoogleCalendarOAuthCallbackUseCase",
     "InitiateGoogleCalendarAuthUseCase",
     "ProcessGoogleCalendarWebhookUseCase",
     "ReconcileCalendarConnectionsUseCase",
     "RenewExpiringCalendarWebhooksUseCase",
+    "RevokeWebcalTokenUseCase",
+    "RotateWebcalTokenUseCase",
     "SyncScheduleBlocksToGoogleUseCase",
+    "WebcalTokenInvalidError",
 ]

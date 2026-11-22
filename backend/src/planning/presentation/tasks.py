@@ -35,6 +35,7 @@ from src.planning.presentation.deps import (
     get_sse_job_store,
 )
 from src.shared_kernel.infrastructure.database.session import async_session_factory
+from src.shared_kernel.infrastructure.outbox.relay import register_outbox_handler
 from src.shared_kernel.infrastructure.outbox.repository import SqlAlchemyOutboxRepository
 from src.shared_kernel.infrastructure.worker.broker import (
     broker,
@@ -304,12 +305,23 @@ async def dispatch_ingest_knowledge_source(*, source_id: str, user_id: str) -> N
                 source_id,
                 exc,
             )
-    await ingest_knowledge_source(source_id=source_id, user_id=user_id)
+    try:
+        await ingest_knowledge_source(source_id=source_id, user_id=user_id)
+    except Exception:
+        logger.exception(
+            "Inline knowledge source ingestion failed for source %s (status persisted by use case)",
+            source_id,
+        )
 
 
 @broker.task
-async def consume_availability_updated_event(event_id: str, user_id: str) -> int:
+async def consume_availability_updated_event(
+    event_id: str,
+    user_id: str,
+    availability_mode: str | None = None,
+) -> int:
     """Idempotent Taskiq consumer for `AvailabilityUpdatedEvent` refreshing preliminary feasibility."""
+    _ = availability_mode
     async with async_session_factory() as session:
         uc = get_handle_availability_updated_event_use_case(
             roadmap_repo=get_roadmap_repository(session),
@@ -365,3 +377,23 @@ async def poll_planning_outbox_events(batch_size: int = 50) -> int:
             await uc.execute(event_id=event_id, user_id=UUID(str(raw_uid)))
             processed += 1
     return processed
+
+
+async def _handle_availability_updated_outbox_event(
+    event_id: UUID, payload: dict[str, Any]
+) -> None:
+    user_id = payload.get("user_id")
+    if not user_id:
+        return
+    await consume_availability_updated_event.kiq(
+        event_id=str(event_id),
+        user_id=str(user_id),
+        availability_mode=str(payload.get("availability_mode", "")),
+    )
+
+
+register_outbox_handler(
+    "AvailabilityUpdatedEvent",
+    "planning.availability_updated_dispatch",
+    _handle_availability_updated_outbox_event,
+)

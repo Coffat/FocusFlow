@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { By } from '@angular/platform-browser';
+import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter, Router, ActivatedRoute } from '@angular/router';
 import { signal } from '@angular/core';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { ConfirmationService, MessageService } from 'primeng/api';
 import { RoadmapsHubComponent } from './roadmaps-hub.component';
 import { RoadmapService } from '../../services/roadmap.service';
@@ -12,6 +13,7 @@ import { AuthService } from '../../../../core/services/auth.service';
 import { AvailabilityService } from '../../../../core/services/availability.service';
 import { CalendarIntegrationService } from '../../../../core/services/calendar-integration.service';
 import { RoadmapResponse } from '../../models/roadmap.model';
+import { RoadmapWizardHostComponent } from '../dialogs/roadmap-wizard-host/roadmap-wizard-host.component';
 
 describe('RoadmapsHubComponent', () => {
   let component: RoadmapsHubComponent;
@@ -346,6 +348,166 @@ describe('RoadmapsHubComponent', () => {
       expect(component.prerequisiteDialogOpen()).toBe(false);
       expect(component.wizardOpen()).toBe(true);
       expect(component.wizardStep()).toBe(1);
+    });
+  });
+
+  describe('FE-API-03: Xử lý lỗi HTTP trung thực cho Resume, Pause và Archive', () => {
+    it('executeResume gặp lỗi HTTP -> giữ nguyên trạng thái PAUSED, hiện toast lỗi và không hiện toast thành công', () => {
+      const messageService = TestBed.inject(MessageService);
+      const addSpy = vi.spyOn(messageService, 'add');
+
+      mockRoadmapService.resumeRoadmap.mockReturnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 500,
+              statusText: 'Internal Server Error',
+              error: { message: 'Lỗi máy chủ khi kích hoạt lại lộ trình.' },
+            })
+        )
+      );
+
+      component.onConfirmAdaptation({
+        roadmapId: 'rm-2',
+        strategy: 'DOMINO_SHIFT',
+      });
+
+      const target = roadmapsSignal().find(r => r.id === 'rm-2');
+      expect(target?.status).toBe('PAUSED');
+      expect(addSpy).toHaveBeenCalledTimes(1);
+      expect(addSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          severity: 'error',
+          summary: 'Kích hoạt lại thất bại',
+          detail: 'Lỗi máy chủ khi kích hoạt lại lộ trình.',
+        })
+      );
+      expect(addSpy).not.toHaveBeenCalledWith(
+        expect.objectContaining({ severity: 'success' })
+      );
+    });
+
+    it('executePause gặp lỗi HTTP -> giữ nguyên trạng thái ACTIVE, hiện toast lỗi và không hiện toast thành công/cảnh báo', () => {
+      const confirmationService = TestBed.inject(ConfirmationService);
+      const messageService = TestBed.inject(MessageService);
+      const addSpy = vi.spyOn(messageService, 'add');
+
+      vi.spyOn(confirmationService, 'confirm').mockImplementation(cfg => {
+        cfg.accept?.();
+        return confirmationService;
+      });
+      mockRoadmapService.pauseRoadmap.mockReturnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 409,
+              statusText: 'Conflict',
+              error: { detail: 'Không thể tạm dừng lộ trình lúc này.' },
+            })
+        )
+      );
+
+      component.onPauseRoadmap('rm-1');
+
+      const target = roadmapsSignal().find(r => r.id === 'rm-1');
+      expect(target?.status).toBe('ACTIVE');
+      expect(addSpy).toHaveBeenCalledTimes(1);
+      expect(addSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          severity: 'error',
+          summary: 'Tạm dừng thất bại',
+          detail: 'Không thể tạm dừng lộ trình lúc này.',
+        })
+      );
+      expect(addSpy).not.toHaveBeenCalledWith(
+        expect.objectContaining({ severity: 'warn' })
+      );
+      expect(addSpy).not.toHaveBeenCalledWith(
+        expect.objectContaining({ severity: 'success' })
+      );
+    });
+
+    it('onArchiveRoadmap gặp lỗi HTTP -> giữ nguyên trạng thái, hiện toast lỗi và không hiện toast Đã lưu trữ', () => {
+      const confirmationService = TestBed.inject(ConfirmationService);
+      const messageService = TestBed.inject(MessageService);
+      const addSpy = vi.spyOn(messageService, 'add');
+
+      vi.spyOn(confirmationService, 'confirm').mockImplementation(cfg => {
+        cfg.accept?.();
+        return confirmationService;
+      });
+      mockRoadmapService.archiveRoadmap.mockImplementation(
+        (
+          _id: string,
+          callbacks?: {
+            onSuccess?: (archived: RoadmapResponse) => void;
+            onError?: (msg: string) => void;
+          }
+        ) => {
+          callbacks?.onError?.('Không thể lưu trữ lộ trình học tập.');
+        }
+      );
+
+      component.onArchiveRoadmap('rm-1');
+
+      const target = roadmapsSignal().find(r => r.id === 'rm-1');
+      expect(target?.status).toBe('ACTIVE');
+      expect(addSpy).toHaveBeenCalledTimes(1);
+      expect(addSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          severity: 'error',
+          summary: 'Lưu trữ thất bại',
+          detail: 'Không thể lưu trữ lộ trình học tập.',
+        })
+      );
+      expect(addSpy).not.toHaveBeenCalledWith(
+        expect.objectContaining({ summary: 'Đã lưu trữ' })
+      );
+    });
+  });
+
+  describe('FE-SYNC-02: Đồng bộ RoadmapsHub sau khi áp dụng lộ trình từ Wizard', () => {
+    it('phát roadmapApplied đóng wizard, đặt lại bộ lọc về ALL, hiện toast thành công và KHÔNG gọi trùng loadRoadmaps() khi loading() === true', () => {
+      const messageService = TestBed.inject(MessageService);
+      const addSpy = vi.spyOn(messageService, 'add');
+
+      component.setFilter('PAUSED');
+      component.wizardOpen.set(true);
+      loadingSignal.set(true);
+      mockRoadmapService.loadRoadmaps.mockClear();
+      fixture.detectChanges();
+
+      const wizardDebugEl = fixture.debugElement.query(By.directive(RoadmapWizardHostComponent));
+      expect(wizardDebugEl).toBeTruthy();
+      const wizardHost = wizardDebugEl.componentInstance as RoadmapWizardHostComponent;
+
+      wizardHost.roadmapApplied.emit('rm-new-1');
+      fixture.detectChanges();
+
+      expect(component.wizardOpen()).toBe(false);
+      expect(component.activeFilter()).toBe('ALL');
+      expect(addSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          severity: 'success',
+        })
+      );
+      expect(mockRoadmapService.loadRoadmaps).not.toHaveBeenCalled();
+    });
+
+    it('phát roadmapApplied gọi loadRoadmaps() khi loading() === false', () => {
+      component.wizardOpen.set(true);
+      loadingSignal.set(false);
+      mockRoadmapService.loadRoadmaps.mockClear();
+      fixture.detectChanges();
+
+      const wizardDebugEl = fixture.debugElement.query(By.directive(RoadmapWizardHostComponent));
+      const wizardHost = wizardDebugEl.componentInstance as RoadmapWizardHostComponent;
+
+      wizardHost.roadmapApplied.emit('rm-new-2');
+      fixture.detectChanges();
+
+      expect(component.wizardOpen()).toBe(false);
+      expect(mockRoadmapService.loadRoadmaps).toHaveBeenCalledTimes(1);
     });
   });
 });

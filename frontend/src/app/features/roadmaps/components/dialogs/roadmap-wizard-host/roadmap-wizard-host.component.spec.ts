@@ -427,4 +427,63 @@ describe('RoadmapWizardHostComponent', () => {
       status: 'RESERVED',
     });
   });
+
+  it('KHÔNG phát roadmapApplied hoặc closeWizard khi API applyProposal thất bại ở backend', () => {
+    roadmapService.selectedRoadmapDetail.set({
+      id: 'rm-100',
+      user_id: 'usr-1',
+      goal_id: 'goal-100',
+      title: 'IELTS 7.5 Academic',
+      description: 'Test',
+      status: 'DRAFT',
+      start_date: '2026-11-12',
+      target_date: '2027-02-01',
+      milestones: [],
+      created_at: '2026-11-12T00:00:00Z',
+      updated_at: '2026-11-12T00:00:00Z',
+    });
+    roadmapService.currentProposal.set({
+      id: 'prop-100',
+      roadmap_id: 'rm-100',
+      user_id: 'usr-1',
+      status: 'DRAFT',
+      is_valid: true,
+      has_soft_overflow: false,
+      judge_status: 'PASSED',
+      is_partial_schedule: false,
+      feasibility_verdict: 'VERIFIED_FEASIBLE',
+      schedule_completeness_status: 'FULL',
+      scheduled_tasks_count: 0,
+      unscheduled_tasks_count: 0,
+      tasks: [],
+      dependencies: [],
+      violations: [],
+      soft_overflow_warnings: [],
+      advisory_warnings: [],
+      diff_summary: {},
+      proposal_data: {},
+      applied_at: null,
+      created_at: '2026-11-12T00:00:00Z',
+      updated_at: '2026-11-12T00:00:00Z',
+    });
+
+    const appliedSpy = vi.fn();
+    const closeSpy = vi.fn();
+    component.roadmapApplied.subscribe(appliedSpy);
+    component.closeWizard.subscribe(closeSpy);
+
+    component.onApplyProposal(false);
+
+    const applyReq = httpTesting.expectOne(
+      API_ENDPOINTS.ROADMAPS.PROPOSAL_APPLY('rm-100', 'prop-100')
+    );
+    applyReq.flush(
+      { detail: 'Không thể áp dụng đề xuất lịch học lúc này.' },
+      { status: 500, statusText: 'Internal Server Error' }
+    );
+
+    expect(appliedSpy).not.toHaveBeenCalled();
+    expect(closeSpy).not.toHaveBeenCalled();
+    expect(roadmapService.errorMessage()).toBe('Không thể áp dụng đề xuất lịch học lúc này.');
+  });
 });

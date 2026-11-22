@@ -112,7 +112,7 @@ async def test_e2e_ai_planning_flow_sse_approval_edit_and_os03_merge(
     3. Generate Level-1 Milestones (`POST .../milestones/generate-jobs`) with Idempotency-Key deduplication
        -> 202 Accepted + SSE stream (`GET /api/v1/roadmaps/jobs/{job_id}/stream`) + Last-Event-ID replay.
     4. Edit & Reorder Milestones (`PUT .../milestones`) and Approve (`POST .../milestones/approve`)
-       -> emits MilestoneApprovedEvent in `outbox_events`.
+       -> persists `APPROVED` state without enqueuing an orphaned `MilestoneApprovedEvent` in `outbox_events`.
     5. Generate Level-2 Schedule Proposal (`POST .../proposals/generate-jobs`) with Self-Correction Retry
        (1st attempt fails Tier 1 duration, 2nd attempt succeeds) -> SSE emits `validation_retry` & `completed`.
     6. Preview (`GET .../proposals/current`) & Edit Proposal (`PUT .../proposals/{id}`).
@@ -221,7 +221,7 @@ async def test_e2e_ai_planning_flow_sse_approval_edit_and_os03_merge(
         approved_ms = approve_res.json()["milestones"]
         assert all(m["status"] == "APPROVED" for m in approved_ms)
 
-        # Verify MilestoneApprovedEvent in outbox_events
+        # Verify approving milestones does NOT enqueue an orphaned MilestoneApprovedEvent
         async with async_session_factory() as session:
             outbox_ms = list(
                 (
@@ -235,7 +235,7 @@ async def test_e2e_ai_planning_flow_sse_approval_edit_and_os03_merge(
                 .scalars()
                 .all()
             )
-            assert len(outbox_ms) == 1
+            assert len(outbox_ms) == 0
 
         # 5. Switch learner to Mode B with Monday 19:00-21:00 slot to test Soft Overflow & Retry
         from datetime import time

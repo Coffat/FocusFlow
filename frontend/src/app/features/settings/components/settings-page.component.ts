@@ -445,7 +445,8 @@ export type SettingsTab = 'general' | 'ai' | 'calendar' | 'security';
                   <button
                     type="button"
                     (click)="reloadQuota()"
-                    class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-mono font-medium border border-[#EAE8E7] bg-[#FBF9F8] hover:bg-neutral-100 text-[#1B1C1C] transition-colors self-start sm:self-auto cursor-pointer"
+                    [disabled]="quotaLoading()"
+                    class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-mono font-medium border border-[#EAE8E7] bg-[#FBF9F8] hover:bg-neutral-100 text-[#1B1C1C] transition-colors self-start sm:self-auto cursor-pointer disabled:opacity-50"
                     title="Làm mới số liệu hạn ngạch"
                   >
                     <lucide-icon name="refresh-cw" [size]="13"></lucide-icon>
@@ -453,76 +454,141 @@ export type SettingsTab = 'general' | 'ai' | 'calendar' | 'security';
                   </button>
                 </div>
 
-                <!-- Progress Bar -->
-                <div class="space-y-2">
-                  <div class="flex justify-between items-center text-xs font-mono">
-                    <span class="text-[#656464]">Tiến độ sử dụng chu kỳ hiện tại</span>
-                    <span class="font-bold text-[#1B1C1C]">
-                      {{ quotaUsagePercent() | number: '1.0-0' }}% đã sử dụng
-                    </span>
-                  </div>
-                  <div class="w-full h-3 rounded-full bg-neutral-100 border border-[#EAE8E7] overflow-hidden p-0.5">
-                    <div
-                      class="h-full rounded-full bg-[#246B4A] transition-all duration-500"
-                      [style.width.%]="quotaUsagePercent()"
-                    ></div>
-                  </div>
-                </div>
-
-                <!-- 4-Box Telemetry Grid -->
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div class="p-4 rounded-xl border border-[#EAE8E7] bg-[#FBF9F8] space-y-1">
-                    <span class="text-[10px] font-mono font-semibold uppercase tracking-wider text-[#656464] block">Đã cam kết</span>
-                    <div class="text-2xl font-bold font-serif text-[#1B1C1C]">
-                      {{ quota()?.used_calls ?? preferences().aiCreditsUsed }}
-                    </div>
-                    <span class="text-[11px] text-[#656464] block font-mono">lượt gọi AI</span>
-                  </div>
-
-                  <div class="p-4 rounded-xl border border-[#EAE8E7] bg-[#FBF9F8] space-y-1">
-                    <span class="text-[10px] font-mono font-semibold uppercase tracking-wider text-[#656464] block">Đang giữ chỗ</span>
-                    <div class="text-2xl font-bold font-serif text-amber-600">
-                      {{ quota()?.reserved_calls ?? 0 }}
-                    </div>
-                    <span class="text-[11px] text-[#656464] block font-mono">đang xử lý</span>
-                  </div>
-
-                  <div class="p-4 rounded-xl border border-[#EAE8E7] bg-[#FBF9F8] space-y-1">
-                    <span class="text-[10px] font-mono font-semibold uppercase tracking-wider text-[#656464] block">Còn khả dụng</span>
-                    <div class="text-2xl font-bold font-serif text-[#246B4A]">
-                      {{ quota()?.remaining_calls ?? (preferences().aiCreditsLimit! - preferences().aiCreditsUsed!) }}
-                    </div>
-                    <span class="text-[11px] text-[#656464] block font-mono">lượt khả dụng</span>
-                  </div>
-
-                  <div class="p-4 rounded-xl border border-[#EAE8E7] bg-[#FBF9F8] space-y-1">
-                    <span class="text-[10px] font-mono font-semibold uppercase tracking-wider text-[#656464] block">Tokens tiêu thụ</span>
-                    <div class="text-2xl font-bold font-serif text-[#1B1C1C]">
-                      {{ (quota()?.tokens_consumed ?? 3450) | number }}
-                    </div>
-                    <span class="text-[11px] text-[#656464] block font-mono">LLM tokens</span>
-                  </div>
-                </div>
-
-                <!-- Cycle Details & Upgrade Action -->
-                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-4 border-t border-[#EAE8E7]">
-                  <div class="text-xs text-[#656464] font-mono">
-                    <span>Ngày làm mới hạn ngạch chu kỳ: </span>
-                    <strong class="text-[#1B1C1C]">{{ (quota()?.cycle_end || defaultCycleEnd) | date: 'dd/MM/yyyy' }}</strong>
-                    <span class="block text-[11px] text-neutral-400 mt-0.5">
-                      Định mức sẽ tự động được phục hồi đầy đủ vào đầu chu kỳ tiếp theo.
-                    </span>
-                  </div>
-
-                  <button
-                    type="button"
-                    (click)="onUpgradePlan()"
-                    class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full text-xs font-semibold text-white bg-[#246B4A] hover:bg-[#1B5338] transition-colors shadow-2xs cursor-pointer self-start sm:self-auto"
+                @if (quotaLoading()) {
+                  <!-- Loading State -->
+                  <div
+                    data-testid="quota-loading-state"
+                    role="status"
+                    aria-live="polite"
+                    class="p-6 rounded-xl border border-[#EAE8E7] bg-[#FBF9F8] flex items-center gap-3 text-xs font-mono text-[#656464]"
                   >
-                    <lucide-icon name="sparkles" [size]="13" class="text-amber-300"></lucide-icon>
-                    <span>Nâng cấp gói PRO / PREMIUM</span>
-                  </button>
-                </div>
+                    <div class="w-4 h-4 border-2 border-[#246B4A]/30 border-t-[#246B4A] rounded-full animate-spin shrink-0"></div>
+                    <span>Đang tải thông tin hạn ngạch AI...</span>
+                  </div>
+                } @else if (quotaError(); as errMsg) {
+                  <!-- Error State -->
+                  <div
+                    data-testid="quota-error-state"
+                    role="alert"
+                    class="p-5 rounded-xl border border-rose-200 bg-rose-50/70 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                  >
+                    <div class="flex items-start gap-3">
+                      <lucide-icon name="alert-triangle" [size]="18" class="text-[#BA1A1A] shrink-0 mt-0.5"></lucide-icon>
+                      <div class="space-y-1">
+                        <p class="text-sm font-semibold text-[#1B1C1C]">Không tải được hạn ngạch AI</p>
+                        <p class="text-xs text-[#656464]">{{ errMsg }}</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      data-testid="quota-retry-btn"
+                      (click)="reloadQuota()"
+                      class="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold text-white bg-[#246B4A] hover:bg-[#1B5338] transition-colors cursor-pointer shrink-0 self-start sm:self-auto"
+                    >
+                      <lucide-icon name="refresh-cw" [size]="13"></lucide-icon>
+                      <span>Thử lại</span>
+                    </button>
+                  </div>
+                } @else if (quota(); as q) {
+                  <!-- Success State -->
+                  <div data-testid="quota-success-state" class="space-y-6">
+                    <!-- Progress Bar -->
+                    <div class="space-y-2">
+                      <div class="flex justify-between items-center text-xs font-mono">
+                        <span class="text-[#656464]">
+                          Tiến độ sử dụng chu kỳ hiện tại ({{ q.used_calls }} / {{ q.monthly_limit }} lượt)
+                        </span>
+                        <span class="font-bold text-[#1B1C1C]">
+                          {{ quotaUsagePercent() | number: '1.0-0' }}% đã sử dụng
+                        </span>
+                      </div>
+                      <div class="w-full h-3 rounded-full bg-neutral-100 border border-[#EAE8E7] overflow-hidden p-0.5">
+                        <div
+                          class="h-full rounded-full bg-[#246B4A] transition-all duration-500"
+                          [style.width.%]="quotaUsagePercent()"
+                        ></div>
+                      </div>
+                    </div>
+
+                    <!-- 4-Box Telemetry Grid -->
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div class="p-4 rounded-xl border border-[#EAE8E7] bg-[#FBF9F8] space-y-1">
+                        <span class="text-[10px] font-mono font-semibold uppercase tracking-wider text-[#656464] block">Đã cam kết</span>
+                        <div class="text-2xl font-bold font-serif text-[#1B1C1C]" data-testid="quota-used-calls">
+                          {{ q.used_calls }}
+                        </div>
+                        <span class="text-[11px] text-[#656464] block font-mono">/ {{ q.monthly_limit }} lượt gọi AI</span>
+                      </div>
+
+                      <div class="p-4 rounded-xl border border-[#EAE8E7] bg-[#FBF9F8] space-y-1">
+                        <span class="text-[10px] font-mono font-semibold uppercase tracking-wider text-[#656464] block">Đang giữ chỗ</span>
+                        <div class="text-2xl font-bold font-serif text-amber-600" data-testid="quota-reserved-calls">
+                          {{ q.reserved_calls }}
+                        </div>
+                        <span class="text-[11px] text-[#656464] block font-mono">đang xử lý</span>
+                      </div>
+
+                      <div class="p-4 rounded-xl border border-[#EAE8E7] bg-[#FBF9F8] space-y-1">
+                        <span class="text-[10px] font-mono font-semibold uppercase tracking-wider text-[#656464] block">Còn khả dụng</span>
+                        <div class="text-2xl font-bold font-serif text-[#246B4A]" data-testid="quota-remaining-calls">
+                          {{ q.remaining_calls }}
+                        </div>
+                        <span class="text-[11px] text-[#656464] block font-mono">lượt khả dụng</span>
+                      </div>
+
+                      <div class="p-4 rounded-xl border border-[#EAE8E7] bg-[#FBF9F8] space-y-1">
+                        <span class="text-[10px] font-mono font-semibold uppercase tracking-wider text-[#656464] block">Tokens tiêu thụ</span>
+                        <div class="text-2xl font-bold font-serif text-[#1B1C1C]" data-testid="quota-tokens-consumed">
+                          {{ q.tokens_consumed | number }}
+                        </div>
+                        <span class="text-[11px] text-[#656464] block font-mono">LLM tokens</span>
+                      </div>
+                    </div>
+
+                    <!-- Cycle Details & Upgrade Action -->
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-4 border-t border-[#EAE8E7]">
+                      <div class="text-xs text-[#656464] font-mono">
+                        <span>Ngày làm mới hạn ngạch chu kỳ: </span>
+                        <strong class="text-[#1B1C1C]" data-testid="quota-cycle-end">
+                          {{ q.cycle_end | date: 'dd/MM/yyyy' }}
+                        </strong>
+                        <span class="block text-[11px] text-neutral-400 mt-0.5">
+                          Định mức sẽ tự động được phục hồi đầy đủ vào đầu chu kỳ tiếp theo.
+                        </span>
+                      </div>
+
+                      <button
+                        type="button"
+                        (click)="onUpgradePlan()"
+                        class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-full text-xs font-semibold text-white bg-[#246B4A] hover:bg-[#1B5338] transition-colors shadow-2xs cursor-pointer self-start sm:self-auto"
+                      >
+                        <lucide-icon name="sparkles" [size]="13" class="text-amber-300"></lucide-icon>
+                        <span>Nâng cấp gói PRO / PREMIUM</span>
+                      </button>
+                    </div>
+                  </div>
+                } @else {
+                  <!-- Empty State -->
+                  <div
+                    data-testid="quota-empty-state"
+                    class="p-6 rounded-xl border border-dashed border-[#EAE8E7] bg-[#FBF9F8] flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                  >
+                    <div class="space-y-1">
+                      <p class="text-sm font-semibold text-[#1B1C1C]">Chưa có dữ liệu hạn ngạch AI</p>
+                      <p class="text-xs text-[#656464]">
+                        Hệ thống chưa ghi nhận thông tin hạn ngạch cho chu kỳ hiện tại.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      (click)="reloadQuota()"
+                      class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold border border-[#EAE8E7] bg-white hover:bg-neutral-100 text-[#1B1C1C] transition-colors cursor-pointer self-start sm:self-auto"
+                    >
+                      <lucide-icon name="refresh-cw" [size]="13"></lucide-icon>
+                      <span>Tải lại</span>
+                    </button>
+                  </div>
+                }
               </section>
 
             </div>
@@ -692,39 +758,141 @@ export type SettingsTab = 'general' | 'ai' | 'calendar' | 'security';
                   </p>
                 </div>
 
+                @if (webcalError(); as errMsg) {
+                  <div
+                    role="alert"
+                    data-testid="webcal-error-banner"
+                    class="p-4 rounded-xl border border-rose-200 bg-rose-50/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                  >
+                    <div class="flex items-start gap-2.5">
+                      <lucide-icon name="alert-triangle" [size]="16" class="text-[#BA1A1A] shrink-0 mt-0.5"></lucide-icon>
+                      <p class="text-xs text-[#1B1C1C]">{{ errMsg }}</p>
+                    </div>
+                    <button
+                      type="button"
+                      data-testid="webcal-retry-btn"
+                      (click)="reloadWebcalStatus()"
+                      class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold text-white bg-[#246B4A] hover:bg-[#1B5338] transition-colors cursor-pointer shrink-0 self-start sm:self-auto"
+                    >
+                      <lucide-icon name="refresh-cw" [size]="12"></lucide-icon>
+                      <span>Thử lại</span>
+                    </button>
+                  </div>
+                }
+
                 <div class="space-y-3">
-                  <div class="flex flex-col sm:flex-row sm:items-center gap-2">
-                    <input
-                      type="text"
-                      [value]="webcalUrl()"
-                      readonly
-                      aria-label="Địa chỉ nguồn cấp lịch WebCal"
-                      data-testid="webcal-url-input"
-                      class="w-full px-3.5 py-2.5 rounded-xl border border-[#EAE8E7] bg-[#FBF9F8] text-xs font-mono text-[#1B1C1C] focus:outline-none"
-                    />
-                    <div class="flex items-center gap-2 shrink-0">
+                  @if (webcalUrl(); as oneTimeUrl) {
+                    <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+                      <input
+                        type="text"
+                        [value]="oneTimeUrl"
+                        readonly
+                        aria-label="Địa chỉ nguồn cấp lịch WebCal"
+                        data-testid="webcal-url-input"
+                        class="w-full px-3.5 py-2.5 rounded-xl border border-emerald-200 bg-emerald-50/30 text-xs font-mono text-[#1B1C1C] focus:outline-none"
+                      />
+                      <div class="flex flex-wrap items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          data-testid="webcal-copy-btn"
+                          (click)="onCopyWebcalUrl()"
+                          class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-semibold bg-[#246B4A] text-white hover:bg-[#1B5338] transition-colors shadow-2xs cursor-pointer"
+                        >
+                          <lucide-icon name="copy" [size]="13"></lucide-icon>
+                          <span>Sao chép</span>
+                        </button>
+                        <button
+                          type="button"
+                          data-testid="webcal-rotate-btn"
+                          [disabled]="webcalLoading()"
+                          (click)="onResetWebcalToken()"
+                          class="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold border border-[#EAE8E7] bg-white text-[#656464] hover:text-[#1B1C1C] hover:bg-neutral-100 transition-colors shadow-2xs cursor-pointer disabled:opacity-50"
+                          title="Tạo lại liên kết mới nếu bị lộ"
+                        >
+                          <lucide-icon name="rotate-ccw" [size]="13"></lucide-icon>
+                          <span>Tạo lại liên kết mới</span>
+                        </button>
+                        <button
+                          type="button"
+                          data-testid="webcal-revoke-btn"
+                          [disabled]="webcalLoading()"
+                          (click)="onRevokeWebcalToken()"
+                          class="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold border border-rose-200 bg-white text-[#BA1A1A] hover:bg-rose-50 transition-colors shadow-2xs cursor-pointer disabled:opacity-50"
+                        >
+                          <lucide-icon name="trash-2" [size]="13"></lucide-icon>
+                          <span>Thu hồi liên kết</span>
+                        </button>
+                      </div>
+                    </div>
+                    <div
+                      data-testid="webcal-onetime-warning"
+                      class="p-3 rounded-xl border border-amber-200 bg-amber-50/70 text-xs text-amber-900 flex items-start gap-2"
+                    >
+                      <lucide-icon name="alert-triangle" [size]="14" class="text-amber-700 shrink-0 mt-0.5"></lucide-icon>
+                      <span>
+                        Liên kết chỉ hiển thị một lần vì lý do bảo mật. Hãy sao chép và dán vào ứng dụng lịch của bạn ngay bây giờ.
+                      </span>
+                    </div>
+                  } @else if (webcalStatus()?.has_active_token) {
+                    <div
+                      data-testid="webcal-active-status"
+                      class="p-4 rounded-xl border border-emerald-200 bg-emerald-50/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                    >
+                      <div class="space-y-1">
+                        <div class="flex items-center gap-2 text-sm font-semibold text-[#1B1C1C]">
+                          <lucide-icon name="check-circle-2" [size]="16" class="text-[#246B4A]"></lucide-icon>
+                          <span>Liên kết WebCal đang hoạt động — token đã được băm SHA-256</span>
+                        </div>
+                        <p class="text-xs text-[#656464]">
+                          Vì lý do bảo mật, hệ thống không lưu trữ hay hiển thị lại URL gốc sau khi rời trang. Bạn có thể tạo lại liên kết mới bất cứ lúc nào.
+                        </p>
+                      </div>
+                      <div class="flex flex-wrap items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          data-testid="webcal-rotate-btn"
+                          [disabled]="webcalLoading()"
+                          (click)="onResetWebcalToken()"
+                          class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border border-[#EAE8E7] bg-white text-[#1B1C1C] hover:border-[#246B4A] hover:text-[#246B4A] transition-colors cursor-pointer disabled:opacity-50"
+                        >
+                          <lucide-icon name="rotate-ccw" [size]="13"></lucide-icon>
+                          <span>Tạo lại liên kết mới</span>
+                        </button>
+                        <button
+                          type="button"
+                          data-testid="webcal-revoke-btn"
+                          [disabled]="webcalLoading()"
+                          (click)="onRevokeWebcalToken()"
+                          class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border border-rose-200 bg-white text-[#BA1A1A] hover:bg-rose-50 transition-colors cursor-pointer disabled:opacity-50"
+                        >
+                          <lucide-icon name="trash-2" [size]="13"></lucide-icon>
+                          <span>Thu hồi liên kết</span>
+                        </button>
+                      </div>
+                    </div>
+                  } @else {
+                    <div
+                      data-testid="webcal-inactive-status"
+                      class="p-4 rounded-xl border border-dashed border-[#EAE8E7] bg-[#FBF9F8] flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                    >
+                      <div class="space-y-0.5">
+                        <div class="text-sm font-semibold text-[#1B1C1C]">Chưa tạo liên kết WebCal</div>
+                        <p class="text-xs text-[#656464]">
+                          Tạo một URL bảo mật riêng để đăng ký lịch học FocusFlow trên Apple Calendar hoặc Outlook.
+                        </p>
+                      </div>
                       <button
                         type="button"
-                        (click)="onCopyWebcalUrl()"
-                        class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-semibold bg-[#246B4A] text-white hover:bg-[#1B5338] transition-colors shadow-2xs cursor-pointer"
+                        data-testid="webcal-create-btn"
+                        [disabled]="webcalLoading()"
+                        (click)="onCreateWebcalToken()"
+                        class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-xs font-semibold text-white bg-[#246B4A] hover:bg-[#1B5338] transition-colors shadow-2xs cursor-pointer shrink-0 self-start sm:self-auto disabled:opacity-50"
                       >
-                        <lucide-icon name="copy" [size]="13"></lucide-icon>
-                        <span>Sao chép</span>
-                      </button>
-                      <button
-                        type="button"
-                        (click)="onResetWebcalToken()"
-                        class="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-semibold border border-[#EAE8E7] bg-white text-[#656464] hover:text-[#1B1C1C] hover:bg-neutral-100 transition-colors shadow-2xs cursor-pointer"
-                        title="Tạo lại mã token mới nếu bị lộ"
-                      >
-                        <lucide-icon name="rotate-ccw" [size]="13"></lucide-icon>
-                        <span>Tạo token mới</span>
+                        <lucide-icon name="sparkles" [size]="13"></lucide-icon>
+                        <span>{{ webcalLoading() ? 'Đang tạo...' : 'Tạo liên kết WebCal' }}</span>
                       </button>
                     </div>
-                  </div>
-                  <p class="text-[11px] text-[#656464]">
-                    Chỉ chia sẻ liên kết này với thiết bị cá nhân của bạn để đảm bảo bảo mật lịch trình học.
-                  </p>
+                  }
                 </div>
               </section>
 
@@ -858,18 +1026,36 @@ export type SettingsTab = 'general' | 'ai' | 'calendar' | 'security';
                   </p>
                 </div>
 
+                @if (exportError(); as errMsg) {
+                  <div
+                    role="alert"
+                    data-testid="gdpr-export-error"
+                    class="p-3.5 rounded-xl border border-rose-200 bg-rose-50/70 flex items-start gap-2.5 text-xs text-rose-900"
+                  >
+                    <lucide-icon name="alert-triangle" [size]="15" class="text-[#BA1A1A] shrink-0 mt-0.5"></lucide-icon>
+                    <span>{{ errMsg }}</span>
+                  </div>
+                }
+
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border border-[#EAE8E7] bg-[#FBF9F8]">
                   <div class="space-y-0.5">
                     <div class="text-xs font-semibold text-[#1B1C1C]">Gói dữ liệu hoàn chỉnh (JSON format)</div>
-                    <p class="text-[11px] text-[#656464]">Bao gồm thông tin hồ sơ, thống kê chu kỳ và cài đặt tùy chọn.</p>
+                    <p class="text-[11px] text-[#656464]">Bao gồm thông tin hồ sơ, lộ trình học tập, phiên học và thống kê từ máy chủ.</p>
                   </div>
                   <button
                     type="button"
+                    data-testid="gdpr-export-btn"
+                    [disabled]="exportLoading()"
                     (click)="onExportData()"
-                    class="inline-flex items-center gap-2 px-4 py-2.5 rounded-full text-xs font-semibold bg-white border border-[#EAE8E7] text-[#1B1C1C] hover:border-[#246B4A] hover:text-[#246B4A] transition-colors shadow-2xs cursor-pointer self-start sm:self-auto shrink-0"
+                    class="inline-flex items-center gap-2 px-4 py-2.5 rounded-full text-xs font-semibold bg-white border border-[#EAE8E7] text-[#1B1C1C] hover:border-[#246B4A] hover:text-[#246B4A] transition-colors shadow-2xs cursor-pointer self-start sm:self-auto shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <lucide-icon name="download" [size]="13"></lucide-icon>
-                    <span>Tải xuống dữ liệu (JSON)</span>
+                    @if (exportLoading()) {
+                      <div class="w-3.5 h-3.5 border-2 border-[#246B4A]/30 border-t-[#246B4A] rounded-full animate-spin"></div>
+                      <span>Đang xuất dữ liệu...</span>
+                    } @else {
+                      <lucide-icon name="download" [size]="13"></lucide-icon>
+                      <span>Tải xuống dữ liệu (JSON)</span>
+                    }
                   </button>
                 </div>
               </section>
@@ -898,14 +1084,28 @@ export type SettingsTab = 'general' | 'ai' | 'calendar' | 'security';
                   </p>
                 </div>
 
+                <div
+                  data-testid="delete-account-unavailable-notice"
+                  role="status"
+                  class="rounded-xl border border-amber-200 bg-amber-50/70 p-4 text-xs text-amber-900 space-y-1"
+                >
+                  <div class="font-semibold">Tính năng đang được phát triển (FR-PROFILE-002)</div>
+                  <p class="leading-relaxed">
+                    Chức năng xóa tài khoản tự động theo GDPR Điều 17 hiện đang được hoàn thiện ở phía máy chủ và chưa khả dụng. Vui lòng quay lại sau khi dịch vụ hỗ trợ chính thức.
+                  </p>
+                </div>
+
                 <div class="flex justify-end pt-2">
                   <button
                     type="button"
+                    data-testid="delete-account-btn"
+                    [disabled]="true"
+                    aria-disabled="true"
                     (click)="onRequestDeleteAccount()"
-                    class="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-semibold text-white bg-[#BA1A1A] hover:bg-rose-700 transition-colors shadow-2xs cursor-pointer"
+                    class="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-semibold text-white bg-[#BA1A1A] transition-colors shadow-2xs disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <lucide-icon name="trash-2" [size]="13"></lucide-icon>
-                    <span>Yêu cầu xóa tài khoản vĩnh viễn</span>
+                    <span>Yêu cầu xóa tài khoản vĩnh viễn (Chưa khả dụng)</span>
                   </button>
                 </div>
               </section>
@@ -931,16 +1131,19 @@ export class SettingsPageComponent implements OnInit, OnDestroy {
 
   readonly preferences = this.settingsService.preferences;
   readonly quota = this.settingsService.quota;
-  readonly defaultCycleEnd = new Date(Date.now() + 30 * 86400000).toISOString();
+  readonly quotaLoading = this.settingsService.quotaLoading;
+  readonly quotaError = this.settingsService.quotaError;
+  readonly webcalStatus = this.settingsService.webcalStatus;
+  readonly webcalUrl = this.settingsService.webcalUrl;
+  readonly webcalLoading = this.settingsService.webcalLoading;
+  readonly webcalError = this.settingsService.webcalError;
+  readonly exportLoading = this.settingsService.exportLoading;
+  readonly exportError = this.settingsService.exportError;
 
   readonly activeTab = signal<SettingsTab>('general');
   readonly returnUrl = signal<string | null>(null);
   readonly autoOpen = signal<boolean>(false);
   private queryParamsSub?: Subscription;
-
-  readonly webcalUrl = signal<string>(
-    'webcal://focusflow.app/api/v1/calendar/feed.ics?token=ff_live_sec_789123'
-  );
 
   readonly userTier = computed<string>(() => {
     return (this.authService.currentUser()?.tier || 'FREE').toUpperCase();
@@ -948,13 +1151,10 @@ export class SettingsPageComponent implements OnInit, OnDestroy {
 
   readonly quotaUsagePercent = computed<number>(() => {
     const q = this.quota();
-    if (q && q.monthly_limit > 0) {
-      return Math.max(0, Math.min(100, (q.used_calls / q.monthly_limit) * 100));
+    if (!q || q.monthly_limit <= 0) {
+      return 0;
     }
-    const prefs = this.preferences();
-    const limit = prefs.aiCreditsLimit || 10;
-    const used = prefs.aiCreditsUsed || 0;
-    return Math.max(0, Math.min(100, (used / limit) * 100));
+    return Math.max(0, Math.min(100, (q.used_calls / q.monthly_limit) * 100));
   });
 
   // Password Strength Indicators
@@ -974,6 +1174,7 @@ export class SettingsPageComponent implements OnInit, OnDestroy {
     this.calendarService.checkUrlCallback(this.route, this.router);
     this.calendarService.loadStatus().subscribe();
     void this.settingsService.loadQuota();
+    void this.settingsService.loadWebcalStatus();
 
     const snapshotParams = this.route.snapshot.queryParamMap;
     const initialReturnUrl = snapshotParams.get('returnUrl');
@@ -1140,15 +1341,23 @@ export class SettingsPageComponent implements OnInit, OnDestroy {
   onUpgradePlan(): void {
     this.messageService?.add({
       severity: 'info',
-      summary: 'Gói dịch vụ',
-      detail: 'Tính năng cổng thanh toán PRO đang được kết nối trong phiên bản tiếp theo.',
+      summary: 'Gói dịch vụ (Free Beta)',
+      detail: 'FocusFlow đang trong giai đoạn Free Beta — gói Premium sẽ sớm mở bán.',
       life: 4000,
     });
   }
 
+  reloadWebcalStatus(): void {
+    void this.settingsService.loadWebcalStatus();
+  }
+
   async onCopyWebcalUrl(): Promise<void> {
+    const url = this.webcalUrl();
+    if (!url) {
+      return;
+    }
     try {
-      await navigator.clipboard.writeText(this.webcalUrl());
+      await navigator.clipboard.writeText(url);
       this.messageService?.add({
         severity: 'success',
         summary: 'Đã sao chép liên kết',
@@ -1165,6 +1374,10 @@ export class SettingsPageComponent implements OnInit, OnDestroy {
     }
   }
 
+  onCreateWebcalToken(): void {
+    void this.executeRotateWebcal();
+  }
+
   onResetWebcalToken(): void {
     if (this.confirmationService) {
       this.confirmationService.confirm({
@@ -1174,45 +1387,88 @@ export class SettingsPageComponent implements OnInit, OnDestroy {
         acceptLabel: 'Xác nhận tạo mới',
         rejectLabel: 'Hủy',
         accept: () => {
-          void this.executeResetWebcal();
+          void this.executeRotateWebcal();
         },
       });
     } else {
       if (confirm('Đặt lại token sẽ vô hiệu hóa tất cả các ứng dụng lịch đang đồng bộ. Tiếp tục?')) {
-        void this.executeResetWebcal();
+        void this.executeRotateWebcal();
       }
     }
   }
 
-  private async executeResetWebcal(): Promise<void> {
-    const res = await this.settingsService.resetWebCalToken();
-    this.webcalUrl.set(res.webcal_url);
+  onRevokeWebcalToken(): void {
+    if (this.confirmationService) {
+      this.confirmationService.confirm({
+        message: 'Thu hồi liên kết sẽ ngắt đồng bộ tất cả ứng dụng lịch đang dùng URL WebCal hiện tại. Bạn có chắc chắn?',
+        header: 'Thu hồi liên kết WebCal',
+        icon: 'pi pi-exclamation-triangle',
+        acceptLabel: 'Thu hồi liên kết',
+        rejectLabel: 'Hủy',
+        acceptButtonStyleClass: 'p-button-danger',
+        accept: () => {
+          void this.executeRevokeWebcal();
+        },
+      });
+    } else {
+      if (confirm('Thu hồi liên kết sẽ ngắt đồng bộ tất cả ứng dụng lịch đang dùng URL WebCal hiện tại. Tiếp tục?')) {
+        void this.executeRevokeWebcal();
+      }
+    }
+  }
+
+  private async executeRotateWebcal(): Promise<void> {
+    const res = await this.settingsService.rotateWebcalToken();
+    if (!res) {
+      return;
+    }
     this.messageService?.add({
       severity: 'success',
-      summary: 'Đã tạo token mới',
-      detail: 'Địa chỉ WebCal mới đã sẵn sàng. Hãy cập nhật vào ứng dụng lịch của bạn.',
+      summary: 'Đã tạo liên kết WebCal mới',
+      detail: 'Liên kết chỉ hiển thị một lần. Hãy sao chép và cập nhật vào ứng dụng lịch của bạn.',
+      life: 4500,
+    });
+  }
+
+  private async executeRevokeWebcal(): Promise<void> {
+    const ok = await this.settingsService.revokeWebcalToken();
+    if (!ok) {
+      return;
+    }
+    this.messageService?.add({
+      severity: 'info',
+      summary: 'Đã thu hồi liên kết WebCal',
+      detail: 'Liên kết WebCal cũ đã bị vô hiệu hóa hoàn toàn.',
       life: 4000,
     });
   }
 
-  onExportData(): void {
-    const data = {
-      user: this.authService.currentUser(),
-      preferences: this.preferences(),
-      quota: this.quota(),
-      exported_at: new Date().toISOString(),
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  async onExportData(): Promise<void> {
+    const snapshot = await this.settingsService.exportAccountData();
+    if (!snapshot) {
+      this.messageService?.add({
+        severity: 'error',
+        summary: 'Lỗi xuất dữ liệu',
+        detail:
+          this.exportError() ||
+          'Không thể xuất dữ liệu cá nhân lúc này. Vui lòng thử lại sau.',
+        life: 5000,
+      });
+      return;
+    }
+
+    const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
+    const dateStamp = (snapshot.exported_at || new Date().toISOString()).slice(0, 10);
     a.href = url;
-    a.download = `focusflow-learner-data-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `focusflow-account-export-${dateStamp}.json`;
     a.click();
     URL.revokeObjectURL(url);
     this.messageService?.add({
       severity: 'success',
       summary: 'Đã xuất dữ liệu',
-      detail: 'Tệp JSON chứa toàn bộ dữ liệu học tập cá nhân đã được tải về.',
+      detail: 'Tệp JSON chứa toàn bộ dữ liệu học tập cá nhân từ máy chủ đã được tải về.',
       life: 4000,
     });
   }
@@ -1275,32 +1531,8 @@ export class SettingsPageComponent implements OnInit, OnDestroy {
   }
 
   onRequestDeleteAccount(): void {
-    if (this.confirmationService) {
-      this.confirmationService.confirm({
-        message: 'Hành động này là vĩnh viễn và không thể khôi phục theo GDPR Điều 17. Bạn có tuyệt đối chắc chắn muốn xóa tài khoản?',
-        header: 'Xác nhận Xóa Vĩnh Viễn Tài Khoản',
-        icon: 'pi pi-trash',
-        acceptLabel: 'Xóa tài khoản vĩnh viễn',
-        rejectLabel: 'Hủy bỏ',
-        acceptButtonStyleClass: 'p-button-danger',
-        accept: () => {
-          this.messageService?.add({
-            severity: 'warn',
-            summary: 'Đang gửi yêu cầu',
-            detail: 'Yêu cầu xóa tài khoản đã được chuyển đến bộ phận bảo mật GDPR.',
-            life: 5000,
-          });
-        },
-      });
-    } else {
-      if (confirm('Bạn có chắc chắn muốn xóa vĩnh viễn tài khoản của mình?')) {
-        this.messageService?.add({
-          severity: 'warn',
-          summary: 'Đang gửi yêu cầu',
-          detail: 'Yêu cầu xóa tài khoản đã được chuyển đến bộ phận bảo mật GDPR.',
-          life: 5000,
-        });
-      }
-    }
+    // FR-PROFILE-002 (GDPR Điều 17): backend deletion endpoint is not yet implemented.
+    // Intentionally disabled so the UI never fakes submission or opens a misleading confirmation dialog.
+    return;
   }
 }

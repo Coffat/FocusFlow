@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { DashboardService, EMPTY_DASHBOARD_SUMMARY, mapDashboardSummary } from './dashboard.service';
+import { EntityInvalidationService } from '../../../core/services/entity-invalidation.service';
 
 describe('DashboardService', () => {
   let service: DashboardService;
@@ -181,5 +182,30 @@ describe('DashboardService', () => {
 
     const req = httpTesting.expectOne('/api/v1/evaluation/dashboard-summary');
     req.error(new ProgressEvent('error'));
+  });
+
+  it('bỏ qua phản hồi loadSummary() cũ đến sau và cập nhật chính xác isSummaryStale()', () => {
+    const invalidation = TestBed.inject(EntityInvalidationService);
+    invalidation.resetForTests();
+
+    expect(service.isSummaryStale()).toBe(false);
+    invalidation.invalidate('dashboard');
+    expect(service.isSummaryStale()).toBe(true);
+
+    service.loadSummary().subscribe();
+    service.loadSummary().subscribe();
+
+    const reqs = httpTesting.match('/api/v1/evaluation/dashboard-summary');
+    expect(reqs).toHaveLength(2);
+    expect(reqs[0].request.withCredentials).toBe(true);
+    expect(reqs[1].request.withCredentials).toBe(true);
+
+    reqs[1].flush(mockBackendResponse);
+    expect(service.summary().kpi.streakDays).toBe(12);
+    expect(service.isSummaryStale()).toBe(false);
+
+    // Phản hồi cũ trả về sau không ghi đè dữ liệu mới
+    reqs[0].flush({ kpi: { streak_days: 1 } });
+    expect(service.summary().kpi.streakDays).toBe(12);
   });
 });

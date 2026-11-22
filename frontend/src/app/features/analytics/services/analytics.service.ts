@@ -2,6 +2,7 @@ import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import { Observable, catchError, finalize, of, tap, throwError } from 'rxjs';
 import { API_ENDPOINTS } from '../../../core/constants/api-endpoints';
+import { RoadmapStore } from '../../../core/stores/roadmap.store';
 import { parseHttpErrorMessage } from '../../../core/utils/error-parser.util';
 import {
   AnalyticsSummaryResponse,
@@ -56,11 +57,12 @@ export function parseAnalyticsApiError(
 })
 export class AnalyticsService {
   private readonly http = inject(HttpClient);
+  private readonly roadmapStore = inject(RoadmapStore);
 
   readonly summary = signal<AnalyticsSummaryResponse | null>(null);
   readonly weekly = signal<AnalyticsWeeklyResponse | null>(null);
   readonly latestReview = signal<WeeklyReviewResponseDTO | null>(null);
-  readonly roadmaps = signal<RoadmapResponse[]>([]);
+  readonly roadmaps = this.roadmapStore.roadmaps;
   readonly weekOffset = signal<number>(0);
 
   readonly isLoading = signal<boolean>(false);
@@ -149,15 +151,8 @@ export class AnalyticsService {
       );
   }
 
-  loadRoadmaps(): Observable<RoadmapResponse[]> {
-    return this.http
-      .get<RoadmapResponse[]>(API_ENDPOINTS.ROADMAPS.BASE, { withCredentials: true })
-      .pipe(
-        tap((list) => {
-          this.roadmaps.set(list);
-        }),
-        catchError(() => of([]))
-      );
+  loadRoadmaps(force = false): Observable<RoadmapResponse[]> {
+    return this.roadmapStore.loadRoadmaps({ force });
   }
 
   generateWeeklyReview(
