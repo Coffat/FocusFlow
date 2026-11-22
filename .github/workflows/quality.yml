@@ -90,16 +90,21 @@ jobs:
           LLM_PROVIDER: mock
           PAYMENT_PROVIDER: local_mock
           CALENDAR_PROVIDER: local_mock
-      - name: Wait for backend
+      - name: Wait for backend and frontend
         run: |
           for attempt in $(seq 1 60); do
-            if curl --fail --silent http://localhost:8000/api/health > /dev/null; then exit 0; fi
+            if curl --fail --silent http://127.0.0.1:3000/api/health > /dev/null; then exit 0; fi
             sleep 2
           done
-          docker compose logs backend
+          docker compose logs backend frontend
           exit 1
-      - run: pnpm exec playwright test e2e/availability.spec.ts e2e/e2e_full_workflow.spec.ts
+      - name: Run deterministic E2E suite
+        run: pnpm exec playwright test e2e/auth.spec.ts e2e/availability.spec.ts e2e/fit_capacity_scope_approval.spec.ts e2e/p2a-data-consistency.spec.ts e2e/p2b1-study-data-integrity.spec.ts e2e/p2b2b-functional-integration.spec.ts e2e/roadmap-dashboard-sync.spec.ts
         working-directory: frontend
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
+          BACKEND_API_URL: http://127.0.0.1:3000/api/v1
+          MAILPIT_API_URL: http://127.0.0.1:8025/api/v1
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -74,6 +74,7 @@ def test_settings_staging_allows_default_secret_with_warning_and_readiness_summa
     monkeypatch.delenv("EMAIL_BACKEND", raising=False)
     monkeypatch.delenv("EMAIL_HOST", raising=False)
     monkeypatch.delenv("CALENDAR_WEBHOOK_BASE_URL", raising=False)
+    monkeypatch.delenv("CALENDAR_PROVIDER", raising=False)
     monkeypatch.delenv("CALENDAR_ENCRYPTION_KEY", raising=False)
     monkeypatch.delenv("FERNET_KEY", raising=False)
     with caplog.at_level(logging.WARNING, logger="src.shared_kernel.config"):
@@ -83,6 +84,7 @@ def test_settings_staging_allows_default_secret_with_warning_and_readiness_summa
             debug=False,
             email_backend="smtp",
             email_host="mailpit",
+            calendar_provider="google",
             calendar_webhook_base_url="http://localhost:3000",
         )
 
