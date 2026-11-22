@@ -470,12 +470,12 @@ def test_shared_circuit_breaker_wiring_and_config_defaults() -> None:
     assert settings.ai_proposal_finalize_reserve_seconds == 6.0
     assert settings.db_pool_size == 10
     assert settings.db_max_overflow == 10
-    assert settings.db_pool_timeout == 30.0
+    assert settings.db_pool_timeout == 15.0
     assert settings.db_pool_recycle == 1800
     assert settings.db_pool_pre_ping is True
     assert settings.db_connect_timeout == 10.0
-    assert settings.db_command_timeout == 30.0
-    assert settings.db_statement_timeout_ms == 30000
+    assert settings.db_command_timeout == 23.0
+    assert settings.db_statement_timeout_ms == 20000
     assert settings.db_lock_timeout_ms == 10000
 
     planning_provider = get_llm_provider()
