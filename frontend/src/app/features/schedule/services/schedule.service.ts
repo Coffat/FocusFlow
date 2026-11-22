@@ -2,6 +2,8 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import { Observable, catchError, finalize, forkJoin, of, tap, throwError } from 'rxjs';
 import { API_ENDPOINTS } from '../../../core/constants/api-endpoints';
+import { EntityInvalidationService } from '../../../core/services/entity-invalidation.service';
+import { RoadmapStore } from '../../../core/stores/roadmap.store';
 import { parseHttpErrorMessage } from '../../../core/utils/error-parser.util';
 import {
   RescheduleTaskRequest,
@@ -127,9 +129,13 @@ const WEEKDAY_NAMES_VI = [
 })
 export class ScheduleService {
   private readonly http = inject(HttpClient);
+  private readonly roadmapStore = inject(RoadmapStore);
+  private readonly entityInvalidation = inject(EntityInvalidationService);
+
+  private weeklyRequestSeq = 0;
 
   readonly weeklySchedule = signal<WeeklyScheduleResponse | null>(null);
-  readonly roadmaps = signal<RoadmapResponse[]>([]);
+  readonly roadmaps = this.roadmapStore.roadmaps;
   readonly weekOffset = signal<number>(0);
 
   readonly isLoading = signal<boolean>(false);
@@ -177,6 +183,7 @@ export class ScheduleService {
   }
 
   loadWeeklySchedule(weekStart?: string | null): Observable<WeeklyScheduleResponse | null> {
+    const seq = ++this.weeklyRequestSeq;
     this.isLoading.set(true);
     this.errorState.set(null);
 
@@ -192,27 +199,27 @@ export class ScheduleService {
       })
       .pipe(
         tap((res) => {
+          if (seq !== this.weeklyRequestSeq) {
+            return;
+          }
           this.weeklySchedule.set(res);
         }),
         catchError((err: unknown) => {
-          this.errorState.set(parseScheduleApiError(err, 'Không thể tải thời khóa biểu tuần.'));
+          if (seq === this.weeklyRequestSeq) {
+            this.errorState.set(parseScheduleApiError(err, 'Không thể tải thời khóa biểu tuần.'));
+          }
           return of(null);
         }),
         finalize(() => {
-          this.isLoading.set(false);
+          if (seq === this.weeklyRequestSeq) {
+            this.isLoading.set(false);
+          }
         })
       );
   }
 
-  loadRoadmaps(): Observable<RoadmapResponse[]> {
-    return this.http
-      .get<RoadmapResponse[]>(API_ENDPOINTS.ROADMAPS.BASE, { withCredentials: true })
-      .pipe(
-        tap((list) => {
-          this.roadmaps.set(list);
-        }),
-        catchError(() => of([]))
-      );
+  loadRoadmaps(force = false): Observable<RoadmapResponse[]> {
+    return this.roadmapStore.loadRoadmaps({ force });
   }
 
   rescheduleTask(taskId: string, payload: RescheduleTaskRequest): Observable<TaskResponse> {
@@ -224,6 +231,10 @@ export class ScheduleService {
         withCredentials: true,
       })
       .pipe(
+        tap((updated) => {
+          this.entityInvalidation.notifyTaskMutated(updated);
+          this.entityInvalidation.invalidate('tasks', 'dashboard', 'workspace', 'analytics');
+        }),
         catchError((err: unknown) => {
           this.errorState.set(parseScheduleApiError(err, 'Không thể dời lịch nhiệm vụ.'));
           return throwError(() => err);
@@ -259,6 +270,12 @@ export class ScheduleService {
     );
 
     return forkJoin(requests).pipe(
+      tap((updatedList) => {
+        for (const updated of updatedList) {
+          this.entityInvalidation.notifyTaskMutated(updated);
+        }
+        this.entityInvalidation.invalidate('tasks', 'dashboard', 'workspace', 'analytics');
+      }),
       catchError((err: unknown) => {
         this.errorState.set(
           parseScheduleApiError(err, 'Không thể chuyển một số nhiệm vụ về Backlog.')
@@ -301,6 +318,10 @@ export class ScheduleService {
     return this.http
       .post<RoadmapResponse>(API_ENDPOINTS.ROADMAPS.PAUSE(roadmapId), {}, { withCredentials: true })
       .pipe(
+        tap((updated) => {
+          this.roadmapStore.upsertRoadmap(updated);
+          this.entityInvalidation.invalidate('dashboard', 'tasks', 'workspace', 'analytics');
+        }),
         catchError((err: unknown) => {
           this.errorState.set(parseScheduleApiError(err, 'Không thể tạm dừng lộ trình.'));
           return throwError(() => err);

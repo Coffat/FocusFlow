@@ -6,7 +6,7 @@ from src.account.public_api import (
     CalendarConnectionQueryPort,
     UserQueryPort,
 )
-from src.evaluation.public_api import ScheduleChangeLogPort
+from src.evaluation.public_api import PauseRecordPort, ScheduleChangeLogPort
 from src.execution.public_api import ExecutionScheduleSyncPort
 from src.planning.application.dtos.planning_dtos import RoadmapDetailDTO
 from src.planning.application.ports.planning_repository_ports import (
@@ -299,11 +299,13 @@ class PauseRoadmapUseCase:
         schedule_repo: OfficialScheduleRepositoryPort,
         uow: AsyncUnitOfWork,
         schedule_change_log_port: ScheduleChangeLogPort | None = None,
+        pause_record_port: PauseRecordPort | None = None,
     ) -> None:
         self._roadmap_repo = roadmap_repo
         self._schedule_repo = schedule_repo
         self._uow = uow
         self._change_log_port = schedule_change_log_port
+        self._pause_record_port = pause_record_port
 
     async def execute(
         self,
@@ -313,15 +315,26 @@ class PauseRoadmapUseCase:
         now: datetime | None = None,
     ) -> Roadmap:
         effective_now = now or datetime.now(UTC)
-        roadmap = await self._roadmap_repo.get_by_id_for_user(roadmap_id, user_id)
-        if roadmap is None:
-            raise RoadmapNotFoundError()
-
-        roadmap.pause(effective_now)
-        schedule = await self._schedule_repo.get_by_roadmap_id(roadmap_id)
 
         async with self._uow:
+            roadmap = await call_for_update(
+                self._roadmap_repo.get_by_id_for_user, roadmap_id, user_id
+            )
+            if roadmap is None:
+                raise RoadmapNotFoundError()
+
+            roadmap.pause(effective_now)
+            schedule = await self._schedule_repo.get_by_roadmap_id(roadmap_id)
             saved_roadmap = await self._roadmap_repo.save(roadmap)
+
+            if self._pause_record_port is not None:
+                await self._pause_record_port.create_active_pause(
+                    roadmap_id=roadmap_id,
+                    pause_start_date=effective_now.date(),
+                    reason="Tạm dừng lộ trình học tập theo yêu cầu người học (UC-22)",
+                    now=effective_now,
+                )
+
             if self._change_log_port is not None:
                 await self._change_log_port.record_change_log(
                     roadmap_id=roadmap_id,
@@ -352,6 +365,7 @@ class ResumeRoadmapUseCase:
         block_repo: ScheduleBlockRepositoryPort | None = None,
         user_query_port: UserQueryPort | None = None,
         schedule_change_log_port: ScheduleChangeLogPort | None = None,
+        pause_record_port: PauseRecordPort | None = None,
     ) -> None:
         self._goal_repo = goal_repo
         self._roadmap_repo = roadmap_repo
@@ -361,6 +375,7 @@ class ResumeRoadmapUseCase:
         self._block_repo = block_repo
         self._user_query_port = user_query_port
         self._change_log_port = schedule_change_log_port
+        self._pause_record_port = pause_record_port
 
     async def execute(
         self,
@@ -388,11 +403,19 @@ class ResumeRoadmapUseCase:
             if roadmap is None:
                 raise RoadmapNotFoundError()
 
+            active_pause = (
+                await self._pause_record_port.get_active_pause(roadmap_id)
+                if self._pause_record_port is not None
+                else None
+            )
             paused_at = roadmap.updated_at if roadmap.updated_at != datetime.min else effective_now
+            paused_start_date = (
+                active_pause.pause_start_date if active_pause is not None else paused_at.date()
+            )
             effective_shift_days = (
                 max(0, int(shift_days))
                 if shift_days is not None
-                else max(1, (effective_now.date() - paused_at.date()).days)
+                else max(1, (effective_now.date() - paused_start_date).days)
             )
 
             if locked_roadmaps:
@@ -510,6 +533,14 @@ class ResumeRoadmapUseCase:
                         blk.sync_status = "PENDING_SYNC"
                         blk.updated_at = effective_now
                     await self._block_repo.save_all(planned_blocks)
+
+            if self._pause_record_port is not None:
+                await self._pause_record_port.complete_active_pause(
+                    roadmap_id=roadmap_id,
+                    actual_end_date=effective_now.date(),
+                    shifted_days=effective_shift_days,
+                    now=effective_now,
+                )
 
             if self._change_log_port is not None:
                 await self._change_log_port.record_change_log(

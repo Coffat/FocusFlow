@@ -1,13 +1,15 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   ElementRef,
   HostListener,
   computed,
+  effect,
   inject,
   signal,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { CommonModule, DatePipe } from '@angular/common';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
@@ -26,8 +28,15 @@ import {
   User,
   Clock,
   Shield,
+  CheckCheck,
+  AlertTriangle,
+  RefreshCw,
 } from 'lucide-angular';
 import { AuthService } from '../../../core/services/auth.service';
+import {
+  NotificationItemDTO,
+  NotificationService,
+} from '../../../core/services/notification.service';
 
 export interface NavItem {
   path: string;
@@ -37,7 +46,7 @@ export interface NavItem {
 @Component({
   selector: 'app-navbar',
   standalone: true,
-  imports: [CommonModule, RouterLink, RouterLinkActive, LucideAngularModule],
+  imports: [CommonModule, DatePipe, RouterLink, RouterLinkActive, LucideAngularModule],
   providers: [
     {
       provide: LUCIDE_ICONS,
@@ -55,6 +64,9 @@ export interface NavItem {
         User,
         Clock,
         Shield,
+        CheckCheck,
+        AlertTriangle,
+        RefreshCw,
       }),
     },
   ],
@@ -64,13 +76,22 @@ export interface NavItem {
 })
 export class AppNavbarComponent {
   private readonly authService = inject(AuthService);
+  private readonly notificationService = inject(NotificationService);
   private readonly router = inject(Router);
   private readonly elementRef = inject(ElementRef);
+  private readonly destroyRef = inject(DestroyRef);
 
   readonly currentUser = this.authService.currentUser;
+  readonly notifications = this.notificationService.items;
+  readonly unreadCount = this.notificationService.unreadCount;
+  readonly notificationsLoading = this.notificationService.loading;
+  readonly notificationsError = this.notificationService.error;
 
   readonly isUserMenuOpen = signal<boolean>(false);
   readonly isMobileMenuOpen = signal<boolean>(false);
+  readonly isNotificationsOpen = signal<boolean>(false);
+  readonly markingAllRead = signal<boolean>(false);
+  private lastLoadedUserId: string | null = null;
 
   readonly navItems: NavItem[] = [
     { path: '/dashboard', label: 'Tổng quan' },
@@ -111,10 +132,21 @@ export class AppNavbarComponent {
   });
 
   constructor() {
+    effect(() => {
+      const userId = this.currentUser()?.id ?? null;
+      if (userId && userId !== this.lastLoadedUserId) {
+        this.lastLoadedUserId = userId;
+        this.notificationService.loadNotifications();
+      } else if (!userId) {
+        this.lastLoadedUserId = null;
+      }
+    });
+
     this.router.events.pipe(takeUntilDestroyed()).subscribe((event) => {
       if (event instanceof NavigationEnd) {
         this.closeUserMenu();
         this.closeMobileMenu();
+        this.closeNotifications();
       }
     });
   }
@@ -122,6 +154,7 @@ export class AppNavbarComponent {
   toggleUserMenu(): void {
     if (!this.isUserMenuOpen()) {
       this.closeMobileMenu();
+      this.closeNotifications();
     }
     this.isUserMenuOpen.update((v) => !v);
   }
@@ -133,12 +166,58 @@ export class AppNavbarComponent {
   toggleMobileMenu(): void {
     if (!this.isMobileMenuOpen()) {
       this.closeUserMenu();
+      this.closeNotifications();
     }
     this.isMobileMenuOpen.update((v) => !v);
   }
 
   closeMobileMenu(): void {
     this.isMobileMenuOpen.set(false);
+  }
+
+  toggleNotifications(): void {
+    const opening = !this.isNotificationsOpen();
+    if (opening) {
+      this.closeUserMenu();
+      this.closeMobileMenu();
+      this.notificationService.loadNotifications();
+    }
+    this.isNotificationsOpen.set(opening);
+  }
+
+  closeNotifications(): void {
+    this.isNotificationsOpen.set(false);
+  }
+
+  onRetryNotifications(): void {
+    this.notificationService.loadNotifications();
+  }
+
+  onNotificationClick(item: NotificationItemDTO): void {
+    if (!item.is_read) {
+      this.notificationService
+        .markRead(item.id)
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe({ error: () => undefined });
+    }
+    this.closeNotifications();
+    if (item.resource_url) {
+      void this.router.navigateByUrl(item.resource_url);
+    }
+  }
+
+  onMarkAllRead(): void {
+    if (this.unreadCount() === 0 || this.markingAllRead()) {
+      return;
+    }
+    this.markingAllRead.set(true);
+    this.notificationService
+      .markAllRead()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => this.markingAllRead.set(false),
+        error: () => this.markingAllRead.set(false),
+      });
   }
 
   onSearchTrigger(): void {
@@ -148,6 +227,7 @@ export class AppNavbarComponent {
   onLogout(): void {
     this.closeUserMenu();
     this.closeMobileMenu();
+    this.closeNotifications();
     this.authService.logout();
     this.router.navigate(['/sign-in']);
   }
@@ -160,6 +240,9 @@ export class AppNavbarComponent {
     if (!target.closest('.user-dropdown-container')) {
       this.closeUserMenu();
     }
+    if (!target.closest('.notification-dropdown-container')) {
+      this.closeNotifications();
+    }
     if (!target.closest('.app-navbar')) {
       this.closeMobileMenu();
     }
@@ -169,5 +252,6 @@ export class AppNavbarComponent {
   onEscapePress(): void {
     this.closeUserMenu();
     this.closeMobileMenu();
+    this.closeNotifications();
   }
 }

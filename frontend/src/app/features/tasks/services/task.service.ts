@@ -1,7 +1,9 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, effect, inject, signal, untracked } from '@angular/core';
 import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import { Observable, catchError, finalize, map, of, tap, throwError } from 'rxjs';
 import { API_ENDPOINTS } from '../../../core/constants/api-endpoints';
+import { EntityInvalidationService } from '../../../core/services/entity-invalidation.service';
+import { RoadmapStore } from '../../../core/stores/roadmap.store';
 import { parseHttpErrorMessage } from '../../../core/utils/error-parser.util';
 import {
   AddTaskDependencyRequest,
@@ -50,21 +52,39 @@ export function parseTaskApiError(
 })
 export class TaskService {
   private readonly http = inject(HttpClient);
+  private readonly roadmapStore = inject(RoadmapStore);
+  private readonly entityInvalidation = inject(EntityInvalidationService);
+
+  private tasksRequestSeq = 0;
+  private backlogRequestSeq = 0;
 
   readonly tasks = signal<TaskResponse[]>([]);
   readonly backlogTasks = signal<TaskResponse[]>([]);
-  readonly roadmaps = signal<RoadmapResponse[]>([]);
+  readonly roadmaps = this.roadmapStore.roadmaps;
   readonly milestonesByRoadmap = signal<Record<string, MilestoneResponse[]>>({});
 
   readonly isLoading = signal<boolean>(false);
   readonly isSubmitting = signal<boolean>(false);
   readonly errorState = signal<TaskApiError | null>(null);
 
+  constructor() {
+    effect(() => {
+      const mutated = this.entityInvalidation.lastTaskMutation();
+      if (!mutated) {
+        return;
+      }
+      untracked(() => {
+        this.applyExternalTaskMutation(mutated);
+      });
+    });
+  }
+
   clearError(): void {
     this.errorState.set(null);
   }
 
   loadTasks(roadmapId?: string | null, status?: string | null): Observable<TaskResponse[]> {
+    const seq = ++this.tasksRequestSeq;
     this.isLoading.set(true);
     this.errorState.set(null);
 
@@ -83,19 +103,27 @@ export class TaskService {
       })
       .pipe(
         tap((list) => {
+          if (seq !== this.tasksRequestSeq) {
+            return;
+          }
           this.tasks.set(list);
         }),
         catchError((err: unknown) => {
-          this.errorState.set(parseTaskApiError(err, 'Không thể tải danh sách nhiệm vụ.'));
+          if (seq === this.tasksRequestSeq) {
+            this.errorState.set(parseTaskApiError(err, 'Không thể tải danh sách nhiệm vụ.'));
+          }
           return of([]);
         }),
         finalize(() => {
-          this.isLoading.set(false);
+          if (seq === this.tasksRequestSeq) {
+            this.isLoading.set(false);
+          }
         })
       );
   }
 
   loadBacklogTasks(roadmapId?: string | null): Observable<TaskResponse[]> {
+    const seq = ++this.backlogRequestSeq;
     let params = new HttpParams();
     if (roadmapId) {
       params = params.set('roadmap_id', roadmapId);
@@ -108,24 +136,22 @@ export class TaskService {
       })
       .pipe(
         tap((list) => {
+          if (seq !== this.backlogRequestSeq) {
+            return;
+          }
           this.backlogTasks.set(list);
         }),
         catchError((err: unknown) => {
-          this.errorState.set(parseTaskApiError(err, 'Không thể tải hàng đợi phục hồi Backlog.'));
+          if (seq === this.backlogRequestSeq) {
+            this.errorState.set(parseTaskApiError(err, 'Không thể tải hàng đợi phục hồi Backlog.'));
+          }
           return of([]);
         })
       );
   }
 
-  loadRoadmaps(): Observable<RoadmapResponse[]> {
-    return this.http
-      .get<RoadmapResponse[]>(API_ENDPOINTS.ROADMAPS.BASE, { withCredentials: true })
-      .pipe(
-        tap((list) => {
-          this.roadmaps.set(list);
-        }),
-        catchError(() => of([]))
-      );
+  loadRoadmaps(force = false): Observable<RoadmapResponse[]> {
+    return this.roadmapStore.loadRoadmaps({ force });
   }
 
   loadRoadmapMilestones(roadmapId: string): Observable<MilestoneResponse[]> {
@@ -162,6 +188,8 @@ export class TaskService {
           if (!created.scheduled_date) {
             this.backlogTasks.update((list) => [created, ...list]);
           }
+          this.entityInvalidation.notifyTaskMutated(created);
+          this.entityInvalidation.invalidate('schedule', 'dashboard', 'workspace', 'analytics');
         }),
         catchError((err: unknown) => {
           this.errorState.set(parseTaskApiError(err, 'Không thể tạo nhiệm vụ mới.'));
@@ -184,6 +212,8 @@ export class TaskService {
       .pipe(
         tap((updated) => {
           this.replaceTaskInSignals(updated);
+          this.entityInvalidation.notifyTaskMutated(updated);
+          this.entityInvalidation.invalidate('schedule', 'dashboard', 'workspace', 'analytics');
         }),
         catchError((err: unknown) => {
           this.errorState.set(parseTaskApiError(err, 'Không thể cập nhật nhiệm vụ.'));
@@ -207,6 +237,8 @@ export class TaskService {
         tap((updated) => {
           this.replaceTaskInSignals(updated);
           this.backlogTasks.update((list) => list.filter((t) => t.id !== updated.id));
+          this.entityInvalidation.notifyTaskMutated(updated);
+          this.entityInvalidation.invalidate('schedule', 'dashboard', 'workspace', 'analytics');
         }),
         catchError((err: unknown) => {
           this.errorState.set(parseTaskApiError(err, 'Không thể hoàn thành nhiệm vụ.'));
@@ -230,6 +262,8 @@ export class TaskService {
           if (!updated.scheduled_date) {
             this.backlogTasks.update((list) => [updated, ...list.filter((t) => t.id !== updated.id)]);
           }
+          this.entityInvalidation.notifyTaskMutated(updated);
+          this.entityInvalidation.invalidate('schedule', 'dashboard', 'workspace', 'analytics');
         }),
         catchError((err: unknown) => {
           this.errorState.set(parseTaskApiError(err, 'Không thể mở lại nhiệm vụ.'));
@@ -257,6 +291,8 @@ export class TaskService {
           } else {
             this.backlogTasks.update((list) => list.filter((t) => t.id !== updated.id));
           }
+          this.entityInvalidation.notifyTaskMutated(updated);
+          this.entityInvalidation.invalidate('schedule', 'dashboard', 'workspace', 'analytics');
         }),
         catchError((err: unknown) => {
           this.errorState.set(parseTaskApiError(err, 'Không thể dời lịch nhiệm vụ.'));
@@ -278,6 +314,8 @@ export class TaskService {
         tap((cancelled) => {
           this.replaceTaskInSignals(cancelled);
           this.backlogTasks.update((list) => list.filter((t) => t.id !== taskId));
+          this.entityInvalidation.notifyTaskMutated(cancelled);
+          this.entityInvalidation.invalidate('schedule', 'dashboard', 'workspace', 'analytics');
         }),
         catchError((err: unknown) => {
           this.errorState.set(parseTaskApiError(err, 'Không thể hủy nhiệm vụ.'));
@@ -312,5 +350,29 @@ export class TaskService {
       if (!exists) return [updated, ...list];
       return list.map((t) => (t.id === updated.id ? updated : t));
     });
+  }
+
+  private applyExternalTaskMutation(mutated: TaskResponse): void {
+    this.tasks.update((list) =>
+      list.some((t) => t.id === mutated.id)
+        ? list.map((t) => (t.id === mutated.id ? mutated : t))
+        : list
+    );
+
+    if (
+      mutated.status === 'COMPLETED' ||
+      mutated.status === 'CANCELLED' ||
+      Boolean(mutated.scheduled_date)
+    ) {
+      this.backlogTasks.update((list) =>
+        list.some((t) => t.id === mutated.id) ? list.filter((t) => t.id !== mutated.id) : list
+      );
+    } else {
+      this.backlogTasks.update((list) =>
+        list.some((t) => t.id === mutated.id)
+          ? list.map((t) => (t.id === mutated.id ? mutated : t))
+          : list
+      );
+    }
   }
 }

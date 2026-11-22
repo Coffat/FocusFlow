@@ -50,13 +50,25 @@
               ? 'px-5 py-2 text-xs font-semibold rounded-full bg-surface-container-lowest text-on-surface shadow-sm transition-all duration-200 flex items-center gap-2 cursor-pointer'
               : 'px-5 py-2 text-xs font-medium rounded-full text-on-surface-variant hover:text-on-surface transition-all duration-200 flex items-center gap-2 cursor-pointer'"
           >
-            <span>Theo Năm (Tiết kiệm 20%)</span>
+            <span>Theo Năm (Tiết kiệm 17%)</span>
             <span class="px-2 py-0.5 text-[10px] uppercase font-bold tracking-wide rounded-full bg-[#E8F5E9] text-[#005234] border border-[#A1E9BF]">
               Tặng 2 Tháng
             </span>
           </button>
         </div>
       </div>
+
+      @if (!checkoutEnabled()) {
+        <div
+          data-testid="billing-free-beta-banner"
+          role="status"
+          aria-live="polite"
+          class="mt-6 max-w-2xl mx-auto px-5 py-3.5 rounded-2xl border border-emerald-200 bg-emerald-50/70 text-emerald-950 flex items-center justify-center gap-3 text-xs sm:text-sm font-sans shadow-xs"
+        >
+          <span class="material-symbols-outlined text-[#246B4A] text-lg shrink-0" aria-hidden="true">info</span>
+          <span class="font-medium">{{ billingStatusMessage() }}</span>
+        </div>
+      }
     </div>
   </section>
 
@@ -178,11 +190,11 @@
           <ul class="space-y-3.5 mb-8 text-xs sm:text-sm text-on-surface font-medium">
             <li class="flex items-start gap-3">
               <span class="material-symbols-outlined text-primary-container text-base mt-0.5" aria-hidden="true">check</span>
-              <span><strong>Không giới hạn số lộ trình</strong> học tập đồng thời</span>
+              <span><strong>Tối đa {{ premiumMaxActiveRoadmaps() }} lộ trình ACTIVE</strong> học tập đồng thời</span>
             </li>
             <li class="flex items-start gap-3">
               <span class="material-symbols-outlined text-primary-container text-base mt-0.5" aria-hidden="true">check</span>
-              <span><strong>300 lượt AI / tháng</strong> (ưu tiên 2-Stage SSE streaming độ trễ thấp)</span>
+              <span><strong>{{ premiumAiMonthlyLimit() }} lượt AI / tháng</strong> (ưu tiên 2-Stage SSE streaming độ trễ thấp)</span>
             </li>
             <li class="flex items-start gap-3">
               <span class="material-symbols-outlined text-primary-container text-base mt-0.5" aria-hidden="true">check</span>
@@ -202,7 +214,7 @@
             </li>
             <li class="flex items-start gap-3">
               <span class="material-symbols-outlined text-primary-container text-base mt-0.5" aria-hidden="true">check</span>
-              <span>Kênh hỗ trợ giải đáp học thuật <strong>ưu tiên 1-on-1 trong 4 giờ</strong></span>
+              <span>Hỗ trợ học thuật <strong>ưu tiên qua email &amp; tài liệu chuyên sâu</strong></span>
             </li>
           </ul>
         </div>
@@ -210,10 +222,12 @@
         <!-- CTA Button -->
         <button
           type="button"
+          data-testid="pricing-select-premium-btn"
+          [disabled]="!checkoutEnabled()"
           (click)="selectPlan('premium')"
-          class="w-full py-3.5 px-6 rounded-full bg-on-surface text-white hover:bg-primary font-semibold text-xs sm:text-sm font-sans transition-all duration-200 shadow-md hover:shadow-lg cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
+          class="w-full py-3.5 px-6 rounded-full bg-on-surface text-white hover:bg-primary font-semibold text-xs sm:text-sm font-sans transition-all duration-200 shadow-md hover:shadow-lg cursor-pointer hover:scale-[1.01] active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-on-surface disabled:hover:scale-100"
         >
-          Nâng cấp Premium ngay
+          {{ checkoutEnabled() ? 'Nâng cấp Premium ngay' : 'Sắp ra mắt (Free Beta)' }}
         </button>
       </div>
 
@@ -221,13 +235,13 @@
   </section>
 
   <!-- ======================================================================
-       SECTION 3: SATISFACTION GUARANTEE STRIP
+       SECTION 3: TRANSPARENCY & DATA OWNERSHIP STRIP
        ====================================================================== -->
   <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-16 text-center">
     <div class="inline-flex items-center justify-center gap-3 py-3 px-6 rounded-full bg-surface-container-low border border-outline-variant shadow-sm text-left">
       <span class="material-symbols-outlined text-primary-container text-xl shrink-0" aria-hidden="true">verified_user</span>
       <p class="text-xs sm:text-sm text-on-surface font-sans">
-        <strong>Cam kết hoàn tiền trong 14 ngày không điều kiện.</strong> Nếu FocusFlow không giúp bạn nâng tầm kỷ luật tự học, chúng tôi hoàn lại 100% học phí không thắc mắc.
+        <strong>Minh bạch &amp; toàn quyền dữ liệu học tập.</strong> Không yêu cầu thẻ thanh toán trong giai đoạn Free Beta; bạn luôn có thể xuất toàn bộ dữ liệu JSON (GDPR Điều 17) bất kỳ lúc nào.
       </p>
     </div>
   </section>
@@ -255,7 +269,7 @@
           </tr>
         </thead>
         <tbody class="divide-y divide-outline-variant/60 text-xs sm:text-sm font-sans">
-          @for (category of capabilityMatrix; track category.title) {
+          @for (category of capabilityMatrix(); track category.title) {
             <!-- Category Header Row -->
             <tr class="bg-surface-container/60">
               <td colspan="3" class="py-2.5 px-6 font-semibold text-xs tracking-wider uppercase text-on-surface-variant">
@@ -358,6 +372,164 @@
   </section>
 
 </main>
+
+<!-- BILLING CHECKOUT MODAL (FE-API-05) -->
+@if (checkoutModalOpen()) {
+  <div
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Thanh toán gói Premium"
+    data-testid="billing-checkout-modal"
+  >
+    <div class="w-full max-w-lg rounded-2xl bg-white border border-neutral-200 shadow-2xl overflow-hidden">
+      <!-- Modal Header -->
+      <div class="px-6 py-4 border-b border-neutral-100 flex items-center justify-between gap-3 bg-neutral-50/70">
+        <div>
+          <span class="text-[10px] font-mono font-bold uppercase tracking-widest text-[#246B4A]">
+            FocusFlow Billing
+          </span>
+          <h3 class="text-lg font-serif-headline font-bold text-neutral-900">
+            Thanh toán Gói Premium
+          </h3>
+        </div>
+        <button
+          type="button"
+          data-testid="billing-modal-close-btn"
+          (click)="closeCheckoutModal()"
+          aria-label="Đóng hộp thoại thanh toán"
+          class="p-2 rounded-full text-neutral-500 hover:text-neutral-900 hover:bg-neutral-200/60 transition cursor-pointer"
+        >
+          <span class="material-symbols-outlined text-lg" aria-hidden="true">close</span>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="p-6 space-y-4">
+        @if (checkoutLoading()) {
+          <div
+            data-testid="billing-loading-state"
+            role="status"
+            aria-live="polite"
+            class="py-8 flex flex-col items-center justify-center gap-3 text-xs text-neutral-600"
+          >
+            <div class="w-6 h-6 border-2 border-[#246B4A]/30 border-t-[#246B4A] rounded-full animate-spin"></div>
+            <span>Đang khởi tạo phiên thanh toán với máy chủ...</span>
+          </div>
+        } @else if (checkoutError(); as errMsg) {
+          <div
+            data-testid="billing-error-banner"
+            role="alert"
+            class="p-4 rounded-xl border border-rose-200 bg-rose-50/80 space-y-2"
+          >
+            <div class="text-sm font-semibold text-rose-900">
+              Không thể khởi tạo thanh toán
+            </div>
+            <p class="text-xs text-rose-800 leading-relaxed">{{ errMsg }}</p>
+            <div class="pt-2 flex items-center gap-2">
+              <button
+                type="button"
+                data-testid="billing-retry-btn"
+                (click)="openPremiumCheckout()"
+                class="px-4 py-2 rounded-full text-xs font-semibold text-white bg-[#246B4A] hover:bg-[#1B5338] transition cursor-pointer"
+              >
+                Thử lại
+              </button>
+              <button
+                type="button"
+                (click)="closeCheckoutModal()"
+                class="px-4 py-2 rounded-full text-xs font-semibold text-neutral-700 bg-white border border-neutral-200 hover:bg-neutral-50 transition cursor-pointer"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        } @else if (checkoutData(); as checkout) {
+          <div data-testid="billing-checkout-details" class="space-y-4">
+            @if (checkout.is_mock_provider) {
+              <div
+                data-testid="billing-mock-badge"
+                class="px-3.5 py-2 rounded-xl border border-amber-200 bg-amber-50/80 text-xs text-amber-900 flex items-center justify-between gap-2"
+              >
+                <span class="font-semibold">Chế độ mô phỏng (Dev/Test)</span>
+                <span class="font-mono text-[10px] uppercase">{{ checkout.provider }}</span>
+              </div>
+            }
+
+            <div class="grid grid-cols-2 gap-3 p-4 rounded-xl border border-neutral-200 bg-neutral-50/70 text-xs">
+              <div>
+                <span class="text-neutral-500 block">Gói đăng ký</span>
+                <strong class="text-neutral-900 font-mono">{{ checkout.plan_code }}</strong>
+              </div>
+              <div>
+                <span class="text-neutral-500 block">Số tiền thanh toán</span>
+                <strong class="text-[#246B4A] font-mono text-sm" data-testid="billing-amount">
+                  {{ checkout.amount_vnd | number }}đ
+                </strong>
+              </div>
+              <div>
+                <span class="text-neutral-500 block">Trạng thái</span>
+                <strong class="text-neutral-900 font-mono" data-testid="billing-status">
+                  {{ checkout.status }}
+                </strong>
+              </div>
+              <div>
+                <span class="text-neutral-500 block">Hết hạn lúc</span>
+                <strong class="text-neutral-900 font-mono">
+                  {{ checkout.expires_at | date: 'HH:mm dd/MM/yyyy' }}
+                </strong>
+              </div>
+            </div>
+
+            <div class="space-y-2 text-xs">
+              <div class="p-3 rounded-xl border border-neutral-200 bg-white space-y-1">
+                <span class="text-[11px] font-semibold text-neutral-600 block">Mã giao dịch</span>
+                <code class="text-[11px] text-neutral-900 break-all">{{ checkout.transaction_ref }}</code>
+              </div>
+              <div class="p-3 rounded-xl border border-neutral-200 bg-white space-y-1">
+                <span class="text-[11px] font-semibold text-neutral-600 block">Liên kết thanh toán / QR</span>
+                <a
+                  [href]="checkout.checkout_url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="text-[11px] text-[#246B4A] underline break-all block"
+                >
+                  {{ checkout.checkout_url }}
+                </a>
+                @if (checkout.qr_code_url && checkout.qr_code_url !== checkout.checkout_url) {
+                  <span class="text-[11px] text-neutral-500 break-all block">
+                    QR: {{ checkout.qr_code_url }}
+                  </span>
+                }
+              </div>
+            </div>
+
+            @if (mockConfirmSuccess(); as settledTx) {
+              <div
+                data-testid="billing-mock-success-banner"
+                role="status"
+                class="p-4 rounded-xl border border-emerald-200 bg-emerald-50/70 text-xs text-emerald-900 space-y-1"
+              >
+                <div class="font-semibold">Thanh toán mô phỏng hoàn tất ({{ settledTx.status }})</div>
+                <p>Tài khoản của bạn đã được nâng cấp lên gói Premium. Phiên đăng nhập đã được đồng bộ.</p>
+              </div>
+            } @else if (checkout.is_mock_provider && mockConfirmEnabled()) {
+              <button
+                type="button"
+                data-testid="billing-mock-confirm-btn"
+                [disabled]="mockConfirmLoading()"
+                (click)="confirmMockPayment()"
+                class="w-full py-3 px-5 rounded-full text-xs font-semibold text-white bg-[#246B4A] hover:bg-[#1B5338] transition cursor-pointer disabled:opacity-50"
+              >
+                {{ mockConfirmLoading() ? 'Đang xác nhận giao dịch...' : 'Xác nhận thanh toán mô phỏng (Dev/Test)' }}
+              </button>
+            }
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+}
 
 <!-- FOOTER -->
 <app-landing-footer />

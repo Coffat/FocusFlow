@@ -21,8 +21,24 @@ from src.account.application.ports.calendar_connection_repository_port import (
 from src.account.application.ports.learner_memory_repository_port import (
     LearnerMemoryRepositoryPort,
 )
+from src.account.application.ports.learner_profile_repository_port import (
+    LearnerProfileRepositoryPort,
+)
+from src.account.application.ports.notification_repository_port import (
+    NotificationRepositoryPort,
+)
+from src.account.application.ports.oauth_state_store_port import (
+    OAuthStateStorePort,
+)
+from src.account.application.ports.payment_ports import (
+    PaymentProviderPort,
+    PaymentTransactionRepositoryPort,
+)
 from src.account.application.ports.user_repository_port import (
     UserRepositoryPort,
+)
+from src.account.application.ports.webcal_token_repository_port import (
+    WebcalTokenRepositoryPort,
 )
 from src.account.application.use_cases.auth.google_auth_use_case import (
     GoogleAuthUseCase,
@@ -52,14 +68,23 @@ from src.account.application.use_cases.availability.get_availability_use_case im
 from src.account.application.use_cases.availability.update_availability_use_case import (
     UpdateAvailabilityUseCase,
 )
+from src.account.application.use_cases.billing import (
+    CreateBillingCheckoutUseCase,
+    ListBillingTransactionsUseCase,
+    SettlePaymentTransactionUseCase,
+)
 from src.account.application.use_cases.calendar import (
     DisconnectGoogleCalendarUseCase,
     GetCalendarConnectionStatusUseCase,
+    GetWebcalIcsFeedUseCase,
+    GetWebcalStatusUseCase,
     HandleGoogleCalendarOAuthCallbackUseCase,
     InitiateGoogleCalendarAuthUseCase,
     ProcessGoogleCalendarWebhookUseCase,
     ReconcileCalendarConnectionsUseCase,
     RenewExpiringCalendarWebhooksUseCase,
+    RevokeWebcalTokenUseCase,
+    RotateWebcalTokenUseCase,
     SyncScheduleBlocksToGoogleUseCase,
 )
 from src.account.application.use_cases.learner_memory import (
@@ -67,8 +92,14 @@ from src.account.application.use_cases.learner_memory import (
     ResetLearnerMemoryUseCase,
     UpdateLearnerMemoryUseCase,
 )
+from src.account.application.use_cases.notifications import (
+    ListNotificationsUseCase,
+    MarkAllNotificationsReadUseCase,
+    MarkNotificationReadUseCase,
+)
 from src.account.application.use_cases.profile import (
     ChangePasswordUseCase,
+    ExportAccountDataUseCase,
     GetProfileUseCase,
     GetQuotaUseCase,
     UpdateProfileUseCase,
@@ -87,9 +118,13 @@ from src.account.infrastructure.adapters.google_calendar_adapter import (
 from src.account.infrastructure.adapters.learner_profile_query_adapter import (
     LearnerProfileQueryAdapter,
 )
+from src.account.infrastructure.adapters.payment_provider_adapter import (
+    LocalMockPaymentAdapter,
+)
 from src.account.infrastructure.adapters.quota_facade_adapter import (
     QuotaFacadeAdapter,
 )
+from src.account.infrastructure.caching.oauth_state_store import RedisOAuthStateStore
 from src.account.infrastructure.caching.otp_repository import OtpRepository
 from src.account.infrastructure.caching.redis_client import RefreshTokenRepository
 from src.account.infrastructure.orm.user_orm import UserORM
@@ -102,8 +137,20 @@ from src.account.infrastructure.repositories.calendar_connection_repository impo
 from src.account.infrastructure.repositories.learner_memory_repository import (
     SqlAlchemyLearnerMemoryRepository,
 )
+from src.account.infrastructure.repositories.learner_profile_repository import (
+    SqlAlchemyLearnerProfileRepository,
+)
+from src.account.infrastructure.repositories.notification_repository import (
+    SqlAlchemyNotificationRepository,
+)
+from src.account.infrastructure.repositories.payment_transaction_repository import (
+    SqlAlchemyPaymentTransactionRepository,
+)
 from src.account.infrastructure.repositories.user_repository import (
     SqlAlchemyUserRepository,
+)
+from src.account.infrastructure.repositories.webcal_token_repository import (
+    SqlAlchemyWebcalTokenRepository,
 )
 from src.account.infrastructure.security.google_auth_service import (
     google_auth_service,
@@ -113,7 +160,16 @@ from src.account.infrastructure.security.jwt_token_provider import (
 )
 from src.account.presentation.tasks import dispatch_otp_email
 from src.account.public_api import LearnerProfileQueryPort, QuotaFacadePort
-from src.planning.public_api import ScheduleBlockSyncPort, create_schedule_block_sync_port
+from src.execution.public_api import (
+    ExecutionDashboardQueryPort,
+    create_execution_dashboard_query_port,
+)
+from src.planning.public_api import (
+    PlanningExecutionBridgePort,
+    ScheduleBlockSyncPort,
+    create_planning_execution_bridge,
+    create_schedule_block_sync_port,
+)
 from src.shared_kernel.application.uow import AsyncUnitOfWork
 from src.shared_kernel.config import get_settings
 from src.shared_kernel.infrastructure.database.session import get_async_session
@@ -252,6 +308,18 @@ def get_current_learner_id(
     return current_user.id
 
 
+async def get_current_admin_user(
+    current_user: UserORM = Depends(get_current_user),
+) -> UserORM:
+    """Require authenticated user with ADMIN role (ADR-008)."""
+    if not current_user.is_admin():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privileges required",
+        )
+    return current_user
+
+
 # --- Use Case Dependencies ---
 def get_login_use_case(
     user_repo: UserRepositoryPort = Depends(get_user_repository),
@@ -361,11 +429,13 @@ def get_confirm_password_reset_use_case(
     user_repo: UserRepositoryPort = Depends(get_user_repository),
     otp_repo: OtpRepositoryPort = Depends(get_otp_repository),
     uow: AsyncUnitOfWork = Depends(get_account_uow),
+    refresh_token_repo: RefreshTokenRepositoryPort = Depends(get_refresh_token_repository),
 ) -> ConfirmPasswordResetUseCase:
     return ConfirmPasswordResetUseCase(
         user_repo=user_repo,
         otp_repo=otp_repo,
         uow=uow,
+        refresh_token_repo=refresh_token_repo,
     )
 
 
@@ -463,18 +533,34 @@ def get_calendar_provider() -> CalendarProviderPort:
     return GoogleCalendarAdapter(settings=settings)
 
 
-def get_initiate_google_calendar_auth_use_case() -> InitiateGoogleCalendarAuthUseCase:
-    return InitiateGoogleCalendarAuthUseCase()
+def get_oauth_state_store() -> OAuthStateStorePort:
+    return RedisOAuthStateStore()
+
+
+def get_initiate_google_calendar_auth_use_case(
+    state_store: OAuthStateStorePort = Depends(get_oauth_state_store),
+) -> InitiateGoogleCalendarAuthUseCase:
+    settings = get_settings()
+    return InitiateGoogleCalendarAuthUseCase(
+        state_store=state_store,
+        secret_key=settings.secret_key,
+        settings=settings,
+    )
 
 
 def get_handle_google_calendar_oauth_callback_use_case(
     repo: CalendarConnectionRepositoryPort = Depends(get_calendar_connection_repository),
     provider: CalendarProviderPort = Depends(get_calendar_provider),
+    state_store: OAuthStateStorePort = Depends(get_oauth_state_store),
     uow: AsyncUnitOfWork = Depends(get_account_uow),
 ) -> HandleGoogleCalendarOAuthCallbackUseCase:
+    settings = get_settings()
     return HandleGoogleCalendarOAuthCallbackUseCase(
         repository=repo,
         calendar_provider=provider,
+        state_store=state_store,
+        secret_key=settings.secret_key,
+        settings=settings,
         uow=uow,
     )
 
@@ -562,17 +648,32 @@ def get_reconcile_calendar_connections_use_case(
 
 
 # --- Profile, Quota & Password Dependencies ---
+def get_learner_profile_repository(
+    session: AsyncSession = Depends(get_account_db_session),
+) -> LearnerProfileRepositoryPort:
+    return SqlAlchemyLearnerProfileRepository(session)
+
+
 def get_update_profile_use_case(
     user_repo: UserRepositoryPort = Depends(get_user_repository),
     uow: AsyncUnitOfWork = Depends(get_account_uow),
+    learner_profile_repo: LearnerProfileRepositoryPort = Depends(get_learner_profile_repository),
 ) -> UpdateProfileUseCase:
-    return UpdateProfileUseCase(user_repo=user_repo, uow=uow)
+    return UpdateProfileUseCase(
+        user_repo=user_repo,
+        uow=uow,
+        learner_profile_repo=learner_profile_repo,
+    )
 
 
 def get_get_profile_use_case(
     user_repo: UserRepositoryPort = Depends(get_user_repository),
+    learner_profile_repo: LearnerProfileRepositoryPort = Depends(get_learner_profile_repository),
 ) -> GetProfileUseCase:
-    return GetProfileUseCase(user_repo=user_repo)
+    return GetProfileUseCase(
+        user_repo=user_repo,
+        learner_profile_repo=learner_profile_repo,
+    )
 
 
 def get_get_quota_use_case(
@@ -591,4 +692,150 @@ def get_change_password_use_case(
         user_repo=user_repo,
         uow=uow,
         refresh_token_repo=refresh_token_repo,
+    )
+
+
+# --- WebCal Dependencies ---
+def get_webcal_token_repository(
+    session: AsyncSession = Depends(get_account_db_session),
+) -> WebcalTokenRepositoryPort:
+    return SqlAlchemyWebcalTokenRepository(session)
+
+
+def get_account_planning_execution_bridge(
+    session: AsyncSession = Depends(get_account_db_session),
+) -> PlanningExecutionBridgePort:
+    return create_planning_execution_bridge(session)
+
+
+def get_webcal_status_use_case(
+    repo: WebcalTokenRepositoryPort = Depends(get_webcal_token_repository),
+) -> GetWebcalStatusUseCase:
+    return GetWebcalStatusUseCase(repository=repo)
+
+
+def get_rotate_webcal_token_use_case(
+    repo: WebcalTokenRepositoryPort = Depends(get_webcal_token_repository),
+    uow: AsyncUnitOfWork = Depends(get_account_uow),
+) -> RotateWebcalTokenUseCase:
+    settings = get_settings()
+    return RotateWebcalTokenUseCase(
+        repository=repo,
+        uow=uow,
+        public_base_url=settings.frontend_url,
+    )
+
+
+def get_revoke_webcal_token_use_case(
+    repo: WebcalTokenRepositoryPort = Depends(get_webcal_token_repository),
+    uow: AsyncUnitOfWork = Depends(get_account_uow),
+) -> RevokeWebcalTokenUseCase:
+    return RevokeWebcalTokenUseCase(repository=repo, uow=uow)
+
+
+def get_webcal_ics_feed_use_case(
+    repo: WebcalTokenRepositoryPort = Depends(get_webcal_token_repository),
+    user_repo: UserRepositoryPort = Depends(get_user_repository),
+    planning_bridge: PlanningExecutionBridgePort = Depends(get_account_planning_execution_bridge),
+    uow: AsyncUnitOfWork = Depends(get_account_uow),
+) -> GetWebcalIcsFeedUseCase:
+    return GetWebcalIcsFeedUseCase(
+        repository=repo,
+        user_repo=user_repo,
+        planning_bridge=planning_bridge,
+        uow=uow,
+    )
+
+
+def get_account_execution_dashboard_port(
+    session: AsyncSession = Depends(get_account_db_session),
+) -> ExecutionDashboardQueryPort:
+    return create_execution_dashboard_query_port(session)
+
+
+def get_export_account_data_use_case(
+    user_repo: UserRepositoryPort = Depends(get_user_repository),
+    learner_profile_repo: LearnerProfileRepositoryPort = Depends(get_learner_profile_repository),
+    learner_memory_repo: LearnerMemoryRepositoryPort = Depends(get_learner_memory_repository),
+    availability_repo: AvailabilityRepositoryPort = Depends(get_availability_repository),
+    planning_bridge: PlanningExecutionBridgePort = Depends(get_account_planning_execution_bridge),
+    execution_dashboard_port: ExecutionDashboardQueryPort = Depends(
+        get_account_execution_dashboard_port
+    ),
+) -> ExportAccountDataUseCase:
+    return ExportAccountDataUseCase(
+        user_repo=user_repo,
+        learner_profile_repo=learner_profile_repo,
+        learner_memory_repo=learner_memory_repo,
+        availability_repo=availability_repo,
+        planning_bridge=planning_bridge,
+        execution_dashboard_port=execution_dashboard_port,
+    )
+
+
+# --- Notification Center Dependencies ---
+def get_notification_repository(
+    session: AsyncSession = Depends(get_account_db_session),
+) -> NotificationRepositoryPort:
+    return SqlAlchemyNotificationRepository(session)
+
+
+def get_list_notifications_use_case(
+    repo: NotificationRepositoryPort = Depends(get_notification_repository),
+) -> ListNotificationsUseCase:
+    return ListNotificationsUseCase(notification_repo=repo)
+
+
+def get_mark_notification_read_use_case(
+    repo: NotificationRepositoryPort = Depends(get_notification_repository),
+    uow: AsyncUnitOfWork = Depends(get_account_uow),
+) -> MarkNotificationReadUseCase:
+    return MarkNotificationReadUseCase(notification_repo=repo, uow=uow)
+
+
+def get_mark_all_notifications_read_use_case(
+    repo: NotificationRepositoryPort = Depends(get_notification_repository),
+    uow: AsyncUnitOfWork = Depends(get_account_uow),
+) -> MarkAllNotificationsReadUseCase:
+    return MarkAllNotificationsReadUseCase(notification_repo=repo, uow=uow)
+
+
+# --- Billing & Subscription Dependencies ---
+def get_payment_transaction_repository(
+    session: AsyncSession = Depends(get_account_db_session),
+) -> PaymentTransactionRepositoryPort:
+    return SqlAlchemyPaymentTransactionRepository(session)
+
+
+def get_payment_provider() -> PaymentProviderPort:
+    return LocalMockPaymentAdapter(settings=get_settings())
+
+
+def get_create_billing_checkout_use_case(
+    payment_repo: PaymentTransactionRepositoryPort = Depends(get_payment_transaction_repository),
+    payment_provider: PaymentProviderPort = Depends(get_payment_provider),
+    uow: AsyncUnitOfWork = Depends(get_account_uow),
+) -> CreateBillingCheckoutUseCase:
+    return CreateBillingCheckoutUseCase(
+        payment_repo=payment_repo,
+        payment_provider=payment_provider,
+        uow=uow,
+    )
+
+
+def get_list_billing_transactions_use_case(
+    payment_repo: PaymentTransactionRepositoryPort = Depends(get_payment_transaction_repository),
+) -> ListBillingTransactionsUseCase:
+    return ListBillingTransactionsUseCase(payment_repo=payment_repo)
+
+
+def get_settle_payment_transaction_use_case(
+    payment_repo: PaymentTransactionRepositoryPort = Depends(get_payment_transaction_repository),
+    user_repo: UserRepositoryPort = Depends(get_user_repository),
+    uow: AsyncUnitOfWork = Depends(get_account_uow),
+) -> SettlePaymentTransactionUseCase:
+    return SettlePaymentTransactionUseCase(
+        payment_repo=payment_repo,
+        user_repo=user_repo,
+        uow=uow,
     )

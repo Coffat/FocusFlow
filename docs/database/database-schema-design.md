@@ -1,5 +1,5 @@
 # FocusFlow — Thiết kế Cơ sở Dữ liệu Quan hệ & Sơ đồ Lược đồ (Database Schema Diagram & Design Document)
-## Phiên bản: v3.2 — Chuẩn Cơ sở Dữ liệu Vật lý Đầy đủ 35 Bảng 3NF/BCNF kết hợp Controlled JSONB Value Objects + `pgvector` (4 Bounded Contexts + Shared Kernel: 12 / 10 / 5 / 4 / 4)
+## Phiên bản: v3.4 — Chuẩn Cơ sở Dữ liệu Vật lý Đầy đủ 36 Bảng 3NF/BCNF kết hợp Controlled JSONB Value Objects + `pgvector` (4 Bounded Contexts + Shared Kernel: 13 / 10 / 5 / 4 / 4)
 **Dự án:** FocusFlow — Hệ thống hỗ trợ lập kế hoạch và thực thi lộ trình tự học thích ứng tích hợp AI (FocusFlow Learning Intelligence Harness)  
 **Hệ quản trị CSDL:** PostgreSQL 16 + `pgvector` (vận hành qua Docker Compose, kết nối bất đồng bộ qua `SQLAlchemy 2.0 Async + asyncpg`)  
 **Kiến trúc Hệ thống:** Context-First Modular Monolith + Hexagonal Architecture (`account`, `planning`, `execution`, `evaluation`, `shared_kernel`)  
@@ -12,27 +12,27 @@
 ## MỤC LỤC
 
 1. [Tổng quan & Phương pháp luận Thiết kế Dữ liệu](#1-tổng-quan--phương-pháp-luận-thiết-kế-dữ-liệu)
-   - 1.1 [Yêu cầu từ Giảng viên Hướng dẫn (DB Diagram Vật lý 35 Bảng thay vì Conceptual ERD)](#11-yêu-cầu-từ-giảng-viên-hướng-dẫn-db-diagram-vật-lý-35-bảng-thay-vì-conceptual-erd)
+   - 1.1 [Yêu cầu từ Giảng viên Hướng dẫn (DB Diagram Vật lý 36 Bảng thay vì Conceptual ERD)](#11-yêu-cầu-từ-giảng-viên-hướng-dẫn-db-diagram-vật-lý-36-bảng-thay-vì-conceptual-erd)
    - 1.2 [Chiến lược Khóa chính Tuần tự Thời gian (UUIDv7 - RFC 9562) & Extension `pgvector`](#12-chiến-lược-khóa-chính-tuần-tự-thời-gian-uuidv7---rfc-9562--extension-pgvector)
    - 1.3 [Quy tắc Modular Monolith: Bảo toàn FK Vật lý tại DB nhưng Cấm ORM JOIN Chéo Context](#13-quy-tắc-modular-monolith-bảo-toàn-fk-vật-lý-tại-db-nhưng-cấm-orm-join-chéo-context)
    - 1.4 [Chiến lược Đa người dùng (Multi-tenant Isolation), Quy ước Định danh & Quản lý Thời gian](#14-chiến-lược-đa-người-dùng-multi-tenant-isolation-quy-ước-định-danh--quản-lý-thời-gian)
-2. [Sơ đồ Lược đồ Cơ sở Dữ liệu Vật lý (Physical Database Schema Diagram - 35 Bảng)](#2-sơ-đồ-lược-đồ-cơ-sở-dữ-liệu-vật-lý-physical-database-schema-diagram---35-bảng)
-   - 2.1 [Sơ đồ Mermaid Database Schema (Chuẩn Crow's Foot - 35 Bảng)](#21-sơ-đồ-mermaid-database-schema-chuẩn-crows-foot---35-bảng)
-   - 2.2 [Mã nguồn DBML (Database Markup Language cho dbdiagram.io - 35 Bảng)](#22-mã-nguồn-dbml-database-markup-language-cho-dbdiagramio---35-bảng)
-3. [Đặc tả Chi tiết 35 Bảng Dữ liệu Vật lý theo 4 Bounded Contexts + Shared Kernel (`12 / 10 / 5 / 4 / 4`)](#3-đặc-tả-chi-tiết-35-bảng-dữ-liệu-vật-lý-theo-4-bounded-contexts--shared-kernel-12--10--5--4--4)
-   - 3.1 [Bounded Context 1 (`account` — 12 Bảng): Định danh, Hồ sơ SRL, Trí nhớ Cấu trúc hóa 4×3, Thành thạo Khái niệm, Thời gian rảnh, Quota 2 Pha, Đồng bộ Lịch & Thanh toán](#31-bounded-context-1-account--12-bảng-định-danh-hồ-sơ-srl-trí-nhớ-cấu-trúc-hóa-43-thành-thạo-khái-niệm-thời-gian-rảnh-quota-2-pha-đồng-bộ-lịch--thanh-toán)
+2. [Sơ đồ Lược đồ Cơ sở Dữ liệu Vật lý (Physical Database Schema Diagram - 36 Bảng)](#2-sơ-đồ-lược-đồ-cơ-sở-dữ-liệu-vật-lý-physical-database-schema-diagram---36-bảng)
+   - 2.1 [Sơ đồ Mermaid Database Schema (Chuẩn Crow's Foot - 36 Bảng)](#21-sơ-đồ-mermaid-database-schema-chuẩn-crows-foot---36-bảng)
+   - 2.2 [Mã nguồn DBML (Database Markup Language cho dbdiagram.io - 36 Bảng)](#22-mã-nguồn-dbml-database-markup-language-cho-dbdiagramio---36-bảng)
+3. [Đặc tả Chi tiết 36 Bảng Dữ liệu Vật lý theo 4 Bounded Contexts + Shared Kernel (`13 / 10 / 5 / 4 / 4`)](#3-đặc-tả-chi-tiết-36-bảng-dữ-liệu-vật-lý-theo-4-bounded-contexts--shared-kernel-13--10--5--4--4)
+   - 3.1 [Bounded Context 1 (`account` — 13 Bảng): Định danh, Hồ sơ SRL, Trí nhớ Cấu trúc hóa 4×3, Thành thạo Khái niệm, Thời gian rảnh, Quota 2 Pha, Đồng bộ Lịch, Thanh toán & Thông báo](#31-bounded-context-1-account--13-bảng-định-danh-hồ-sơ-srl-trí-nhớ-cấu-trúc-hóa-43-thành-thạo-khái-niệm-thời-gian-rảnh-quota-2-pha-đồng-bộ-lịch-thanh-toán--thông-báo)
    - 3.2 [Bounded Context 2 (`planning` — 10 Bảng): Mục tiêu, Lộ trình, Cột mốc, Lịch chính thức (Resilience Policy), Đề xuất Lịch (What-If), Đồ thị Tri thức, Knowledge Engine (RAG) & Khối Lịch Học (`schedule_blocks`)](#32-bounded-context-2-planning--10-bảng-mục-tiêu-lộ-trình-cột-mốc-lịch-chính-thức-resilience-policy-đề-xuất-lịch-what-if-đồ-thị-tri-thức-knowledge-engine-rag--khối-lịch-học-schedule_blocks)
    - 3.3 [Bounded Context 3 (`execution` — 5 Bảng): Nhiệm vụ (kèm Trích dẫn RAG), Tiên quyết DAG, Phiên học Pomodoro (kèm Daily Check-in), Liên kết Nhiệm vụ & Ghi chép](#33-bounded-context-3-execution--5-bảng-nhiệm-vụ-kèm-trích-dẫn-rag-tiên-quyết-dag-phiên-học-pomodoro-kèm-daily-check-in-liên-kết-nhiệm-vụ--ghi-chép)
    - 3.4 [Bounded Context 4 (`evaluation` — 4 Bảng): Lịch sử Tạm dừng, Báo cáo Đánh giá AI (kèm Phản tư Tuần), Nhật ký Biến động Lịch học & Bằng chứng Khảo sát Mốc (kèm Mistake Intelligence)](#34-bounded-context-4-evaluation--4-bảng-lịch-sử-tạm-dừng-báo-cáo-đánh-giá-ai-kèm-phản-tư-tuần-nhật-ký-biến-động-lịch-học--bằng-chứng-khảo-sát-mốc-kèm-mistake-intelligence)
    - 3.5 [Shared Kernel (`shared_kernel` — 4 Bảng): Hàng đợi Sự kiện Giao dịch Outbox, Sổ cái Idempotent Consumer & Điều phối Workflow Bền vững (`workflow_runs`, `workflow_step_executions`)](#35-shared-kernel-shared_kernel--4-bảng-hàng-đợi-sự-kiện-giao-dịch-outbox-sổ-cái-idempotent-consumer--điều-phối-workflow-bền-vững-workflow_runs-workflow_step_executions)
-   - 3.6 [Ma trận Ánh xạ 11 Khái niệm Logic của FocusFlow Learning Intelligence Harness sang 35 Bảng Vật lý](#36-ma-trận-ánh-xạ-11-khái-niệm-logic-của-focusflow-learning-intelligence-harness-sang-35-bảng-vật-lý)
+   - 3.6 [Ma trận Ánh xạ 11 Khái niệm Logic của FocusFlow Learning Intelligence Harness sang 36 Bảng Vật lý](#36-ma-trận-ánh-xạ-11-khái-niệm-logic-của-focusflow-learning-intelligence-harness-sang-36-bảng-vật-lý)
 4. [Phân tích Chuẩn hóa Dữ liệu (Database Normalization Analysis - 3NF / BCNF)](#4-phân-tích-chuẩn-hóa-dữ-liệu-database-normalization-analysis---3nf--bcnf)
-   - 4.1 [Chứng minh Dạng Chuẩn 1 (1NF), 2 (2NF), 3 (3NF) & Boyce-Codd (BCNF) trên 35 Bảng](#41-chứng-minh-dạng-chuẩn-1-1nf-2-2nf-3-3nf--boyce-codd-bcnf-trên-35-bảng)
+   - 4.1 [Chứng minh Dạng Chuẩn 1 (1NF), 2 (2NF), 3 (3NF) & Boyce-Codd (BCNF) trên 36 Bảng](#41-chứng-minh-dạng-chuẩn-1-1nf-2-2nf-3-3nf--boyce-codd-bcnf-trên-36-bảng)
    - 4.2 [Cơ chế Ánh xạ Repository giữa Bảng 3NF `availability_slots` và Domain Value Objects (`WeeklySchedule`, `TimeSlot`)](#42-cơ-chế-ánh-xạ-repository-giữa-bảng-3nf-availability_slots-và-domain-value-objects-weeklyschedule-timeslot)
    - 4.3 [Tính Hợp thức của Frozen Baseline (`official_schedules`) và Audit Snapshots trong Lý thuyết Chuẩn hóa](#43-tính-hợp-thức-của-frozen-baseline-official_schedules-và-audit-snapshots-trong-lý-thuyết-chuẩn-hóa)
    - 4.4 [Luận cứ Chuẩn hóa 3NF/BCNF cho 7 Bảng Mới của Learning Intelligence Harness & Sự Tách biệt Khối Lịch Học](#44-luận-cứ-chuẩn-hóa-3nfbcnf-cho-7-bảng-mới-của-learning-intelligence-harness--sự-tách-biệt-khối-lịch-học)
 5. [Thiết kế Chỉ mục Hiệu năng & Ràng buộc Toàn vẹn (Indexing & Constraints Strategy)](#5-thiết-kế-chỉ-mục-hiệu-năng--ràng-buộc-toàn-vẹn-indexing--constraints-strategy)
-   - 5.1 [Chiến lược B-Tree, Partial Unique, GIN `tsvector` & HNSW `pgvector` Indexes (74 Chỉ mục chuyên biệt)](#51-chiến-lược-b-tree-partial-unique-gin-tsvector--hnsw-pgvector-indexes-74-chỉ-mục-chuyên-biệt)
+   - 5.1 [Chiến lược B-Tree, Partial Unique, GIN `tsvector` & HNSW `pgvector` Indexes (76 Chỉ mục chuyên biệt)](#51-chiến-lược-b-tree-partial-unique-gin-tsvector--hnsw-pgvector-indexes-76-chỉ-mục-chuyên-biệt)
    - 5.2 [Ràng buộc Toàn vẹn Tham chiếu Lai (Hybrid Cascading & Deletion Protection)](#52-ràng-buộc-toàn-vẹn-tham-chiếu-lai-hybrid-cascading--deletion-protection)
 6. [Quản trị Giao dịch, Khóa Đồng thời & Transactional Outbox](#6-quản-trị-giao-dịch-khóa-đồng-thời--transactional-outbox)
    - 6.1 [Giao dịch Giữ chỗ Hạn ngạch AI 2 Pha (2-Phase ACID Quota Reservation)](#61-giao-dịch-giữ-chỗ-hạn-ngạch-ai-2-pha-2-phase-acid-quota-reservation---asr-02)
@@ -40,15 +40,15 @@
    - 6.3 [Giao dịch Tịnh tiến Tất định Domino Shift & Ghi Nhật ký `schedule_change_logs` (`BUSR-07`)](#63-giao-dịch-tịnh-tiến-tất-định-domino-shift--ghi-nhật-ký-schedule_change_logs-busr-07)
    - 6.4 [Giao dịch Giám sát Heartbeat & Chốt Phiên Gián đoạn qua Taskiq Scheduler (`BUSR-09`, `OS-01`, `OS-07`)](#64-giao-dịch-giám-sát-heartbeat--chốt-phiên-gián-đoạn-qua-taskiq-scheduler-busr-09-os-01-os-07)
 7. [Tập lệnh SQL DDL Khởi tạo Cơ sở Dữ liệu Hoàn chỉnh (PostgreSQL 16 DDL Script)](#7-tập-lệnh-sql-ddl-khởi-tạo-cơ-sở-dữ-liệu-hoàn-chỉnh-postgresql-16-ddl-script)
-8. [Ma trận Truy vết từ Yêu cầu SRS v1.3 & Learning Intelligence Harness sang 35 Bảng Cơ sở Dữ liệu](#8-ma-trận-truy-vết-từ-yêu-cầu-srs-v13--learning-intelligence-harness-sang-35-bảng-cơ-sở-dữ-liệu)
+8. [Ma trận Truy vết từ Yêu cầu SRS v1.3 & Learning Intelligence Harness sang 36 Bảng Cơ sở Dữ liệu](#8-ma-trận-truy-vết-từ-yêu-cầu-srs-v13--learning-intelligence-harness-sang-36-bảng-cơ-sở-dữ-liệu)
 
 ---
 
 ## 1. Tổng quan & Phương pháp luận Thiết kế Dữ liệu
 
-### 1.1. Yêu cầu từ Giảng viên Hướng dẫn (DB Diagram Vật lý 35 Bảng thay vì Conceptual ERD)
+### 1.1. Yêu cầu từ Giảng viên Hướng dẫn (DB Diagram Vật lý 36 Bảng thay vì Conceptual ERD)
 Theo yêu cầu trực tiếp từ Giảng viên Hướng dẫn Đồ án Tốt nghiệp CNTT:
-> **Định hướng Học thuật:** Không sử dụng biểu đồ ERD khái niệm hình thoi (Chen notation) mang tính trừu tượng sơ lược. Bắt buộc xây dựng **Sơ đồ Lược đồ Cơ sở Dữ liệu Vật lý (Physical Database Schema Diagram / DB Diagram)** phản ánh chính xác cấu trúc **35 bảng thực tế** trong hệ quản trị PostgreSQL 16 (theo phân rã 4 Bounded Contexts + Shared Kernel: `12 / 10 / 5 / 4 / 4`), thể hiện rõ tên bảng, tên cột, kiểu dữ liệu vật lý chuẩn (`UUID`, `VARCHAR`, `TIMESTAMPTZ`, `JSONB`, `BOOLEAN`, `SMALLINT`, `INTEGER`, `BIGINT`, `NUMERIC`, `TSVECTOR`, `vector(768)`), chỉ định Khóa chính (`PK`), Khóa ngoại (`FK`), Ràng buộc duy nhất (`UQ`), Ràng buộc kiểm tra (`CHECK`) và các quan hệ 1:1, 1:N, N:M với ký hiệu Crow's Foot chuẩn mực.
+> **Định hướng Học thuật:** Không sử dụng biểu đồ ERD khái niệm hình thoi (Chen notation) mang tính trừu tượng sơ lược. Bắt buộc xây dựng **Sơ đồ Lược đồ Cơ sở Dữ liệu Vật lý (Physical Database Schema Diagram / DB Diagram)** phản ánh chính xác cấu trúc **36 bảng thực tế** trong hệ quản trị PostgreSQL 16 (theo phân rã 4 Bounded Contexts + Shared Kernel: `13 / 10 / 5 / 4 / 4`, bổ sung bảng `notifications` từ migration `0015_add_notifications_table`), thể hiện rõ tên bảng, tên cột, kiểu dữ liệu vật lý chuẩn (`UUID`, `VARCHAR`, `TIMESTAMPTZ`, `JSONB`, `BOOLEAN`, `SMALLINT`, `INTEGER`, `BIGINT`, `NUMERIC`, `TSVECTOR`, `vector(768)`), chỉ định Khóa chính (`PK`), Khóa ngoại (`FK`), Ràng buộc duy nhất (`UQ`), Ràng buộc kiểm tra (`CHECK`) và các quan hệ 1:1, 1:N, N:M với ký hiệu Crow's Foot chuẩn mực.
 
 ### 1.2. Chiến lược Khóa chính Tuần tự Thời gian (UUIDv7 - RFC 9562) & Extension `pgvector`
 Toàn bộ các bảng thực thể trong hệ thống FocusFlow sử dụng kiểu dữ liệu `UUID` cho khóa chính (riêng bảng sổ cái chống lặp `processed_events` sử dụng khóa chính kép `(event_id, handler_name)`, bảng `learning_concepts` dùng `concept_id VARCHAR(120)` và `concept_prerequisites` dùng `(source_concept_id, prerequisite_concept_id)`):
@@ -61,14 +61,14 @@ Toàn bộ các bảng thực thể trong hệ thống FocusFlow sử dụng ki�
   3. *Bảo mật cao:* Vẫn chứa 74 bits ngẫu nhiên mã hóa mạnh, loại bỏ 100% rủi ro tấn công đoán số thứ tự (ID Enumeration Attack) như khóa tự tăng `SERIAL`/`BIGINT`.
 
 ### 1.3. Quy tắc Modular Monolith: Bảo toàn FK Vật lý tại DB nhưng Cấm ORM JOIN Chéo Context
-Trong kiến trúc **Context-First Modular Monolith** của FocusFlow, toàn bộ **35 bảng vật lý** cùng cư trú trong schema `public` của một cụm PostgreSQL 16 nhưng được phân định quyền sở hữu nghiêm ngặt về **4 Bounded Contexts + 1 Shared Kernel (`12 / 10 / 5 / 4 / 4`)**:
+Trong kiến trúc **Context-First Modular Monolith** của FocusFlow, toàn bộ **36 bảng vật lý** cùng cư trú trong schema `public` của một cụm PostgreSQL 16 nhưng được phân định quyền sở hữu nghiêm ngặt về **4 Bounded Contexts + 1 Shared Kernel (`13 / 10 / 5 / 4 / 4`)**:
 1. **Tại tầng Cơ sở Dữ liệu Vật lý (Physical DB Level):** Giữ nguyên đầy đủ các ràng buộc **Foreign Key (`FK`) vật lý** giữa các bảng (kể cả các Cross-Context FK như từ `planning.roadmaps` về `account.users`, từ `account.learner_concept_masteries` về `planning.learning_concepts`, từ `planning.schedule_blocks` về `execution.tasks`, từ `execution.tasks` về `planning.roadmaps`/`planning.milestones`/`planning.official_schedules`, từ `evaluation.pause_records` về `planning.roadmaps`, hay các Intra-Context FK như `execution.session_tasks` về `execution.tasks` với `ON DELETE RESTRICT`). Điều này đảm bảo tính toàn vẹn tham chiếu 100% ở mức hệ quản trị CSDL (Defense-in-Depth) và đáp ứng trọn vẹn tiêu chí chuẩn hóa 3NF/BCNF của Hội đồng Chấm Đồ án.
 2. **Tại tầng Mã nguồn Ứng dụng (Application & ORM Code Level):** Nghiêm cấm viết các câu lệnh SQLAlchemy ORM `JOIN` hoặc `relationship()` nối trực tiếp giữa các ORM Model thuộc hai Bounded Context khác nhau (được kiểm soát tự động bởi công cụ `import-linter`).
    - Khi một Context cần **đọc dữ liệu** từ Context khác: Bắt buộc gọi qua giao diện truy vấn công khai `public_api.py` (ví dụ: `AvailabilityQueryPort`, `QuotaFacadePort`, `RoadmapTaskQueryPort`, `KnowledgeRetrievalPort`, `LearnerMemoryQueryPort`).
    - Khi một Context cần **kích hoạt hiệu ứng phụ (side-effect)** sang Context khác: Bắt buộc phát sự kiện miền bất đồng bộ qua bảng **`outbox_events`** (Transactional Outbox), được tiếp vận qua **Taskiq Worker (Redis Streams)** và kiểm tra chống xử lý trùng tại bảng **`processed_events`**.
 
 ### 1.4. Chiến lược Đa người dùng (Multi-tenant Isolation), Quy ước Định danh & Quản lý Thời gian
-* **Cô lập Dữ liệu Đa người dùng:** Sử dụng Single Surrogate FK chuẩn, `user_id` hiện diện tại các bảng gốc (`users`, `learner_profiles`, `webcal_tokens`, `calendar_connections`, `availabilities`, `ai_quotas`, `ai_quota_reservations`, `ai_usage_logs`, `payment_transactions`, `learner_memory_items`, `learner_concept_masteries`, `goals`, `roadmaps`, `schedule_proposals`, `knowledge_sources`, `study_sessions`, `study_notes`, `ai_reviews`, `milestone_proofs`, `workflow_runs`). Việc kiểm tra quyền sở hữu được thực hiện nghiêm ngặt ở Application Service Layer (`WHERE user_id = current_user.id`).
+* **Cô lập Dữ liệu Đa người dùng:** Sử dụng Single Surrogate FK chuẩn, `user_id` hiện diện tại các bảng gốc (`users`, `learner_profiles`, `webcal_tokens`, `calendar_connections`, `availabilities`, `ai_quotas`, `ai_quota_reservations`, `ai_usage_logs`, `payment_transactions`, `learner_memory_items`, `learner_concept_masteries`, `notifications`, `goals`, `roadmaps`, `schedule_proposals`, `knowledge_sources`, `study_sessions`, `study_notes`, `ai_reviews`, `milestone_proofs`, `workflow_runs`). Việc kiểm tra quyền sở hữu được thực hiện nghiêm ngặt ở Application Service Layer (`WHERE user_id = current_user.id`).
 * **Quy ước Định danh (Naming Conventions):**
   * Tên bảng: Chữ thường, số nhiều, nối bằng dấu gạch dưới (`snake_case`).
   * Khóa ngoại: `{tên_bảng_số_ít}_id`, ví dụ: `user_id`, `roadmap_id`, `session_id`, `task_id`, `milestone_id`, `source_id`, `workflow_run_id`.
@@ -81,14 +81,14 @@ Trong kiến trúc **Context-First Modular Monolith** của FocusFlow, toàn b�
 
 ---
 
-## 2. Sơ đồ Lược đồ Cơ sở Dữ liệu Vật lý (Physical Database Schema Diagram - 35 Bảng)
+## 2. Sơ đồ Lược đồ Cơ sở Dữ liệu Vật lý (Physical Database Schema Diagram - 36 Bảng)
 
 > **Tệp mã nguồn DBML độc lập (tương thích 100% dbdiagram.io):** [`docs/database/schema.dbml`](schema.dbml)  
 > **Tệp mã nguồn PlantUML ERD:** [`docs/database/database-schema.puml`](database-schema.puml)  
 > **Hình ảnh sơ đồ CSDL vật lý:**  
 > ![FocusFlow Database Diagram](images/FocusFlow_Database_Diagram.png)
 
-### 2.1. Sơ đồ Mermaid Database Schema (Chuẩn Crow's Foot - 35 Bảng)
+### 2.1. Sơ đồ Mermaid Database Schema (Chuẩn Crow's Foot - 36 Bảng)
 
 ```mermaid
 erDiagram
@@ -106,6 +106,7 @@ erDiagram
     users ||--o{ learner_memory_items : "stores memory (1:N)"
     users ||--o{ learner_concept_masteries : "tracks mastery (1:N)"
     learning_concepts ||--o{ learner_concept_masteries : "assessed in (1:N)"
+    users ||--o{ notifications : "receives notifications (1:N)"
     users ||--o{ goals : "defines (1:N)"
     users ||--o{ roadmaps : "owns (1:N)"
     goals ||--o| roadmaps : "originates (1:0..1)"
@@ -318,6 +319,20 @@ erDiagram
         jsonb mistake_pattern_summary
         timestamptz last_practiced_at
         timestamptz next_review_at
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    notifications {
+        uuid id PK
+        uuid user_id FK
+        uuid event_id
+        varchar notification_type
+        varchar title
+        text content
+        varchar resource_url
+        boolean is_read
+        timestamptz read_at
         timestamptz created_at
         timestamptz updated_at
     }
@@ -664,16 +679,16 @@ erDiagram
 
 ---
 
-### 2.2. Mã nguồn DBML (Database Markup Language cho dbdiagram.io - 35 Bảng)
+### 2.2. Mã nguồn DBML (Database Markup Language cho dbdiagram.io - 36 Bảng)
 
 ```dbml
-Project FocusFlow_v3_2 {
+Project FocusFlow_v3_4 {
   database_type: 'PostgreSQL 16'
-  Note: 'Physical Database Schema v3.2 (35 Tables across 4 Bounded Contexts + Shared Kernel: 12 / 10 / 5 / 4 / 4 with pgvector)'
+  Note: 'Physical Database Schema v3.4 (36 Tables across 4 Bounded Contexts + Shared Kernel: 13 / 10 / 5 / 4 / 4 with pgvector)'
 }
 
 // ==========================================
-// BOUNDED CONTEXT 1: ACCOUNT (12 TABLES)
+// BOUNDED CONTEXT 1: ACCOUNT (13 TABLES)
 // ==========================================
 Table users {
   id uuid [pk, default: `gen_random_uuid()`]
@@ -850,6 +865,25 @@ Table learner_concept_masteries {
 
   indexes {
     (user_id, concept_id) [unique]
+  }
+}
+
+Table notifications {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null, ref: > users.id]
+  event_id uuid
+  notification_type varchar(64) [not null]
+  title varchar(200) [not null]
+  content text [not null]
+  resource_url varchar(255)
+  is_read boolean [not null, default: false]
+  read_at timestamptz
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (user_id, event_id, notification_type) [unique, name: 'uq_notifications_user_event_type']
+    (user_id, is_read, created_at) [name: 'idx_notifications_user_unread']
   }
 }
 
@@ -1223,18 +1257,18 @@ Table workflow_step_executions {
 
 ---
 
-## 3. Đặc tả Chi tiết 35 Bảng Dữ liệu Vật lý theo 4 Bounded Contexts + Shared Kernel (`12 / 10 / 5 / 4 / 4`)
+## 3. Đặc tả Chi tiết 36 Bảng Dữ liệu Vật lý theo 4 Bounded Contexts + Shared Kernel (`13 / 10 / 5 / 4 / 4`)
 
 | STT Module | Bounded Context | Số lượng Bảng | Danh sách Bảng Vật lý (`schema.sql`) |
 | :--- | :--- | :---: | :--- |
-| **1** | `account` | **12 bảng** | `users`, `learner_profiles`, `webcal_tokens`, `calendar_connections`, `availabilities`, `availability_slots`, `ai_quotas`, `ai_quota_reservations`, `ai_usage_logs`, `payment_transactions`, `learner_memory_items` *(Mới v3.2)*, `learner_concept_masteries` *(Mới v3.2)* |
+| **1** | `account` | **13 bảng** | `users`, `learner_profiles`, `webcal_tokens`, `calendar_connections`, `availabilities`, `availability_slots`, `ai_quotas`, `ai_quota_reservations`, `ai_usage_logs`, `payment_transactions`, `learner_memory_items` *(Mới v3.2)*, `learner_concept_masteries` *(Mới v3.2)*, `notifications` *(Mới v3.4 / migration `0015`)* |
 | **2** | `planning` | **10 bảng** | `goals`, `roadmaps`, `milestones`, `official_schedules`, `schedule_proposals`, `learning_concepts`, `concept_prerequisites`, `knowledge_sources` *(Mới v3.2)*, `knowledge_chunks` *(Mới v3.2)*, `schedule_blocks` *(Mới v3.2)* |
 | **3** | `execution` | **5 bảng** | `tasks`, `task_dependencies`, `study_sessions`, `session_tasks`, `study_notes` |
 | **4** | `evaluation` | **4 bảng** | `pause_records`, `ai_reviews`, `schedule_change_logs`, `milestone_proofs` |
 | **5** | `shared_kernel` | **4 bảng** | `outbox_events`, `processed_events`, `workflow_runs` *(Mới v3.2)*, `workflow_step_executions` *(Mới v3.2)* |
-| **Tổng cộng** | **4 Contexts + Shared Kernel** | **35 bảng** | **Chuẩn hóa 3NF/BCNF, tích hợp `pgvector`, đồng bộ 100% với Learning Intelligence Harness** |
+| **Tổng cộng** | **4 Contexts + Shared Kernel** | **36 bảng** | **Chuẩn hóa 3NF/BCNF, tích hợp `pgvector`, đồng bộ 100% với Learning Intelligence Harness & Alembic head (`0015`)** |
 
-### 3.1. Bounded Context 1 (`account` — 12 Bảng): Định danh, Hồ sơ SRL, Trí nhớ Cấu trúc hóa 4×3, Thành thạo Khái niệm, Thời gian rảnh, Quota 2 Pha, Đồng bộ Lịch & Thanh toán
+### 3.1. Bounded Context 1 (`account` — 13 Bảng): Định danh, Hồ sơ SRL, Trí nhớ Cấu trúc hóa 4×3, Thành thạo Khái niệm, Thời gian rảnh, Quota 2 Pha, Đồng bộ Lịch, Thanh toán & Thông báo
 1. `users`: Định danh gốc người học và quản trị viên (`LEARNER`, `ADMIN`), gói dịch vụ (`FREE`, `PREMIUM`), trạng thái khóa tài khoản (`is_locked`), hạn gói dịch vụ (`premium_expires_at`), mốc đăng nhập gần nhất (`last_login_at`), mật khẩu băm Argon2id và múi giờ IANA.
 2. `learner_profiles`: Hồ sơ năng lực 1:1 theo lý thuyết Tự điều chỉnh học tập Zimmerman SRL, lưu trữ thời lượng tập trung tối ưu (`optimal_focus_duration_mins`), hệ số chệch ước lượng (`estimation_bias_factor`), và tỷ lệ hoàn thành tuần.
 3. `webcal_tokens`: Token đồng bộ lịch 1 chiều xuất feed `.ics` bảo mật (bản băm SHA-256 của CSPRN 32-byte hex, `token_hash` UNIQUE, `is_active`, `last_used_at`, `rotated_at`).
@@ -1247,6 +1281,7 @@ Table workflow_step_executions {
 10. `payment_transactions`: Lưu vết giao dịch thanh toán nâng cấp gói `PREMIUM`, bảo vệ lịch sử tài chính với `ON DELETE RESTRICT` trên `user_id`.
 11. **`learner_memory_items` (MỚI v3.2)**: Lưu trữ **Trí nhớ Người học Cấu trúc hóa (Structured Learner Memory)** theo ma trận **4 Categories** (`PROFILE`, `BEHAVIORAL`, `KNOWLEDGE`, `INTERACTION`) × **3 Epistemic Levels** (`EXPLICIT`, `OBSERVED`, `INFERRED`). Mỗi nhận định (`memory_key`) gắn với giá trị cấu trúc `claim_value JSONB`, bằng chứng nguồn `source_evidence`, kích thước mẫu `sample_size`, cửa sổ quan sát `observation_window_days`, điểm tin cậy `confidence_score` (`0.000..1.000`) và trạng thái xác nhận của người học (`confirmation_status IN ('UNCONFIRMED', 'CONFIRMED', 'REJECTED', 'EDITED')`). Khóa duy nhất `UNIQUE (user_id, memory_category, memory_key)`.
 12. **`learner_concept_masteries` (MỚI v3.2)**: Theo dõi mức độ thành thạo khái niệm học thuật và lịch ôn tập thông minh xuyên suốt các lộ trình (`user_id`, `concept_id`, `mastery_score` `0.00..100.00`, `mastery_level IN ('NOVICE', 'DEVELOPING', 'PROFICIENT', 'MASTERED')`, `evidence_count`, `mistake_pattern_summary JSONB`, `last_practiced_at`, `next_review_at`). Khóa duy nhất `UNIQUE (user_id, concept_id)`.
+13. **`notifications` (MỚI v3.4 — migration `0015_add_notifications_table`)**: Lưu trữ thông báo bền vững cho Trung tâm Thông báo (Notification Center) của người học (`id UUID PK`, `user_id UUID FK -> users(id) ON DELETE CASCADE`, `event_id UUID NULL` phục vụ chống lặp từ Outbox/Sweeper, `notification_type VARCHAR(64)`, `title VARCHAR(200)`, `content TEXT`, `resource_url VARCHAR(255)`, `is_read BOOLEAN DEFAULT false`, `read_at TIMESTAMPTZ`, `created_at`, `updated_at` kèm trigger `trg_notifications_updated_at`). Trang bị Partial Unique Index `uq_notifications_user_event_type (user_id, event_id, notification_type) WHERE event_id IS NOT NULL` và chỉ mục đọc nhanh `idx_notifications_user_unread (user_id, is_read, created_at DESC)`.
 
 ### 3.2. Bounded Context 2 (`planning` — 10 Bảng): Mục tiêu, Lộ trình, Cột mốc, Lịch chính thức (Resilience Policy), Đề xuất Lịch (What-If), Đồ thị Tri thức, Knowledge Engine (RAG) & Khối Lịch Học (`schedule_blocks`)
 13. `goals`: Mục tiêu tự học tổng quát của người dùng (`title`, `raw_description`, `target_date`, `status` `IN ('DRAFT', 'CLARIFIED', 'ACTIVE', 'PAUSED', 'COMPLETED', 'ABANDONED')`, `prior_knowledge_level`, `clarification_context`).
@@ -1260,7 +1295,7 @@ Table workflow_step_executions {
 21. **`knowledge_chunks` (MỚI v3.2)**: Lưu trữ từng phân đoạn văn bản bóc tách từ `knowledge_sources` phục vụ truy xuất lai Hybrid RAG (`source_id`, `goal_id`, `chunk_index`, `section_title`, `page_number`, `content`, `token_count`, `search_vector TSVECTOR` cho tìm kiếm từ khóa GIN, `embedding vector(768)` cho tìm kiếm ngữ nghĩa HNSW, và `provenance_json JSONB`). Khóa duy nhất `UNIQUE (source_id, chunk_index)`.
 22. **`schedule_blocks` (MỚI v3.2)**: Lưu trữ các **Khối Lịch Học Thực thi & Ánh xạ Sự kiện Lịch Ngoại vi**. Cho phép 1 `Task` (`tasks.estimated_minutes` = nỗ lực ước tính bởi AI, ví dụ 120 phút) được Bộ lập lịch tất định chia thành nhiều khối lịch (`scheduled_duration_minutes`, ví dụ 2 khối 60 phút với `sequence_in_task = 1, 2`), hoặc tạo các khối không gắn task cố định như `BUFFER`, `REVISION`, `RECOVERY` (`block_type IN ('STUDY', 'BUFFER', 'REVISION', 'RECOVERY')`), đồng thời lưu `external_calendar_event_id` để đồng bộ 2 chiều với Google/Outlook Calendar và `is_protected` để khóa các khối lịch ưu tiên.
 
-#### Ma trận Phân loại Intra-Context FK vs Cross-Context FK (Theo Phân rã `12 / 10 / 5 / 4 / 4`)
+#### Ma trận Phân loại Intra-Context FK vs Cross-Context FK (Theo Phân rã `13 / 10 / 5 / 4 / 4`)
 
 | Khóa ngoại Vật lý (`Child.column -> Parent(id)`) | Context Nguồn -> Context Đích | Phân loại FK | Hành vi `ON DELETE` | Quy tắc Giao tiếp Kiến trúc (`import-linter`) |
 | :--- | :---: | :---: | :---: | :--- |
@@ -1351,7 +1386,7 @@ Table workflow_step_executions {
 
 ---
 
-### 3.6. Ma trận Ánh xạ 11 Khái niệm Logic của FocusFlow Learning Intelligence Harness sang 35 Bảng Vật lý
+### 3.6. Ma trận Ánh xạ 11 Khái niệm Logic của FocusFlow Learning Intelligence Harness sang 36 Bảng Vật lý
 
 > [!IMPORTANT]
 > **Nguyên tắc Ranh giới Ngữ nghĩa Cốt lõi:** Hệ thống tách biệt tuyệt đối giữa **`AI Execution Run`** (nhật ký điều phối workflow và tiêu thụ tài nguyên LLM tại `workflow_runs`, `workflow_step_executions`, `ai_usage_logs`) và **`Learning Event`** (bằng chứng hành vi học tập thực tế của người học tại `study_sessions`, `study_notes`, `milestone_proofs`, `schedule_change_logs`). Sự tách biệt này đảm bảo các thuật toán phân tích hành vi người học không bao giờ bị làm nhiễu bởi các lần retry kỹ thuật hoặc các lượt chạy mô phỏng What-If của AI.
@@ -1374,14 +1409,14 @@ Table workflow_step_executions {
 
 ## 4. Phân tích Chuẩn hóa Dữ liệu (Database Normalization Analysis - 3NF / BCNF)
 
-### 4.1. Chứng minh Dạng Chuẩn 1 (1NF), 2 (2NF), 3 (3NF) & Boyce-Codd (BCNF) Kết hợp Controlled JSONB Value Objects trên 35 Bảng
+### 4.1. Chứng minh Dạng Chuẩn 1 (1NF), 2 (2NF), 3 (3NF) & Boyce-Codd (BCNF) Kết hợp Controlled JSONB Value Objects trên 36 Bảng
 
 1. **Dạng chuẩn 1 (1NF - First Normal Form) & Controlled JSONB Value Objects:**
    * *Định nghĩa:* Mọi thuộc tính quan hệ trong bảng đều có tính nguyên tử (Atomic Values); các cấu trúc tập hợp cần truy vấn/ràng buộc khóa ngoại quan hệ được tách thành bảng con độc lập, trong khi các cấu trúc giá trị bất biến nội tại (Self-contained Value Objects / Audit Payloads) sử dụng kiểu `JSONB` kèm ràng buộc `CHECK` kiểm định kiểu và miền giá trị ở cấp CSDL.
-   * *Hiện thực:* Mọi thực thể và tập hợp quan hệ trong cả 35 bảng đều được phân rã chuẩn hóa: khung giờ rảnh Mode B tách thành `availability_slots`, phân đoạn tài liệu RAG tách thành `knowledge_chunks`, khối lịch học chia nhỏ từ một nhiệm vụ tách thành `schedule_blocks`, nhận định trí nhớ người học và mức độ thành thạo khái niệm tách thành `learner_memory_items` và `learner_concept_masteries`, bước thực thi workflow tách thành `workflow_step_executions`. Đối với các **Controlled JSONB Value Objects** (`availabilities.daily_quotas`, `tasks.learning_resources_json`, `milestone_proofs.mistake_taxonomy_json`), hệ thống áp đặt ràng buộc `CHECK` nghiêm ngặt tại PostgreSQL (đặc biệt hàm `IMMUTABLE` `fn_validate_daily_quotas(daily_quotas, mode)` trong `chk_availabilities_quotas_json` kiểm tra mọi khóa ngày thuộc `MON..SUN` / `MONDAY..SUNDAY`, giá trị số trong khoảng `[0.5, 14.0]` giờ/ngày và không rỗng khi `mode = 'MODE_A'`; cùng `chk_tasks_learning_resources_json` và `chk_milestone_proofs_mistake_taxonomy`).
+   * *Hiện thực:* Mọi thực thể và tập hợp quan hệ trong cả 36 bảng đều được phân rã chuẩn hóa: khung giờ rảnh Mode B tách thành `availability_slots`, phân đoạn tài liệu RAG tách thành `knowledge_chunks`, khối lịch học chia nhỏ từ một nhiệm vụ tách thành `schedule_blocks`, nhận định trí nhớ người học và mức độ thành thạo khái niệm tách thành `learner_memory_items` và `learner_concept_masteries`, thông báo người học tách thành `notifications`, bước thực thi workflow tách thành `workflow_step_executions`. Đối với các **Controlled JSONB Value Objects** (`availabilities.daily_quotas`, `tasks.learning_resources_json`, `milestone_proofs.mistake_taxonomy_json`), hệ thống áp đặt ràng buộc `CHECK` nghiêm ngặt tại PostgreSQL (đặc biệt hàm `IMMUTABLE` `fn_validate_daily_quotas(daily_quotas, mode)` trong `chk_availabilities_quotas_json` kiểm tra mọi khóa ngày thuộc `MON..SUN` / `MONDAY..SUNDAY`, giá trị số trong khoảng `[0.5, 14.0]` giờ/ngày và không rỗng khi `mode = 'MODE_A'`; cùng `chk_tasks_learning_resources_json` và `chk_milestone_proofs_mistake_taxonomy`).
 2. **Dạng chuẩn 2 (2NF - Second Normal Form):**
    * *Định nghĩa:* Bảng đạt 1NF và mọi thuộc tính không khóa đều phụ thuộc hàm toàn phần (Full Functional Dependency) vào toàn bộ khóa chính, không có phụ thuộc một phần vào một bộ phận của khóa chính.
-   * *Hiện thực:* 33/35 bảng sử dụng Khóa chính đơn thuộc tính Surrogate Key (`id UUID` hoặc `concept_id VARCHAR(120)`), triệt tiêu hoàn toàn phụ thuộc hàm bộ phận. Hai bảng có khóa chính kép là `processed_events (event_id, handler_name)` và `concept_prerequisites (source_concept_id, prerequisite_concept_id)` — trong đó mọi thuộc tính không khóa đều phụ thuộc toàn phần vào cả cặp khóa chính. Do đó cả 35/35 bảng đạt chuẩn 2NF.
+   * *Hiện thực:* 34/36 bảng sử dụng Khóa chính đơn thuộc tính Surrogate Key (`id UUID` hoặc `concept_id VARCHAR(120)`), triệt tiêu hoàn toàn phụ thuộc hàm bộ phận. Hai bảng có khóa chính kép là `processed_events (event_id, handler_name)` và `concept_prerequisites (source_concept_id, prerequisite_concept_id)` — trong đó mọi thuộc tính không khóa đều phụ thuộc toàn phần vào cả cặp khóa chính. Do đó cả 36/36 bảng đạt chuẩn 2NF.
 3. **Dạng chuẩn 3 (3NF - Third Normal Form):**
    * *Định nghĩa:* Bảng đạt 2NF và không có thuộc tính không khóa nào phụ thuộc bắc cầu (Transitive Dependency) vào khóa chính ($X \to Y \to Z$).
    * *Hiện thực:*
@@ -1390,7 +1425,7 @@ Table workflow_step_executions {
      * Trong bảng `workflow_step_executions`, thông tin chi phí token/độ trễ LLM không lưu trùng lặp mà tham chiếu qua `ai_usage_log_id -> ai_usage_logs(id)`.
 4. **Dạng chuẩn Boyce-Codd (BCNF):**
    * *Định nghĩa:* Một lược đồ quan hệ đạt BCNF nếu với mọi phụ thuộc hàm không tầm thường $X \to Y$, $X$ bắt buộc phải là một Siêu khóa (Superkey / Candidate Key).
-   * *Hiện thực:* Trong toàn bộ 35 bảng vật lý, mọi vế trái của các phụ thuộc hàm nghiệp vụ xác định đều là Khóa chính hoặc Khóa ứng viên được bảo vệ bằng ràng buộc `UNIQUE` (`email` trong `users`, `transaction_ref` trong `payment_transactions`, `user_id` trong `learner_profiles`/`availabilities`/`ai_quotas`, `(user_id, memory_category, memory_key)` trong `learner_memory_items`, `(user_id, concept_id)` trong `learner_concept_masteries`, `(source_id, chunk_index)` trong `knowledge_chunks`, `(roadmap_id, sequence_order)` trong `milestones`, `(session_id, task_id)` trong `session_tasks`, `(milestone_id, attempt_no)` trong `milestone_proofs`). Do đó, hệ thống đạt chuẩn BCNF toàn diện.
+   * *Hiện thực:* Trong toàn bộ 36 bảng vật lý, mọi vế trái của các phụ thuộc hàm nghiệp vụ xác định đều là Khóa chính hoặc Khóa ứng viên được bảo vệ bằng ràng buộc `UNIQUE` (`email` trong `users`, `transaction_ref` trong `payment_transactions`, `user_id` trong `learner_profiles`/`availabilities`/`ai_quotas`, `(user_id, memory_category, memory_key)` trong `learner_memory_items`, `(user_id, concept_id)` trong `learner_concept_masteries`, `(user_id, event_id, notification_type) WHERE event_id IS NOT NULL` trong `notifications`, `(source_id, chunk_index)` trong `knowledge_chunks`, `(roadmap_id, sequence_order)` trong `milestones`, `(session_id, task_id)` trong `session_tasks`, `(milestone_id, attempt_no)` trong `milestone_proofs`). Do đó, hệ thống đạt chuẩn BCNF toàn diện.
 
 ### 4.2. Cơ chế Ánh xạ Repository giữa Bảng 3NF `availability_slots` và Domain Value Objects (`WeeklySchedule`, `TimeSlot`)
 Để hòa giải trọn vẹn giữa **Mô hình Miền Phong phú (Rich Domain Model)** và **Lược đồ Quan hệ Chuẩn hóa 3NF** trong PostgreSQL 16:
@@ -1417,16 +1452,17 @@ Table workflow_step_executions {
 
 ## 5. Thiết kế Chỉ mục Hiệu năng & Ràng buộc Toàn vẹn (Indexing & Constraints Strategy)
 
-### 5.1. Chiến lược B-Tree, Partial Unique, GIN `tsvector` & HNSW `pgvector` Indexes (74 Chỉ mục chuyên biệt)
-Hệ thống thiết kế **74 chỉ mục chuyên biệt** nhằm thỏa mãn yêu cầu hiệu năng **ASR-03** (phản hồi API CRUD $\le 250\text{ms}$ P95 và truy xuất Hybrid RAG $< 50\text{ms}$):
+### 5.1. Chiến lược B-Tree, Partial Unique, GIN `tsvector` & HNSW `pgvector` Indexes (76 Chỉ mục chuyên biệt; 66 `CREATE INDEX` tường minh trong `schema.sql`)
+Hệ thống thiết kế **76 chỉ mục chuyên biệt** (gồm 66 chỉ mục `CREATE [UNIQUE] INDEX` tường minh trong `schema.sql` cùng các chỉ mục nội sinh từ ràng buộc `UNIQUE`) nhằm thỏa mãn yêu cầu hiệu năng **ASR-03** (phản hồi API CRUD $\le 250\text{ms}$ P95 và truy xuất Hybrid RAG $< 50\text{ms}$):
 
-1. **Bảo vệ Bất biến Đồng thời bằng Partial Unique Index (7 chỉ mục):**
+1. **Bảo vệ Bất biến Đồng thời bằng Partial Unique Index (8 chỉ mục):**
    * `uq_users_lower_email`: Email duy nhất không phân biệt hoa thường.
    * `uq_study_sessions_user_active`: Bảo đảm mỗi người dùng tại một thời điểm chỉ có tối đa 1 phiên học `IN_PROGRESS`.
    * `uq_schedule_proposals_roadmap_draft`: Đảm bảo mỗi lộ trình chỉ có duy nhất 1 bản nháp đề xuất lịch `DRAFT`.
    * `uq_ai_reviews_weekly` & `uq_ai_reviews_milestone`: Bảo vệ tính Idempotency khi Taskiq Worker retry tác vụ sinh đánh giá AI.
    * `uq_availability_slots_active_time`: Chống xung đột khung giờ rảnh đồng thời (DEC-03).
    * `uq_study_notes_takeaway`: Duy nhất 1 ghi chép đúc kết `TAKEAWAY` cho mỗi cặp phiên học và nhiệm vụ (DEC-02).
+   * `uq_notifications_user_event_type`: Chống tạo trùng thông báo cho cùng `(user_id, event_id, notification_type)` khi `event_id IS NOT NULL` (migration `0015`).
 2. **Chỉ mục Truy xuất Ngữ nghĩa Lai — Hybrid RAG Indexes (GIN + HNSW):**
    * `idx_knowledge_chunks_search_vector`: `CREATE INDEX ... ON knowledge_chunks USING GIN (search_vector);` — Tăng tốc tìm kiếm toàn văn bản theo từ khóa chuyên ngành (BM25 / Full-Text Search).
    * `idx_knowledge_chunks_embedding_hnsw`: `CREATE INDEX ... ON knowledge_chunks USING hnsw (embedding vector_cosine_ops);` — Chỉ mục đồ thị HNSW trên vector 768 chiều cho phép tìm kiếm các phân đoạn tài liệu tương đồng ngữ nghĩa nhanh gấp hàng chục lần so với quét tuần tự.
@@ -1615,12 +1651,12 @@ COMMIT;
 
 ## 7. Tập lệnh SQL DDL Khởi tạo Cơ sở Dữ liệu Hoàn chỉnh (PostgreSQL 16 DDL Script)
 
-Tập lệnh SQL DDL hoàn chỉnh (35 bảng 3NF/BCNF + `pgvector`, phân nhóm theo 4 Bounded Contexts + Shared Kernel với tỷ lệ `12 / 10 / 5 / 4 / 4`, đầy đủ ràng buộc, 26 triggers `fn_set_updated_at()` và 74 chỉ mục) được quản lý tập trung tại tệp:  
+Tập lệnh SQL DDL hoàn chỉnh (36 bảng ứng dụng 3NF/BCNF + `alembic_version` = 37 bảng + `pgvector`, phân nhóm theo 4 Bounded Contexts + Shared Kernel với tỷ lệ `13 / 10 / 5 / 4 / 4`, đầy đủ ràng buộc, 26 triggers `fn_set_updated_at()` và 66 chỉ mục `CREATE INDEX` tường minh — đồng bộ 0-drift từ Alembic head `0015_add_notifications_table`) được quản lý tập trung tại tệp:  
 👉 **[`docs/database/schema.sql`](schema.sql)**
 
 ---
 
-## 8. Ma trận Truy vết từ Yêu cầu SRS v1.3 & Learning Intelligence Harness sang 35 Bảng Cơ sở Dữ liệu
+## 8. Ma trận Truy vết từ Yêu cầu SRS v1.3 & Learning Intelligence Harness sang 36 Bảng Cơ sở Dữ liệu
 
 | STT | Bounded Context | Tên Bảng Vật lý (`schema.sql`) | Thực thể / Value Object Miền (`class-diagrams.md`) | Mã Yêu cầu SRS / Harness Chi phối |
 | :--- | :--- | :--- | :--- | :--- |
@@ -1636,26 +1672,27 @@ Tập lệnh SQL DDL hoàn chỉnh (35 bảng 3NF/BCNF + `pgvector`, phân nhóm
 | **10** | `account` | `payment_transactions` | `PaymentTransaction` | `FR-QUOTA-002`, `UC-04`, `UC-05`, `UC-27`, `ASR-06` |
 | **11** | `account` | `learner_memory_items` | `LearnerMemoryItem` | `FR-PROFILE-001`, Structured Learner Memory (4 Categories × 3 Epistemic Levels) |
 | **12** | `account` | `learner_concept_masteries` | `LearnerConceptMastery` | `FR-PROFILE-001`, `FR-EVAL-004`, Skill Mastery & Intelligent Revision |
-| **13** | `planning` | `goals` | `Goal` | `FR-GOAL-001`, `FR-GOAL-002`, `NFR-SEC-003` |
-| **14** | `planning` | `roadmaps` | `Roadmap` | `FR-PLAN-001`, `BUSR-01`, `BUSR-05`, `OS-04` |
-| **15** | `planning` | `milestones` | `Milestone` | `FR-PLAN-002`, `BUSR-02` (Human-in-the-Loop Gate Cấp 1) |
-| **16** | `planning` | `official_schedules` | `OfficialSchedule` | `FR-PLAN-003`, `BUSR-02`, `BUSR-08`, `OS-03` + Resilience Policy |
-| **17** | `planning` | `schedule_proposals` | `ScheduleProposal` | `FR-PLAN-002`, `FR-PLAN-005`, `BUSR-02`, `ASR-04` + What-If Simulation |
-| **18** | `planning` | `learning_concepts` | `LearningConcept` | `BUSR-01`, `FR-PLAN-001`, `FR-PLAN-004`, `UC-08`, `UC-20` |
-| **19** | `planning` | `concept_prerequisites` | `ConceptPrerequisite` | `BUSR-01`, `FR-PLAN-001`, `FR-PLAN-004`, `UC-08` |
-| **20** | `planning` | `knowledge_sources` | `KnowledgeSource` | `FR-PLAN-001`, `FR-PLAN-004`, Knowledge Engine Ingestion & SSRF Guard |
-| **21** | `planning` | `knowledge_chunks` | `KnowledgeChunk` | `FR-PLAN-004`, Hybrid RAG (`tsvector` GIN + `pgvector` HNSW `vector(768)`) |
-| **22** | `planning` | `schedule_blocks` | `ScheduleBlock` | `FR-PLAN-003`, `FR-CALENDAR-002`, Decoupled Schedule Blocks & External Calendar Sync |
-| **23** | `execution` | `tasks` | `Task` | `FR-TASK-001`, `FR-ADAPT-003`, `BUSR-06`, `BUSR-07` + `learning_resources_json` |
-| **24** | `execution` | `task_dependencies` | `TaskDependency` | `FR-TASK-003`, `ASR-04` (`DagCycleValidator`) |
-| **25** | `execution` | `study_sessions` | `StudySession` | `FR-SESSION-001..003`, `BUSR-09`, `OS-01`, `OS-07` + Daily Learning Check-in |
-| **26** | `execution` | `session_tasks` | `SessionTask` (Association Class) | `FR-SESSION-002`, `BUSR-09`, `OS-01` (`ON DELETE RESTRICT`) |
-| **27** | `execution` | `study_notes` | `StudyNote` | `FR-SESSION-002`, `NFR-SEC-003` |
-| **28** | `evaluation` | `pause_records` | `PauseRecord` | `FR-PAUSE-001`, `FR-PAUSE-002`, `BUSR-07`, `EVAL-03`, `UC-22` |
-| **29** | `evaluation` | `ai_reviews` | `AIReview` + `QuantitativeMetrics` | `FR-REPORT-001`, `FR-REPORT-002`, `BUSR-12`, `UC-21` + Weekly Reflection |
-| **30** | `evaluation` | `schedule_change_logs` | `ScheduleChangeLog` | `FR-ADAPT-001`, `BUSR-07`, `UC-13`, `UC-22`, `UC-23`, `UC-24` |
-| **31** | `evaluation` | `milestone_proofs` | `MilestoneProof` | `BUSR-04`, `BUSR-11`, `FR-REPORT-003`, `UC-20` + Mistake Intelligence |
-| **32** | `shared_kernel` | `outbox_events` | `OutboxEvent` | `ASR-01`, `ASR-02` (Transactional Outbox Pattern) |
-| **33** | `shared_kernel` | `processed_events` | `ProcessedEvent` | `ASR-01`, `ASR-02` (Idempotent Taskiq Consumer) |
-| **34** | `shared_kernel` | `workflow_runs` | `WorkflowRun` | `ASR-01`, `ASR-02`, Durable Workflow Orchestration State (5 Core Workflows) |
-| **35** | `shared_kernel` | `workflow_step_executions` | `WorkflowStepExecution` | `ASR-01`, `ASR-02`, Step-by-Step Checkpoint & LLM Execution Trace |
+| **13** | `account` | `notifications` | `Notification` | Notification Center (`FE-MOCK-08`, migration `0015_add_notifications_table`, idempotent via `event_id`) |
+| **14** | `planning` | `goals` | `Goal` | `FR-GOAL-001`, `FR-GOAL-002`, `NFR-SEC-003` |
+| **15** | `planning` | `roadmaps` | `Roadmap` | `FR-PLAN-001`, `BUSR-01`, `BUSR-05`, `OS-04` |
+| **16** | `planning` | `milestones` | `Milestone` | `FR-PLAN-002`, `BUSR-02` (Human-in-the-Loop Gate Cấp 1) |
+| **17** | `planning` | `official_schedules` | `OfficialSchedule` | `FR-PLAN-003`, `BUSR-02`, `BUSR-08`, `OS-03` + Resilience Policy |
+| **18** | `planning` | `schedule_proposals` | `ScheduleProposal` | `FR-PLAN-002`, `FR-PLAN-005`, `BUSR-02`, `ASR-04` + What-If Simulation |
+| **19** | `planning` | `learning_concepts` | `LearningConcept` | `BUSR-01`, `FR-PLAN-001`, `FR-PLAN-004`, `UC-08`, `UC-20` |
+| **20** | `planning` | `concept_prerequisites` | `ConceptPrerequisite` | `BUSR-01`, `FR-PLAN-001`, `FR-PLAN-004`, `UC-08` |
+| **21** | `planning` | `knowledge_sources` | `KnowledgeSource` | `FR-PLAN-001`, `FR-PLAN-004`, Knowledge Engine Ingestion & SSRF Guard |
+| **22** | `planning` | `knowledge_chunks` | `KnowledgeChunk` | `FR-PLAN-004`, Hybrid RAG (`tsvector` GIN + `pgvector` HNSW `vector(768)`) |
+| **23** | `planning` | `schedule_blocks` | `ScheduleBlock` | `FR-PLAN-003`, `FR-CALENDAR-002`, Decoupled Schedule Blocks & External Calendar Sync |
+| **24** | `execution` | `tasks` | `Task` | `FR-TASK-001`, `FR-ADAPT-003`, `BUSR-06`, `BUSR-07` + `learning_resources_json` |
+| **25** | `execution` | `task_dependencies` | `TaskDependency` | `FR-TASK-003`, `ASR-04` (`DagCycleValidator`) |
+| **26** | `execution` | `study_sessions` | `StudySession` | `FR-SESSION-001..003`, `BUSR-09`, `OS-01`, `OS-07` + Daily Learning Check-in |
+| **27** | `execution` | `session_tasks` | `SessionTask` (Association Class) | `FR-SESSION-002`, `BUSR-09`, `OS-01` (`ON DELETE RESTRICT`) |
+| **28** | `execution` | `study_notes` | `StudyNote` | `FR-SESSION-002`, `NFR-SEC-003` |
+| **29** | `evaluation` | `pause_records` | `PauseRecord` | `FR-PAUSE-001`, `FR-PAUSE-002`, `BUSR-07`, `EVAL-03`, `UC-22` |
+| **30** | `evaluation` | `ai_reviews` | `AIReview` + `QuantitativeMetrics` | `FR-REPORT-001`, `FR-REPORT-002`, `BUSR-12`, `UC-21` + Weekly Reflection |
+| **31** | `evaluation` | `schedule_change_logs` | `ScheduleChangeLog` | `FR-ADAPT-001`, `BUSR-07`, `UC-13`, `UC-22`, `UC-23`, `UC-24` |
+| **32** | `evaluation` | `milestone_proofs` | `MilestoneProof` | `BUSR-04`, `BUSR-11`, `FR-REPORT-003`, `UC-20` + Mistake Intelligence |
+| **33** | `shared_kernel` | `outbox_events` | `OutboxEvent` | `ASR-01`, `ASR-02` (Transactional Outbox Pattern) |
+| **34** | `shared_kernel` | `processed_events` | `ProcessedEvent` | `ASR-01`, `ASR-02` (Idempotent Taskiq Consumer) |
+| **35** | `shared_kernel` | `workflow_runs` | `WorkflowRun` | `ASR-01`, `ASR-02`, Durable Workflow Orchestration State (5 Core Workflows) |
+| **36** | `shared_kernel` | `workflow_step_executions` | `WorkflowStepExecution` | `ASR-01`, `ASR-02`, Step-by-Step Checkpoint & LLM Execution Trace |

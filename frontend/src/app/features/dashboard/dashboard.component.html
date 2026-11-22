@@ -69,14 +69,21 @@
   [initialTitle]="wizardInitialTitle()"
   [initialLevel]="wizardInitialLevel()"
   [initialWeeklyHours]="wizardInitialWeeklyHours()"
+  (roadmapApplied)="onRoadmapApplied($event)"
   (closeWizard)="closeCreateWizard()"
 />
 
 <!-- SCR-08 ADAPTATION MODAL DIALOG -->
 <app-adaptation-modal-dialog
   [open]="adaptationModalOpen()"
+  [roadmapId]="adaptationContext().roadmapId"
+  [roadmapTitle]="adaptationContext().roadmapTitle"
+  [missedSessionsCount]="adaptationContext().missedSessionsCount"
+  [currentDeadline]="adaptationContext().currentDeadline"
+  [submitting]="adaptationSubmitting()"
+  [errorMessage]="adaptationError()"
   (closeModal)="closeAdaptationModal()"
-  (confirmAdaptation)="closeAdaptationModal()"
+  (confirmAdaptation)="onConfirmAdaptation($event)"
 />
 
 <!-- PREREQUISITE AVAILABILITY POPUP DIALOG -->

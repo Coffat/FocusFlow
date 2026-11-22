@@ -10,6 +10,7 @@ import { routes } from './app.routes';
 import { ColorService } from './core/services/color.service';
 import { TranslationService } from './core/services/translation.service';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
+import { timeoutInterceptor } from './core/interceptors/timeout.interceptor';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -19,7 +20,7 @@ export const appConfig: ApplicationConfig = {
       withComponentInputBinding(),
       withInMemoryScrolling({ scrollPositionRestoration: 'top', anchorScrolling: 'enabled' })
     ),
-    provideHttpClient(withFetch(), withInterceptors([authInterceptor])),
+    provideHttpClient(withFetch(), withInterceptors([authInterceptor, timeoutInterceptor])),
     provideAnimationsAsync(),
     ConfirmationService,
     MessageService,

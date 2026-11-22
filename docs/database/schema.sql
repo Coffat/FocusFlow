@@ -8,7 +8,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict ksecOrFoe4YIR9lYCw8RygNUJnINrwfLr6TAjvZMbPBevhAGy1DVOduAagc3Db9
+\restrict FA8IxWuGbWEWhcFlpg0blspYwckeVrF3PZcZzgbzq1vBCWQ3pmiegpxtB8p1fNh
 
 -- Dumped from database version 16.15 (Debian 16.15-1.pgdg12+2)
 -- Dumped by pg_dump version 16.15 (Debian 16.15-1.pgdg12+2)
@@ -450,6 +450,25 @@ CREATE TABLE public.milestones (
     CONSTRAINT chk_milestones_proof_status CHECK (((proof_status)::text = ANY ((ARRAY['UNVERIFIED'::character varying, 'PENDING_REVIEW'::character varying, 'PROVEN'::character varying, 'NEEDS_REVIEW'::character varying])::text[]))),
     CONSTRAINT chk_milestones_seq CHECK ((sequence_order >= 1)),
     CONSTRAINT chk_milestones_status CHECK (((status)::text = ANY ((ARRAY['PENDING'::character varying, 'APPROVED'::character varying, 'IN_PROGRESS'::character varying, 'COMPLETED'::character varying])::text[])))
+);
+
+
+--
+-- Name: notifications; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.notifications (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    event_id uuid,
+    notification_type character varying(64) NOT NULL,
+    title character varying(200) NOT NULL,
+    content text NOT NULL,
+    resource_url character varying(255),
+    is_read boolean DEFAULT false NOT NULL,
+    read_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -1020,6 +1039,14 @@ ALTER TABLE ONLY public.milestones
 
 
 --
+-- Name: notifications notifications_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notifications
+    ADD CONSTRAINT notifications_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: official_schedules official_schedules_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1419,6 +1446,13 @@ CREATE INDEX idx_milestone_proofs_owner ON public.milestone_proofs USING btree (
 
 
 --
+-- Name: idx_notifications_user_unread; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_notifications_user_unread ON public.notifications USING btree (user_id, is_read, created_at DESC);
+
+
+--
 -- Name: idx_outbox_events_aggregate; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1727,6 +1761,13 @@ CREATE UNIQUE INDEX uq_ai_usage_logs_idempotency_key ON public.ai_usage_logs USI
 
 
 --
+-- Name: uq_notifications_user_event_type; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_notifications_user_event_type ON public.notifications USING btree (user_id, event_id, notification_type) WHERE (event_id IS NOT NULL);
+
+
+--
 -- Name: uq_schedule_proposals_roadmap_draft; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1790,6 +1831,27 @@ CREATE TRIGGER trg_goals_updated_at BEFORE UPDATE ON public.goals FOR EACH ROW E
 
 
 --
+-- Name: knowledge_sources trg_knowledge_sources_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_knowledge_sources_updated_at BEFORE UPDATE ON public.knowledge_sources FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
+
+
+--
+-- Name: learner_concept_masteries trg_learner_concept_masteries_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_learner_concept_masteries_updated_at BEFORE UPDATE ON public.learner_concept_masteries FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
+
+
+--
+-- Name: learner_memory_items trg_learner_memory_items_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_learner_memory_items_updated_at BEFORE UPDATE ON public.learner_memory_items FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
+
+
+--
 -- Name: learner_profiles trg_learner_profiles_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -1797,10 +1859,24 @@ CREATE TRIGGER trg_learner_profiles_updated_at BEFORE UPDATE ON public.learner_p
 
 
 --
+-- Name: learning_concepts trg_learning_concepts_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_learning_concepts_updated_at BEFORE UPDATE ON public.learning_concepts FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
+
+
+--
 -- Name: milestones trg_milestones_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER trg_milestones_updated_at BEFORE UPDATE ON public.milestones FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
+
+
+--
+-- Name: notifications trg_notifications_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_notifications_updated_at BEFORE UPDATE ON public.notifications FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
 
 
 --
@@ -1885,6 +1961,13 @@ CREATE TRIGGER trg_users_updated_at BEFORE UPDATE ON public.users FOR EACH ROW E
 --
 
 CREATE TRIGGER trg_webcal_tokens_updated_at BEFORE UPDATE ON public.webcal_tokens FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
+
+
+--
+-- Name: workflow_runs trg_workflow_runs_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_workflow_runs_updated_at BEFORE UPDATE ON public.workflow_runs FOR EACH ROW EXECUTE FUNCTION public.fn_set_updated_at();
 
 
 --
@@ -2005,6 +2088,14 @@ ALTER TABLE ONLY public.learner_profiles
 
 ALTER TABLE ONLY public.milestones
     ADD CONSTRAINT fk_milestones_roadmap FOREIGN KEY (roadmap_id) REFERENCES public.roadmaps(id) ON DELETE CASCADE;
+
+
+--
+-- Name: notifications fk_notifications_user; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notifications
+    ADD CONSTRAINT fk_notifications_user FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
 
 
 --
@@ -2355,5 +2446,5 @@ ALTER TABLE ONLY public.workflow_step_executions
 -- PostgreSQL database dump complete
 --
 
-\unrestrict ksecOrFoe4YIR9lYCw8RygNUJnINrwfLr6TAjvZMbPBevhAGy1DVOduAagc3Db9
+\unrestrict FA8IxWuGbWEWhcFlpg0blspYwckeVrF3PZcZzgbzq1vBCWQ3pmiegpxtB8p1fNh
 

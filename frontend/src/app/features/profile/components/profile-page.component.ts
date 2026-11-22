@@ -93,9 +93,15 @@ interface TimezoneOption {
                 Định danh tài khoản, quy chuẩn múi giờ IANA và hệ thống nhận thức Zimmerman SRL giúp mô hình AI thấu hiểu phong cách học tập của bạn.
               </p>
             </div>
-            <div class="flex items-center gap-2 text-xs font-mono text-[#656464] bg-white border border-[#EAE8E7] px-3 py-1.5 rounded-full shadow-2xs self-start md:self-auto">
-              <span class="w-2 h-2 rounded-full bg-[#246B4A] animate-pulse"></span>
-              <span>SRL State: Adaptive Active</span>
+            <div
+              data-testid="srl-state-badge"
+              class="flex items-center gap-2 text-xs font-mono text-[#656464] bg-white border border-[#EAE8E7] px-3 py-1.5 rounded-full shadow-2xs self-start md:self-auto"
+            >
+              <span
+                class="w-2 h-2 rounded-full"
+                [ngClass]="isSrlColdStart() ? 'bg-amber-500' : 'bg-[#246B4A] animate-pulse'"
+              ></span>
+              <span>{{ isSrlColdStart() ? 'SRL: Chưa đủ dữ liệu' : 'SRL: Đang thích ứng' }}</span>
             </div>
           </div>
         </header>
@@ -322,6 +328,18 @@ interface TimezoneOption {
                 </p>
               </div>
 
+              @if (isSrlColdStart()) {
+                <div
+                  data-testid="srl-insufficient-data-banner"
+                  class="p-4 rounded-xl bg-amber-50/80 border border-amber-200 text-xs text-amber-900 flex items-start gap-3"
+                >
+                  <lucide-icon name="alert-triangle" [size]="16" class="text-amber-700 shrink-0 mt-0.5"></lucide-icon>
+                  <p class="leading-relaxed">
+                    Chưa đủ dữ liệu học tập ({{ srlProfile()?.total_completed_sessions ?? 0 }}/{{ srlProfile()?.min_sessions_required ?? 3 }} phiên hoàn thành). Hãy hoàn thành thêm phiên học để hệ thống tính toán chỉ số cá nhân hóa.
+                  </p>
+                </div>
+              }
+
               <!-- 3 Metrics Grid -->
               <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <!-- Metric 1: Thời lượng học tối ưu -->
@@ -330,8 +348,12 @@ interface TimezoneOption {
                     <span class="text-[11px] font-mono font-semibold uppercase tracking-wider">Thời lượng tối ưu</span>
                     <lucide-icon name="clock" [size]="14" class="text-[#246B4A]"></lucide-icon>
                   </div>
-                  <div class="text-2xl font-bold font-serif text-[#1B1C1C]">
-                    {{ srlMetrics().optSessionMinutes }} <span class="text-sm font-sans font-normal text-[#656464]">phút / phiên</span>
+                  <div class="text-2xl font-bold font-serif text-[#1B1C1C]" data-testid="srl-optimal-focus">
+                    @if (!isSrlColdStart() && srlProfile()?.optimal_focus_duration_mins !== null && srlProfile()?.optimal_focus_duration_mins !== undefined) {
+                      {{ srlProfile()?.optimal_focus_duration_mins }} <span class="text-sm font-sans font-normal text-[#656464]">phút / phiên</span>
+                    } @else {
+                      <span>—</span>
+                    }
                   </div>
                   <p class="text-[11px] text-[#656464] leading-relaxed">
                     Khung thời gian tập trung cao độ đạt hiệu quả hấp thụ kiến thức tốt nhất.
@@ -344,25 +366,33 @@ interface TimezoneOption {
                     <span class="text-[11px] font-mono font-semibold uppercase tracking-wider">Thiên kiến hoàn thành</span>
                     <lucide-icon name="compass" [size]="14" class="text-[#246B4A]"></lucide-icon>
                   </div>
-                  <div class="text-2xl font-bold font-serif text-[#1B1C1C]">
-                    {{ srlMetrics().completionRateBias | number: '1.2-2' }}x
+                  <div class="text-2xl font-bold font-serif text-[#1B1C1C]" data-testid="srl-estimation-bias">
+                    @if (!isSrlColdStart() && srlProfile()?.estimation_bias_factor !== null && srlProfile()?.estimation_bias_factor !== undefined) {
+                      {{ srlProfile()?.estimation_bias_factor | number: '1.2-2' }}x
+                    } @else {
+                      <span>—</span>
+                    }
                   </div>
                   <p class="text-[11px] text-[#656464] leading-relaxed">
                     Hệ số hiệu chỉnh tốc độ thực tế so với dự toán ban đầu của kế hoạch.
                   </p>
                 </div>
 
-                <!-- Metric 3: Phong cách học chủ đạo -->
+                <!-- Metric 3: Khung giờ hiệu suất cao -->
                 <div class="bg-[#FBF9F8] rounded-xl border border-[#EAE8E7] p-4 space-y-2">
                   <div class="flex items-center justify-between text-[#656464]">
-                    <span class="text-[11px] font-mono font-semibold uppercase tracking-wider">Phong cách học</span>
+                    <span class="text-[11px] font-mono font-semibold uppercase tracking-wider">Khung giờ hiệu suất cao</span>
                     <lucide-icon name="brain" [size]="14" class="text-[#246B4A]"></lucide-icon>
                   </div>
-                  <div class="text-base font-bold font-serif text-[#1B1C1C] leading-snug">
-                    Sequential Deep Work
+                  <div class="text-base font-bold font-serif text-[#1B1C1C] leading-snug" data-testid="srl-peak-slots">
+                    @if (!isSrlColdStart()) {
+                      {{ peakProductivityLabel() }}
+                    } @else {
+                      <span>—</span>
+                    }
                   </div>
                   <p class="text-[11px] text-[#656464] leading-relaxed">
-                    Ưu tiên hoàn thành tuần tự từng khối kiến thức trước khi mở rộng.
+                    Khung giờ trong ngày bạn duy trì độ tập trung và tỷ lệ hoàn thành phiên học tốt nhất.
                   </p>
                 </div>
               </div>
@@ -565,8 +595,23 @@ export class ProfilePageComponent implements OnInit {
   private readonly confirmationService = inject(ConfirmationService, { optional: true });
 
   readonly profile = this.profileService.profile;
-  readonly srlMetrics = this.profileService.srlMetrics;
+  readonly srlProfile = this.profileService.srlProfile;
+  readonly isSrlColdStart = this.profileService.isSrlColdStart;
   readonly selectedCategory = signal<string>('ALL');
+
+  readonly peakProductivityLabel = computed<string>(() => {
+    const slots = this.srlProfile()?.peak_productivity_slots ?? [];
+    if (slots.length === 0) {
+      return 'Chưa xác định';
+    }
+    const slotLabels: Record<string, string> = {
+      MORNING: 'Buổi sáng',
+      AFTERNOON: 'Buổi chiều',
+      EVENING: 'Buổi tối',
+      NIGHT: 'Đêm khuya',
+    };
+    return slots.map((slot) => slotLabels[slot.toUpperCase()] ?? slot).join(', ');
+  });
 
   readonly timezoneOptions: TimezoneOption[] = [
     { value: 'Asia/Ho_Chi_Minh', label: 'Asia/Ho_Chi_Minh (Việt Nam)', offset: 'GMT+07:00' },

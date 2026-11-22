@@ -18,6 +18,7 @@ from src.evaluation.application.dtos.intelligence import (
 from src.evaluation.application.use_cases.intelligence import (
     GenerateWeeklyReviewUseCase,
     ProveGradingLLMOutput,
+    ProveGradingUnavailableError,
     SubmitMilestoneProofUseCase,
     WeeklyReviewWriteScope,
 )
@@ -329,7 +330,7 @@ async def test_t5_2_t4_4_prove_threshold_70_calibration_and_confidence_pct_forma
 async def test_t5_2_t5_4_prove_grader_timeout_returns_unverified_needs_review_and_never_upserts_mastery() -> (
     None
 ):
-    """T5.2 & T5.4: Grader timeout/error returns NEEDS_REVIEW, score=0, is_verified=False, NO mastery write, logs reason."""
+    """T5.2 & T5.4 & AUD-MED-12: Grader timeout raises ProveGradingUnavailableError, leaves proof READY/unscored, NO mastery write, logs reason."""
     user_id = uuid4()
     milestone_id = uuid4()
     repo = _InMemoryEvalRepo()
@@ -358,18 +359,24 @@ async def test_t5_2_t5_4_prove_grader_timeout_returns_unverified_needs_review_an
         workflow_repo=workflow_repo,
         llm_provider=_TimeoutGrader(),  # type: ignore[arg-type]
     )
-    res = await uc.execute(
-        user_id,
-        milestone_id,
-        proof.id,
-        SubmitProofRequestDTO(
-            answers=[{"question_id": "q1", "answer": "Đáp án chi tiết nhưng grader bị timeout."}],
-            confidence=0.9,
-        ),
-    )
-    assert res.status == "NEEDS_REVIEW"
-    assert res.score == 0
-    assert res.is_verified is False
+    with pytest.raises(ProveGradingUnavailableError) as exc_info:
+        await uc.execute(
+            user_id,
+            milestone_id,
+            proof.id,
+            SubmitProofRequestDTO(
+                answers=[
+                    {"question_id": "q1", "answer": "Đáp án chi tiết nhưng grader bị timeout."}
+                ],
+                confidence=0.9,
+            ),
+        )
+    assert exc_info.value.code == "AI_GRADING_UNAVAILABLE"
+    assert exc_info.value.reason_code == "PROVE_GRADER_TIMEOUT"
+    assert uow.closed is True
+    assert proof.status == "READY"
+    assert proof.score is None
+    assert proof.submitted_at is None
     assert memory_port.memories_upserted == []
     assert memory_port.masteries_upserted == []
     assert any(

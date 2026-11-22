@@ -7,6 +7,7 @@ from src.account.infrastructure.orm.learner_memory_orm import (
     LearnerConceptMasteryORM,
     LearnerMemoryItemORM,
 )
+from src.account.infrastructure.orm.notification_orm import NotificationORM
 from src.account.infrastructure.orm.user_orm import (
     AiQuotaModel,
     AIQuotaORM,
@@ -36,6 +37,7 @@ __all__ = [
     "LearnerProfileORM",
     "LearnerConceptMasteryORM",
     "LearnerMemoryItemORM",
+    "NotificationORM",
     "PaymentTransactionORM",
     "UserModel",
     "UserORM",

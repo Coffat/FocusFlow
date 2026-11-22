@@ -3,6 +3,8 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TaskService } from './task.service';
 import { TaskResponse } from '../models/task.model';
+import { EntityInvalidationService } from '../../../core/services/entity-invalidation.service';
+import { WorkspaceSessionService } from '../../../core/services/workspace-session.service';
 
 const makeTask = (overrides: Partial<TaskResponse> = {}): TaskResponse => ({
   id: 'task-1',
@@ -112,5 +114,45 @@ describe('TaskService', () => {
     expect(delReq.request.method).toBe('DELETE');
     delReq.flush(cancelled);
     expect(service.tasks()[0].status).toBe('CANCELLED');
+  });
+
+  it('bỏ qua phản hồi loadTasks() cũ đến sau khi đổi bộ lọc nhanh (stale-response protection)', () => {
+    const staleTask = makeTask({ id: 'task-stale', title: 'Filter cũ' });
+    const freshTask = makeTask({ id: 'task-fresh', title: 'Filter mới' });
+
+    service.loadTasks('rm-old').subscribe();
+    service.loadTasks('rm-new').subscribe();
+
+    const oldReq = httpMock.expectOne('/api/v1/tasks?roadmap_id=rm-old');
+    const newReq = httpMock.expectOne('/api/v1/tasks?roadmap_id=rm-new');
+
+    newReq.flush([freshTask]);
+    expect(service.tasks()).toEqual([freshTask]);
+
+    oldReq.flush([staleTask]);
+    expect(service.tasks()).toEqual([freshTask]);
+  });
+
+  it('tự động đồng bộ TaskService.tasks và backlogTasks khi hoàn thành task từ WorkspaceSessionService', () => {
+    const invalidation = TestBed.inject(EntityInvalidationService);
+    const workspaceService = TestBed.inject(WorkspaceSessionService);
+    invalidation.resetForTests();
+
+    const initialTask = makeTask({ id: 'task-sync-1', status: 'TODO', scheduled_date: null });
+    service.tasks.set([initialTask]);
+    service.backlogTasks.set([initialTask]);
+
+    workspaceService.toggleTaskCompletion(initialTask).subscribe();
+    const req = httpMock.expectOne('/api/v1/tasks/task-sync-1/complete');
+    req.flush({ ...initialTask, status: 'COMPLETED', completed_at: '2026-11-21T08:00:00Z' });
+
+    TestBed.tick();
+
+    expect(service.tasks()[0].status).toBe('COMPLETED');
+    expect(service.backlogTasks()).toHaveLength(0);
+    expect(invalidation.versionFor('tasks')()).toBe(1);
+    expect(invalidation.versionFor('schedule')()).toBe(1);
+    expect(invalidation.versionFor('dashboard')()).toBe(1);
+    expect(invalidation.versionFor('analytics')()).toBe(1);
   });
 });

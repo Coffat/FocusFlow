@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import JSONResponse
 
 from src.account.application.dtos.auth import (
     ConfirmPasswordResetCommand,
@@ -24,6 +25,10 @@ from src.account.application.dtos.auth import (
     VerifyPasswordResetOtpSchema,
     VerifyRegisterOtpCommand,
     VerifyRegisterOtpSchema,
+)
+from src.account.application.ports.auth_ports import (
+    RefreshTokenRepositoryPort,
+    TokenProviderPort,
 )
 from src.account.application.use_cases.auth.google_auth_use_case import (
     GoogleAuthUseCase,
@@ -53,6 +58,7 @@ from src.account.domain.exceptions.auth_exceptions import (
     InvalidOtpError,
     InvalidTokenError,
     RateLimitError,
+    SessionStoreUnavailableError,
     UserAlreadyExistsError,
 )
 from src.account.infrastructure.orm.user_orm import UserORM
@@ -61,16 +67,95 @@ from src.account.presentation.deps import (
     get_current_user,
     get_google_auth_use_case,
     get_login_use_case,
+    get_refresh_token_repository,
     get_refresh_token_use_case,
     get_register_use_case,
     get_request_password_reset_otp_use_case,
     get_request_register_otp_use_case,
     get_resend_register_otp_use_case,
+    get_token_provider,
     get_verify_password_reset_otp_use_case,
     get_verify_register_otp_use_case,
 )
+from src.shared_kernel.config import get_settings
+from src.shared_kernel.infrastructure.security.rate_limiter import (
+    enforce_rate_limit,
+    hash_email,
+)
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
+
+
+_DEV_TEST_ENVIRONMENTS = frozenset({"development", "dev", "test", "local"})
+REFRESH_TOKEN_COOKIE_PATH = "/api/v1/auth"
+
+
+def _is_dev_or_test_environment() -> bool:
+    """Return True only in local development or automated test environments."""
+    env = (get_settings().environment or "").strip().lower()
+    return env in _DEV_TEST_ENVIRONMENTS
+
+
+def _is_secure_cookie() -> bool:
+    """Return True outside local dev/test environments so auth cookies require HTTPS."""
+    return not _is_dev_or_test_environment()
+
+
+def _set_auth_cookies(
+    response: Response,
+    *,
+    access_token: str,
+    refresh_token: str,
+    access_token_max_age: int,
+) -> None:
+    """Set HttpOnly auth cookies with refresh_token scoped strictly to /api/v1/auth."""
+    secure = _is_secure_cookie()
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=secure,
+        samesite="lax",
+        max_age=access_token_max_age,
+        path="/",
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=secure,
+        samesite="lax",
+        max_age=7 * 24 * 3600,
+        path=REFRESH_TOKEN_COOKIE_PATH,
+    )
+
+
+def _clear_auth_cookies(response: Response) -> None:
+    """Clear auth cookies including legacy root-path refresh_token for smooth browser migration."""
+    secure = _is_secure_cookie()
+    response.delete_cookie(
+        key="access_token", path="/", secure=secure, httponly=True, samesite="lax"
+    )
+    response.delete_cookie(
+        key="refresh_token",
+        path=REFRESH_TOKEN_COOKIE_PATH,
+        secure=secure,
+        httponly=True,
+        samesite="lax",
+    )
+    response.delete_cookie(
+        key="refresh_token", path="/", secure=secure, httponly=True, samesite="lax"
+    )
+
+
+def _session_store_unavailable_response() -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={
+            "code": "SESSION_STORE_UNAVAILABLE",
+            "detail": "Dịch vụ phiên đăng nhập tạm thời không khả dụng. Vui lòng thử lại sau.",
+        },
+    )
 
 
 @router.post(
@@ -80,32 +165,25 @@ router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
     summary="User Login (UC-AUTH-02)",
 )
 async def login(
+    request: Request,
     payload: LoginRequestSchema,
     response: Response,
     use_case: LoginUseCase = Depends(get_login_use_case),
-) -> LoginResponseSchema:
+) -> LoginResponseSchema | JSONResponse:
     """Authenticates credentials using Argon2id, generates HS256 JWT & 7-day Refresh Token."""
+    await enforce_rate_limit(request, "auth_login_ip")
+    await enforce_rate_limit(request, "auth_login_account", identifier=hash_email(payload.email))
     try:
         cmd = LoginCommand(
             email=payload.email, password=payload.password, remember_me=payload.remember_me
         )
         result = await use_case.execute(cmd)
 
-        response.set_cookie(
-            key="access_token",
-            value=result.access_token,
-            httponly=True,
-            samesite="lax",
-            max_age=result.expires_in,
-            path="/",
-        )
-        response.set_cookie(
-            key="refresh_token",
-            value=result.refresh_token,
-            httponly=True,
-            samesite="lax",
-            max_age=7 * 24 * 3600,
-            path="/",
+        _set_auth_cookies(
+            response,
+            access_token=result.access_token,
+            refresh_token=result.refresh_token,
+            access_token_max_age=result.expires_in,
         )
 
         return LoginResponseSchema(
@@ -125,6 +203,8 @@ async def login(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
     except AccountLockedError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except SessionStoreUnavailableError:
+        return _session_store_unavailable_response()
 
 
 @router.post(
@@ -134,11 +214,13 @@ async def login(
     summary="Google OAuth 2.0 Single Sign-On (SSO)",
 )
 async def google_auth(
+    request: Request,
     payload: GoogleAuthRequestSchema,
     response: Response,
     use_case: GoogleAuthUseCase = Depends(get_google_auth_use_case),
-) -> LoginResponseSchema:
+) -> LoginResponseSchema | JSONResponse:
     """Verifies Google ID Token or Access Token, auto-provisions user if new, issues JWT pair."""
+    await enforce_rate_limit(request, "auth_google_ip")
     token = payload.id_token or payload.credential
 
     if not token and not payload.access_token:
@@ -151,21 +233,11 @@ async def google_auth(
         cmd = GoogleAuthCommand(id_token=token, access_token=payload.access_token)
         result = await use_case.execute(cmd)
 
-        response.set_cookie(
-            key="access_token",
-            value=result.access_token,
-            httponly=True,
-            samesite="lax",
-            max_age=result.expires_in,
-            path="/",
-        )
-        response.set_cookie(
-            key="refresh_token",
-            value=result.refresh_token,
-            httponly=True,
-            samesite="lax",
-            max_age=7 * 24 * 3600,
-            path="/",
+        _set_auth_cookies(
+            response,
+            access_token=result.access_token,
+            refresh_token=result.refresh_token,
+            access_token_max_age=result.expires_in,
         )
 
         return LoginResponseSchema(
@@ -185,41 +257,43 @@ async def google_auth(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
     except AccountLockedError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except SessionStoreUnavailableError:
+        return _session_store_unavailable_response()
 
 
 @router.post(
     "/register",
     response_model=LoginResponseSchema,
     status_code=status.HTTP_201_CREATED,
-    summary="User Registration (Direct fallback)",
+    summary="User Registration (Direct fallback — dev/test only)",
 )
 async def register(
+    request: Request,
     payload: RegisterRequestSchema,
     response: Response,
     use_case: RegisterUseCase = Depends(get_register_use_case),
-) -> LoginResponseSchema:
-    """Direct registration fallback without OTP (UC-AUTH-01)."""
+) -> LoginResponseSchema | JSONResponse:
+    """Direct registration fallback without OTP (UC-AUTH-01). Disabled in staging/production."""
+    await enforce_rate_limit(request, "auth_register_otp_ip")
+    if not _is_dev_or_test_environment():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "REGISTRATION_OTP_REQUIRED: Direct registration without OTP is disabled "
+                "in this environment. Use /api/v1/auth/register/request-otp."
+            ),
+        )
     try:
         cmd = RegisterCommand(
             full_name=payload.full_name, email=payload.email, password=payload.password
         )
         result = await use_case.execute(cmd)
 
-        response.set_cookie(
-            key="access_token",
-            value=result.access_token,
-            httponly=True,
-            samesite="lax",
-            max_age=result.expires_in,
-            path="/",
-        )
-        response.set_cookie(
-            key="refresh_token",
-            value=result.refresh_token,
-            httponly=True,
-            samesite="lax",
-            max_age=7 * 24 * 3600,
-            path="/",
+        _set_auth_cookies(
+            response,
+            access_token=result.access_token,
+            refresh_token=result.refresh_token,
+            access_token_max_age=result.expires_in,
         )
 
         return LoginResponseSchema(
@@ -237,6 +311,8 @@ async def register(
         )
     except UserAlreadyExistsError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except SessionStoreUnavailableError:
+        return _session_store_unavailable_response()
 
 
 # --- OTP REGISTRATION ENDPOINTS ---
@@ -249,10 +325,12 @@ async def register(
     summary="Request OTP for User Registration",
 )
 async def request_register_otp(
+    request: Request,
     payload: RegisterRequestSchema,
     use_case: RequestRegisterOtpUseCase = Depends(get_request_register_otp_use_case),
 ) -> MessageResponseSchema:
     """Step 1: Check duplicate, generate OTP, store in Redis, dispatch email."""
+    await enforce_rate_limit(request, "auth_register_otp_ip")
     try:
         cmd = RequestRegisterOtpCommand(
             full_name=payload.full_name, email=payload.email, password=payload.password
@@ -272,10 +350,12 @@ async def request_register_otp(
     summary="Resend OTP for User Registration",
 )
 async def resend_register_otp(
+    request: Request,
     payload: ResendRegisterOtpSchema,
     use_case: ResendRegisterOtpUseCase = Depends(get_resend_register_otp_use_case),
 ) -> MessageResponseSchema:
     """Step 1b: Resend fresh OTP using existing Redis registration session."""
+    await enforce_rate_limit(request, "auth_register_otp_ip")
     try:
         cmd = ResendRegisterOtpCommand(email=payload.email)
         message = await use_case.execute(cmd)
@@ -295,30 +375,25 @@ async def resend_register_otp(
     summary="Verify OTP and Complete Registration",
 )
 async def verify_register_otp(
+    request: Request,
     payload: VerifyRegisterOtpSchema,
     response: Response,
     use_case: VerifyRegisterOtpUseCase = Depends(get_verify_register_otp_use_case),
-) -> LoginResponseSchema:
+) -> LoginResponseSchema | JSONResponse:
     """Step 2: Verify OTP from Redis, write to PostgreSQL, and return JWT tokens."""
+    await enforce_rate_limit(request, "auth_verify_otp_ip")
+    await enforce_rate_limit(
+        request, "auth_verify_otp_account", identifier=hash_email(payload.email)
+    )
     try:
         cmd = VerifyRegisterOtpCommand(email=payload.email, otp_code=payload.otp_code)
         result = await use_case.execute(cmd)
 
-        response.set_cookie(
-            key="access_token",
-            value=result.access_token,
-            httponly=True,
-            samesite="lax",
-            max_age=result.expires_in,
-            path="/",
-        )
-        response.set_cookie(
-            key="refresh_token",
-            value=result.refresh_token,
-            httponly=True,
-            samesite="lax",
-            max_age=7 * 24 * 3600,
-            path="/",
+        _set_auth_cookies(
+            response,
+            access_token=result.access_token,
+            refresh_token=result.refresh_token,
+            access_token_max_age=result.expires_in,
         )
 
         return LoginResponseSchema(
@@ -338,6 +413,8 @@ async def verify_register_otp(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except UserAlreadyExistsError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except SessionStoreUnavailableError:
+        return _session_store_unavailable_response()
 
 
 # --- OTP PASSWORD RESET ENDPOINTS ---
@@ -350,10 +427,15 @@ async def verify_register_otp(
     summary="Request Password Reset OTP",
 )
 async def request_password_reset_otp(
+    request: Request,
     payload: RequestPasswordResetOtpSchema,
     use_case: RequestPasswordResetOtpUseCase = Depends(get_request_password_reset_otp_use_case),
 ) -> MessageResponseSchema:
     """Step 1: Check user, generate OTP, store in Redis, dispatch email."""
+    await enforce_rate_limit(request, "auth_password_reset_ip")
+    await enforce_rate_limit(
+        request, "auth_password_reset_account", identifier=hash_email(payload.email)
+    )
     try:
         cmd = RequestPasswordResetOtpCommand(email=payload.email)
         message = await use_case.execute(cmd)
@@ -369,10 +451,15 @@ async def request_password_reset_otp(
     summary="Verify OTP for Password Reset (Step 2)",
 )
 async def verify_password_reset_otp(
+    request: Request,
     payload: VerifyPasswordResetOtpSchema,
     use_case: VerifyPasswordResetOtpUseCase = Depends(get_verify_password_reset_otp_use_case),
 ) -> VerifyPasswordResetOtpResponseSchema:
     """Step 2: Verify reset OTP from Redis, consume it, and issue temporary reset_token."""
+    await enforce_rate_limit(request, "auth_password_reset_ip")
+    await enforce_rate_limit(
+        request, "auth_password_reset_account", identifier=hash_email(payload.email)
+    )
     try:
         cmd = VerifyPasswordResetOtpCommand(email=payload.email, otp_code=payload.otp_code)
         result = await use_case.execute(cmd)
@@ -390,10 +477,15 @@ async def verify_password_reset_otp(
     summary="Confirm Password Reset (Step 3)",
 )
 async def confirm_password_reset(
+    request: Request,
     payload: ConfirmPasswordResetSchema,
     use_case: ConfirmPasswordResetUseCase = Depends(get_confirm_password_reset_use_case),
 ) -> MessageResponseSchema:
     """Step 3: Verify reset_token (or direct OTP), update password_hash in PostgreSQL with Argon2id."""
+    await enforce_rate_limit(request, "auth_password_reset_ip")
+    await enforce_rate_limit(
+        request, "auth_password_reset_account", identifier=hash_email(payload.email)
+    )
     try:
         cmd = ConfirmPasswordResetCommand(
             email=payload.email,
@@ -418,8 +510,9 @@ async def refresh_token(
     response: Response,
     payload: RefreshTokenRequestSchema | None = None,
     use_case: RefreshTokenUseCase = Depends(get_refresh_token_use_case),
-) -> LoginResponseSchema:
+) -> LoginResponseSchema | JSONResponse:
     """Consumes existing refresh token, rotates session, and issues fresh JWT access/refresh token pair."""
+    await enforce_rate_limit(request, "auth_refresh_ip")
     token = (
         payload.refresh_token if payload and payload.refresh_token else None
     ) or request.cookies.get("refresh_token")
@@ -434,21 +527,11 @@ async def refresh_token(
         cmd = RefreshTokenCommand(raw_refresh_token=token)
         result = await use_case.execute(cmd)
 
-        response.set_cookie(
-            key="access_token",
-            value=result.access_token,
-            httponly=True,
-            samesite="lax",
-            max_age=result.expires_in,
-            path="/",
-        )
-        response.set_cookie(
-            key="refresh_token",
-            value=result.refresh_token,
-            httponly=True,
-            samesite="lax",
-            max_age=7 * 24 * 3600,
-            path="/",
+        _set_auth_cookies(
+            response,
+            access_token=result.access_token,
+            refresh_token=result.refresh_token,
+            access_token_max_age=result.expires_in,
         )
 
         return LoginResponseSchema(
@@ -468,6 +551,8 @@ async def refresh_token(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
     except AccountLockedError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except SessionStoreUnavailableError:
+        return _session_store_unavailable_response()
 
 
 @router.get(
@@ -491,8 +576,21 @@ async def get_current_user_profile(
 
 
 @router.post("/logout", status_code=status.HTTP_200_OK, summary="User Logout")
-async def logout(response: Response) -> dict[str, str]:
+async def logout(
+    request: Request,
+    response: Response,
+    token_provider: TokenProviderPort = Depends(get_token_provider),
+    refresh_token_repo: RefreshTokenRepositoryPort = Depends(get_refresh_token_repository),
+) -> dict[str, str]:
     """Clears authentication cookies and invalidates session."""
-    response.delete_cookie(key="access_token", path="/")
-    response.delete_cookie(key="refresh_token", path="/")
+    raw_refresh_token = request.cookies.get("refresh_token")
+    if raw_refresh_token:
+        try:
+            token_hash = token_provider.hash_token(raw_refresh_token)
+            await refresh_token_repo.revoke_refresh_token(token_hash)
+        except Exception:
+            # Best-effort revocation so logout still clears cookies if Redis is unavailable.
+            pass
+
+    _clear_auth_cookies(response)
     return {"message": "Logged out successfully."}

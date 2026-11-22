@@ -26,11 +26,13 @@ export interface AdaptationConfirmEvent {
 export class AdaptationModalDialogComponent {
   readonly open = input<boolean>(false);
   readonly roadmapId = input<string | null>(null);
-  readonly roadmapTitle = input<string>('Master FastAPI & Hexagonal Architecture');
-  readonly missedSessionsCount = input<number>(2);
-  readonly missedMinutes = input<number>(100);
-  readonly currentDeadline = input<string>('30/11/2026');
-  readonly shiftedDeadline = input<string>('02/12/2026');
+  readonly roadmapTitle = input<string>('');
+  readonly missedSessionsCount = input<number>(0);
+  readonly missedMinutes = input<number>(0);
+  readonly currentDeadline = input<string>('');
+  readonly shiftedDeadline = input<string>('');
+  readonly submitting = input<boolean>(false);
+  readonly errorMessage = input<string | null>(null);
 
   readonly closeModal = output<void>();
   readonly confirmAdaptation = output<AdaptationConfirmEvent>();
@@ -39,26 +41,35 @@ export class AdaptationModalDialogComponent {
 
   @HostListener('document:keydown.escape')
   onEscapeKey(): void {
-    if (this.open()) {
+    if (this.open() && !this.submitting()) {
       this.closeModal.emit();
     }
   }
 
   selectStrategy(strategy: AdaptationStrategyType): void {
+    if (this.submitting()) {
+      return;
+    }
     this.selectedStrategy.set(strategy);
   }
 
   onClose(): void {
+    if (this.submitting()) {
+      return;
+    }
     this.closeModal.emit();
   }
 
   onBackdropClick(event: MouseEvent): void {
-    if (event.target === event.currentTarget) {
+    if (event.target === event.currentTarget && !this.submitting()) {
       this.closeModal.emit();
     }
   }
 
   onConfirm(): void {
+    if (this.submitting()) {
+      return;
+    }
     this.confirmAdaptation.emit({
       strategy: this.selectedStrategy(),
       roadmapId: this.roadmapId(),

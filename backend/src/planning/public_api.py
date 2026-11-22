@@ -291,6 +291,18 @@ class PlanningExecutionBridgePort(Protocol):
         roadmap_id: UUID | None = None,
     ) -> list[RoadmapExecutionContextDTO]: ...
 
+    async def get_roadmaps_context_by_ids(
+        self,
+        roadmap_ids: Sequence[UUID],
+    ) -> dict[UUID, RoadmapExecutionContextDTO]: ...
+
+    async def reset_weekly_reschedule_budgets(
+        self,
+        roadmap_ids: Sequence[UUID],
+        current_monday: date,
+        now: datetime,
+    ) -> int: ...
+
     async def get_milestone_sequences(
         self,
         roadmap_ids: Sequence[UUID],
@@ -379,3 +391,60 @@ def create_planning_execution_bridge(session: Any) -> PlanningExecutionBridgePor
     assert callable(_planning_execution_bridge_factory)
     res: PlanningExecutionBridgePort = _planning_execution_bridge_factory(session)
     return res
+
+
+class PlanningReadQueryPort(Protocol):
+    """Minimal read-only query port for cross-context Planning lookups."""
+
+    async def filter_existing_concept_ids(
+        self,
+        concept_ids: Sequence[str],
+    ) -> set[str]: ...
+
+    async def get_latest_applied_proposal_data(
+        self,
+        roadmap_id: UUID,
+        *,
+        limit: int = 3,
+    ) -> list[dict[str, Any]]: ...
+
+
+_planning_read_query_factory: Any = None
+
+
+def register_planning_read_query_factory(factory: Any) -> None:
+    global _planning_read_query_factory
+    _planning_read_query_factory = factory
+
+
+def create_planning_read_query_port(session: Any) -> PlanningReadQueryPort:
+    global _planning_read_query_factory
+    if _planning_read_query_factory is None:
+        import importlib
+
+        importlib.import_module("src.planning.infrastructure.adapters.planning_read_query_adapter")
+    assert callable(_planning_read_query_factory)
+    res: PlanningReadQueryPort = _planning_read_query_factory(session)
+    return res
+
+
+async def filter_existing_concept_ids(
+    session: Any,
+    concept_ids: Sequence[str],
+) -> set[str]:
+    """Return subset of `concept_ids` that exist in Planning's `learning_concepts` table."""
+    if not concept_ids:
+        return set()
+    port = create_planning_read_query_port(session)
+    return await port.filter_existing_concept_ids(concept_ids)
+
+
+async def get_latest_applied_proposal_data(
+    session: Any,
+    roadmap_id: UUID,
+    *,
+    limit: int = 3,
+) -> list[dict[str, Any]]:
+    """Return latest APPLIED (falling back to DRAFT) proposal_data dicts for `roadmap_id`."""
+    port = create_planning_read_query_port(session)
+    return await port.get_latest_applied_proposal_data(roadmap_id, limit=limit)

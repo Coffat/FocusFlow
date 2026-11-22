@@ -593,9 +593,9 @@ async def test_litellm_adapter_uses_bounded_httpx_http11_pool_and_disables_afc()
 def test_concurrency_pacing_and_decomposer_defaults() -> None:
     cfg = Settings(_env_file=None)
     assert cfg.ai_max_concurrent_llm_requests == 4
-    assert cfg.ai_decomposer_max_concurrency == 2
+    assert cfg.ai_decomposer_max_concurrency == 4
     decomposer = MilestoneScopedTaskDecomposer(llm_provider=StubLLMAdapter())
-    assert decomposer._max_concurrency == 2
+    assert decomposer._max_concurrency == 4
 
 
 @pytest.mark.asyncio
@@ -932,12 +932,14 @@ async def test_curated_discovery_url_validation_and_live_404_stripping(
         lambda: SimpleNamespace(environment="production", llm_provider="gemini"),
     )
 
-    async def _fake_public_dns(url: str) -> None:
-        del url
+    import socket as _socket
 
     monkeypatch.setattr(
-        "src.planning.application.knowledge.safe_url_fetcher.SafeUrlFetcher._validate_public_destination",
-        _fake_public_dns,
+        _socket,
+        "getaddrinfo",
+        lambda host, port, *a, **kw: [
+            (_socket.AF_INET, _socket.SOCK_STREAM, 6, "", ("93.184.216.34", int(port)))
+        ],
     )
 
     class _FakeHeadClient:
@@ -950,8 +952,8 @@ async def test_curated_discovery_url_validation_and_live_404_stripping(
         async def __aexit__(self, *args: Any) -> None:
             del args
 
-        async def head(self, url: str, headers: dict[str, str] | None = None) -> Any:
-            del headers
+        async def head(self, url: str, headers: dict[str, str] | None = None, **kwargs: Any) -> Any:
+            del headers, kwargs
             status_code = 404 if "broken" in url else 200
             return SimpleNamespace(status_code=status_code, headers={})
 

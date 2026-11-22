@@ -415,9 +415,16 @@ def get_list_sticky_notes_use_case(
 
 def get_create_sticky_note_use_case(
     session_repo: StudySessionRepositoryPort = Depends(get_study_session_repository),
+    task_repo: TaskRepositoryPort = Depends(get_task_repository),
+    planning_bridge: PlanningExecutionBridgePort = Depends(get_execution_planning_bridge),
     uow: AsyncUnitOfWork = Depends(get_execution_uow),
 ) -> CreateStickyNoteUseCase:
-    return CreateStickyNoteUseCase(session_repo=session_repo, uow=uow)
+    return CreateStickyNoteUseCase(
+        session_repo=session_repo,
+        uow=uow,
+        task_repo=task_repo,
+        planning_bridge=planning_bridge,
+    )
 
 
 def get_update_sticky_note_use_case(

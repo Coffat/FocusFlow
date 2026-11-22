@@ -89,16 +89,54 @@ async def stream_sse_wire_with_keepalive(
 class InMemorySseJobStore(SseJobPort):
     """In-memory 2-Stage SSE Job Store supporting 24h Idempotency-Key & Last-Event-ID replay (ADR-005)."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, eviction_interval_seconds: float = 60.0) -> None:
         self._jobs: dict[UUID, SseJobRecord] = {}
+        self._job_expires_at: dict[UUID, datetime] = {}
         self._idempotency_map: dict[tuple[UUID, str, str], tuple[str, datetime]] = {}
         self._idempotency_lock = asyncio.Lock()
         self._condition_map: dict[UUID, asyncio.Condition] = {}
+        self._eviction_interval_seconds: float = max(0.0, float(eviction_interval_seconds))
+        self._last_eviction_monotonic: float = time.monotonic()
 
     def clear(self) -> None:
         self._jobs.clear()
+        self._job_expires_at.clear()
         self._idempotency_map.clear()
         self._condition_map.clear()
+
+    def evict_expired(self, *, now: datetime | None = None, force: bool = False) -> int:
+        """Evict expired jobs, conditions, and idempotency keys to bound memory usage."""
+        monotonic_now = time.monotonic()
+        if not force and (
+            monotonic_now - self._last_eviction_monotonic < self._eviction_interval_seconds
+        ):
+            return 0
+
+        self._last_eviction_monotonic = monotonic_now
+        current_time = now or datetime.now(UTC)
+        evicted = 0
+
+        expired_job_ids = [
+            jid for jid, exp in list(self._job_expires_at.items()) if current_time >= exp
+        ]
+        for jid in expired_job_ids:
+            self._job_expires_at.pop(jid, None)
+            if self._jobs.pop(jid, None) is not None:
+                evicted += 1
+            self._condition_map.pop(jid, None)
+
+        orphan_cond_ids = [jid for jid in list(self._condition_map.keys()) if jid not in self._jobs]
+        for jid in orphan_cond_ids:
+            self._condition_map.pop(jid, None)
+
+        expired_idem_keys = [
+            comp for comp, (_, exp) in list(self._idempotency_map.items()) if current_time >= exp
+        ]
+        for comp in expired_idem_keys:
+            if self._idempotency_map.pop(comp, None) is not None:
+                evicted += 1
+
+        return evicted
 
     def _get_condition(self, job_id: UUID) -> asyncio.Condition:
         cond = self._condition_map.get(job_id)
@@ -114,6 +152,7 @@ class InMemorySseJobStore(SseJobPort):
         operation: str,
         idempotency_key: str,
     ) -> SseJobRecord | None:
+        self.evict_expired()
         cleaned_key = (idempotency_key or "").strip()
         if not cleaned_key:
             return None
@@ -150,6 +189,7 @@ class InMemorySseJobStore(SseJobPort):
         idempotency_key: str,
         pending_ttl_seconds: int = 30,
     ) -> IdempotencySlotClaim:
+        self.evict_expired()
         cleaned_key = (idempotency_key or "").strip()
         if not cleaned_key:
             return IdempotencySlotClaim(acquired=True, token=None)
@@ -248,7 +288,9 @@ class InMemorySseJobStore(SseJobPort):
         ttl_seconds: int = 86400,
         register_idempotency: bool = True,
     ) -> SseJobRecord:
+        self.evict_expired()
         now = datetime.now(UTC)
+        ttl_delta = timedelta(seconds=max(1, ttl_seconds))
         record = SseJobRecord(
             job_id=job_id,
             user_id=user_id,
@@ -261,11 +303,12 @@ class InMemorySseJobStore(SseJobPort):
             events=[],
         )
         self._jobs[job_id] = record
+        self._job_expires_at[job_id] = now + ttl_delta
         if register_idempotency and idempotency_key and idempotency_key.strip():
             composite = (user_id, operation.strip().upper(), idempotency_key.strip())
             self._idempotency_map[composite] = (
                 str(job_id),
-                now + timedelta(seconds=max(1, ttl_seconds)),
+                now + ttl_delta,
             )
         return record
 
@@ -275,6 +318,13 @@ class InMemorySseJobStore(SseJobPort):
         job_id: UUID,
         user_id: UUID,
     ) -> SseJobRecord:
+        self.evict_expired()
+        expires_at = self._job_expires_at.get(job_id)
+        if expires_at is not None and datetime.now(UTC) >= expires_at:
+            self._jobs.pop(job_id, None)
+            self._job_expires_at.pop(job_id, None)
+            self._condition_map.pop(job_id, None)
+            raise SseJobNotFoundError()
         job = self._jobs.get(job_id)
         if job is None or job.user_id != user_id:
             raise SseJobNotFoundError()
@@ -597,16 +647,17 @@ class RedisSseJobStore(SseJobPort):
         ttl_seconds: int = 86400,
         register_idempotency: bool = True,
     ) -> SseJobRecord:
-        record = await self._fallback.create_job(
+        now = datetime.now(UTC)
+        record = SseJobRecord(
             job_id=job_id,
             user_id=user_id,
             roadmap_id=roadmap_id,
             reservation_id=reservation_id,
             job_type=job_type,
-            operation=operation,
-            idempotency_key=idempotency_key,
-            ttl_seconds=ttl_seconds,
-            register_idempotency=register_idempotency,
+            status="RESERVED",
+            created_at=now,
+            updated_at=now,
+            events=[],
         )
         try:
             client = self._get_client()
@@ -632,9 +683,21 @@ class RedisSseJobStore(SseJobPort):
                         str(job_id),
                         ex=max(1, ttl_seconds),
                     )
+                return record
         except Exception:
             self._mark_redis_unavailable()
-        return record
+
+        return await self._fallback.create_job(
+            job_id=job_id,
+            user_id=user_id,
+            roadmap_id=roadmap_id,
+            reservation_id=reservation_id,
+            job_type=job_type,
+            operation=operation,
+            idempotency_key=idempotency_key,
+            ttl_seconds=ttl_seconds,
+            register_idempotency=register_idempotency,
+        )
 
     async def get_job_for_user(
         self,

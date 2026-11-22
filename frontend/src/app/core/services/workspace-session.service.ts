@@ -19,6 +19,7 @@ import {
 } from 'rxjs';
 import { components } from '../api/schema';
 import { API_ENDPOINTS } from '../constants/api-endpoints';
+import { EntityInvalidationService } from './entity-invalidation.service';
 import { parseHttpErrorMessage } from '../utils/error-parser.util';
 import type {
   MilestoneContextSummary,
@@ -105,6 +106,7 @@ export function evaluateTakeawayCheck(takeaway: string): LocalTakeawayCheck {
 export class WorkspaceSessionService {
   private readonly http = inject(HttpClient);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly entityInvalidation = inject(EntityInvalidationService);
 
   // Server state signals
   private readonly _todayFocus = signal<TodayFocusResponse | null>(null);
@@ -176,14 +178,10 @@ export class WorkspaceSessionService {
   private readonly _isBreakRunning = signal<boolean>(false);
   readonly isBreakRunning = this._isBreakRunning.asReadonly();
 
-  private readonly _localPomodorosToday = signal<number>(this.loadPomodorosToday());
   private readonly _localPomodoroDelta = signal<number>(0);
   readonly completedPomodorosToday = computed<number>(() => {
-    const tf = this._todayFocus();
-    if (tf && typeof tf.completed_sessions_today === 'number') {
-      return tf.completed_sessions_today + this._localPomodoroDelta();
-    }
-    return this._localPomodorosToday();
+    const base = this._todayFocus()?.completed_sessions_today ?? 0;
+    return base + this._localPomodoroDelta();
   });
 
   private readonly _scratchpadNote = signal<string>('');
@@ -646,13 +644,17 @@ export class WorkspaceSessionService {
       })
       .pipe(
         tap((finalized) => {
-          if (this.mode() === 'pomodoro' && !this.pomodoroCountedForCurrentSession) {
-            this.incrementCompletedPomodorosToday();
+          if (
+            (finalized.status === 'COMPLETED' || finalized.status === 'PARTIAL_COMPLETED') &&
+            !this.pomodoroCountedForCurrentSession
+          ) {
+            this._localPomodoroDelta.update((delta) => delta + 1);
             this.pomodoroCountedForCurrentSession = true;
           }
           this.stopTimersAndHeartbeat();
           this.resetLocalSessionState();
           this._lastFinalizedSession.set(finalized);
+          this.entityInvalidation.invalidate('tasks', 'schedule', 'dashboard', 'analytics');
         }),
         catchError((err: unknown) => {
           const parsed = extractExecutionError(
@@ -718,6 +720,8 @@ export class WorkspaceSessionService {
     return this.http.post<TaskResponse>(url, null, { withCredentials: true }).pipe(
       tap((updated) => {
         this.replaceTaskInSignals(updated);
+        this.entityInvalidation.notifyTaskMutated(updated);
+        this.entityInvalidation.invalidate('tasks', 'schedule', 'dashboard', 'analytics');
       }),
       catchError((err: unknown) => {
         this._todayQueue.set(prevQueue);
@@ -873,10 +877,6 @@ export class WorkspaceSessionService {
 
     if (remaining === 0 && this.isRunning()) {
       this._timerCompletedTick.update((n) => n + 1);
-      if (!this.pomodoroCountedForCurrentSession) {
-        this.incrementCompletedPomodorosToday();
-        this.pomodoroCountedForCurrentSession = true;
-      }
       this.pauseSession();
     }
   }
@@ -915,71 +915,6 @@ export class WorkspaceSessionService {
     if (remaining === 0 && this._isBreakRunning()) {
       this._timerCompletedTick.update((n) => n + 1);
       this.stopBreak();
-    }
-  }
-
-  private getLocalDateString(): string {
-    const d = new Date();
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  }
-
-  private loadPomodorosToday(): number {
-    if (typeof localStorage === 'undefined' || typeof localStorage?.getItem !== 'function') {
-      return 0;
-    }
-    try {
-      const raw = localStorage.getItem('focusflow_pomodoros_today_v1');
-      if (!raw) return 0;
-      const parsed = JSON.parse(raw) as { date?: unknown; count?: unknown };
-      if (parsed.date === this.getLocalDateString() && typeof parsed.count === 'number') {
-        return Math.max(0, Math.floor(parsed.count));
-      }
-    } catch {
-      return 0;
-    }
-    return 0;
-  }
-
-  private incrementCompletedPomodorosToday(): void {
-    const today = this.getLocalDateString();
-    const hasStorage =
-      typeof localStorage !== 'undefined' &&
-      typeof localStorage?.getItem === 'function' &&
-      typeof localStorage?.setItem === 'function';
-
-    let current = 0;
-    if (hasStorage) {
-      try {
-        const raw = localStorage.getItem('focusflow_pomodoros_today_v1');
-        if (raw) {
-          const parsed = JSON.parse(raw) as { date?: unknown; count?: unknown };
-          if (parsed.date === today && typeof parsed.count === 'number') {
-            current = Math.max(0, Math.floor(parsed.count));
-          }
-        }
-      } catch {
-        current = this._localPomodorosToday();
-      }
-    } else {
-      current = this._localPomodorosToday();
-    }
-
-    const nextCount = current + 1;
-    this._localPomodorosToday.set(nextCount);
-    this._localPomodoroDelta.update((delta) => delta + 1);
-
-    if (hasStorage) {
-      try {
-        localStorage.setItem(
-          'focusflow_pomodoros_today_v1',
-          JSON.stringify({ date: today, count: nextCount })
-        );
-      } catch {
-        // Ignore storage quota errors
-      }
     }
   }
 

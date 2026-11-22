@@ -1,7 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { Observable, catchError, map, of, tap } from 'rxjs';
+import { Observable, catchError, finalize, map, of, shareReplay, tap } from 'rxjs';
 import {
   LoginRequest,
   LoginResponse,
@@ -57,12 +57,7 @@ export class AuthService {
     this.initAuth();
   }
 
-  setUser(user: UserProfile, accessToken?: string): void {
-    if (accessToken) {
-      // Retain token in localStorage as optional fallback for dev inspection,
-      // but primary authentication relies on HttpOnly cookies (ADR-008)
-      localStorage.setItem('access_token', accessToken);
-    }
+  setUser(user: UserProfile): void {
     this._currentUser.set(user);
   }
 
@@ -71,7 +66,6 @@ export class AuthService {
   }
 
   private clearSession(): void {
-    localStorage.removeItem('access_token');
     this._currentUser.set(null);
   }
 
@@ -83,26 +77,30 @@ export class AuthService {
       return this.sessionCheck$;
     }
 
-    this.sessionCheck$ = this.http.get<BackendUserPayload>(AUTH_ENDPOINTS.ME, { withCredentials: true }).pipe(
-      map((user: BackendUserPayload) => {
-        const mappedUser: UserProfile = {
-          id: user.id,
-          email: user.email,
-          fullName: user.full_name,
-          role: user.role,
-          tier: user.tier,
-          createdAt: user.created_at
-        };
-        this.setUser(mappedUser);
-        this.sessionCheck$ = null;
-        return true;
-      }),
-      catchError(() => {
-        this.clearSession();
-        this.sessionCheck$ = null;
-        return of(false);
-      })
-    );
+    this.sessionCheck$ = this.http
+      .get<BackendUserPayload>(AUTH_ENDPOINTS.ME, { withCredentials: true })
+      .pipe(
+        map((user: BackendUserPayload) => {
+          const mappedUser: UserProfile = {
+            id: user.id,
+            email: user.email,
+            fullName: user.full_name,
+            role: user.role,
+            tier: user.tier,
+            createdAt: user.created_at
+          };
+          this.setUser(mappedUser);
+          return true;
+        }),
+        catchError(() => {
+          this.clearSession();
+          return of(false);
+        }),
+        finalize(() => {
+          this.sessionCheck$ = null;
+        }),
+        shareReplay(1)
+      );
 
     return this.sessionCheck$;
   }
@@ -130,7 +128,7 @@ export class AuthService {
             tier: response.user.tier,
             createdAt: response.user.created_at
           };
-          this.setUser(user, response.access_token);
+          this.setUser(user);
           this._isLoading.set(false);
         },
         error: () => {
@@ -175,7 +173,7 @@ export class AuthService {
       }),
       tap({
         next: (response: LoginResponse) => {
-          this.setUser(response.user, response.accessToken);
+          this.setUser(response.user);
           this._isLoading.set(false);
         },
         error: (_err: Error) => {
@@ -211,7 +209,7 @@ export class AuthService {
       }),
       tap({
         next: (response: RegisterResponse) => {
-          this.setUser(response.user, response.accessToken);
+          this.setUser(response.user);
           this._isLoading.set(false);
         },
         error: () => {
@@ -261,7 +259,7 @@ export class AuthService {
       }),
       tap({
         next: (response: LoginResponse) => {
-          this.setUser(response.user, response.accessToken);
+          this.setUser(response.user);
         }
       })
     );
@@ -322,7 +320,7 @@ export class AuthService {
       }),
       tap({
         next: (response: LoginResponse) => {
-          this.setUser(response.user, response.accessToken);
+          this.setUser(response.user);
         }
       })
     );
@@ -350,7 +348,7 @@ export class AuthService {
       }),
       tap({
         next: (response: LoginResponse) => {
-          this.setUser(response.user, response.accessToken);
+          this.setUser(response.user);
         },
         error: (_err: Error) => {
           this.signOut();
@@ -360,7 +358,6 @@ export class AuthService {
   }
 
   signOut(): void {
-    localStorage.removeItem('access_token');
     this.http.post(AUTH_ENDPOINTS.LOGOUT, {}, { withCredentials: true }).pipe(
       catchError(() => of({}))
     ).subscribe();

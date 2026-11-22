@@ -7,6 +7,8 @@ import {
   AiStreamChunkEvent,
   SseStreamError,
 } from '../../../core/services/ai-sse.service';
+import { EntityInvalidationService } from '../../../core/services/entity-invalidation.service';
+import { RoadmapStore } from '../../../core/stores/roadmap.store';
 import {
   ApplyScheduleProposalRequest,
   ApplyScheduleProposalResponse,
@@ -200,11 +202,14 @@ export function mapRawDependenciesToProposedItems(
 export class RoadmapService {
   private readonly http = inject(HttpClient);
   private readonly aiSseService = inject(AiSseService);
+  private readonly roadmapStore = inject(RoadmapStore);
+  private readonly entityInvalidation = inject(EntityInvalidationService);
 
   private activeSseSubscription: Subscription | null = null;
+  private detailRequestSeq = 0;
 
   // Core Planning Store Signals (WBS 6.3)
-  readonly roadmaps = signal<RoadmapResponse[]>([]);
+  readonly roadmaps = this.roadmapStore.roadmaps;
   readonly selectedRoadmapDetail = signal<RoadmapDetailResponse | null>(null);
   readonly milestones = signal<MilestoneResponse[]>([]);
   readonly editableMilestones = signal<MilestoneUpsertItemSchema[]>([]);
@@ -990,24 +995,18 @@ export class RoadmapService {
     this.loading.set(true);
     this.errorMessage.set(null);
 
-    const url = statusFilter
-      ? `${API_ENDPOINTS.ROADMAPS.BASE}?status=${encodeURIComponent(statusFilter)}`
-      : API_ENDPOINTS.ROADMAPS.BASE;
-
-    this.http
-      .get<RoadmapResponse[]>(url, { withCredentials: true })
+    this.roadmapStore
+      .loadRoadmaps({ force: true, statusFilter })
       .pipe(
         tap(list => {
-          this.roadmaps.set(list);
+          const storeError = this.roadmapStore.error();
+          if (storeError) {
+            this.errorMessage.set(storeError);
+            return;
+          }
           if (list.length > 0 && !this.selectedRoadmapDetail()) {
             this.loadRoadmapDetail(list[0].id);
           }
-        }),
-        catchError((err: HttpErrorResponse) => {
-          this.errorMessage.set(
-            this.extractErrorMessage(err, 'Không thể tải danh sách lộ trình học tập.')
-          );
-          return of([]);
         }),
         finalize(() => {
           this.loading.set(false);
@@ -1017,6 +1016,7 @@ export class RoadmapService {
   }
 
   loadRoadmapDetail(roadmapId: string): void {
+    const seq = ++this.detailRequestSeq;
     this.loading.set(true);
     this.errorMessage.set(null);
 
@@ -1026,6 +1026,9 @@ export class RoadmapService {
       })
       .pipe(
         tap(detail => {
+          if (seq !== this.detailRequestSeq) {
+            return;
+          }
           this.selectedRoadmapDetail.set(detail);
           this.syncMilestonesState(detail.milestones ?? []);
           this.syncPreliminaryFeasibility(detail.preliminary_feasibility ?? null);
@@ -1045,15 +1048,21 @@ export class RoadmapService {
           } else {
             this.activeStep.set(1);
           }
+
+          this.reattachActiveStreamIfAny(roadmapId);
         }),
         catchError((err: HttpErrorResponse) => {
-          this.errorMessage.set(
-            this.extractErrorMessage(err, 'Không thể tải chi tiết lộ trình học tập.')
-          );
+          if (seq === this.detailRequestSeq) {
+            this.errorMessage.set(
+              this.extractErrorMessage(err, 'Không thể tải chi tiết lộ trình học tập.')
+            );
+          }
           return of(null);
         }),
         finalize(() => {
-          this.loading.set(false);
+          if (seq === this.detailRequestSeq) {
+            this.loading.set(false);
+          }
         })
       )
       .subscribe();
@@ -1079,7 +1088,8 @@ export class RoadmapService {
       .post<RoadmapResponse>(API_ENDPOINTS.ROADMAPS.BASE, payload, { withCredentials: true })
       .pipe(
         tap(created => {
-          this.roadmaps.update(list => [created, ...list.filter(r => r.id !== created.id)]);
+          this.roadmapStore.upsertRoadmap(created);
+          this.entityInvalidation.invalidate('dashboard', 'schedule', 'tasks', 'analytics');
           const emptyDetail: RoadmapDetailResponse = {
             ...created,
             milestones: [],
@@ -1388,30 +1398,11 @@ export class RoadmapService {
         const streamUrl =
           ticket.stream_url || ticket.streamUrl || API_ENDPOINTS.ROADMAPS.JOB_STREAM(ticket.job_id);
 
-        this.activeSseSubscription = this.aiSseService
-          .observeJobStream<{ roadmap_id?: string; milestones?: MilestoneResponse[] }>(streamUrl)
-          .subscribe({
-            next: (evt: AiStreamChunkEvent<{ roadmap_id?: string; milestones?: MilestoneResponse[] }>) => {
-              this.handleSseChunk(evt, roadmapId, 'MILESTONES');
-            },
-            error: (err: unknown) => {
-              const failMsg = pickNonEmpty(
-                err instanceof Error ? err.message : null,
-                'Mất kết nối luồng SSE khi đang sinh cột mốc học tập.'
-              );
-              this._lastErrorCode.set(
-                err instanceof SseStreamError ? err.code : 'SSE_STREAM_DISCONNECTED'
-              );
-              this._lastFailedStage.set('MILESTONES');
-              this.errorMessage.set(failMsg);
-              this.sseProgress.update(prev => ({
-                ...prev,
-                stage: 'FAILED',
-                isStreaming: false,
-                message: failMsg,
-              }));
-            },
-          });
+        this.aiSseService.saveActiveJob(roadmapId, 'MILESTONES', {
+          jobId: ticket.job_id,
+          streamUrl,
+        });
+        this.attachToSseStream(roadmapId, 'MILESTONES', streamUrl);
       });
   }
 
@@ -1628,30 +1619,80 @@ export class RoadmapService {
         const streamUrl =
           ticket.stream_url || ticket.streamUrl || API_ENDPOINTS.ROADMAPS.JOB_STREAM(ticket.job_id);
 
-        this.activeSseSubscription = this.aiSseService
-          .observeJobStream<Record<string, unknown>>(streamUrl)
-          .subscribe({
-            next: (evt: AiStreamChunkEvent<Record<string, unknown>>) => {
-              this.handleSseChunk(evt, roadmapId, 'PROPOSAL');
-            },
-            error: (err: unknown) => {
-              const failMsg = pickNonEmpty(
-                err instanceof Error ? err.message : null,
-                'Mất kết nối luồng SSE khi đang sinh đề xuất lịch học.'
-              );
-              this._lastErrorCode.set(
-                err instanceof SseStreamError ? err.code : 'SSE_STREAM_DISCONNECTED'
-              );
-              this._lastFailedStage.set('PROPOSAL');
-              this.errorMessage.set(failMsg);
-              this.sseProgress.update(prev => ({
-                ...prev,
-                stage: 'FAILED',
-                isStreaming: false,
-                message: failMsg,
-              }));
-            },
-          });
+        this.aiSseService.saveActiveJob(roadmapId, 'PROPOSAL', {
+          jobId: ticket.job_id,
+          streamUrl,
+        });
+        this.attachToSseStream(roadmapId, 'PROPOSAL', streamUrl);
+      });
+  }
+
+  reattachActiveStreamIfAny(roadmapId: string): boolean {
+    if (!roadmapId || this.sseProgress().isStreaming) {
+      return false;
+    }
+    const proposalJob = this.aiSseService.getActiveJob(roadmapId, 'PROPOSAL');
+    const milestonesJob = this.aiSseService.getActiveJob(roadmapId, 'MILESTONES');
+    const activeJob =
+      proposalJob && milestonesJob
+        ? proposalJob.startedAt >= milestonesJob.startedAt
+          ? proposalJob
+          : milestonesJob
+        : (proposalJob ?? milestonesJob);
+
+    if (!activeJob) {
+      return false;
+    }
+
+    this.lastFailedRoadmapId = roadmapId;
+    this.errorMessage.set(null);
+    this._lastErrorCode.set(null);
+    this._lastFailedStage.set(null);
+    this.sseProgress.set({
+      stage: 'STREAMING',
+      progress: 25,
+      message:
+        activeJob.stage === 'MILESTONES'
+          ? 'Đang kết nối lại tiến trình phân rã cột mốc AI...'
+          : 'Đang kết nối lại tiến trình sinh đề xuất lịch học AI...',
+      retryCount: 0,
+      isStreaming: true,
+    });
+    this.attachToSseStream(roadmapId, activeJob.stage, activeJob.streamUrl);
+    return true;
+  }
+
+  private attachToSseStream(
+    roadmapId: string,
+    mode: 'MILESTONES' | 'PROPOSAL',
+    streamUrl: string
+  ): void {
+    this.activeSseSubscription = this.aiSseService
+      .observeJobStream<Record<string, unknown>>(streamUrl)
+      .subscribe({
+        next: (evt: AiStreamChunkEvent<Record<string, unknown>>) => {
+          this.handleSseChunk(evt, roadmapId, mode);
+        },
+        error: (err: unknown) => {
+          this.aiSseService.clearActiveJob(roadmapId, mode);
+          const failMsg = pickNonEmpty(
+            err instanceof Error ? err.message : null,
+            mode === 'MILESTONES'
+              ? 'Mất kết nối luồng SSE khi đang sinh cột mốc học tập.'
+              : 'Mất kết nối luồng SSE khi đang sinh đề xuất lịch học.'
+          );
+          this._lastErrorCode.set(
+            err instanceof SseStreamError ? err.code : 'SSE_STREAM_DISCONNECTED'
+          );
+          this._lastFailedStage.set(mode);
+          this.errorMessage.set(failMsg);
+          this.sseProgress.update(prev => ({
+            ...prev,
+            stage: 'FAILED',
+            isStreaming: false,
+            message: failMsg,
+          }));
+        },
       });
   }
 
@@ -1900,7 +1941,14 @@ export class RoadmapService {
             `Đã áp dụng lịch học chính thức thành công (${res.total_sessions} phiên, ${res.total_planned_minutes} phút)!`
           );
           this.loadRoadmapDetail(roadmapId);
-          this.loadRoadmaps();
+          this.roadmapStore.loadRoadmaps({ force: true }).subscribe();
+          this.entityInvalidation.invalidate(
+            'dashboard',
+            'schedule',
+            'tasks',
+            'workspace',
+            'analytics'
+          );
           onSuccess?.(res);
         }),
         catchError((err: HttpErrorResponse) => {
@@ -2026,7 +2074,13 @@ export class RoadmapService {
       .subscribe();
   }
 
-  archiveRoadmap(roadmapId: string): void {
+  archiveRoadmap(
+    roadmapId: string,
+    callbacks?: {
+      onSuccess?: (archived: RoadmapResponse) => void;
+      onError?: (message: string) => void;
+    }
+  ): void {
     this.saving.set(true);
     this.errorMessage.set(null);
     this.successMessage.set(null);
@@ -2039,20 +2093,26 @@ export class RoadmapService {
       )
       .pipe(
         tap(archived => {
-          this.roadmaps.update(list =>
-            list.map(r => (r.id === archived.id ? archived : r))
-          );
+          this.roadmapStore.upsertRoadmap(archived);
           this.selectedRoadmapDetail.update(detail =>
             detail && detail.id === archived.id
               ? { ...detail, status: archived.status }
               : detail
           );
+          this.entityInvalidation.invalidate(
+            'dashboard',
+            'schedule',
+            'tasks',
+            'workspace',
+            'analytics'
+          );
           this.successMessage.set('Đã lưu trữ lộ trình (ARCHIVED — chế độ chỉ đọc).');
+          callbacks?.onSuccess?.(archived);
         }),
         catchError((err: HttpErrorResponse) => {
-          this.errorMessage.set(
-            this.extractErrorMessage(err, 'Không thể lưu trữ lộ trình học tập.')
-          );
+          const msg = this.extractErrorMessage(err, 'Không thể lưu trữ lộ trình học tập.');
+          this.errorMessage.set(msg);
+          callbacks?.onError?.(msg);
           return of(null);
         }),
         finalize(() => {
@@ -2090,6 +2150,7 @@ export class RoadmapService {
     }));
 
     if (isCompleted) {
+      this.aiSseService.clearActiveJob(roadmapId, mode);
       this._lastErrorCode.set(null);
       this._lastFailedStage.set(null);
       if (mode === 'MILESTONES') {
@@ -2123,6 +2184,7 @@ export class RoadmapService {
         cb?.();
       }
     } else if (isFailed) {
+      this.aiSseService.clearActiveJob(roadmapId, mode);
       this._lastErrorCode.set(pickNonEmpty(evt.error_code, evt.code, 'AI_EXECUTION_ERROR'));
       this._lastFailedStage.set(mode);
       this.errorMessage.set(
@@ -2135,22 +2197,49 @@ export class RoadmapService {
     }
   }
 
-  // Legacy methods kept for backward compatibility
-  pauseRoadmap(id: string): Observable<Roadmap> {
+  pauseRoadmap(id: string): Observable<RoadmapResponse> {
     return this.http
-      .post<Roadmap>(API_ENDPOINTS.ROADMAPS.PAUSE(id), {}, { withCredentials: true })
-      .pipe(tap(updated => this.currentRoadmap.set(updated)));
+      .post<RoadmapResponse>(API_ENDPOINTS.ROADMAPS.PAUSE(id), {}, { withCredentials: true })
+      .pipe(
+        tap(updated => {
+          this.roadmapStore.upsertRoadmap(updated);
+          this.selectedRoadmapDetail.update(detail =>
+            detail && detail.id === updated.id ? { ...detail, status: updated.status } : detail
+          );
+          this.entityInvalidation.invalidate(
+            'dashboard',
+            'schedule',
+            'tasks',
+            'workspace',
+            'analytics'
+          );
+        })
+      );
   }
 
-  resumeRoadmap(id: string): Observable<Roadmap> {
+  resumeRoadmap(id: string): Observable<RoadmapResponse> {
     return this.http
-      .post<Roadmap>(API_ENDPOINTS.ROADMAPS.RESUME(id), {}, { withCredentials: true })
-      .pipe(tap(updated => this.currentRoadmap.set(updated)));
+      .post<RoadmapResponse>(API_ENDPOINTS.ROADMAPS.RESUME(id), {}, { withCredentials: true })
+      .pipe(
+        tap(updated => {
+          this.roadmapStore.upsertRoadmap(updated);
+          this.selectedRoadmapDetail.update(detail =>
+            detail && detail.id === updated.id ? { ...detail, status: updated.status } : detail
+          );
+          this.entityInvalidation.invalidate(
+            'dashboard',
+            'schedule',
+            'tasks',
+            'workspace',
+            'analytics'
+          );
+        })
+      );
   }
 
-  reoptimizeSchedule(id: string): Observable<unknown> {
-    return this.http.post(
-      API_ENDPOINTS.ROADMAPS.REOPTIMIZE_SCHEDULE(id),
+  reoptimizeSchedule(roadmapId: string): Observable<ScheduleProposalResponse> {
+    return this.http.post<ScheduleProposalResponse>(
+      API_ENDPOINTS.ROADMAPS.REOPTIMIZE_SCHEDULE(roadmapId),
       {},
       { withCredentials: true }
     );

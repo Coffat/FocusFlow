@@ -98,7 +98,7 @@ class SqlAlchemyUserRepository:
 
     async def create_or_init_quota(self, user_id: uuid.UUID, tier: str = "FREE") -> AIQuotaORM:
         """Create and initialize default AI quota record for user."""
-        monthly_limit = 100 if tier == "PREMIUM" else 30
+        monthly_limit = 300 if tier == "PREMIUM" else 30
         now = datetime.now(UTC)
         quota = AIQuotaORM(
             id=uuid.uuid4(),
@@ -113,6 +113,36 @@ class SqlAlchemyUserRepository:
         self.session.add(quota)
         await self.session.flush()
         return quota
+
+    async def upgrade_user_to_premium(
+        self,
+        user_id: uuid.UUID,
+        *,
+        premium_monthly_limit: int = 300,
+    ) -> None:
+        """Upgrade user's tier to PREMIUM and raise AI quota monthly_limit without committing."""
+        user = await self.find_by_id(user_id)
+        if user is not None:
+            user.tier = "PREMIUM"
+            await self.session.flush()
+
+        quota = await self.get_quota_by_user_id(user_id)
+        if quota is None:
+            now = datetime.now(UTC)
+            quota = AIQuotaORM(
+                id=uuid.uuid4(),
+                user_id=user_id,
+                monthly_limit=premium_monthly_limit,
+                used_calls=0,
+                reserved_calls=0,
+                tokens_consumed=0,
+                cycle_start=now,
+                cycle_end=now + timedelta(days=30),
+            )
+            self.session.add(quota)
+        else:
+            quota.monthly_limit = max(quota.monthly_limit, premium_monthly_limit)
+        await self.session.flush()
 
 
 # Legacy alias for backward compatibility

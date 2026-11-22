@@ -9,6 +9,7 @@ import {
   WorkspaceSessionService,
   evaluateTakeawayCheck,
 } from './workspace-session.service';
+import { EntityInvalidationService } from './entity-invalidation.service';
 
 const makeTask = (overrides: Partial<TaskResponse> = {}): TaskResponse => ({
   id: 'task-01',
@@ -75,14 +76,20 @@ describe('WorkspaceSessionService', () => {
   let httpMock: HttpTestingController;
 
   let storageMap: Map<string, string>;
+  let getItemSpy: ReturnType<typeof vi.fn>;
+  let setItemSpy: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    storageMap = new Map<string, string>();
+    storageMap = new Map<string, string>([
+      ['focusflow_pomodoros_today_v1', JSON.stringify({ date: '2099-01-01', count: 99 })],
+    ]);
+    getItemSpy = vi.fn((key: string) => storageMap.get(key) ?? null);
+    setItemSpy = vi.fn((key: string, value: string) => {
+      storageMap.set(key, value);
+    });
     vi.stubGlobal('localStorage', {
-      getItem: (key: string) => storageMap.get(key) ?? null,
-      setItem: (key: string, value: string) => {
-        storageMap.set(key, value);
-      },
+      getItem: getItemSpy,
+      setItem: setItemSpy,
       removeItem: (key: string) => {
         storageMap.delete(key);
       },
@@ -303,12 +310,12 @@ describe('WorkspaceSessionService', () => {
     }
   });
 
-  it('pomodoro mode tự tạm dừng, tăng timerCompletedTick và completedPomodorosToday khi về 0', () => {
+  it('pomodoro mode tự tạm dừng và tăng timerCompletedTick khi về 0 nhưng KHÔNG tăng completedPomodorosToday trước khi finalize thành công', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-11-18T10:00:00Z'));
 
     service.mode.set('pomodoro');
-    service.hydrateActiveSession(makeSession({ planned_minutes: 1 }), true);
+    service.hydrateActiveSession(makeSession({ id: 'sess-pomo', planned_minutes: 1 }), true);
 
     expect(service.timerCompletedTick()).toBe(0);
     expect(service.completedPomodorosToday()).toBe(0);
@@ -318,8 +325,89 @@ describe('WorkspaceSessionService', () => {
     expect(service.remainingSeconds()).toBe(0);
     expect(service.isRunning()).toBe(false);
     expect(service.timerCompletedTick()).toBe(1);
+    // Phải vẫn là 0 cho đến khi backend finalize trả về COMPLETED / PARTIAL_COMPLETED
+    expect(service.completedPomodorosToday()).toBe(0);
+    expect(getItemSpy).not.toHaveBeenCalledWith('focusflow_pomodoros_today_v1');
+    expect(setItemSpy).not.toHaveBeenCalledWith('focusflow_pomodoros_today_v1', expect.anything());
+
+    // Finalize thành công với COMPLETED -> tăng delta lên 1 mà không đụng localStorage
+    service
+      .finalizeSession({
+        early_stop: false,
+        takeaway: 'Hoàn thành trọn vẹn phiên học 1 phút theo chuẩn Pomodoro và chốt kết quả.',
+        checkin_time_sufficiency: 'JUST_RIGHT',
+      })
+      .subscribe();
+    httpMock
+      .expectOne('/api/v1/sessions/sess-pomo/finalize')
+      .flush(makeSession({ id: 'sess-pomo', status: 'COMPLETED' }));
+
     expect(service.completedPomodorosToday()).toBe(1);
-    expect(localStorage.getItem('focusflow_pomodoros_today_v1')).toContain('"count":1');
+    expect(getItemSpy).not.toHaveBeenCalledWith('focusflow_pomodoros_today_v1');
+    expect(setItemSpy).not.toHaveBeenCalledWith('focusflow_pomodoros_today_v1', expect.anything());
+  });
+
+  it('KHÔNG tăng completedPomodorosToday khi finalize trả về CANCELLED hoặc lỗi HTTP, và không đếm lặp khi gọi double finalize', () => {
+    // 1. CANCELLED -> giữ nguyên 0
+    service.hydrateActiveSession(makeSession({ id: 'sess-cancel' }), true);
+    service
+      .finalizeSession({
+        early_stop: true,
+        takeaway: '',
+      })
+      .subscribe();
+    httpMock
+      .expectOne('/api/v1/sessions/sess-cancel/finalize')
+      .flush(makeSession({ id: 'sess-cancel', status: 'CANCELLED' }));
+
+    expect(service.completedPomodorosToday()).toBe(0);
+
+    // 2. HTTP error -> giữ nguyên 0
+    service.hydrateActiveSession(makeSession({ id: 'sess-err' }), true);
+    let errCaught = false;
+    service
+      .finalizeSession({
+        early_stop: false,
+        takeaway: 'Kiểm thử lỗi mạng khi chốt phiên học trên máy chủ backend.',
+      })
+      .subscribe({
+        error: () => {
+          errCaught = true;
+        },
+      });
+    httpMock
+      .expectOne('/api/v1/sessions/sess-err/finalize')
+      .flush({ message: 'Server error' }, { status: 500, statusText: 'Server Error' });
+
+    expect(errCaught).toBe(true);
+    expect(service.completedPomodorosToday()).toBe(0);
+
+    // 3. Double finalize trên cùng một session đang active -> lần 2 bị chặn do sessionId đã null sau lần 1, không đếm lặp
+    service.finalizeSession({
+      early_stop: false,
+      takeaway: 'Chốt phiên hợp lệ sau khi khôi phục kết nối máy chủ thành công.',
+    }).subscribe();
+    httpMock
+      .expectOne('/api/v1/sessions/sess-err/finalize')
+      .flush(makeSession({ id: 'sess-err', status: 'PARTIAL_COMPLETED' }));
+
+    expect(service.completedPomodorosToday()).toBe(1);
+
+    let secondFinalizeErrored = false;
+    service
+      .finalizeSession({
+        early_stop: false,
+        takeaway: 'Gọi finalize lần hai phải bị từ chối và không tăng bộ đếm.',
+      })
+      .subscribe({
+        error: () => {
+          secondFinalizeErrored = true;
+        },
+      });
+    expect(secondFinalizeErrored).toBe(true);
+    expect(service.completedPomodorosToday()).toBe(1);
+    expect(getItemSpy).not.toHaveBeenCalledWith('focusflow_pomodoros_today_v1');
+    expect(setItemSpy).not.toHaveBeenCalledWith('focusflow_pomodoros_today_v1', expect.anything());
   });
 
   it('local break timer hỗ trợ startBreak, pauseBreak, resumeBreak, stopBreak và tự dừng khi hết giờ mà không gọi API', () => {
@@ -585,7 +673,7 @@ describe('WorkspaceSessionService', () => {
     expect(service.errorState()).toBeNull();
   });
 
-  it('ưu tiên completed_sessions_today (+ delta cục bộ) và studied_minutes_today (+ elapsedMinutes) từ TodayFocusResponse', () => {
+  it('ưu tiên completed_sessions_today (+ delta sau finalize) và studied_minutes_today (+ elapsedMinutes) từ TodayFocusResponse, bỏ qua localStorage', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-11-18T10:00:00Z'));
 
@@ -605,11 +693,23 @@ describe('WorkspaceSessionService', () => {
     expect(service.todayProgress().totalStudiedMinutes).toBe(75);
 
     service.mode.set('pomodoro');
-    service.hydrateActiveSession(makeSession({ planned_minutes: 1 }), true);
+    service.hydrateActiveSession(makeSession({ id: 'sess-sync', planned_minutes: 1 }), true);
 
     vi.advanceTimersByTime(60 * 1000);
-    expect(service.completedPomodorosToday()).toBe(4);
+    // Hết giờ nhưng chưa finalize -> vẫn là 3
+    expect(service.completedPomodorosToday()).toBe(3);
     expect(service.todayProgress().totalStudiedMinutes).toBe(76);
+
+    service
+      .finalizeSession({
+        early_stop: false,
+        takeaway: 'Hoàn tất phiên học và đồng bộ với bộ đếm chuẩn từ server.',
+      })
+      .subscribe();
+    httpMock
+      .expectOne('/api/v1/sessions/sess-sync/finalize')
+      .flush(makeSession({ id: 'sess-sync', status: 'COMPLETED' }));
+    expect(service.completedPomodorosToday()).toBe(4);
 
     // Sau khi loadWorkspace lại với giá trị server mới, delta cục bộ được reset tránh đếm lặp
     service.loadWorkspace().subscribe();
@@ -625,7 +725,7 @@ describe('WorkspaceSessionService', () => {
     expect(service.completedPomodorosToday()).toBe(4);
     expect(service.todayProgress().totalStudiedMinutes).toBe(76);
 
-    // Fallback khi mock cũ không trả completed_sessions_today / studied_minutes_today
+    // Khi TodayFocusResponse không có completed_sessions_today -> mặc định 0 (không đọc localStorage)
     service.loadWorkspace().subscribe();
     httpMock.expectOne('/api/v1/sessions/today-focus').flush({
       local_date: '2026-11-18',
@@ -636,8 +736,10 @@ describe('WorkspaceSessionService', () => {
       overdue_tasks_count: 0,
     } as unknown as TodayFocusResponse);
     httpMock.expectOne('/api/v1/sessions/active').flush(null);
-    expect(service.completedPomodorosToday()).toBe(1);
+    expect(service.completedPomodorosToday()).toBe(0);
     expect(service.todayProgress().totalStudiedMinutes).toBe(0);
+    expect(getItemSpy).not.toHaveBeenCalledWith('focusflow_pomodoros_today_v1');
+    expect(setItemSpy).not.toHaveBeenCalledWith('focusflow_pomodoros_today_v1', expect.anything());
   });
 
   it('suy diễn milestoneContext trực tiếp từ activeFocusTask mà không gọi GET /api/v1/roadmaps/{id}', () => {
@@ -668,5 +770,40 @@ describe('WorkspaceSessionService', () => {
 
     service.loadMilestoneContext('rm-inline', 'ms-inline');
     httpMock.expectNone('/api/v1/roadmaps/rm-inline');
+  });
+
+  it('toggleTaskCompletion() lỗi rollback và KHÔNG phát invalidation, trong khi thành công phát invalidation đầy đủ', () => {
+    const invalidation = TestBed.inject(EntityInvalidationService);
+    invalidation.resetForTests();
+
+    const task = makeTask({ id: 'task-err', status: 'TODO' });
+    service.loadWorkspace().subscribe();
+    httpMock.expectOne('/api/v1/sessions/today-focus').flush(
+      makeTodayFocus({ focus_task: task, today_queue: [task] })
+    );
+    httpMock.expectOne('/api/v1/sessions/active').flush(null);
+
+    // Lỗi HTTP -> rollback & không invalidate
+    service.toggleTaskCompletion(task).subscribe();
+    httpMock
+      .expectOne('/api/v1/tasks/task-err/complete')
+      .flush({ message: 'Server error' }, { status: 500, statusText: 'Server Error' });
+
+    expect(service.todayQueue()[0].status).toBe('TODO');
+    expect(invalidation.versionFor('tasks')()).toBe(0);
+    expect(invalidation.versionFor('dashboard')()).toBe(0);
+    expect(invalidation.lastTaskMutation()).toBeNull();
+
+    // Thành công -> phát notifyTaskMutated + invalidate 4 domain
+    service.toggleTaskCompletion(task).subscribe();
+    httpMock
+      .expectOne('/api/v1/tasks/task-err/complete')
+      .flush(makeTask({ id: 'task-err', status: 'COMPLETED' }));
+
+    expect(invalidation.lastTaskMutation()?.id).toBe('task-err');
+    expect(invalidation.versionFor('tasks')()).toBe(1);
+    expect(invalidation.versionFor('schedule')()).toBe(1);
+    expect(invalidation.versionFor('dashboard')()).toBe(1);
+    expect(invalidation.versionFor('analytics')()).toBe(1);
   });
 });

@@ -9,7 +9,11 @@ from src.main import app
 @pytest.mark.asyncio
 async def test_auth_workflow() -> None:
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Origin": "http://localhost:3000"},
+    ) as client:
         # 1. Unique email per test run
         random_str = uuid.uuid4().hex[:8]
         email = f"learner_{random_str}@focusflow.vn"

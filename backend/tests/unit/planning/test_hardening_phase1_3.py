@@ -19,6 +19,7 @@ from src.evaluation.application.use_cases.intelligence import (
     GenerateWeeklyReviewUseCase,
     SubmitMilestoneProofUseCase,
 )
+from src.evaluation.domain.exceptions.prove_exceptions import ProveGradingUnavailableError
 from src.evaluation.domain.models.intelligence import MilestoneProof, WeeklyReview
 from src.planning.application.dtos.planning_dtos import (
     ClarificationQuestionsLLMOutput,
@@ -205,7 +206,8 @@ async def test_intelligence_use_cases_route_through_execution_manager_and_handle
     assert quota.committed == 1
     assert llm.calls == ["LOW"]
 
-    # E5: Prove grader fails with non-retryable 403 -> releases quota, does NOT retry, falls back safely
+    # E5 / P1B Phase 3: Prove grader fails with non-retryable 403 -> releases quota, does NOT retry,
+    # preserves user answers in PENDING state, and raises ProveGradingUnavailableError (no silent heuristic fallback)
     llm.fail_next = True
     submit_uc = SubmitMilestoneProofUseCase(
         repository=repo,  # type: ignore[arg-type]
@@ -213,15 +215,18 @@ async def test_intelligence_use_cases_route_through_execution_manager_and_handle
         llm_provider=llm,  # type: ignore[arg-type]
         quota_port=quota,
     )
-    graded = await submit_uc.execute(
-        user_id,
-        milestone_id,
-        proof_dto.proof_id,
-        SubmitProofRequestDTO(
-            answers=[{"id": "q1", "answer": "Tránh I/O đồng bộ."}], confidence=0.8
-        ),
-    )
-    assert graded.status in ("PASSED", "NEEDS_REVIEW")
+    with pytest.raises(ProveGradingUnavailableError):
+        await submit_uc.execute(
+            user_id,
+            milestone_id,
+            proof_dto.proof_id,
+            SubmitProofRequestDTO(
+                answers=[{"id": "q1", "answer": "Tránh I/O đồng bộ."}], confidence=0.8
+            ),
+        )
+    saved_proof = repo.proofs[proof_dto.proof_id]
+    assert saved_proof.status == "PENDING"
+    assert saved_proof.score is None
     assert len(quota.released) == 1
     assert len(llm.calls) == 2
 

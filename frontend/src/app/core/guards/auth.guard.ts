@@ -1,5 +1,6 @@
 import { inject } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
+import { map } from 'rxjs';
 import { AuthService } from '../services/auth.service';
 
 export const authGuard: CanActivateFn = () => {
@@ -10,6 +11,7 @@ export const authGuard: CanActivateFn = () => {
     return true;
   }
 
-  // Allow proceeding if cookie check passes on backend or redirect to login
-  return router.parseUrl('/login');
+  return authService
+    .checkSession()
+    .pipe(map(isAuthed => (isAuthed ? true : router.createUrlTree(['/sign-in']))));
 };

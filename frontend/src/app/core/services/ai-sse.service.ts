@@ -1,8 +1,9 @@
 import { DestroyRef, Injectable, Signal, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
-import { Observable } from 'rxjs';
+import { Observable, Subscription } from 'rxjs';
 import { API_BASE_URL } from '../../constant/api.constant';
+import { API_ENDPOINTS } from '../constants/api-endpoints';
 import type { components } from '../api/schema';
 
 export type SseJobTicketResponse = components['schemas']['SseJobTicketResponse'];
@@ -17,10 +18,20 @@ export type SseEventType =
 
 export interface AiStreamChunkEvent<T = unknown> {
   readonly eventType?: SseEventType;
-  readonly stage: 'RESERVED' | 'STREAMING' | 'VALIDATING_TIER_1_2_3' | 'COMPLETED' | 'FAILED';
+  readonly stage:
+    | 'RESERVED'
+    | 'STREAMING'
+    | 'DECOMPOSING_MILESTONES'
+    | 'VALIDATING_TIER_1_2_3'
+    | 'COMPLETED'
+    | 'FAILED';
   readonly progress: number;
   readonly deltaText?: string;
   readonly delta_text?: string;
+  readonly milestone_sequence?: number;
+  readonly completed_count?: number;
+  readonly total_count?: number;
+  readonly from_checkpoint?: boolean;
   readonly retry_attempt?: number;
   readonly violations?: components['schemas']['ConstraintViolationSchema'][];
   readonly payload?: T;
@@ -51,8 +62,20 @@ export interface SseStreamWatchdogOptions {
   readonly maxReconnectAttempts?: number;
 }
 
+export type ActiveSseJobStage = 'MILESTONES' | 'PROPOSAL';
+
+export interface ActiveSseJobRecord {
+  readonly jobId: string;
+  readonly streamUrl: string;
+  readonly roadmapId: string;
+  readonly stage: ActiveSseJobStage;
+  readonly startedAt: number;
+}
+
 const DEFAULT_INACTIVITY_TIMEOUT_MS = 90_000;
 const DEFAULT_MAX_RECONNECT_ATTEMPTS = 3;
+const ACTIVE_JOB_STORAGE_PREFIX = 'focusflow:sse:active';
+const ACTIVE_JOB_MAX_AGE_MS = 10 * 60_000;
 
 function pickNonEmpty(...candidates: Array<string | null | undefined>): string | undefined {
   for (const candidate of candidates) {
@@ -88,6 +111,79 @@ export class AiSseService {
     });
   }
 
+  private getActiveJobStorageKey(roadmapId: string, stage: ActiveSseJobStage): string {
+    return `${ACTIVE_JOB_STORAGE_PREFIX}:${roadmapId}:${stage}`;
+  }
+
+  saveActiveJob(
+    roadmapId: string,
+    stage: ActiveSseJobStage,
+    job: { jobId: string; streamUrl: string }
+  ): void {
+    if (typeof sessionStorage === 'undefined' || !roadmapId || !job.streamUrl) {
+      return;
+    }
+    const record: ActiveSseJobRecord = {
+      jobId: job.jobId,
+      streamUrl: job.streamUrl,
+      roadmapId,
+      stage,
+      startedAt: Date.now(),
+    };
+    try {
+      sessionStorage.setItem(this.getActiveJobStorageKey(roadmapId, stage), JSON.stringify(record));
+    } catch {
+      // Ignore storage quota or privacy-mode errors
+    }
+  }
+
+  getActiveJob(roadmapId: string, stage: ActiveSseJobStage): ActiveSseJobRecord | null {
+    if (typeof sessionStorage === 'undefined' || !roadmapId) {
+      return null;
+    }
+    const key = this.getActiveJobStorageKey(roadmapId, stage);
+    try {
+      const raw = sessionStorage.getItem(key);
+      if (!raw) {
+        return null;
+      }
+      const parsed = JSON.parse(raw) as Partial<ActiveSseJobRecord>;
+      if (
+        typeof parsed.jobId !== 'string' ||
+        typeof parsed.streamUrl !== 'string' ||
+        parsed.streamUrl.trim().length === 0 ||
+        typeof parsed.startedAt !== 'number'
+      ) {
+        sessionStorage.removeItem(key);
+        return null;
+      }
+      if (Date.now() - parsed.startedAt > ACTIVE_JOB_MAX_AGE_MS) {
+        sessionStorage.removeItem(key);
+        return null;
+      }
+      return {
+        jobId: parsed.jobId,
+        streamUrl: parsed.streamUrl,
+        roadmapId,
+        stage,
+        startedAt: parsed.startedAt,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  clearActiveJob(roadmapId: string, stage: ActiveSseJobStage): void {
+    if (typeof sessionStorage === 'undefined' || !roadmapId) {
+      return;
+    }
+    try {
+      sessionStorage.removeItem(this.getActiveJobStorageKey(roadmapId, stage));
+    } catch {
+      // Ignore storage access errors
+    }
+  }
+
   observeJobStream<TPayload = unknown>(
     streamUrl: string,
     options?: SseStreamWatchdogOptions
@@ -97,12 +193,15 @@ export class AiSseService {
       if (streamUrl.startsWith('/api/v1')) {
         resolvedUrl = `${API_BASE_URL}${streamUrl.slice('/api/v1'.length)}`;
       }
-      const eventSource = new EventSource(resolvedUrl, { withCredentials: true });
       const inactivityTimeoutMs = options?.inactivityTimeoutMs ?? DEFAULT_INACTIVITY_TIMEOUT_MS;
       const maxReconnectAttempts = options?.maxReconnectAttempts ?? DEFAULT_MAX_RECONNECT_ATTEMPTS;
 
+      let currentEventSource: EventSource | null = null;
+      let refreshSubscription: Subscription | null = null;
       let terminalReceived = false;
       let reconnectAttempts = 0;
+      let authRefreshAttempted = false;
+      let authRefreshInProgress = false;
       let inactivityTimer: ReturnType<typeof setTimeout> | null = null;
 
       const clearWatchdog = () => {
@@ -118,7 +217,9 @@ export class AiSseService {
         }
         terminalReceived = true;
         clearWatchdog();
-        eventSource.close();
+        refreshSubscription?.unsubscribe();
+        refreshSubscription = null;
+        currentEventSource?.close();
         subscriber.error(new SseStreamError(message, code));
       };
 
@@ -134,8 +235,6 @@ export class AiSseService {
           );
         }, inactivityTimeoutMs);
       };
-
-      resetWatchdog();
 
       const handleEvent = (rawEvent: MessageEvent<string>, eventType: SseEventType) => {
         if (terminalReceived || subscriber.closed) {
@@ -161,21 +260,12 @@ export class AiSseService {
           subscriber.next(normalized);
           if (isTerminal) {
             clearWatchdog();
-            eventSource.close();
+            currentEventSource?.close();
             subscriber.complete();
           }
         } catch {
           failAndClose('Dữ liệu phản hồi từ luồng SSE không hợp lệ.', 'SSE_PARSE_ERROR');
         }
-      };
-
-      eventSource.onopen = () => {
-        reconnectAttempts = 0;
-        resetWatchdog();
-      };
-
-      eventSource.onmessage = (event: MessageEvent<string>) => {
-        handleEvent(event, 'message');
       };
 
       const namedEvents: readonly SseEventType[] = [
@@ -185,36 +275,85 @@ export class AiSseService {
         'completed',
         'failed',
       ];
-      for (const evtName of namedEvents) {
-        if (typeof eventSource.addEventListener === 'function') {
-          eventSource.addEventListener(evtName, (event: Event) => {
-            handleEvent(event as MessageEvent<string>, evtName);
-          });
-        }
-      }
 
-      eventSource.onerror = () => {
-        if (terminalReceived || subscriber.closed) {
-          return;
+      const openEventSource = () => {
+        const es = new EventSource(resolvedUrl, { withCredentials: true });
+        currentEventSource = es;
+
+        es.onopen = () => {
+          reconnectAttempts = 0;
+          resetWatchdog();
+        };
+
+        es.onmessage = (event: MessageEvent<string>) => {
+          handleEvent(event, 'message');
+        };
+
+        for (const evtName of namedEvents) {
+          if (typeof es.addEventListener === 'function') {
+            es.addEventListener(evtName, (event: Event) => {
+              handleEvent(event as MessageEvent<string>, evtName);
+            });
+          }
         }
-        if (eventSource.readyState === EventSource.CLOSED) {
-          failAndClose('Kết nối luồng SSE đã bị đóng đột ngột.', 'SSE_CONNECTION_LOST');
-          return;
-        }
-        // A transient network interruption moves EventSource to CONNECTING;
-        // allow bounded reconnect attempts with Last-Event-ID, then abort cleanly.
-        reconnectAttempts += 1;
-        if (reconnectAttempts > maxReconnectAttempts) {
-          failAndClose(
-            'Mất kết nối luồng SSE sau nhiều lần thử kết nối lại. Vui lòng thử lại.',
-            'SSE_RECONNECT_EXHAUSTED'
-          );
-        }
+
+        es.onerror = () => {
+          if (terminalReceived || subscriber.closed || authRefreshInProgress) {
+            return;
+          }
+          if (es.readyState === EventSource.CLOSED) {
+            // EventSource closes immediately on HTTP 401; attempt a single cookie refresh
+            // before giving up so an expired 15m access token mid-stream recovers cleanly.
+            if (!authRefreshAttempted) {
+              authRefreshAttempted = true;
+              authRefreshInProgress = true;
+              clearWatchdog();
+              es.close();
+
+              refreshSubscription = this.http
+                .post(API_ENDPOINTS.AUTH.REFRESH, {}, { withCredentials: true })
+                .subscribe({
+                  next: () => {
+                    authRefreshInProgress = false;
+                    refreshSubscription = null;
+                    if (terminalReceived || subscriber.closed) {
+                      return;
+                    }
+                    reconnectAttempts = 0;
+                    resetWatchdog();
+                    openEventSource();
+                  },
+                  error: () => {
+                    authRefreshInProgress = false;
+                    refreshSubscription = null;
+                    failAndClose('Kết nối luồng SSE đã bị đóng đột ngột.', 'SSE_CONNECTION_LOST');
+                  },
+                });
+              return;
+            }
+            failAndClose('Kết nối luồng SSE đã bị đóng đột ngột.', 'SSE_CONNECTION_LOST');
+            return;
+          }
+          // A transient network interruption moves EventSource to CONNECTING;
+          // allow bounded reconnect attempts with Last-Event-ID, then abort cleanly.
+          reconnectAttempts += 1;
+          if (reconnectAttempts > maxReconnectAttempts) {
+            failAndClose(
+              'Mất kết nối luồng SSE sau nhiều lần thử kết nối lại. Vui lòng thử lại.',
+              'SSE_RECONNECT_EXHAUSTED'
+            );
+          }
+        };
       };
+
+      resetWatchdog();
+      openEventSource();
 
       return () => {
         clearWatchdog();
-        eventSource.close();
+        refreshSubscription?.unsubscribe();
+        refreshSubscription = null;
+        currentEventSource?.close();
       };
     });
   }

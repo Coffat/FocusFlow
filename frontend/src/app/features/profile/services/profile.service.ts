@@ -1,13 +1,14 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../../../core/services/auth.service';
+import { API_ENDPOINTS } from '../../../core/constants/api-endpoints';
 import type {
   ProfileResponseDTO,
   UpdateProfileRequestDTO,
   LearnerMemoryResponseDTO,
   UpdateLearnerMemoryRequestDTO,
-  SrlMetrics,
+  LearnerSrlProfileDTO,
 } from '../models/profile.model';
 
 @Injectable({
@@ -25,17 +26,16 @@ export class ProfileService {
   readonly memoryLoading = signal<boolean>(false);
   readonly memoryError = signal<string | null>(null);
 
-  readonly srlMetrics = signal<SrlMetrics>({
-    optSessionMinutes: 45,
-    completionRateBias: 1.05,
-    learningStyle: 'Tuần tự & Tập trung sâu (Sequential Deep Work)',
-  });
+  readonly srlProfile = computed<LearnerSrlProfileDTO | null>(
+    () => this.profile()?.srl_profile ?? null,
+  );
+  readonly isSrlColdStart = computed<boolean>(() => this.srlProfile()?.is_cold_start ?? true);
 
   async loadProfile(): Promise<void> {
     this.profileLoading.set(true);
     try {
       const data = await firstValueFrom(
-        this.http.get<ProfileResponseDTO>('/api/v1/account/profile', {
+        this.http.get<ProfileResponseDTO>(API_ENDPOINTS.SETTINGS.PROFILE, {
           withCredentials: true,
         }),
       );
@@ -63,7 +63,7 @@ export class ProfileService {
     this.profileSaving.set(true);
     try {
       const updated = await firstValueFrom(
-        this.http.patch<ProfileResponseDTO>('/api/v1/account/profile', req, {
+        this.http.patch<ProfileResponseDTO>(API_ENDPOINTS.SETTINGS.PROFILE, req, {
           withCredentials: true,
         }),
       );
@@ -89,7 +89,7 @@ export class ProfileService {
     this.memoryError.set(null);
     try {
       const items = await firstValueFrom(
-        this.http.get<LearnerMemoryResponseDTO[]>('/api/v1/account/learner-memory', {
+        this.http.get<LearnerMemoryResponseDTO[]>(API_ENDPOINTS.SETTINGS.LEARNER_MEMORY, {
           withCredentials: true,
         }),
       );
@@ -103,9 +103,13 @@ export class ProfileService {
 
   async updateMemory(id: string, req: UpdateLearnerMemoryRequestDTO): Promise<void> {
     const updated = await firstValueFrom(
-      this.http.patch<LearnerMemoryResponseDTO>(`/api/v1/account/learner-memory/${id}`, req, {
-        withCredentials: true,
-      }),
+      this.http.patch<LearnerMemoryResponseDTO>(
+        API_ENDPOINTS.SETTINGS.LEARNER_MEMORY_DETAIL(id),
+        req,
+        {
+          withCredentials: true,
+        },
+      ),
     );
     this.learnerMemory.update((items) => items.map((item) => (item.id === id ? updated : item)));
   }
@@ -113,11 +117,12 @@ export class ProfileService {
   async resetLearnerMemory(): Promise<void> {
     await firstValueFrom(
       this.http.post<void>(
-        '/api/v1/account/learner-memory/reset',
+        API_ENDPOINTS.SETTINGS.LEARNER_MEMORY_RESET,
         { confirm: true },
         { withCredentials: true },
       ),
     );
     this.learnerMemory.set([]);
+    await this.loadProfile();
   }
 }

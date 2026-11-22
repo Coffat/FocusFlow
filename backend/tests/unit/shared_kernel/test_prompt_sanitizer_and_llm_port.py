@@ -1675,17 +1675,33 @@ async def test_probe_cobhub_capabilities_detects_mismatch_caches_and_fails_safe(
     assert startup_res is not None
     assert startup_res.probe_succeeded is False
 
+    async def _always_healthy(*args: Any, **kwargs: Any) -> bool:
+        del args, kwargs
+        return True
+
+    health_probe_calls = 0
+
+    async def _unexpected_health_probe(*args: Any, **kwargs: Any) -> Any:
+        nonlocal health_probe_calls
+        del args, kwargs
+        health_probe_calls += 1
+        raise AssertionError("Outbound AI probe must not be triggered by /api/health")
+
+    monkeypatch.setattr(main_mod, "check_database_health", _always_healthy)
+    monkeypatch.setattr(main_mod, "check_redis_health", _always_healthy)
+    monkeypatch.setattr(main_mod, "probe_cobhub_capabilities", _unexpected_health_probe)
+
     client = TestClient(app)
     health_fast = client.get("/api/health")
     assert health_fast.status_code == 200
-    assert health_fast.json()["status"] == "healthy"
+    assert health_fast.json() == {"status": "healthy", "database": "ok", "redis": "ok"}
 
     health_probed = client.get("/api/health?probe_ai=true")
     assert health_probed.status_code == 200
     body = health_probed.json()
-    assert body["status"] == "healthy"
-    assert body["ai_gateway"]["probe_succeeded"] is False
-    assert "ConnectionError" in body["ai_gateway"]["error"]
+    assert body == {"status": "healthy", "database": "ok", "redis": "ok"}
+    assert "ai_gateway" not in body
+    assert health_probe_calls == 0
     clear_cobhub_capability_probe_cache()
 
 

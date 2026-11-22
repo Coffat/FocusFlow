@@ -1,6 +1,8 @@
 import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { API_ENDPOINTS } from '../constants/api-endpoints';
 import { AiSseService, AiStreamChunkEvent, SseStreamError } from './ai-sse.service';
 
 class FakeEventSource {
@@ -22,6 +24,7 @@ class FakeEventSource {
     readonly eventSourceInitDict?: EventSourceInit
   ) {
     fakeEventSource = this;
+    createdEventSources.push(this);
   }
 
   addEventListener(type: string, listener: EventListenerOrEventListenerObject): void {
@@ -41,17 +44,42 @@ class FakeEventSource {
 }
 
 let fakeEventSource: FakeEventSource;
+let createdEventSources: FakeEventSource[] = [];
 
 describe('AiSseService', () => {
   let service: AiSseService;
+  let httpTesting: HttpTestingController;
+  let mockSessionStore: Record<string, string> = {};
 
   beforeEach(() => {
+    createdEventSources = [];
+    mockSessionStore = {};
     vi.stubGlobal('EventSource', FakeEventSource);
-    TestBed.configureTestingModule({ providers: [AiSseService, provideHttpClient()] });
+    vi.stubGlobal('sessionStorage', {
+      getItem: (key: string) => mockSessionStore[key] ?? null,
+      setItem: (key: string, value: string) => {
+        mockSessionStore[key] = value;
+      },
+      removeItem: (key: string) => {
+        delete mockSessionStore[key];
+      },
+      clear: () => {
+        mockSessionStore = {};
+      },
+      key: (index: number) => Object.keys(mockSessionStore)[index] ?? null,
+      get length() {
+        return Object.keys(mockSessionStore).length;
+      },
+    });
+    TestBed.configureTestingModule({
+      providers: [AiSseService, provideHttpClient(), provideHttpClientTesting()],
+    });
     service = TestBed.inject(AiSseService);
+    httpTesting = TestBed.inject(HttpTestingController);
   });
 
   afterEach(() => {
+    httpTesting.verify();
     vi.useRealTimers();
     vi.unstubAllGlobals();
   });
@@ -95,6 +123,28 @@ describe('AiSseService', () => {
     });
 
     expect(received[0].error).toBe('Thông báo lỗi từ message.');
+  });
+
+  it('giữ metadata tiến độ logical subjob theo milestone', () => {
+    const received: AiStreamChunkEvent[] = [];
+    service.observeJobStream('/api/v1/roadmaps/jobs/job-progress/stream').subscribe({
+      next: event => received.push(event),
+    });
+
+    fakeEventSource.emit('chunk', {
+      stage: 'DECOMPOSING_MILESTONES',
+      progress: 71,
+      milestone_sequence: 4,
+      completed_count: 2,
+      total_count: 6,
+      from_checkpoint: true,
+    });
+
+    expect(received[0].stage).toBe('DECOMPOSING_MILESTONES');
+    expect(received[0].milestone_sequence).toBe(4);
+    expect(received[0].completed_count).toBe(2);
+    expect(received[0].total_count).toBe(6);
+    expect(received[0].from_checkpoint).toBe(true);
   });
 
   it('giữ kết nối để EventSource tự nối lại khi lỗi mạng chỉ là tạm thời', () => {
@@ -151,5 +201,102 @@ describe('AiSseService', () => {
     expect(fakeEventSource.closed).toBe(true);
     expect(transportError).toBeInstanceOf(SseStreamError);
     expect((transportError as SseStreamError).code).toBe('SSE_TIMEOUT');
+  });
+
+  it('thử refresh phiên một lần khi EventSource đóng đột ngột (401) và nối lại luồng thành công', () => {
+    const received: AiStreamChunkEvent[] = [];
+    let completed = false;
+    let transportError: unknown;
+
+    service.observeJobStream('/api/v1/roadmaps/jobs/job-401/stream').subscribe({
+      next: event => received.push(event),
+      error: error => (transportError = error),
+      complete: () => (completed = true),
+    });
+
+    expect(createdEventSources).toHaveLength(1);
+    const firstSource = createdEventSources[0];
+    firstSource.readyState = FakeEventSource.CLOSED;
+    firstSource.onerror?.(new Event('error'));
+
+    const refreshReq = httpTesting.expectOne(API_ENDPOINTS.AUTH.REFRESH);
+    expect(refreshReq.request.method).toBe('POST');
+    expect(refreshReq.request.withCredentials).toBe(true);
+    refreshReq.flush({ ok: true });
+
+    expect(createdEventSources).toHaveLength(2);
+    const reopenedSource = createdEventSources[1];
+    reopenedSource.emit('completed', { stage: 'COMPLETED', progress: 100 });
+
+    expect(received).toHaveLength(1);
+    expect(received[0].stage).toBe('COMPLETED');
+    expect(completed).toBe(true);
+    expect(transportError).toBeUndefined();
+  });
+
+  it('phát lỗi SSE_CONNECTION_LOST khi refresh phiên thất bại sau khi EventSource đóng đột ngột', () => {
+    let transportError: unknown;
+    service.observeJobStream('/api/v1/roadmaps/jobs/job-401-fail/stream').subscribe({
+      error: error => (transportError = error),
+    });
+
+    fakeEventSource.readyState = FakeEventSource.CLOSED;
+    fakeEventSource.onerror?.(new Event('error'));
+
+    const refreshReq = httpTesting.expectOne(API_ENDPOINTS.AUTH.REFRESH);
+    refreshReq.flush({ detail: 'Refresh expired' }, { status: 401, statusText: 'Unauthorized' });
+
+    expect(createdEventSources).toHaveLength(1);
+    expect(transportError).toBeInstanceOf(SseStreamError);
+    expect((transportError as SseStreamError).code).toBe('SSE_CONNECTION_LOST');
+  });
+
+  it('không lặp refresh lần thứ hai nếu EventSource sau khi nối lại tiếp tục bị CLOSED', () => {
+    let transportError: unknown;
+    service.observeJobStream('/api/v1/roadmaps/jobs/job-401-twice/stream').subscribe({
+      error: error => (transportError = error),
+    });
+
+    createdEventSources[0].readyState = FakeEventSource.CLOSED;
+    createdEventSources[0].onerror?.(new Event('error'));
+
+    const refreshReq = httpTesting.expectOne(API_ENDPOINTS.AUTH.REFRESH);
+    refreshReq.flush({ ok: true });
+
+    expect(createdEventSources).toHaveLength(2);
+    createdEventSources[1].readyState = FakeEventSource.CLOSED;
+    createdEventSources[1].onerror?.(new Event('error'));
+
+    httpTesting.expectNone(API_ENDPOINTS.AUTH.REFRESH);
+    expect(transportError).toBeInstanceOf(SseStreamError);
+    expect((transportError as SseStreamError).code).toBe('SSE_CONNECTION_LOST');
+  });
+
+  it('lưu, đọc, xóa active job theo roadmapId + stage trong sessionStorage và tự hủy bản ghi quá hạn', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-22T10:00:00Z'));
+
+    service.saveActiveJob('rm-1', 'MILESTONES', {
+      jobId: 'job-m1',
+      streamUrl: '/api/v1/roadmaps/jobs/job-m1/stream',
+    });
+    service.saveActiveJob('rm-1', 'PROPOSAL', {
+      jobId: 'job-p1',
+      streamUrl: '/api/v1/roadmaps/jobs/job-p1/stream',
+    });
+
+    const milestoneJob = service.getActiveJob('rm-1', 'MILESTONES');
+    expect(milestoneJob?.jobId).toBe('job-m1');
+    expect(milestoneJob?.streamUrl).toBe('/api/v1/roadmaps/jobs/job-m1/stream');
+    expect(service.getActiveJob('rm-1', 'PROPOSAL')?.jobId).toBe('job-p1');
+    expect(service.getActiveJob('rm-2', 'MILESTONES')).toBeNull();
+
+    service.clearActiveJob('rm-1', 'MILESTONES');
+    expect(service.getActiveJob('rm-1', 'MILESTONES')).toBeNull();
+    expect(service.getActiveJob('rm-1', 'PROPOSAL')?.jobId).toBe('job-p1');
+
+    // Advance past 10m TTL -> expired record is auto-cleared
+    vi.advanceTimersByTime(11 * 60_000);
+    expect(service.getActiveJob('rm-1', 'PROPOSAL')).toBeNull();
   });
 });

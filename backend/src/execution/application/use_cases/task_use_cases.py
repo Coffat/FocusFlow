@@ -963,6 +963,13 @@ class AddTaskDependencyUseCase:
             predecessor = await self._task_repo.get_by_id(predecessor_id)
             if successor is None or predecessor is None:
                 raise TaskNotFoundError()
+            owned_roadmaps = await self._bridge.get_user_roadmaps_context(user_id)
+            owned_roadmap_ids = {r.roadmap_id for r in owned_roadmaps}
+            if (
+                successor.roadmap_id not in owned_roadmap_ids
+                or predecessor.roadmap_id not in owned_roadmap_ids
+            ):
+                raise TaskNotFoundError()
             await _verify_writable_for_task(self._bridge, user_id, successor.roadmap_id)
             if predecessor.roadmap_id != successor.roadmap_id:
                 raise InvalidTaskStateError(

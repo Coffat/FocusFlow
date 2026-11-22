@@ -5,9 +5,4 @@ export type UpdateProfileRequestDTO = components['schemas']['UpdateProfileReques
 export type LearnerMemoryResponseDTO = components['schemas']['LearnerMemoryResponseDTO'];
 export type UpdateLearnerMemoryRequestDTO = components['schemas']['UpdateLearnerMemoryRequestDTO'];
 export type ResetLearnerMemoryRequestDTO = components['schemas']['ResetLearnerMemoryRequestDTO'];
-
-export interface SrlMetrics {
-  optSessionMinutes: number;
-  completionRateBias: number;
-  learningStyle: string;
-}
+export type LearnerSrlProfileDTO = components['schemas']['LearnerSrlProfileDTO'];

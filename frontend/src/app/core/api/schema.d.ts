@@ -24,6 +24,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/account/admin/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get admin portal status (ADMIN role required)
+         * @description Role-enforced admin status endpoint (ADR-008).
+         */
+        get: operations["get_admin_status_api_v1_account_admin_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/account/profile": {
         parameters: {
             query?: never;
@@ -40,6 +60,23 @@ export interface paths {
         head?: never;
         /** Update current learner profile */
         patch: operations["update_profile_api_v1_account_profile_patch"];
+        trace?: never;
+    };
+    "/api/v1/account/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export authenticated learner's personal data (GDPR Article 20) */
+        get: operations["export_account_data_api_v1_account_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/account/quota": {
@@ -127,6 +164,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/account/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List persistent notifications for the authenticated learner */
+        get: operations["list_notifications_api_v1_account_notifications_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/account/notifications/read-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark all unread notifications as read */
+        post: operations["mark_all_notifications_read_api_v1_account_notifications_read_all_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/account/notifications/{notification_id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark a single notification as read */
+        post: operations["mark_notification_read_api_v1_account_notifications__notification_id__read_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/availabilities/me": {
         parameters: {
             query?: never;
@@ -195,8 +283,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * User Registration (Direct fallback)
-         * @description Direct registration fallback without OTP (UC-AUTH-01).
+         * User Registration (Direct fallback — dev/test only)
+         * @description Direct registration fallback without OTP (UC-AUTH-01). Disabled in staging/production.
          */
         post: operations["register_api_v1_auth_register_post"];
         delete?: never;
@@ -385,6 +473,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/account/billing/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get public server-owned billing release mode, capabilities, and plan catalog */
+        get: operations["get_billing_config_api_v1_account_billing_config_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/account/billing/checkout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create or reuse a PENDING subscription checkout session */
+        post: operations["create_billing_checkout_api_v1_account_billing_checkout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/account/billing/transactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List authenticated learner's billing transactions */
+        get: operations["list_billing_transactions_api_v1_account_billing_transactions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/account/billing/webhook": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Receive HMAC-SHA256 verified payment gateway webhook */
+        post: operations["receive_billing_webhook_api_v1_account_billing_webhook_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/account/billing/mock-confirm/{transaction_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm a local_mock payment transaction in dev/test environments only */
+        post: operations["mock_confirm_billing_transaction_api_v1_account_billing_mock_confirm__transaction_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/account/calendar/google/authorize": {
         parameters: {
             query?: never;
@@ -448,6 +621,58 @@ export interface paths {
         put?: never;
         /** Disconnect external calendar and stop push notifications */
         post: operations["disconnect_calendar_api_v1_account_calendar_disconnect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/account/calendar/webcal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get current WebCal subscription status */
+        get: operations["get_webcal_status_api_v1_account_calendar_webcal_get"];
+        put?: never;
+        post?: never;
+        /** Revoke personal WebCal feed token */
+        delete: operations["revoke_webcal_token_api_v1_account_calendar_webcal_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/account/calendar/webcal/rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create or rotate personal WebCal feed token */
+        post: operations["rotate_webcal_token_api_v1_account_calendar_webcal_rotate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/feeds/{token}.ics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download read-only RFC 5545 ICS calendar feed */
+        get: operations["get_webcal_ics_feed_api_v1_feeds__token__ics_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1275,6 +1500,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/evaluation/milestones/{milestone_id}/proofs/latest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Latest Milestone Proof */
+        get: operations["get_latest_milestone_proof_api_v1_evaluation_milestones__milestone_id__proofs_latest_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/evaluation/milestones/{milestone_id}/proofs/generate-jobs": {
         parameters: {
             query?: never;
@@ -1414,6 +1656,38 @@ export interface components {
             cycle_start: string;
             /** Cycle End */
             cycle_end: string;
+        };
+        /**
+         * AccountDataExportDTO
+         * @description GDPR Article 20 portable JSON export payload for the authenticated learner (FE-MOCK-03).
+         */
+        AccountDataExportDTO: {
+            /**
+             * Schema Version
+             * @default 1.0
+             */
+            schema_version: string;
+            /**
+             * Exported At
+             * Format: date-time
+             */
+            exported_at: string;
+            user: components["schemas"]["ExportUserDTO"];
+            learner_profile?: components["schemas"]["ExportLearnerProfileDTO"] | null;
+            /** Learner Memory */
+            learner_memory?: components["schemas"]["ExportLearnerMemoryItemDTO"][];
+            availability?: components["schemas"]["ExportAvailabilityDTO"] | null;
+            /** Roadmaps */
+            roadmaps?: components["schemas"]["ExportRoadmapDTO"][];
+            analytics_summary: components["schemas"]["ExportAnalyticsSummaryDTO"];
+            /** Study Sessions Count */
+            study_sessions_count: number;
+            /** Study Sessions */
+            study_sessions?: components["schemas"]["ExportStudySessionItemDTO"][];
+            /** Tasks Count */
+            tasks_count: number;
+            /** Tasks */
+            tasks?: components["schemas"]["ExportTaskItemDTO"][];
         };
         /** AddTaskDependencyRequest */
         AddTaskDependencyRequest: {
@@ -1609,6 +1883,68 @@ export interface components {
             /** Updated At */
             updated_at: string;
         };
+        /**
+         * BillingConfigResponseDTO
+         * @description Public server-owned billing release mode and capability response.
+         */
+        BillingConfigResponseDTO: {
+            /**
+             * Release Mode
+             * @enum {string}
+             */
+            release_mode: "FREE_BETA" | "PAID_ENABLED";
+            /** Checkout Enabled */
+            checkout_enabled: boolean;
+            /** Mock Confirm Enabled */
+            mock_confirm_enabled: boolean;
+            /** Provider */
+            provider: string;
+            /** Status Message */
+            status_message: string;
+            /** Plans */
+            plans: components["schemas"]["BillingPlanDTO"][];
+        };
+        /**
+         * BillingPlanDTO
+         * @description Server-owned subscription plan pricing and entitlement catalog.
+         */
+        BillingPlanDTO: {
+            /**
+             * Plan Code
+             * @enum {string}
+             */
+            plan_code: "PREMIUM_MONTHLY" | "PREMIUM_YEARLY";
+            /** Name */
+            name: string;
+            /** Amount Vnd */
+            amount_vnd: number;
+            /** Currency */
+            currency: string;
+            /**
+             * Billing Cycle
+             * @enum {string}
+             */
+            billing_cycle: "MONTHLY" | "YEARLY";
+            /** Ai Monthly Limit */
+            ai_monthly_limit: number;
+            /** Max Active Roadmaps */
+            max_active_roadmaps: number;
+        };
+        /**
+         * BillingWebhookResponseDTO
+         * @description Idempotent webhook settlement acknowledgement.
+         */
+        BillingWebhookResponseDTO: {
+            /** Status */
+            status: string;
+            /**
+             * Transaction Id
+             * Format: uuid
+             */
+            transaction_id: string;
+            /** Already Processed */
+            already_processed: boolean;
+        };
         /** Body_upload_knowledge_source_file_api_v1_planning_goals__goal_id__knowledge_sources_files_post */
         Body_upload_knowledge_source_file_api_v1_planning_goals__goal_id__knowledge_sources_files_post: {
             /** File */
@@ -1661,6 +1997,38 @@ export interface components {
             current_password: string;
             /** New Password */
             new_password: string;
+        };
+        /**
+         * CheckoutResponseDTO
+         * @description Response returned when initiating or reusing an active PENDING checkout.
+         */
+        CheckoutResponseDTO: {
+            /**
+             * Transaction Id
+             * Format: uuid
+             */
+            transaction_id: string;
+            /** Transaction Ref */
+            transaction_ref: string;
+            /** Plan Code */
+            plan_code: string;
+            /** Amount Vnd */
+            amount_vnd: number;
+            /** Status */
+            status: string;
+            /** Provider */
+            provider: string;
+            /** Checkout Url */
+            checkout_url: string;
+            /** Qr Code Url */
+            qr_code_url: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Is Mock Provider */
+            is_mock_provider: boolean;
         };
         /** ClarificationAnswerItem */
         ClarificationAnswerItem: {
@@ -1813,6 +2181,17 @@ export interface components {
             actual_value: string;
             /** Suggested Fix */
             suggested_fix: string;
+        };
+        /**
+         * CreateCheckoutRequestDTO
+         * @description Request payload to initiate a subscription checkout session.
+         */
+        CreateCheckoutRequestDTO: {
+            /**
+             * Plan Code
+             * @enum {string}
+             */
+            plan_code: "PREMIUM_MONTHLY" | "PREMIUM_YEARLY";
         };
         /** CreateKnowledgeUrlRequest */
         CreateKnowledgeUrlRequest: {
@@ -2252,6 +2631,237 @@ export interface components {
              */
             is_today: boolean;
         };
+        /**
+         * ExportAnalyticsSummaryDTO
+         * @description Aggregated analytics summary snapshot.
+         */
+        ExportAnalyticsSummaryDTO: {
+            /** Total Focused Hours */
+            total_focused_hours: number;
+            /** Weekly Study Hours */
+            weekly_study_hours: number;
+            /** Task Completion Rate */
+            task_completion_rate: number;
+            /** Plan Adherence Rate */
+            plan_adherence_rate: number;
+            /** Completed Tasks Count */
+            completed_tasks_count: number;
+            /** Total Tasks Count */
+            total_tasks_count: number;
+            /** Active Streak Days */
+            active_streak_days: number;
+            /** Average Focus Score */
+            average_focus_score: number;
+        };
+        /**
+         * ExportAvailabilityDTO
+         * @description User availability settings & slots snapshot.
+         */
+        ExportAvailabilityDTO: {
+            /** Mode */
+            mode: string;
+            /** Calendar Integration Mode */
+            calendar_integration_mode: string;
+            /** Min Session Minutes */
+            min_session_minutes: number;
+            /** Total Weekly Hours */
+            total_weekly_hours: number;
+            /** Days */
+            days?: components["schemas"]["ExportAvailabilitySlotDTO"][];
+        };
+        /**
+         * ExportAvailabilitySlotDTO
+         * @description Single day availability slot snapshot.
+         */
+        ExportAvailabilitySlotDTO: {
+            /** Day Of Week */
+            day_of_week: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Quota Hours */
+            quota_hours: number;
+            /** Preferred Period */
+            preferred_period: string;
+            /** Min Session Minutes */
+            min_session_minutes: number;
+            /** Time Slots */
+            time_slots?: {
+                [key: string]: unknown;
+            }[];
+        };
+        /**
+         * ExportLearnerMemoryItemDTO
+         * @description Learner memory item snapshot.
+         */
+        ExportLearnerMemoryItemDTO: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Memory Key */
+            memory_key: string;
+            /** Value */
+            value: {
+                [key: string]: unknown;
+            };
+            /** Category */
+            category: string;
+            /** Epistemic Level */
+            epistemic_level: string;
+            /** Confidence */
+            confidence: number;
+            /** Sample Size */
+            sample_size: number;
+            /** Status */
+            status: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * ExportLearnerProfileDTO
+         * @description Learner SRL profile metrics snapshot.
+         */
+        ExportLearnerProfileDTO: {
+            /** Optimal Focus Duration Mins */
+            optimal_focus_duration_mins: number;
+            /** Peak Productivity Slots */
+            peak_productivity_slots: string[];
+            /** Estimation Bias Factor */
+            estimation_bias_factor: number;
+            /** Weekly Completion Rate */
+            weekly_completion_rate: number;
+            /** Total Completed Sessions */
+            total_completed_sessions: number;
+            /** Is Cold Start */
+            is_cold_start: boolean;
+            /** Last Aggregated At */
+            last_aggregated_at?: string | null;
+        };
+        /**
+         * ExportRoadmapDTO
+         * @description User roadmap metadata snapshot.
+         */
+        ExportRoadmapDTO: {
+            /**
+             * Roadmap Id
+             * Format: uuid
+             */
+            roadmap_id: string;
+            /** Title */
+            title: string;
+            /** Status */
+            status: string;
+            /** Target Date */
+            target_date?: string | null;
+            /** Weekly Reschedule Budget */
+            weekly_reschedule_budget: number;
+            /** Weekly Reschedule Used */
+            weekly_reschedule_used: number;
+        };
+        /**
+         * ExportStudySessionItemDTO
+         * @description Bounded study session record for GDPR export.
+         */
+        ExportStudySessionItemDTO: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Roadmap Id
+             * Format: uuid
+             */
+            roadmap_id: string;
+            /** Session Mode */
+            session_mode: string;
+            /** Status */
+            status: string;
+            /** Planned Minutes */
+            planned_minutes: number;
+            /** Actual Minutes */
+            actual_minutes: number;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Ended At */
+            ended_at?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * ExportTaskItemDTO
+         * @description Bounded task record for GDPR export.
+         */
+        ExportTaskItemDTO: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Roadmap Id
+             * Format: uuid
+             */
+            roadmap_id: string;
+            /**
+             * Milestone Id
+             * Format: uuid
+             */
+            milestone_id: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description?: string | null;
+            /** Estimated Minutes */
+            estimated_minutes: number;
+            /** Scheduled Date */
+            scheduled_date?: string | null;
+            /** Status */
+            status: string;
+            /** Completed At */
+            completed_at?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * ExportUserDTO
+         * @description Sanitized user profile snapshot for GDPR export (strictly excludes secrets/hashes).
+         */
+        ExportUserDTO: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Email */
+            email: string;
+            /** Full Name */
+            full_name: string;
+            /** Timezone */
+            timezone: string;
+            /** Role */
+            role: string;
+            /** Tier */
+            tier: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** FinalizeSessionRequest */
         FinalizeSessionRequest: {
             /**
@@ -2457,6 +3067,52 @@ export interface components {
              */
             updated_at: string;
         };
+        /** LatestMilestoneProofResponseDTO */
+        LatestMilestoneProofResponseDTO: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Milestone Id
+             * Format: uuid
+             */
+            milestone_id: string;
+            /** Status */
+            status: string;
+            /** Score */
+            score?: number | null;
+            /** Confidence */
+            confidence?: number | null;
+            /** Corrective Action */
+            corrective_action?: string | null;
+            /**
+             * Is Verified
+             * @default false
+             */
+            is_verified: boolean;
+            /** Calibration Error */
+            calibration_error?: number | null;
+            /** Questions */
+            questions?: {
+                [key: string]: unknown;
+            }[];
+            /** Answer Evidence */
+            answer_evidence?: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
         /** LearnerMemoryResponseDTO */
         LearnerMemoryResponseDTO: {
             /**
@@ -2494,6 +3150,37 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** LearnerSrlProfileDTO */
+        LearnerSrlProfileDTO: {
+            /**
+             * Total Completed Sessions
+             * @default 0
+             */
+            total_completed_sessions: number;
+            /**
+             * Is Cold Start
+             * @default true
+             */
+            is_cold_start: boolean;
+            /**
+             * Min Sessions Required
+             * @default 3
+             */
+            min_sessions_required: number;
+            /** Optimal Focus Duration Mins */
+            optimal_focus_duration_mins?: number | null;
+            /** Estimation Bias Factor */
+            estimation_bias_factor?: number | null;
+            /**
+             * Weekly Completion Rate
+             * @default 0
+             */
+            weekly_completion_rate: number;
+            /** Peak Productivity Slots */
+            peak_productivity_slots?: string[];
+            /** Last Aggregated At */
+            last_aggregated_at?: string | null;
         };
         /** LearningResourceSchema */
         LearningResourceSchema: {
@@ -2539,6 +3226,14 @@ export interface components {
              */
             expires_in: number;
             user: components["schemas"]["UserProfileSchema"];
+        };
+        /**
+         * MarkAllNotificationsReadResponseDTO
+         * @description Response payload for marking all user notifications as read.
+         */
+        MarkAllNotificationsReadResponseDTO: {
+            /** Updated Count */
+            updated_count: number;
         };
         /** MessageResponseSchema */
         MessageResponseSchema: {
@@ -2674,6 +3369,46 @@ export interface components {
             /** Prerequisite Milestone Ids */
             prerequisite_milestone_ids?: string[];
         };
+        /**
+         * NotificationItemDTO
+         * @description API representation of a single persistent notification.
+         */
+        NotificationItemDTO: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Notification Type */
+            notification_type: string;
+            /** Title */
+            title: string;
+            /** Content */
+            content: string;
+            /** Resource Url */
+            resource_url?: string | null;
+            /** Is Read */
+            is_read: boolean;
+            /** Read At */
+            read_at?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * NotificationListResponseDTO
+         * @description Paginated notification list with unread counter.
+         */
+        NotificationListResponseDTO: {
+            /** Items */
+            items?: components["schemas"]["NotificationItemDTO"][];
+            /** Total */
+            total: number;
+            /** Unread Count */
+            unread_count: number;
+        };
         /** OfficialScheduleResponse */
         OfficialScheduleResponse: {
             /**
@@ -2737,6 +3472,40 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * PaymentTransactionDTO
+         * @description Historical or pending payment transaction item for the authenticated learner.
+         */
+        PaymentTransactionDTO: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Transaction Ref */
+            transaction_ref: string;
+            /** Plan Code */
+            plan_code: string;
+            /** Amount Vnd */
+            amount_vnd: number;
+            /** Currency */
+            currency: string;
+            /** Status */
+            status: string;
+            /** Provider */
+            provider: string;
+            /** Qr Code Url */
+            qr_code_url?: string | null;
+            /** Webhook Signature Verified */
+            webhook_signature_verified: boolean;
+            /** Paid At */
+            paid_at?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** PlanningConflictResponse */
         PlanningConflictResponse: {
             /** Code */
@@ -2786,6 +3555,7 @@ export interface components {
             tier: string;
             /** Created At */
             created_at: string;
+            srl_profile?: components["schemas"]["LearnerSrlProfileDTO"] | null;
         };
         /** ProposedDependencyItemSchema */
         ProposedDependencyItemSchema: {
@@ -3854,6 +4624,48 @@ export interface components {
             /** Otp Code */
             otp_code: string;
         };
+        /**
+         * WebcalRevokeResponseDTO
+         * @description Confirmation payload after revoking a learner's WebCal token.
+         */
+        WebcalRevokeResponseDTO: {
+            /** Revoked */
+            revoked: boolean;
+            /**
+             * Is Active
+             * @default false
+             */
+            is_active: boolean;
+        };
+        /**
+         * WebcalRotateResponseDTO
+         * @description One-time response returned when creating or rotating a WebCal feed token.
+         */
+        WebcalRotateResponseDTO: {
+            /** Webcal Url */
+            webcal_url: string;
+            /** Feed Url */
+            feed_url: string;
+            /**
+             * Rotated At
+             * Format: date-time
+             */
+            rotated_at: string;
+        };
+        /**
+         * WebcalStatusResponseDTO
+         * @description Public status of a learner's WebCal token (never exposes plaintext token).
+         */
+        WebcalStatusResponseDTO: {
+            /** Has Active Token */
+            has_active_token: boolean;
+            /** Is Active */
+            is_active: boolean;
+            /** Rotated At */
+            rotated_at?: string | null;
+            /** Last Used At */
+            last_used_at?: string | null;
+        };
         /** WeeklyReviewResponseDTO */
         WeeklyReviewResponseDTO: {
             /**
@@ -4050,6 +4862,28 @@ export interface operations {
             };
         };
     };
+    get_admin_status_api_v1_account_admin_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     get_profile_api_v1_account_profile_get: {
         parameters: {
             query?: never;
@@ -4099,6 +4933,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_account_data_api_v1_account_export_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountDataExportDTO"];
                 };
             };
         };
@@ -4232,6 +5086,90 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_notifications_api_v1_account_notifications_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+                unread_only?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationListResponseDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_all_notifications_read_api_v1_account_notifications_read_all_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarkAllNotificationsReadResponseDTO"];
+                };
+            };
+        };
+    };
+    mark_notification_read_api_v1_account_notifications__notification_id__read_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                notification_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationItemDTO"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -4669,6 +5607,130 @@ export interface operations {
             };
         };
     };
+    get_billing_config_api_v1_account_billing_config_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingConfigResponseDTO"];
+                };
+            };
+        };
+    };
+    create_billing_checkout_api_v1_account_billing_checkout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCheckoutRequestDTO"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CheckoutResponseDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_billing_transactions_api_v1_account_billing_transactions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentTransactionDTO"][];
+                };
+            };
+        };
+    };
+    receive_billing_webhook_api_v1_account_billing_webhook_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingWebhookResponseDTO"];
+                };
+            };
+        };
+    };
+    mock_confirm_billing_transaction_api_v1_account_billing_mock_confirm__transaction_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                transaction_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingWebhookResponseDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     initiate_google_calendar_auth_api_v1_account_calendar_google_authorize_post: {
         parameters: {
             query?: never;
@@ -4816,6 +5878,97 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CalendarConnectionResponseDTO"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_webcal_status_api_v1_account_calendar_webcal_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebcalStatusResponseDTO"];
+                };
+            };
+        };
+    };
+    revoke_webcal_token_api_v1_account_calendar_webcal_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebcalRevokeResponseDTO"];
+                };
+            };
+        };
+    };
+    rotate_webcal_token_api_v1_account_calendar_webcal_rotate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebcalRotateResponseDTO"];
+                };
+            };
+        };
+    };
+    get_webcal_ics_feed_api_v1_feeds__token__ics_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -5058,6 +6211,8 @@ export interface operations {
         parameters: {
             query?: {
                 status?: string | null;
+                limit?: number | null;
+                offset?: number;
             };
             header?: never;
             path?: never;
@@ -5827,6 +6982,8 @@ export interface operations {
             query?: {
                 roadmap_id?: string | null;
                 status?: string | null;
+                limit?: number | null;
+                offset?: number;
             };
             header?: never;
             path?: never;
@@ -5891,6 +7048,8 @@ export interface operations {
         parameters: {
             query?: {
                 roadmap_id?: string | null;
+                limit?: number | null;
+                offset?: number;
             };
             header?: never;
             path?: never;
@@ -6571,6 +7730,37 @@ export interface operations {
             };
         };
     };
+    get_latest_milestone_proof_api_v1_evaluation_milestones__milestone_id__proofs_latest_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                milestone_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LatestMilestoneProofResponseDTO"] | null;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     generate_milestone_proof_api_v1_evaluation_milestones__milestone_id__proofs_generate_jobs_post: {
         parameters: {
             query?: never;
@@ -6744,9 +7934,7 @@ export interface operations {
     };
     health_check_api_health_get: {
         parameters: {
-            query?: {
-                probe_ai?: boolean;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -6759,18 +7947,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": unknown;
                 };
             };
         };

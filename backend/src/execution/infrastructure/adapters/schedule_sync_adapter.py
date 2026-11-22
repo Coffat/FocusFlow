@@ -15,6 +15,7 @@ from src.execution.public_api import (
     ProposedTaskSyncItemDTO,
     ScheduleSyncResultDTO,
 )
+from src.planning.public_api import filter_existing_concept_ids
 
 
 class ExecutionScheduleSyncAdapter(ExecutionScheduleSyncPort):
@@ -191,7 +192,7 @@ class ExecutionScheduleSyncAdapter(ExecutionScheduleSyncPort):
             comp_task.official_schedule_id = official_schedule_id
             comp_task.updated_at = now
 
-        # Verify referenced concept_ids exist in learning_concepts to preserve FK integrity
+        # Verify referenced concept_ids exist in Planning's learning_concepts via public_api
         candidate_concept_ids = sorted(
             {
                 item.concept_id.strip()
@@ -199,13 +200,10 @@ class ExecutionScheduleSyncAdapter(ExecutionScheduleSyncPort):
                 if item.concept_id and item.concept_id.strip()
             }
         )
-        valid_concept_ids: set[str] = set()
-        if candidate_concept_ids:
-            c_res = await self._session.execute(
-                text("SELECT concept_id FROM learning_concepts WHERE concept_id = ANY(:cids)"),
-                {"cids": candidate_concept_ids},
-            )
-            valid_concept_ids = {str(r[0]) for r in c_res.fetchall()}
+        valid_concept_ids = await filter_existing_concept_ids(
+            self._session,
+            candidate_concept_ids,
+        )
 
         # Insert new tasks (skipping any task_id that is already COMPLETED or protected)
         valid_task_ids: set[UUID] = set(completed_tasks) | set(protected_tasks)

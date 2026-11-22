@@ -64,3 +64,30 @@ class InboundSyncResultDTO:
     deleted_blocks_count: int
     full_reconciliation_triggered: bool = False
     new_sync_token: str | None = None
+
+
+@dataclass(frozen=True)
+class WebcalStatusResponseDTO:
+    """Public status of a learner's WebCal token (never exposes plaintext token)."""
+
+    has_active_token: bool
+    is_active: bool
+    rotated_at: datetime | None = None
+    last_used_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class WebcalRotateResponseDTO:
+    """One-time response returned when creating or rotating a WebCal feed token."""
+
+    webcal_url: str
+    feed_url: str
+    rotated_at: datetime
+
+
+@dataclass(frozen=True)
+class WebcalRevokeResponseDTO:
+    """Confirmation payload after revoking a learner's WebCal token."""
+
+    revoked: bool
+    is_active: bool = False

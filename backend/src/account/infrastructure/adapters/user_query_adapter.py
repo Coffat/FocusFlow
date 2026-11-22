@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from uuid import UUID
 
 from sqlalchemy import select
@@ -37,6 +38,14 @@ class SqlAlchemyUserQueryAdapter(UserQueryPort):
         if row is None:
             return None
         return self._to_dto(row)
+
+    async def get_users_by_ids(self, user_ids: Sequence[UUID]) -> dict[UUID, UserSnapshotDTO]:
+        if not user_ids:
+            return {}
+        unique_ids = list(dict.fromkeys(user_ids))
+        stmt = select(UserORM).where(UserORM.id.in_(unique_ids))
+        rows = list((await self._session.execute(stmt)).scalars().all())
+        return {row.id: self._to_dto(row) for row in rows}
 
 
 UserQueryAdapter = SqlAlchemyUserQueryAdapter

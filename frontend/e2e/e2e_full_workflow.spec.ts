@@ -1,7 +1,9 @@
 import { test, expect } from '@playwright/test';
 import * as path from 'path';
 import * as fs from 'fs';
+import { registerUserWithOtp } from './helpers/otp-auth.helper';
 
+const BACKEND_API_URL = process.env['BACKEND_API_URL'] || 'http://127.0.0.1:3000/api/v1';
 const EVIDENCE_DIR = path.resolve(__dirname, '../../docs/evidence/e2e_screenshots');
 
 test.describe('FocusFlow End-to-End Visual Evidence Suite', () => {
@@ -15,7 +17,7 @@ test.describe('FocusFlow End-to-End Visual Evidence Suite', () => {
     page,
     request
   }) => {
-    test.setTimeout(120_000);
+    test.setTimeout(240_000);
 
     const timestamp = Date.now();
     const testEmail = `evidence.${timestamp}@gmail.com`;
@@ -25,12 +27,11 @@ test.describe('FocusFlow End-to-End Visual Evidence Suite', () => {
     // =========================================================================
     // STEP 1: Registration / Sign In via Backend API and open Sign-In page
     // =========================================================================
-    const regRes = await request.post('http://localhost:8000/api/v1/auth/register', {
-      data: {
-        full_name: testFullName,
-        email: testEmail,
-        password: testPassword
-      }
+    const regRes = await registerUserWithOtp(request, {
+      fullName: testFullName,
+      email: testEmail,
+      password: testPassword,
+      backendApiUrl: BACKEND_API_URL
     });
     expect(regRes.ok()).toBeTruthy();
 
@@ -82,7 +83,7 @@ test.describe('FocusFlow End-to-End Visual Evidence Suite', () => {
     // Switch to Mode B (Fixed Slots)
     const modeBTab = page.locator('[data-testid="mode-b-tab"]');
     await modeBTab.click();
-    await page.waitForTimeout(500);
+    await expect(modeBTab).toHaveAttribute('aria-selected', 'true');
     await page.screenshot({ path: path.join(EVIDENCE_DIR, '05_availability_mode_b_slots.png'), fullPage: true });
 
     // Save Mode B
@@ -132,28 +133,61 @@ test.describe('FocusFlow End-to-End Visual Evidence Suite', () => {
     await page.click('[data-testid="submit-create-roadmap-btn"]');
 
     // =========================================================================
-    // STEP 6: AI Diagnostic Clarification Questions (FR-GOAL-002)
+    // STEP 6: AI Diagnostic Clarification Questions (FR-GOAL-002 — Multi-Round)
     // =========================================================================
     const clarifyCard = page.locator('[data-testid="clarification-questionnaire-card"]');
     await expect(clarifyCard).toBeVisible({ timeout: 45000 });
     await page.screenshot({ path: path.join(EVIDENCE_DIR, '08_goal_clarification_questions.png'), fullPage: true });
 
-    // Select options or answers for questions
-    const firstOpt = page.locator('[data-testid="question-0-opt-0"]');
-    if (await firstOpt.isVisible()) {
-      await firstOpt.click();
-    }
-    const secondOpt = page.locator('[data-testid="question-1-opt-0"]');
-    if (await secondOpt.isVisible()) {
-      await secondOpt.click();
-    }
-
-    // Submit clarification answers
-    await page.click('[data-testid="submit-clarification-btn"]');
-
-    // Submitting answers automatically moves to Step 2 with milestones generator ready
     const genMilestonesBtn = page.locator('[data-testid="generate-milestones-ai-btn"]');
-    await expect(genMilestonesBtn).toBeVisible({ timeout: 10000 });
+    const maxClarificationRounds = 3;
+
+    for (let round = 1; round <= maxClarificationRounds; round++) {
+      const questionCards = page.locator('[data-testid^="clarification-question-"]');
+      const questionCount = await questionCards.count();
+      expect(questionCount).toBeGreaterThan(0);
+
+      for (let qIdx = 0; qIdx < questionCount; qIdx++) {
+        const firstOpt = page.locator(`[data-testid="question-${qIdx}-opt-0"]`);
+        if (await firstOpt.isVisible()) {
+          await firstOpt.click();
+        } else {
+          const answerInput = page.locator(`[data-testid="question-answer-input-${qIdx}"]`);
+          await expect(answerInput).toBeVisible();
+          await answerInput.fill(
+            'Mình ưu tiên học thực hành lab AWS kết hợp luyện đề SAA-C03 đều đặn mỗi tuần.'
+          );
+        }
+      }
+
+      const submitClarifyBtn = page.locator('[data-testid="submit-clarification-btn"]');
+      await expect(submitClarifyBtn).toBeEnabled({ timeout: 10000 });
+
+      const clarifyResponsePromise = page.waitForResponse(
+        (res) => res.url().includes('/clarify') && res.request().method() === 'POST'
+      );
+      await submitClarifyBtn.click();
+      const clarifyRes = await clarifyResponsePromise;
+      expect(
+        clarifyRes.ok(),
+        `Clarification round ${round} submit failed (${clarifyRes.status()}): ${await clarifyRes.text()}`
+      ).toBeTruthy();
+
+      const clarifyBody = (await clarifyRes.json()) as { status?: string; round?: number };
+      if (clarifyBody.status === 'WAITING_FOLLOW_UP') {
+        await expect(page.locator('[data-testid="clarification-round-2-badge"]')).toBeVisible({
+          timeout: 15000
+        });
+        await expect(page.locator('[data-testid="clarification-round-2-banner"]')).toBeVisible({
+          timeout: 15000
+        });
+      } else {
+        break;
+      }
+    }
+
+    // Submitting final clarification round automatically moves to Step 2 with milestones generator ready
+    await expect(genMilestonesBtn).toBeVisible({ timeout: 15000 });
     await page.screenshot({ path: path.join(EVIDENCE_DIR, '09_clarification_submitted_step2_ready.png'), fullPage: true });
 
     // Verify diagnosed context can also be viewed on Step 1
@@ -171,7 +205,7 @@ test.describe('FocusFlow End-to-End Visual Evidence Suite', () => {
     await page.click('[data-testid="generate-milestones-ai-btn"]');
 
     // Wait for SSE streaming completion (milestones list populated)
-    await page.waitForSelector('[data-testid="milestone-item-0"]', { state: 'visible', timeout: 30000 });
+    await page.waitForSelector('[data-testid="milestone-item-0"]', { state: 'visible', timeout: 60000 });
     await page.screenshot({ path: path.join(EVIDENCE_DIR, '11_milestones_generated_sse.png'), fullPage: true });
 
     // =========================================================================
@@ -206,7 +240,7 @@ test.describe('FocusFlow End-to-End Visual Evidence Suite', () => {
     }
 
     // Wait for SSE proposal generation to complete (milestone task groups appear)
-    await page.waitForSelector('[data-testid="milestone-task-group-0"]', { state: 'visible', timeout: 45000 });
+    await page.waitForSelector('[data-testid="milestone-task-group-0"]', { state: 'visible', timeout: 90000 });
     await page.waitForSelector('[data-testid="task-learning-resources"]', { state: 'visible', timeout: 10000 });
     await page.screenshot({ path: path.join(EVIDENCE_DIR, '13_step3_tasks_and_learning_resources.png'), fullPage: true });
 
@@ -265,12 +299,11 @@ test.describe('FocusFlow End-to-End Visual Evidence Suite', () => {
     const testFullName = 'Learner Onboard';
 
     // Register user via API
-    const regRes = await request.post('http://localhost:8000/api/v1/auth/register', {
-      data: {
-        full_name: testFullName,
-        email: testEmail,
-        password: testPassword
-      }
+    const regRes = await registerUserWithOtp(request, {
+      fullName: testFullName,
+      email: testEmail,
+      password: testPassword,
+      backendApiUrl: BACKEND_API_URL
     });
     expect(regRes.ok()).toBeTruthy();
 

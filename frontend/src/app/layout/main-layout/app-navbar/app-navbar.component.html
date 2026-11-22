@@ -60,15 +60,134 @@
         <kbd class="font-mono text-[10px] bg-white text-neutral-600 px-1.5 py-0.5 rounded border border-neutral-200/80 shadow-2xs">⌘K</kbd>
       </button>
 
-      <!-- Notification Bell -->
-      <button
-        type="button"
-        aria-label="Thông báo"
-        class="relative p-2 text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/80 rounded-full transition cursor-pointer flex items-center justify-center shrink-0"
-        title="Thông báo"
-      >
-        <lucide-icon name="bell" [size]="17" class="shrink-0" aria-hidden="true"></lucide-icon>
-      </button>
+      <!-- Notification Bell & Popover -->
+      <div class="relative notification-dropdown-container">
+        <button
+          type="button"
+          data-testid="notification-bell-btn"
+          (click)="toggleNotifications()"
+          [attr.aria-expanded]="isNotificationsOpen()"
+          aria-haspopup="true"
+          aria-label="Thông báo"
+          class="relative p-2 text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100/80 rounded-full transition cursor-pointer flex items-center justify-center shrink-0"
+          title="Thông báo"
+        >
+          <lucide-icon name="bell" [size]="17" class="shrink-0" aria-hidden="true"></lucide-icon>
+          @if (unreadCount() > 0) {
+            <span
+              data-testid="notification-unread-badge"
+              class="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-600 text-white text-[10px] font-bold leading-none flex items-center justify-center shadow-xs"
+            >
+              {{ unreadCount() > 99 ? '99+' : unreadCount() }}
+            </span>
+          }
+        </button>
+
+        @if (isNotificationsOpen()) {
+          <div
+            data-testid="notification-popover"
+            role="dialog"
+            aria-label="Trung tâm thông báo"
+            class="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl bg-white border border-neutral-200/90 shadow-[0_12px_36px_-6px_rgba(0,0,0,0.12)] z-50 overflow-hidden"
+          >
+            <!-- Popover Header -->
+            <div class="px-4 py-3 border-b border-neutral-100 flex items-center justify-between gap-2 bg-neutral-50/70">
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-bold text-neutral-900">Thông báo</span>
+                @if (unreadCount() > 0) {
+                  <span class="px-1.5 py-0.5 rounded-full bg-[#246B4A]/10 text-[#246B4A] text-[10px] font-mono font-bold">
+                    {{ unreadCount() }} chưa đọc
+                  </span>
+                }
+              </div>
+              <button
+                type="button"
+                data-testid="notification-mark-all-btn"
+                (click)="onMarkAllRead()"
+                [disabled]="unreadCount() === 0 || markingAllRead()"
+                class="inline-flex items-center gap-1 text-[11px] font-semibold text-[#246B4A] hover:underline disabled:opacity-40 disabled:no-underline disabled:cursor-not-allowed cursor-pointer"
+              >
+                <lucide-icon name="check-check" [size]="13" aria-hidden="true"></lucide-icon>
+                <span>Đánh dấu tất cả đã đọc</span>
+              </button>
+            </div>
+
+            <!-- Popover Body -->
+            <div class="max-h-96 overflow-y-auto divide-y divide-neutral-100">
+              @if (notificationsLoading() && notifications().length === 0) {
+                <div
+                  data-testid="notification-loading"
+                  role="status"
+                  aria-live="polite"
+                  class="px-4 py-8 flex items-center justify-center gap-2.5 text-xs text-neutral-500"
+                >
+                  <div class="w-4 h-4 border-2 border-[#246B4A]/30 border-t-[#246B4A] rounded-full animate-spin"></div>
+                  <span>Đang tải thông báo...</span>
+                </div>
+              } @else if (notificationsError(); as errMsg) {
+                <div
+                  data-testid="notification-error"
+                  role="alert"
+                  class="p-4 flex flex-col items-center text-center gap-2.5"
+                >
+                  <lucide-icon name="alert-triangle" [size]="20" class="text-rose-600" aria-hidden="true"></lucide-icon>
+                  <p class="text-xs text-neutral-700">{{ errMsg }}</p>
+                  <button
+                    type="button"
+                    data-testid="notification-retry-btn"
+                    (click)="onRetryNotifications()"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white bg-[#246B4A] hover:bg-[#1B5338] transition cursor-pointer"
+                  >
+                    <lucide-icon name="refresh-cw" [size]="12" aria-hidden="true"></lucide-icon>
+                    <span>Thử lại</span>
+                  </button>
+                </div>
+              } @else if (notifications().length === 0) {
+                <div
+                  data-testid="notification-empty"
+                  class="px-4 py-10 text-center space-y-1"
+                >
+                  <p class="text-xs font-semibold text-neutral-700">Chưa có thông báo nào</p>
+                  <p class="text-[11px] text-neutral-400">
+                    Các cập nhật về lịch học và lộ trình sẽ hiển thị tại đây.
+                  </p>
+                </div>
+              } @else {
+                @for (item of notifications(); track item.id) {
+                  <button
+                    type="button"
+                    data-testid="notification-item"
+                    [attr.data-notification-id]="item.id"
+                    [attr.data-unread]="!item.is_read"
+                    (click)="onNotificationClick(item)"
+                    class="w-full px-4 py-3 text-left hover:bg-neutral-50 transition-colors cursor-pointer flex items-start gap-2.5"
+                    [ngClass]="{ 'bg-emerald-50/40': !item.is_read }"
+                  >
+                    <span
+                      class="w-2 h-2 rounded-full mt-1.5 shrink-0"
+                      [ngClass]="item.is_read ? 'bg-neutral-200' : 'bg-[#246B4A]'"
+                      aria-hidden="true"
+                    ></span>
+                    <div class="min-w-0 flex-1 space-y-0.5">
+                      <div class="flex items-start justify-between gap-2">
+                        <span class="text-xs font-semibold text-neutral-900 leading-snug">
+                          {{ item.title }}
+                        </span>
+                        <span class="text-[10px] font-mono text-neutral-400 shrink-0">
+                          {{ item.created_at | date: 'HH:mm dd/MM' }}
+                        </span>
+                      </div>
+                      <p class="text-[11px] text-neutral-600 leading-relaxed line-clamp-2">
+                        {{ item.content }}
+                      </p>
+                    </div>
+                  </button>
+                }
+              }
+            </div>
+          </div>
+        }
+      </div>
 
       <!-- User Profile Pill & Dropdown -->
       <div class="relative user-dropdown-container">

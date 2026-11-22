@@ -2,13 +2,14 @@ import hashlib
 import hmac
 import logging
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 
 from src.account.application.ports.calendar_connection_repository_port import (
     CalendarConnectionRepositoryPort,
 )
 from src.account.presentation.deps import get_calendar_connection_repository
 from src.account.presentation.tasks import process_google_calendar_webhook
+from src.shared_kernel.infrastructure.security.rate_limiter import enforce_rate_limit
 
 logger = logging.getLogger("focusflow.account.webhook")
 
@@ -21,6 +22,7 @@ router = APIRouter(prefix="/api/v1/calendar/webhooks", tags=["Calendar Webhooks 
     summary="Receive Google Calendar push notifications via webhook",
 )
 async def handle_google_calendar_webhook(
+    request: Request,
     x_goog_channel_id: str | None = Header(None, alias="X-Goog-Channel-ID"),
     x_goog_resource_id: str | None = Header(None, alias="X-Goog-Resource-ID"),
     x_goog_channel_token: str | None = Header(None, alias="X-Goog-Channel-Token"),
@@ -28,6 +30,7 @@ async def handle_google_calendar_webhook(
     repository: CalendarConnectionRepositoryPort = Depends(get_calendar_connection_repository),
 ) -> dict[str, str]:
     """Handle incoming Google Calendar push notifications with strict 3-header verification."""
+    await enforce_rate_limit(request, "calendar_webhook_ip")
     if not x_goog_channel_id or not x_goog_resource_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -47,18 +50,23 @@ async def handle_google_calendar_webhook(
             detail="X-Goog-Resource-ID mismatch.",
         )
 
-    if conn.channel_token_hash:
-        if not x_goog_channel_token:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Missing X-Goog-Channel-Token header.",
-            )
-        token_hash = hashlib.sha256(x_goog_channel_token.encode("utf-8")).hexdigest()
-        if not hmac.compare_digest(token_hash, conn.channel_token_hash):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Invalid X-Goog-Channel-Token verification hash.",
-            )
+    if not conn.channel_token_hash:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Webhook channel token is not configured for verification.",
+        )
+
+    if not x_goog_channel_token:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Missing X-Goog-Channel-Token header.",
+        )
+    token_hash = hashlib.sha256(x_goog_channel_token.encode("utf-8")).hexdigest()
+    if not hmac.compare_digest(token_hash, conn.channel_token_hash):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid X-Goog-Channel-Token verification hash.",
+        )
 
     # Initial sync ping from Google
     if x_goog_resource_state == "sync":

@@ -1,0 +1,22 @@
+# 07 — Deferred Findings & Residual Risk Acceptance (Phase 7)
+
+Không sửa SRS để hợp thức hóa việc hoãn. Mọi mục hoãn dưới đây đều được đánh giá độc lập theo bối cảnh phát hành **Free Beta**.
+
+---
+
+## 1. Deferred Findings Acceptance Matrix
+
+| Finding ID | Current Risk | Impact | Exposure in Free Beta | Existing Controls | Compensating Controls | Release Condition | Owner | Recommended Deadline |
+|---|---|---|---|---|---|---|---|---|
+| **`AUD-MED-03`** (`access_token` trong JSON body bên cạnh cookie `HttpOnly`) | **Medium** — Nếu xảy ra XSS, script có thể đọc `access_token` ngay tại response login/refresh (giảm nhẹ hiệu quả cô lập `HttpOnly`). | Chiếm phiên tối đa 15 phút (không đọc được `refresh_token` HttpOnly). | **Low** — Angular SPA không lưu token trong `localStorage`/`sessionStorage`, tự động escape template, whitelist embed URL nghiêm ngặt. | `HttpOnly` cookie cho refresh token (`Path=/api/v1/auth`), CSP/Nginx security headers (`nosniff`, `DENY`), access token TTL ngắn (15m). | Giữ chặt XSS hygiene & security headers trong `nginx.prod.conf`; lên kế hoạch gỡ `access_token` khỏi JSON body trong PR breaking-change đồng bộ với test Bearer. | **ACCEPTED FOR FREE BETA** (Non-Blocker) | Backend + QA Lead | Post-Beta Sprint 1 (≤ 30 ngày sau Free Beta) |
+| **`AUD-MED-11`** (Không có runtime `LLM_PROVIDER=mock`/`CALENDAR_PROVIDER=local_mock`; non-Gemini bỏ qua tools/fallback/semaphore) | **Low–Medium** — Lệch tài liệu `AGENTS.md` về chế độ offline demo; chỉ ảnh hưởng nếu đổi sang OpenAI/Anthropic hoặc chạy demo không mạng. | Không ảnh hưởng người dùng Free Beta (production dùng Gemini thật + Google Calendar thật). | **None (Prod)** / Dev-only. | Gemini path (`google-genai`) có đủ tool calling, fallback models, semaphore, circuit breaker và 3-tier validation gate. | Khóa `LLM_PROVIDER=gemini` cho Free Beta; cập nhật `AGENTS.md` hoặc bổ sung adapter mock nếu cần demo offline. | **ACCEPTED FOR FREE BETA** (Non-Blocker) | AI Infra Lead | Post-Beta Sprint 2 (≤ 60 ngày) |
+| **`AUD-LOW-04`** (Stateless access token 15m window sau logout/password reset) | **Low** — Access token đã phát vẫn dùng được tối đa 15 phút sau khi logout hoặc đặt lại mật khẩu. | Kẻ giữ bản sao access token có cửa sổ ≤ 15 phút trước khi hết hạn; không thể refresh thêm. | **Low** — Refresh token & toàn bộ family bị thu hồi nguyên tử ngay lập tức (`AUD-HIGH-02/03`). | TTL access token ngắn (`15m`), atomic RTR family revocation, password reset `revoke_all_for_user()`. | Giám sát bất thường; bổ sung `token_version` (migration) hoặc Redis JTI denylist trước khi mở Paid Tier / Enterprise. | **ACCEPTED FOR FREE BETA** (Non-Blocker) | Auth/Security Lead | Trước khi mở `PAID_ENABLED` |
+| **`AUD-HIGH-11`** (Live Payment Provider chưa tích hợp — Feature-Gated bằng `FREE_BETA`) | **Zero in Free Beta** / **Blocker cho Paid Mode**. | Không thể thu tiền người dùng trong Free Beta (chủ đích). | **Eliminated in Free Beta** — Backend fail-closed (`503`/`403`), FE hiển thị Free Beta banner & disable CTA. | `BILLING_RELEASE_MODE=FREE_BETA` mặc định, `PAID_ENABLED` fail-closed nếu thiếu live adapter + `PAYMENT_WEBHOOK_SECRET`, webhook HMAC + timestamp + `FOR UPDATE` đã sẵn sàng. | **Cấm bật `BILLING_RELEASE_MODE=PAID_ENABLED`** cho đến khi chọn & tích hợp live gateway (PayOS/VNPay/SePay), chạy sandbox verification, và hoàn thiện `expires_at`/`EXPIRED` + subscription lifecycle. | **ACCEPTED FOR FREE BETA ONLY; BLOCKER FOR PAID LAUNCH** | Product + Payment Lead | Trước khi mở Paid Tier |
+
+---
+
+## 2. Additional Operational Residual Risks Tracked from P3
+
+1. **Timeout Headroom (`MEDIUM-HIGH`)**: Prove Mode Grader (`25.0s`) vs Angular `timeoutInterceptor` (`30.0s`, chưa có `HTTP_TIMEOUT_MS` override) và sự trùng khít `30.0s` ở DB timeouts (`statement_timeout`/`command_timeout`/`pool_timeout`). **Khuyến nghị**: Vá nhanh 2 dòng cấu hình (override `40s` trên `ProveModeService` + lệch tầng DB `20s/23s/15s`) trước khi mở rộng cohort Free Beta.
+2. **Untested Production-Only Components**: `docker compose -f docker-compose.prod.yml build`, TLS termination thật, transactional SMTP production thật, Google Calendar HTTPS webhook thật, và RAG `EMBEDDING_API_KEY` chưa chạy trên host production thực tế (bắt buộc smoke-test lúc triển khai).
+3. **Uncommitted Working Tree**: Toàn bộ mã nguồn P0A–P3 đang ở trạng thái chưa commit và còn thư mục `artifacts/` — **Bắt buộc** dọn và commit theo Atomic Commit Plan trước khi gắn tag release.

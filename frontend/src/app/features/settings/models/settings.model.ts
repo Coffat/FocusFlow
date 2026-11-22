@@ -12,3 +12,7 @@ export interface UserPreferences {
 
 export type AIQuotaResponseDTO = components['schemas']['AIQuotaResponseDTO'];
 export type ChangePasswordRequestDTO = components['schemas']['ChangePasswordRequestDTO'];
+export type WebcalStatusResponseDTO = components['schemas']['WebcalStatusResponseDTO'];
+export type WebcalRotateResponseDTO = components['schemas']['WebcalRotateResponseDTO'];
+export type WebcalRevokeResponseDTO = components['schemas']['WebcalRevokeResponseDTO'];
+export type AccountDataExportDTO = components['schemas']['AccountDataExportDTO'];

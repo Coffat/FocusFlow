@@ -2,7 +2,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.account.public_api import create_user_query_port
@@ -16,8 +16,12 @@ from src.execution.public_api import (
     ExecutionDayStudyDTO,
     ExecutionKpiStatsDTO,
     ExecutionTodayTaskDTO,
+    ExportStudySessionDTO,
+    ExportTaskDTO,
+    SrlSessionFactsDTO,
     register_execution_dashboard_factory,
 )
+from src.planning.public_api import create_planning_execution_bridge
 
 _WEEKDAY_LABELS: list[str] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
@@ -63,20 +67,16 @@ class ExecutionDashboardAdapter(ExecutionDashboardQueryPort):
         return user_tz, effective_today
 
     async def _get_active_roadmaps(self, user_id: UUID) -> dict[UUID, str]:
-        stmt = text(
-            """
-            SELECT id, title
-            FROM roadmaps
-            WHERE user_id = :u_id AND status = 'ACTIVE'
-            """
+        roadmaps = await create_planning_execution_bridge(self._session).get_user_roadmaps_context(
+            user_id
         )
-        res = await self._session.execute(stmt, {"u_id": user_id})
-        return {row.id: row.title for row in res.fetchall()}
+        return {r.roadmap_id: r.title for r in roadmaps if r.status == "ACTIVE"}
 
     async def _get_all_user_roadmap_ids(self, user_id: UUID) -> list[UUID]:
-        stmt = text("SELECT id FROM roadmaps WHERE user_id = :u_id")
-        res = await self._session.execute(stmt, {"u_id": user_id})
-        return [row.id for row in res.fetchall()]
+        roadmaps = await create_planning_execution_bridge(self._session).get_user_roadmaps_context(
+            user_id
+        )
+        return [r.roadmap_id for r in roadmaps]
 
     async def get_today_queue(
         self,
@@ -244,7 +244,7 @@ class ExecutionDashboardAdapter(ExecutionDashboardQueryPort):
         deep_work_seconds = sum(
             s.actual_minutes * 60 for s in monthly_sessions if s.actual_minutes >= 45
         )
-        completed_pomodoro_count = sum(max(1, s.actual_minutes // 25) for s in monthly_sessions)
+        completed_pomodoro_count = len(monthly_sessions)
 
         # Streak calculation
         all_roadmap_ids = await self._get_all_user_roadmap_ids(user_id)
@@ -351,11 +351,10 @@ class ExecutionDashboardAdapter(ExecutionDashboardQueryPort):
         )
 
     async def _get_non_paused_user_roadmap_ids(self, user_id: UUID) -> list[UUID]:
-        stmt = text(
-            "SELECT id FROM roadmaps WHERE user_id = :u_id AND status != 'PAUSED' AND status != 'ARCHIVED'"
+        roadmaps = await create_planning_execution_bridge(self._session).get_user_roadmaps_context(
+            user_id
         )
-        res = await self._session.execute(stmt, {"u_id": user_id})
-        return [row.id for row in res.fetchall()]
+        return [r.roadmap_id for r in roadmaps if r.status not in ("PAUSED", "ARCHIVED")]
 
     async def _compute_wrls_for_sessions(
         self,
@@ -614,6 +613,118 @@ class ExecutionDashboardAdapter(ExecutionDashboardQueryPort):
             average_focus_score=average_focus_score,
             daily_metrics=weekly.daily_breakdown,
         )
+
+    async def get_srl_session_facts(self, user_id: UUID) -> SrlSessionFactsDTO:
+        stmt = (
+            select(
+                StudySessionORM.actual_minutes,
+                StudySessionORM.planned_minutes,
+                StudySessionORM.started_at,
+            )
+            .where(
+                StudySessionORM.user_id == user_id,
+                StudySessionORM.status.in_(("COMPLETED", "PARTIAL_COMPLETED")),
+            )
+            .order_by(StudySessionORM.started_at.asc())
+        )
+        rows = (await self._session.execute(stmt)).all()
+
+        completed_durations: list[int] = []
+        estimation_ratios: list[float] = []
+        start_datetimes_utc: list[datetime] = []
+
+        for actual_min, planned_min, started_at in rows:
+            actual_val = int(actual_min or 0)
+            planned_val = int(planned_min or 0)
+            if actual_val > 0:
+                completed_durations.append(actual_val)
+            if actual_val > 0 and planned_val > 0:
+                estimation_ratios.append(float(actual_val) / float(planned_val))
+            if started_at is not None:
+                aware = (
+                    started_at if started_at.tzinfo is not None else started_at.replace(tzinfo=UTC)
+                )
+                start_datetimes_utc.append(aware.astimezone(UTC))
+
+        weekly = await self.get_weekly_analytics(user_id)
+        return SrlSessionFactsDTO(
+            total_completed_sessions=len(rows),
+            completed_durations_mins=tuple(completed_durations),
+            estimation_ratios=tuple(estimation_ratios),
+            session_start_datetimes_utc=tuple(start_datetimes_utc),
+            weekly_completion_rate=float(weekly.task_completion_rate),
+        )
+
+    async def get_user_export_sessions(
+        self,
+        user_id: UUID,
+        *,
+        limit: int = 500,
+    ) -> tuple[int, list[ExportStudySessionDTO]]:
+        count_stmt = select(func.count(StudySessionORM.id)).where(
+            StudySessionORM.user_id == user_id
+        )
+        total_count = int((await self._session.execute(count_stmt)).scalar_one() or 0)
+
+        stmt = (
+            select(StudySessionORM)
+            .where(StudySessionORM.user_id == user_id)
+            .order_by(StudySessionORM.started_at.desc())
+            .limit(max(1, min(limit, 500)))
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        items = [
+            ExportStudySessionDTO(
+                id=row.id,
+                roadmap_id=row.roadmap_id,
+                session_mode=row.session_mode,
+                status=row.status,
+                planned_minutes=row.planned_minutes,
+                actual_minutes=row.actual_minutes,
+                started_at=row.started_at,
+                ended_at=row.ended_at,
+                created_at=row.created_at,
+            )
+            for row in rows
+        ]
+        return total_count, items
+
+    async def get_user_export_tasks(
+        self,
+        user_id: UUID,
+        *,
+        limit: int = 1000,
+    ) -> tuple[int, list[ExportTaskDTO]]:
+        all_roadmap_ids = await self._get_all_user_roadmap_ids(user_id)
+        if not all_roadmap_ids:
+            return 0, []
+
+        count_stmt = select(func.count(TaskORM.id)).where(TaskORM.roadmap_id.in_(all_roadmap_ids))
+        total_count = int((await self._session.execute(count_stmt)).scalar_one() or 0)
+
+        stmt = (
+            select(TaskORM)
+            .where(TaskORM.roadmap_id.in_(all_roadmap_ids))
+            .order_by(TaskORM.created_at.desc())
+            .limit(max(1, min(limit, 1000)))
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        items = [
+            ExportTaskDTO(
+                id=row.id,
+                roadmap_id=row.roadmap_id,
+                milestone_id=row.milestone_id,
+                title=row.title,
+                description=row.description,
+                estimated_minutes=row.estimated_minutes,
+                scheduled_date=row.scheduled_date,
+                status=row.status,
+                completed_at=row.completed_at,
+                created_at=row.created_at,
+            )
+            for row in rows
+        ]
+        return total_count, items
 
 
 def _execution_dashboard_factory_impl(

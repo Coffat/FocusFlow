@@ -8,6 +8,17 @@ from src.shared_kernel.config import get_settings
 logger = logging.getLogger("focusflow.email")
 
 
+def mask_email(email: str) -> str:
+    """Mask recipient email address for safe logging (e.g., u***@domain.com)."""
+    cleaned = (email or "").strip()
+    if "@" not in cleaned:
+        return "***"
+    local, domain = cleaned.split("@", 1)
+    if not local or not domain:
+        return "***"
+    return f"{local[0]}***@{domain}"
+
+
 class EmailService:
     """Asynchronous Email Delivery Service supporting SMTP (Mailpit / Gmail) and Console fallback."""
 
@@ -27,14 +38,22 @@ class EmailService:
 
         # 1. Console / Defense Demo Mode
         if settings.email_backend.lower() == "console":
-            print("\n" + "=" * 60)
-            print(f" [MOCK EMAIL DISPATCH] To: {to_email}")
-            print(f" Subject: {subject_title}")
-            print(f" Purpose: {purpose_label}")
-            print(
-                f" >>> OTP CODE: [ {otp_code} ] (Valid for {settings.otp_ttl_seconds // 60} minutes) <<<"
-            )
-            print("=" * 60 + "\n")
+            if settings.environment.lower() in ("development", "dev", "local", "test"):
+                print("\n" + "=" * 60)
+                print(f" [MOCK EMAIL DISPATCH] To: {to_email}")
+                print(f" Subject: {subject_title}")
+                print(f" Purpose: {purpose_label}")
+                print(
+                    f" >>> OTP CODE: [ {otp_code} ] (Valid for {settings.otp_ttl_seconds // 60} minutes) <<<"
+                )
+                print("=" * 60 + "\n")
+            else:
+                logger.warning(
+                    "Console email backend configured in non-development environment (%s); "
+                    "suppressing plaintext OTP output for %s",
+                    settings.environment,
+                    mask_email(to_email),
+                )
             return
 
         # 2. SMTP Real Email Dispatch (Supports Mailpit on localhost:1025 and production SMTP)
@@ -115,11 +134,11 @@ Trân trọng,
                 start_tls=use_start_tls,
                 timeout=12.0,
             )
-            logger.info("OTP email successfully dispatched to %s", to_email)
+            logger.info("OTP email successfully dispatched to %s", mask_email(to_email))
         except Exception as exc:
-            logger.error("Failed to send OTP email via SMTP to %s: %s", to_email, str(exc))
-            # Fallback output to stdout for defense stability
-            print(f"\n[SMTP ERROR FALLBACK] OTP for {to_email} is: {otp_code}\n")
+            logger.error(
+                "Failed to send OTP email via SMTP to %s: %s", mask_email(to_email), str(exc)
+            )
             raise
 
     @staticmethod
@@ -127,6 +146,7 @@ Trân trọng,
         to_email: str,
         overdue_task_titles: list[str],
         remaining_reschedule_budget: int,
+        raise_on_error: bool = False,
     ) -> None:
         """Send overdue tasks warning email via configured backend (UC-25, BUSR-23)."""
         settings = get_settings()
@@ -177,6 +197,10 @@ Trân trọng,
                 start_tls=use_start_tls,
                 timeout=12.0,
             )
-            logger.info("Overdue alert email successfully dispatched to %s", to_email)
+            logger.info("Overdue alert email successfully dispatched to %s", mask_email(to_email))
         except Exception as exc:
-            logger.error("Failed to send overdue alert email to %s: %s", to_email, str(exc))
+            logger.error(
+                "Failed to send overdue alert email to %s: %s", mask_email(to_email), str(exc)
+            )
+            if raise_on_error:
+                raise

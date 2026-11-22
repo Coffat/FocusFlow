@@ -16,6 +16,7 @@ from src.account.public_api import LearnerMemoryQueryPort
 from src.evaluation.application.dtos.intelligence import (
     GenerateProofResponseDTO,
     GenerateWeeklyReviewRequestDTO,
+    LatestMilestoneProofResponseDTO,
     MilestoneProofResponseDTO,
     ProveAnswerFeedbackSchema,
     ProveGradingLLMOutput,
@@ -38,6 +39,10 @@ from src.evaluation.application.prompts import (
     build_prove_question_prompt,
     build_weekly_review_prompt,
 )
+from src.evaluation.domain.exceptions import (
+    ProofAlreadyGradedError,
+    ProveGradingUnavailableError,
+)
 from src.evaluation.domain.models.intelligence import WeeklyReview
 from src.evaluation.domain.services import QuantitativeFaithfulnessValidator
 from src.execution.public_api import WeeklyExecutionMetricsDTO, WeeklyExecutionMetricsQueryPort
@@ -55,7 +60,7 @@ from src.shared_kernel.application.harness.models import (
 )
 from src.shared_kernel.application.harness.prompt_registry import build_prompt_audit_metadata
 from src.shared_kernel.application.harness.workflow_port import WorkflowRepositoryPort
-from src.shared_kernel.application.llm_port import LLMProviderPort
+from src.shared_kernel.application.llm_port import LLMProviderPort, SchemaMismatchError
 from src.shared_kernel.application.uow import AsyncUnitOfWork
 from src.shared_kernel.config import get_settings
 from src.shared_kernel.domain.base import generate_uuid7
@@ -68,9 +73,12 @@ __all__ = [
     "EvaluationResourceNotFoundError",
     "GenerateMilestoneProofUseCase",
     "GenerateWeeklyReviewUseCase",
+    "GetLatestMilestoneProofUseCase",
     "GetLatestWeeklyReviewUseCase",
+    "ProofAlreadyGradedError",
     "ProveAnswerFeedbackSchema",
     "ProveGradingLLMOutput",
+    "ProveGradingUnavailableError",
     "ProveQuestionItemSchema",
     "ProveQuestionsLLMOutput",
     "SubmitMilestoneProofUseCase",
@@ -100,7 +108,7 @@ WeeklyReviewWriteScopeFactory = Callable[[], AbstractAsyncContextManager[WeeklyR
 def _classify_ai_failure_reason(exc: Exception, prefix: str) -> str:
     if isinstance(exc, (TimeoutError, asyncio.TimeoutError)):
         return f"{prefix}_TIMEOUT"
-    if isinstance(exc, (ValidationError, json.JSONDecodeError)):
+    if isinstance(exc, (ValidationError, json.JSONDecodeError, SchemaMismatchError)):
         return f"{prefix}_SCHEMA_ERROR"
     if isinstance(exc, PermissionError):
         return f"{prefix}_PERMISSION_ERROR"
@@ -138,7 +146,11 @@ async def _record_eval_workflow(
         roadmap_id=roadmap_id,
         workflow_type=workflow_type,
         current_step=step_name,
-        status=WorkflowStatus.COMPLETED,
+        status=(
+            WorkflowStatus.FAILED
+            if step_status is WorkflowStepStatus.FAILED
+            else WorkflowStatus.COMPLETED
+        ),
         context_snapshot=dict(input_summary or {}),
         error_detail=error_detail,
         started_at=now,
@@ -199,9 +211,21 @@ class GenerateMilestoneProofUseCase:
     async def execute(self, user_id: UUID, milestone_id: UUID) -> GenerateProofResponseDTO:
         milestone = await self._ownership.get_milestone(milestone_id)
         if milestone is None or milestone.user_id != user_id:
+            await _close_read_transaction(self._uow)
             raise EvaluationResourceNotFoundError
+        milestone_title = milestone.title
+        milestone_description = getattr(milestone, "description", None)
+        milestone_learning_outcomes = getattr(milestone, "learning_outcomes", ()) or ()
+        milestone_completion_criteria = getattr(milestone, "completion_criteria", None)
+        milestone_required_concepts = getattr(milestone, "required_concepts", ()) or ()
+        milestone_unverified_concepts = getattr(milestone, "unverified_concepts", ()) or ()
+        milestone_task_titles = getattr(milestone, "task_titles", ()) or ()
+
+        # Close read transaction / release DB pool connection strictly BEFORE external LLM call.
+        await _close_read_transaction(self._uow)
+
         default_questions = [
-            {"id": "q1", "prompt": f"Giải thích ý chính của {milestone.title} bằng ví dụ của bạn."},
+            {"id": "q1", "prompt": f"Giải thích ý chính của {milestone_title} bằng ví dụ của bạn."},
             {"id": "q2", "prompt": "Nêu một lỗi thường gặp và cách bạn phát hiện lỗi đó."},
             {"id": "q3", "prompt": "Áp dụng kiến thức này vào một tình huống mới."},
         ]
@@ -215,13 +239,13 @@ class GenerateMilestoneProofUseCase:
         prompt_audit = build_prompt_audit_metadata(prompt_tpl)
         if self._llm_provider is not None:
             user_prompt = build_prove_question_prompt(
-                milestone_title=milestone.title,
-                description=getattr(milestone, "description", None),
-                learning_outcomes=getattr(milestone, "learning_outcomes", ()) or (),
-                completion_criteria=getattr(milestone, "completion_criteria", None),
-                required_concepts=getattr(milestone, "required_concepts", ()) or (),
-                unverified_concepts=getattr(milestone, "unverified_concepts", ()) or (),
-                task_titles=getattr(milestone, "task_titles", ()) or (),
+                milestone_title=milestone_title,
+                description=milestone_description,
+                learning_outcomes=milestone_learning_outcomes,
+                completion_criteria=milestone_completion_criteria,
+                required_concepts=milestone_required_concepts,
+                unverified_concepts=milestone_unverified_concepts,
+                task_titles=milestone_task_titles,
             )
             try:
                 manager = AIExecutionManager(
@@ -340,161 +364,27 @@ class SubmitMilestoneProofUseCase:
     ) -> MilestoneProofResponseDTO:
         proof = await self._repository.get_owned_proof(proof_id, user_id)
         if proof is None or proof.milestone_id != milestone_id:
+            await _close_read_transaction(self._uow)
             raise EvaluationResourceNotFoundError
-        answered = sum(bool(str(item.get("answer", "")).strip()) for item in request.answers)
-        proof.answers = request.answers
-        proof.confidence = request.confidence
 
-        # Fail-safe default: unverified NEEDS_REVIEW with score 0; never derive score from text presence.
-        proof.score = 0
-        proof.status = "NEEDS_REVIEW"
-        proof.corrective_action = "Bài làm chưa được xác minh tự động. Vui lòng thử gửi lại hoặc ôn tập kỹ nội dung cột mốc."
-        is_verified = False
-        calibration_error: float | None = None
-        answer_evidence: list[dict[str, Any]] = []
-        model_used = "unverified-fallback"
-        llm_recorded = False
-        fallback_reason_code: str | None = None
+        # Idempotency / status guard: never overwrite an already-graded proof or double-charge quota.
+        if (proof.submitted_at is not None and proof.score is not None) or proof.status == "PASSED":
+            await _close_read_transaction(self._uow)
+            raise ProofAlreadyGradedError
+
+        answered = sum(bool(str(item.get("answer", "")).strip()) for item in request.answers)
+        if answered == 0:
+            await _close_read_transaction(self._uow)
+            raise ValueError("Vui lòng trả lời ít nhất một câu hỏi trước khi nộp bài.")
+
+        questions_snapshot = list(proof.questions)
+        # Close read transaction / release DB pool connection strictly BEFORE external LLM call.
+        await _close_read_transaction(self._uow)
 
         grader_tpl = build_evaluation_prompt_registry().latest(PROVE_MODE_GRADER_PROMPT.prompt_id)
         grader_audit = build_prompt_audit_metadata(grader_tpl)
-        if answered == 0:
-            fallback_reason_code = "PROVE_EMPTY_ANSWERS"
-            proof.corrective_action = "Vui lòng trả lời ít nhất một câu hỏi trước khi nộp bài."
-        elif self._llm_provider is None:
-            fallback_reason_code = "PROVE_GRADER_UNAVAILABLE"
-        else:
-            q_map = {
-                str(q.get("id", f"q{i + 1}")): str(q.get("prompt", ""))
-                for i, q in enumerate(proof.questions)
-            }
-            qa_pairs: list[tuple[str, str, str]] = []
-            for idx, ans in enumerate(request.answers):
-                raw_qid = str(ans.get("question_id") or ans.get("id") or f"q{idx + 1}")
-                raw_ans = str(ans.get("answer") or "")
-                qa_pairs.append((raw_qid, q_map.get(raw_qid, ""), raw_ans))
 
-            try:
-                manager = AIExecutionManager(
-                    provider=self._llm_provider,
-                    quota=self._quota_port,
-                    manage_quota=self._quota_port is not None,
-                    max_retries=1,
-                    timeout_seconds=float(get_settings().ai_prove_grader_timeout_seconds),
-                    workflow_repo=self._workflow_repo,
-                )
-                exec_res = await manager.execute(
-                    user_id=user_id,
-                    operation_type="PROVE_MODE_ASSESSMENT",
-                    system_prompt=grader_tpl.system_template,
-                    user_prompt=build_prove_grader_prompt(qa_pairs),
-                    response_schema=ProveGradingLLMOutput,
-                    thinking_level=PROVE_MODE_GRADER_PROMPT.thinking_level,
-                    workflow_type=WorkflowType.CONTINUOUS_LEARNING,
-                    step_name="PROVE_MODE_ASSESSMENT",
-                    context_snapshot={"milestone_id": str(milestone_id), "proof_id": str(proof.id)},
-                    prompt_template=grader_tpl,
-                )
-                raw_grade = (
-                    exec_res.value.model_dump()
-                    if isinstance(exec_res.value, BaseModel)
-                    else exec_res.value
-                )
-                if isinstance(raw_grade, dict):
-                    graded = ProveGradingLLMOutput.model_validate(raw_grade)
-                    total_score = max(
-                        0,
-                        min(
-                            100,
-                            int(graded.conceptual_understanding_score)
-                            + int(graded.example_grounding_score)
-                            + int(graded.practical_application_score),
-                        ),
-                    )
-                    proof.score = total_score
-                    proof.status = (
-                        "PASSED" if total_score >= _PROVE_PASS_THRESHOLD else "NEEDS_REVIEW"
-                    )
-                    proof.corrective_action = (
-                        None
-                        if proof.status == "PASSED"
-                        else (
-                            graded.corrective_action.strip()
-                            if graded.corrective_action
-                            else "Ôn lại takeaway và thử Prove Mode với ví dụ cụ thể hơn."
-                        )
-                    )
-                    answer_evidence = [item.model_dump() for item in graded.answer_evidence]
-                    is_verified = True
-                    calibration_error = round(
-                        float(request.confidence) - (float(total_score) / 100.0), 4
-                    )
-                    model_used = str(exec_res.model_id or "gemini-3.8-flash")
-                    llm_recorded = True
-                else:
-                    fallback_reason_code = "PROVE_GRADER_INVALID_PAYLOAD"
-            except (
-                TimeoutError,
-                ValidationError,
-                json.JSONDecodeError,
-                PermissionError,
-                ValueError,
-                RuntimeError,
-                OSError,
-            ) as exc:
-                fallback_reason_code = _classify_ai_failure_reason(exc, "PROVE_GRADER")
-                logger.warning(
-                    "prove_grader_fallback",
-                    proof_id=str(proof_id),
-                    milestone_id=str(milestone_id),
-                    reason_code=fallback_reason_code,
-                    error_type=type(exc).__name__,
-                )
-                proof.score = 0
-                proof.status = "NEEDS_REVIEW"
-                is_verified = False
-                proof.corrective_action = "Hệ thống chấm điểm tạm thời chưa xác minh được bài làm. Vui lòng thử gửi lại sau."
-
-        proof.submitted_at = datetime.now(UTC)
-        await self._repository.save_proof(proof)
-
-        # Strictly upsert mastery & memory evidence ONLY when the grader result is verified.
-        if is_verified and self._learner_memory_port is not None:
-            mastery_score = round(float(proof.score) / 100.0, 4)
-            confidence_pct = round(float(request.confidence) * 100)
-            await self._learner_memory_port.upsert_memory_and_mastery_feedback(
-                user_id,
-                memories=[
-                    {
-                        "memory_key": f"prove_mode:milestone:{milestone_id}",
-                        "category": "KNOWLEDGE",
-                        "epistemic_level": "OBSERVED",
-                        "confidence": 0.9,
-                        "value": {
-                            "summary": (
-                                f"Prove Mode milestone {milestone_id}: {proof.status} "
-                                f"(score {proof.score}%, confidence {confidence_pct}%)."
-                            ),
-                            "source_workflow": "PROVE_MODE",
-                            "proof_id": str(proof.id),
-                            "score": proof.score,
-                            "confidence": round(float(request.confidence), 4),
-                            "confidence_pct": confidence_pct,
-                            "calibration_error": calibration_error,
-                            "model_used": model_used,
-                        },
-                        "evidence": [{"proof_id": str(proof.id), "score": proof.score}],
-                    }
-                ],
-                masteries=[
-                    {
-                        "concept_key": f"milestone:{milestone_id}",
-                        "mastery_score": mastery_score,
-                        "last_evidence_type": "PROVE_MODE",
-                    }
-                ],
-            )
-        if not llm_recorded:
+        if self._llm_provider is None:
             await _record_eval_workflow(
                 self._workflow_repo,
                 user_id=user_id,
@@ -507,27 +397,182 @@ class SubmitMilestoneProofUseCase:
                 },
                 output_payload={
                     "status": proof.status,
-                    "score": proof.score,
-                    "is_verified": is_verified,
-                    "calibration_error": calibration_error,
-                    "model_used": model_used,
+                    "score": None,
+                    "is_verified": False,
+                    "calibration_error": None,
+                    "model_used": "unavailable",
+                    "fallback_reason_code": "PROVE_GRADER_UNAVAILABLE",
+                    "prompt_tokens": 0,
+                    "output_tokens": 0,
+                    "completion_tokens": 0,
+                    "thinking_tokens": 0,
+                },
+                step_status=WorkflowStepStatus.FAILED,
+                error_detail="PROVE_GRADER_UNAVAILABLE",
+            )
+            await self._uow.commit()
+            raise ProveGradingUnavailableError(reason_code="PROVE_GRADER_UNAVAILABLE")
+
+        q_map = {
+            str(q.get("id", f"q{i + 1}")): str(q.get("prompt", ""))
+            for i, q in enumerate(questions_snapshot)
+        }
+        qa_pairs: list[tuple[str, str, str]] = []
+        for idx, ans in enumerate(request.answers):
+            raw_qid = str(ans.get("question_id") or ans.get("id") or f"q{idx + 1}")
+            raw_ans = str(ans.get("answer") or "")
+            qa_pairs.append((raw_qid, q_map.get(raw_qid, ""), raw_ans))
+
+        try:
+            manager = AIExecutionManager(
+                provider=self._llm_provider,
+                quota=self._quota_port,
+                manage_quota=self._quota_port is not None,
+                max_retries=1,
+                timeout_seconds=float(get_settings().ai_prove_grader_timeout_seconds),
+                workflow_repo=self._workflow_repo,
+            )
+            exec_res = await manager.execute(
+                user_id=user_id,
+                operation_type="PROVE_MODE_ASSESSMENT",
+                system_prompt=grader_tpl.system_template,
+                user_prompt=build_prove_grader_prompt(qa_pairs),
+                response_schema=ProveGradingLLMOutput,
+                thinking_level=PROVE_MODE_GRADER_PROMPT.thinking_level,
+                workflow_type=WorkflowType.CONTINUOUS_LEARNING,
+                step_name="PROVE_MODE_ASSESSMENT",
+                context_snapshot={"milestone_id": str(milestone_id), "proof_id": str(proof.id)},
+                prompt_template=grader_tpl,
+            )
+            raw_grade = (
+                exec_res.value.model_dump()
+                if isinstance(exec_res.value, BaseModel)
+                else exec_res.value
+            )
+            if not isinstance(raw_grade, dict):
+                raise ValueError("PROVE_GRADER_INVALID_PAYLOAD")
+            graded = ProveGradingLLMOutput.model_validate(raw_grade)
+        except (
+            TimeoutError,
+            ValidationError,
+            json.JSONDecodeError,
+            PermissionError,
+            ValueError,
+            RuntimeError,
+            OSError,
+        ) as exc:
+            # Never conflate technical AI grading failure with score=0 / NEEDS_REVIEW.
+            # Leave MilestoneProof untouched (READY, score=None, submitted_at=None) and never touch mastery.
+            # Quota reservation is already released by AIExecutionManager._cleanup_on_failure().
+            fallback_reason_code = _classify_ai_failure_reason(exc, "PROVE_GRADER")
+            logger.warning(
+                "prove_grader_unavailable",
+                proof_id=str(proof_id),
+                milestone_id=str(milestone_id),
+                reason_code=fallback_reason_code,
+                error_type=type(exc).__name__,
+            )
+            await _record_eval_workflow(
+                self._workflow_repo,
+                user_id=user_id,
+                workflow_type=WorkflowType.CONTINUOUS_LEARNING,
+                step_name="PROVE_MODE_ASSESSMENT",
+                input_summary={
+                    "milestone_id": str(milestone_id),
+                    "proof_id": str(proof.id),
+                    **grader_audit,
+                },
+                output_payload={
+                    "status": proof.status,
+                    "score": None,
+                    "is_verified": False,
+                    "calibration_error": None,
+                    "model_used": "unavailable",
                     "fallback_reason_code": fallback_reason_code,
                     "prompt_tokens": 0,
                     "output_tokens": 0,
                     "completion_tokens": 0,
                     "thinking_tokens": 0,
                 },
-                step_status=(
-                    WorkflowStepStatus.COMPLETED if is_verified else WorkflowStepStatus.FAILED
-                ),
+                step_status=WorkflowStepStatus.FAILED,
                 error_detail=fallback_reason_code,
             )
+            await self._uow.commit()
+            raise ProveGradingUnavailableError(reason_code=fallback_reason_code) from exc
+
+        total_score = max(
+            0,
+            min(
+                100,
+                int(graded.conceptual_understanding_score)
+                + int(graded.example_grounding_score)
+                + int(graded.practical_application_score),
+            ),
+        )
+        proof.answers = request.answers
+        proof.confidence = request.confidence
+        proof.score = total_score
+        proof.status = "PASSED" if total_score >= _PROVE_PASS_THRESHOLD else "NEEDS_REVIEW"
+        proof.corrective_action = (
+            None
+            if proof.status == "PASSED"
+            else (
+                graded.corrective_action.strip()
+                if graded.corrective_action
+                else "Ôn lại takeaway và thử Prove Mode với ví dụ cụ thể hơn."
+            )
+        )
+        proof.submitted_at = datetime.now(UTC)
+        answer_evidence = [item.model_dump() for item in graded.answer_evidence]
+        is_verified = True
+        calibration_error = round(float(request.confidence) - (float(total_score) / 100.0), 4)
+        model_used = str(exec_res.model_id or "gemini-3.8-flash")
+
+        await self._repository.save_proof(proof)
+
+        # Strictly upsert mastery & memory evidence inside the verified grading branch.
+        if self._learner_memory_port is not None:
+            mastery_score = round(float(total_score) / 100.0, 4)
+            confidence_pct = round(float(request.confidence) * 100)
+            await self._learner_memory_port.upsert_memory_and_mastery_feedback(
+                user_id,
+                memories=[
+                    {
+                        "memory_key": f"prove_mode:milestone:{milestone_id}",
+                        "category": "KNOWLEDGE",
+                        "epistemic_level": "OBSERVED",
+                        "confidence": 0.9,
+                        "value": {
+                            "summary": (
+                                f"Prove Mode milestone {milestone_id}: {proof.status} "
+                                f"(score {total_score}%, confidence {confidence_pct}%)."
+                            ),
+                            "source_workflow": "PROVE_MODE",
+                            "proof_id": str(proof.id),
+                            "score": total_score,
+                            "confidence": round(float(request.confidence), 4),
+                            "confidence_pct": confidence_pct,
+                            "calibration_error": calibration_error,
+                            "model_used": model_used,
+                        },
+                        "evidence": [{"proof_id": str(proof.id), "score": total_score}],
+                    }
+                ],
+                masteries=[
+                    {
+                        "concept_key": f"milestone:{milestone_id}",
+                        "mastery_score": mastery_score,
+                        "last_evidence_type": "PROVE_MODE",
+                    }
+                ],
+            )
+
         await self._uow.commit()
         return MilestoneProofResponseDTO(
             id=proof.id,
             milestone_id=proof.milestone_id,
             status=proof.status,
-            score=int(proof.score or 0),
+            score=total_score,
             confidence=request.confidence,
             corrective_action=proof.corrective_action,
             is_verified=is_verified,
@@ -931,6 +976,44 @@ class GenerateWeeklyReviewUseCase:
                     return _weekly_dto(dup_exc.existing_review)
                 raise
         return _weekly_dto(review)
+
+
+class GetLatestMilestoneProofUseCase:
+    def __init__(
+        self,
+        repository: EvaluationIntelligenceRepositoryPort,
+        ownership: MilestoneOwnershipQueryPort,
+    ) -> None:
+        self._repository = repository
+        self._ownership = ownership
+
+    async def execute(
+        self, user_id: UUID, milestone_id: UUID
+    ) -> LatestMilestoneProofResponseDTO | None:
+        milestone = await self._ownership.get_milestone(milestone_id)
+        if milestone is None or milestone.user_id != user_id:
+            raise EvaluationResourceNotFoundError
+        proof = await self._repository.get_latest_milestone_proof(milestone_id, user_id)
+        if proof is None:
+            return None
+        is_verified = proof.submitted_at is not None and proof.score is not None
+        calibration_error: float | None = None
+        if is_verified and proof.confidence is not None and proof.score is not None:
+            calibration_error = round(float(proof.confidence) - (float(proof.score) / 100.0), 4)
+        return LatestMilestoneProofResponseDTO(
+            id=proof.id,
+            milestone_id=proof.milestone_id,
+            status=proof.status,
+            score=proof.score,
+            confidence=proof.confidence,
+            corrective_action=proof.corrective_action,
+            is_verified=is_verified,
+            calibration_error=calibration_error,
+            questions=list(proof.questions),
+            answer_evidence=[],
+            created_at=proof.created_at,
+            updated_at=proof.submitted_at or proof.created_at,
+        )
 
 
 class GetLatestWeeklyReviewUseCase:

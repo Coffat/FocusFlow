@@ -25,6 +25,7 @@ from src.planning.application.ports.milestone_checkpoint_port import (
 )
 from src.planning.application.services.milestone_scoped_decomposer import (
     MilestoneScopedTaskDecomposer,
+    MilestoneSubjobProgress,
     compute_milestone_checkpoint_key,
     compute_milestone_content_hash,
 )
@@ -552,6 +553,44 @@ def _build_5_milestone_fixture() -> tuple[
 
 
 @pytest.mark.asyncio
+async def test_timeout_is_not_retried_but_sibling_subjobs_still_finish() -> None:
+    user_id, goal, roadmap, milestones, avail = _build_5_milestone_fixture()
+    failed_milestone = milestones[1]
+    checkpoint_store = InMemoryMilestoneCheckpointStore()
+    llm = _FaultInjectingStubLLM()
+    llm.fail_milestone_ids = {failed_milestone.id}
+    learner_profile = SimpleNamespace(
+        opt_session_minutes=60,
+        estimation_bias_beta=1.0,
+        peak_productivity_slots=("MORNING",),
+    )
+    decomposer = MilestoneScopedTaskDecomposer(
+        llm_provider=llm,
+        enable_tier3_judge=False,
+        user_id=user_id,
+        goal_id=goal.id,
+        roadmap_id=roadmap.id,
+        max_concurrency=3,
+        checkpoint_store=checkpoint_store,
+    )
+
+    with pytest.raises(TimeoutError, match="Simulated LLM network timeout"):
+        await decomposer.decompose_and_validate(
+            goal=goal,
+            roadmap=roadmap,
+            milestones=milestones,
+            availability=avail,
+            learner_profile=learner_profile,
+            start_date=roadmap.start_date,
+            max_milestone_retries=1,
+            reference_date=roadmap.start_date,
+        )
+
+    assert llm.calls_by_milestone_id[failed_milestone.id] == 1
+    assert llm.total_decomposer_calls == len(milestones)
+
+
+@pytest.mark.asyncio
 async def test_fault_injection_and_checkpoint_resume_5_milestones() -> None:
     """Scenario 1:
 
@@ -693,6 +732,7 @@ async def test_fault_injection_and_checkpoint_resume_5_milestones() -> None:
         checkpoint_store=checkpoint_store,
     )
 
+    resume_progress: list[MilestoneSubjobProgress] = []
     gate_result = await decomposer_resume.decompose_and_validate(
         goal=goal,
         roadmap=roadmap,
@@ -702,7 +742,13 @@ async def test_fault_injection_and_checkpoint_resume_5_milestones() -> None:
         start_date=roadmap.start_date,
         max_milestone_retries=0,
         reference_date=roadmap.start_date,
+        on_progress_callback=resume_progress.append,
     )
+
+    progress_by_sequence = {item.milestone_sequence: item for item in resume_progress}
+    assert len(progress_by_sequence) == 5
+    assert all(progress_by_sequence[index].from_checkpoint for index in (1, 2, 3))
+    assert all(not progress_by_sequence[index].from_checkpoint for index in (4, 5))
 
     # 1. Assert M1, M2, M3 are loaded from checkpoint with ZERO LLM calls:
     assert llm.calls_by_milestone_id.get(m1.id, 0) == 0, (

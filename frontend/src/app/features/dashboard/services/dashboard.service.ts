@@ -1,6 +1,8 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, tap, catchError, of, map } from 'rxjs';
+import { Observable, tap, catchError, of, map, finalize } from 'rxjs';
+import { API_ENDPOINTS } from '../../../core/constants/api-endpoints';
+import { EntityInvalidationService } from '../../../core/services/entity-invalidation.service';
 import {
   DashboardSummary,
   DashboardDataState,
@@ -296,32 +298,46 @@ export function mapDashboardSummary(data: unknown): DashboardSummary {
 })
 export class DashboardService {
   private readonly http = inject(HttpClient);
+  private readonly entityInvalidation = inject(EntityInvalidationService);
+
+  private summaryRequestSeq = 0;
+  private readonly _lastLoadedVersion = signal<number>(0);
 
   readonly summary = signal<DashboardSummary>(EMPTY_DASHBOARD_SUMMARY);
   readonly currentState = signal<DashboardDataState>('normal');
   readonly isLoading = signal<boolean>(false);
   readonly weekOffset = signal<number>(0);
+  readonly isSummaryStale = computed<boolean>(
+    () => this.entityInvalidation.versionFor('dashboard')() > this._lastLoadedVersion()
+  );
 
   loadSummary(): Observable<DashboardSummary> {
+    const seq = ++this.summaryRequestSeq;
+    const requestedVersion = this.entityInvalidation.versionFor('dashboard')();
     this.isLoading.set(true);
-    return this.http.get<unknown>('/api/v1/evaluation/dashboard-summary').pipe(
-      map((data) => mapDashboardSummary(data)),
-      tap({
-        next: (mapped) => {
+    return this.http
+      .get<unknown>(API_ENDPOINTS.EVALUATION.DASHBOARD_SUMMARY, { withCredentials: true })
+      .pipe(
+        map((data) => mapDashboardSummary(data)),
+        tap((mapped) => {
+          if (seq !== this.summaryRequestSeq) {
+            return;
+          }
           this.summary.set(mapped);
-          this.isLoading.set(false);
-        },
-        error: () => {
-          this.summary.set(EMPTY_DASHBOARD_SUMMARY);
-          this.isLoading.set(false);
-        },
-      }),
-      catchError(() => {
-        this.summary.set(EMPTY_DASHBOARD_SUMMARY);
-        this.isLoading.set(false);
-        return of(EMPTY_DASHBOARD_SUMMARY);
-      })
-    );
+          this._lastLoadedVersion.set(requestedVersion);
+        }),
+        catchError(() => {
+          if (seq === this.summaryRequestSeq) {
+            this.summary.set(EMPTY_DASHBOARD_SUMMARY);
+          }
+          return of(EMPTY_DASHBOARD_SUMMARY);
+        }),
+        finalize(() => {
+          if (seq === this.summaryRequestSeq) {
+            this.isLoading.set(false);
+          }
+        })
+      );
   }
 
   setState(state: DashboardDataState): void {

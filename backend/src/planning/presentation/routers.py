@@ -2,7 +2,7 @@ from collections.abc import AsyncGenerator
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, File, Form, Header, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, File, Form, Header, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from src.account.public_api import QuotaExceededError
@@ -12,7 +12,11 @@ from src.planning.application.dtos.planning_dtos import (
     SseJobTicketDTO,
     parse_clarification_context,
 )
+from src.planning.application.knowledge.safe_url_fetcher import UnsafeUrlError
 from src.planning.application.ports.sse_job_port import SseJobNotFoundError, SseJobPort
+from src.planning.application.use_cases.knowledge_source_use_cases import (
+    InvalidKnowledgeSourceError,
+)
 from src.planning.domain.exceptions.planning_exceptions import (
     AIExecutionError,
     FreshCalendarConflictDetectedError,
@@ -53,6 +57,7 @@ from src.planning.presentation.deps import (
     GenerateClarificationQuestionsUseCaseDep,
     GetCurrentProposalUseCaseDep,
     GetRoadmapDetailUseCaseDep,
+    GoalRepositoryDep,
     InitiateMilestoneGenUseCaseDep,
     InitiateOverdueRecoveryUseCaseDep,
     InitiateProposalGenUseCaseDep,
@@ -105,6 +110,7 @@ from src.planning.presentation.tasks import (
 )
 from src.shared_kernel.config import get_settings
 from src.shared_kernel.domain.exceptions import DomainError
+from src.shared_kernel.infrastructure.security.rate_limiter import enforce_rate_limit
 from src.shared_kernel.infrastructure.sse.job_store import (
     DEFAULT_SSE_KEEPALIVE_INTERVAL_SECONDS,
     stream_sse_wire_with_keepalive,
@@ -467,12 +473,14 @@ async def get_planning_context_status() -> dict[str, str]:
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def upload_knowledge_source_file(
+    http_request: Request,
     goal_id: UUID,
     current_user_id: CurrentLearnerIdDep,
     use_case: CreateKnowledgeSourceUseCaseDep,
     file: UploadFile = File(...),
     title: str = Form(default=""),
 ) -> KnowledgeSourceResponse:
+    await enforce_rate_limit(http_request, "knowledge_upload_user", identifier=str(current_user_id))
     if not get_settings().knowledge_rag_enabled:
         raise HTTPException(status_code=404, detail="Knowledge RAG is not enabled")
     content = await file.read(get_settings().knowledge_file_max_bytes + 1)
@@ -483,9 +491,15 @@ async def upload_knowledge_source_file(
             title=title,
             filename=file.filename or "knowledge.txt",
             content=content,
+            content_type=file.content_type,
         )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail="Goal not found") from exc
+    except InvalidKnowledgeSourceError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
     await dispatch_ingest_knowledge_source(source_id=str(source.id), user_id=str(current_user_id))
     return _to_knowledge_source_response(source)
 
@@ -496,11 +510,13 @@ async def upload_knowledge_source_file(
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def add_knowledge_source_url(
+    http_request: Request,
     goal_id: UUID,
     request: CreateKnowledgeUrlRequest,
     current_user_id: CurrentLearnerIdDep,
     use_case: CreateKnowledgeSourceUseCaseDep,
 ) -> KnowledgeSourceResponse:
+    await enforce_rate_limit(http_request, "knowledge_upload_user", identifier=str(current_user_id))
     if not get_settings().knowledge_rag_enabled:
         raise HTTPException(status_code=404, detail="Knowledge RAG is not enabled")
     try:
@@ -512,6 +528,11 @@ async def add_knowledge_source_url(
         )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail="Goal not found") from exc
+    except (InvalidKnowledgeSourceError, UnsafeUrlError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
     await dispatch_ingest_knowledge_source(source_id=str(source.id), user_id=str(current_user_id))
     return _to_knowledge_source_response(source)
 
@@ -523,8 +544,12 @@ async def add_knowledge_source_url(
 async def list_knowledge_sources(
     goal_id: UUID,
     current_user_id: CurrentLearnerIdDep,
+    goal_repository: GoalRepositoryDep,
     repository: KnowledgeSourceRepositoryDep,
 ) -> list[KnowledgeSourceResponse]:
+    goal = await goal_repository.get_by_id_for_user(goal_id, current_user_id)
+    if goal is None:
+        raise HTTPException(status_code=404, detail="Goal not found")
     sources = await repository.list_sources_for_goal(goal_id, current_user_id)
     return [_to_knowledge_source_response(source) for source in sources]
 
@@ -536,10 +561,14 @@ async def list_knowledge_sources(
 async def get_knowledge_source(
     source_id: UUID,
     current_user_id: CurrentLearnerIdDep,
+    goal_repository: GoalRepositoryDep,
     repository: KnowledgeSourceRepositoryDep,
 ) -> KnowledgeSourceResponse:
     source = await repository.get_source_for_user(source_id, current_user_id)
     if source is None:
+        raise HTTPException(status_code=404, detail="Knowledge source not found")
+    goal = await goal_repository.get_by_id_for_user(source.goal_id, current_user_id)
+    if goal is None:
         raise HTTPException(status_code=404, detail="Knowledge source not found")
     return _to_knowledge_source_response(source)
 
@@ -786,9 +815,12 @@ async def list_roadmaps(
     user_id: CurrentLearnerIdDep,
     use_case: ListRoadmapsUseCaseDep,
     status_filter: Annotated[str | None, Query(alias="status")] = None,
+    limit: Annotated[int | None, Query(ge=1, le=100)] = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[RoadmapResponse]:
     roadmaps = await use_case.execute(user_id=user_id, status=status_filter)
-    return [_to_roadmap_response(r) for r in roadmaps]
+    sliced = roadmaps[offset : offset + limit] if limit is not None else roadmaps[offset:]
+    return [_to_roadmap_response(r) for r in sliced]
 
 
 @roadmaps_router.get(
