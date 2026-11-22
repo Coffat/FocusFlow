@@ -1,0 +1,241 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: focusflow-postgres-prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+    volumes:
+      - pg_data_prod:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1536M
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+    networks:
+      - focusflow-internal
+
+  redis:
+    image: redis:7-alpine
+    container_name: focusflow-redis-prod
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - ${REDIS_MAXMEMORY:-512mb}
+      - --maxmemory-policy
+      - noeviction
+      - --requirepass
+      - ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    volumes:
+      - redis_data_prod:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+    networks:
+      - focusflow-internal
+
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: focusflow-migrate-prod
+    profiles: ["migrate"]
+    restart: "no"
+    entrypoint: ["alembic", "upgrade", "head"]
+    environment:
+      ENVIRONMENT: production
+      DEBUG: "false"
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}
+      DATABASE_URL_SYNC: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
+      FERNET_KEY: ${FERNET_KEY:-}
+      CALENDAR_PROVIDER: ${CALENDAR_PROVIDER:-google}
+      CALENDAR_ENCRYPTION_KEY: ${CALENDAR_ENCRYPTION_KEY:?CALENDAR_ENCRYPTION_KEY is required}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *default-logging
+    networks:
+      - focusflow-internal
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: focusflow-backend-prod
+    restart: unless-stopped
+    entrypoint: ["/usr/bin/supervisord", "-c", "/app/supervisord.prod.conf", "-n"]
+    volumes:
+      - ./backend/supervisord.prod.conf:/app/supervisord.prod.conf:ro
+      - knowledge_uploads_prod:/var/lib/focusflow/knowledge
+    environment:
+      ENVIRONMENT: production
+      DEBUG: "false"
+      BILLING_RELEASE_MODE: ${BILLING_RELEASE_MODE:-FREE_BETA}
+
+      # Database
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}
+      DATABASE_URL_SYNC: postgresql://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-10}
+      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-10}
+
+      # Redis
+      REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379/0
+
+      # Security, CORS, CSRF & Rate Limiting
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
+      FERNET_KEY: ${FERNET_KEY:-}
+      WEBCAL_SALT: ${WEBCAL_SALT:-}
+      FRONTEND_URL: ${FRONTEND_URL:?FRONTEND_URL is required}
+      BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:?BACKEND_CORS_ORIGINS is required}
+      CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-}
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_TRUSTED_PROXIES: ${RATE_LIMIT_TRUSTED_PROXIES:-127.0.0.1/32,::1/128,172.16.0.0/12,10.0.0.0/8,192.168.0.0/16}
+
+      # Google Calendar OAuth & Webhooks
+      CALENDAR_PROVIDER: ${CALENDAR_PROVIDER:-google}
+      CALENDAR_ENCRYPTION_KEY: ${CALENDAR_ENCRYPTION_KEY:?CALENDAR_ENCRYPTION_KEY is required}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-}
+      CALENDAR_WEBHOOK_BASE_URL: ${CALENDAR_WEBHOOK_BASE_URL:-}
+
+      # Production SMTP
+      EMAIL_BACKEND: ${EMAIL_BACKEND:-smtp}
+      EMAIL_HOST: ${EMAIL_HOST:?EMAIL_HOST is required}
+      EMAIL_PORT: ${EMAIL_PORT:-587}
+      EMAIL_USER: ${EMAIL_USER:-}
+      EMAIL_PASS: ${EMAIL_PASS:-}
+      EMAIL_FROM: ${EMAIL_FROM:?EMAIL_FROM is required}
+
+      # AI Harness & Embeddings
+      LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
+      LLM_API_KEY: ${LLM_API_KEY:?LLM_API_KEY is required}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_THINKING_CONTROL: ${LLM_THINKING_CONTROL:-model_suffix}
+      LLM_MODEL: ${LLM_MODEL:-gemini-3.8-flash-medium}
+      LLM_MODEL_LOW: ${LLM_MODEL_LOW:-gemini-3.8-flash-low}
+      LLM_MODEL_MEDIUM: ${LLM_MODEL_MEDIUM:-gemini-3.8-flash-medium}
+      LLM_MODEL_HIGH: ${LLM_MODEL_HIGH:-gemini-3.8-flash-high}
+      LLM_FALLBACK_MODELS: ${LLM_FALLBACK_MODELS:-}
+      AI_HARD_TIMEOUT_SECONDS: ${AI_HARD_TIMEOUT_SECONDS:-55}
+      AI_DECOMPOSER_MAX_CONCURRENCY: ${AI_DECOMPOSER_MAX_CONCURRENCY:-4}
+      AI_PROPOSAL_FINALIZE_RESERVE_SECONDS: ${AI_PROPOSAL_FINALIZE_RESERVE_SECONDS:-14}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-google_ai_studio}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-gemini/gemini-embedding-2}
+      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-}
+      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-768}
+
+      # RAG Knowledge Storage
+      KNOWLEDGE_RAG_ENABLED: ${KNOWLEDGE_RAG_ENABLED:-true}
+      KNOWLEDGE_UPLOAD_DIR: /var/lib/focusflow/knowledge
+      KNOWLEDGE_FILE_MAX_BYTES: ${KNOWLEDGE_FILE_MAX_BYTES:-20971520}
+
+      # Payment Provider (fail-closed under FREE_BETA)
+      PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-sepay}
+      PAYMENT_WEBHOOK_SECRET: ${PAYMENT_WEBHOOK_SECRET:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3).status == 200 else 1)",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 25s
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2048M
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+    networks:
+      - focusflow-internal
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    container_name: focusflow-frontend-prod
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_BIND_HOST:-127.0.0.1}:${FRONTEND_PORT:-8080}:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+    networks:
+      - focusflow-internal
+
+volumes:
+  pg_data_prod:
+    driver: local
+  redis_data_prod:
+    driver: local
+  knowledge_uploads_prod:
+    driver: local
+
+networks:
+  focusflow-internal:
+    driver: bridge
