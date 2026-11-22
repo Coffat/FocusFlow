@@ -101,6 +101,26 @@ logger = logging.getLogger(__name__)
 _SCHEDULE_FIELDS = frozenset(
     {"scheduled_date", "scheduled_start", "scheduled_end", "start_time", "end_time"}
 )
+_DEFAULT_PREFETCH_URL_VERIFY_TIMEOUT_SECONDS = 3.0
+
+
+class MilestoneDecompositionTimeoutError(TimeoutError):
+    """TimeoutError enriched with milestone checkpoint progress metadata for seamless retry."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        completed_milestones: int,
+        total_milestones: int,
+        failed_milestone_sequence: int | None = None,
+        resumable: bool | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.completed_milestones = max(0, int(completed_milestones))
+        self.total_milestones = max(0, int(total_milestones))
+        self.failed_milestone_sequence = failed_milestone_sequence
+        self.resumable = bool(resumable) if resumable is not None else self.completed_milestones > 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -123,11 +143,10 @@ class MilestoneSubjobProgress:
 
 
 def calculate_dynamic_subjob_concurrency(milestone_count: int, *, ceiling: int) -> int:
-    """Return a bounded worker count that keeps milestone fan-out to at most two waves."""
+    """Return a bounded worker count that runs up to `ceiling` milestones in 1 parallel wave."""
     if milestone_count <= 0:
         return 0
-    dynamic_target = 1 if milestone_count == 1 else max(2, math.ceil(milestone_count / 2))
-    return min(milestone_count, dynamic_target, max(1, int(ceiling)))
+    return min(max(1, milestone_count), max(1, int(ceiling)))
 
 
 def calculate_milestone_subjob_timeout(
@@ -813,6 +832,7 @@ class MilestoneScopedTaskDecomposer:
         checkpoint_store: MilestoneCheckpointStorePort | None = None,
         quota: Any = None,
         reservation_id: UUID | None = None,
+        url_verify_timeout_seconds: float = _DEFAULT_PREFETCH_URL_VERIFY_TIMEOUT_SECONDS,
     ) -> None:
         self._llm = llm_provider
         self._kb = knowledge_base
@@ -829,6 +849,7 @@ class MilestoneScopedTaskDecomposer:
         )
         self._quota = quota
         self._reservation_id = reservation_id
+        self._url_verify_timeout_seconds = max(0.05, float(url_verify_timeout_seconds))
         self._wf_lock = asyncio.Lock()
 
     async def _prefetch_resources_for_milestones(
@@ -885,9 +906,44 @@ class MilestoneScopedTaskDecomposer:
                     unverified_concepts=unverified,
                     limit=6,
                 )
-                for cand in candidates:
-                    if await verify_official_url_live(cand.url):
-                        discovered.append(cand)
+                if candidates:
+
+                    async def _verify_candidate(
+                        cand: LearningResource,
+                    ) -> LearningResource | None:
+                        try:
+                            is_live = await asyncio.wait_for(
+                                verify_official_url_live(cand.url),
+                                timeout=self._url_verify_timeout_seconds,
+                            )
+                            return cand if is_live else None
+                        except asyncio.CancelledError:
+                            raise
+                        except TimeoutError:
+                            logger.warning(
+                                "milestone_resource_url_verify_timeout",
+                                extra={
+                                    "milestone_id": str(milestone.id),
+                                    "url": cand.url,
+                                    "timeout_seconds": self._url_verify_timeout_seconds,
+                                },
+                            )
+                            return None
+                        except Exception as exc:
+                            logger.warning(
+                                "milestone_resource_url_verify_failed",
+                                extra={
+                                    "milestone_id": str(milestone.id),
+                                    "url": cand.url,
+                                    "error_type": type(exc).__name__,
+                                },
+                            )
+                            return None
+
+                    verified_results = await asyncio.gather(
+                        *(_verify_candidate(cand) for cand in candidates)
+                    )
+                    discovered.extend(item for item in verified_results if item is not None)
 
             # Rank learner INDEXED KnowledgeSource materials for this milestone
             m_terms = set(
@@ -1470,11 +1526,13 @@ class MilestoneScopedTaskDecomposer:
 
         milestone_results: list[tuple[MilestoneDecompositionOutcome, BufferedWorkflowRepo]] = []
         first_failure: BaseException | None = None
+        first_failed_milestone: Milestone | None = None
         for milestone, res in zip(sorted_milestones, raw_milestone_results, strict=True):
             if isinstance(res, asyncio.CancelledError):
                 raise res
             if isinstance(res, BaseException):
                 if first_failure is None:
+                    first_failed_milestone = milestone
                     if isinstance(res, TimeoutError) and not str(res).strip():
                         first_failure = TimeoutError(
                             f"Milestone-scoped decomposition timed out for milestone #{milestone.sequence_order} ({milestone.id})"
@@ -1485,6 +1543,27 @@ class MilestoneScopedTaskDecomposer:
                 milestone_results.append(res)
 
         if first_failure is not None:
+            if isinstance(first_failure, TimeoutError):
+                completed_milestones = len(milestone_results)
+                total_milestones = len(sorted_milestones)
+                resumable = (
+                    completed_milestones > 0
+                    and effective_cp_store is not None
+                    and bool(getattr(effective_cp_store, "is_durable", False))
+                )
+                failed_seq = (
+                    first_failed_milestone.sequence_order
+                    if first_failed_milestone is not None
+                    else None
+                )
+                raise MilestoneDecompositionTimeoutError(
+                    str(first_failure)
+                    or (f"Milestone-scoped decomposition timed out for milestone #{failed_seq}"),
+                    completed_milestones=completed_milestones,
+                    total_milestones=total_milestones,
+                    failed_milestone_sequence=failed_seq,
+                    resumable=resumable,
+                ) from first_failure
             raise first_failure
 
         if self._workflow_repo is not None:

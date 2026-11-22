@@ -193,7 +193,13 @@ def _is_http_500_stream_error(exc: Exception) -> bool:
 
 
 def default_ai_retry_predicate(exc: Exception) -> bool:
-    """Retry only transient TIMEOUT and transient GATEWAY_ERROR (never SCHEMA_MISMATCH/QUOTA/VALIDATION_GATE/4xx)."""
+    """Retry only transient TIMEOUT and transient GATEWAY_ERROR (never circuit-open/SCHEMA_MISMATCH/QUOTA/VALIDATION_GATE/4xx)."""
+    if (
+        getattr(exc, "code", None) == "AI_SERVICE_UNAVAILABLE"
+        or type(exc).__name__ == "AIServiceUnavailableError"
+    ):
+        return False
+
     if isinstance(
         exc,
         (

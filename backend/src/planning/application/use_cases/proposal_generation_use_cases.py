@@ -358,6 +358,8 @@ class ExecuteScheduleProposalGenerationUseCase:
     ) -> ScheduleProposal:
         effective_now = now or datetime.now(UTC)
         reservation_finalized = False
+        last_completed_milestones = 0
+        total_milestones_count = 0
 
         async def _release_once(reason: str) -> None:
             nonlocal reservation_finalized
@@ -389,6 +391,7 @@ class ExecuteScheduleProposalGenerationUseCase:
                 raw_milestones,
                 require_all_approved_without_prelim=True,
             )
+            total_milestones_count = len(milestones)
 
             goal = await self._goal_repo.get_by_id(roadmap.goal_id)
             user_tz = "Asia/Ho_Chi_Minh"
@@ -455,6 +458,7 @@ class ExecuteScheduleProposalGenerationUseCase:
                 raw_milestones,
                 require_all_approved_without_prelim=True,
             )
+            total_milestones_count = len(milestones)
 
             await self._sse.append_event(
                 job_id=job_id,
@@ -611,6 +615,10 @@ class ExecuteScheduleProposalGenerationUseCase:
                 )
 
             async def _on_milestone_progress(progress: MilestoneSubjobProgress) -> None:
+                nonlocal last_completed_milestones
+                last_completed_milestones = max(
+                    last_completed_milestones, int(progress.completed_count)
+                )
                 progress_percent = min(
                     82,
                     60 + round(22 * progress.completed_count / progress.total_count),
@@ -645,7 +653,20 @@ class ExecuteScheduleProposalGenerationUseCase:
                 if has_scripted_monolithic_queue
                 else get_settings().decomposer_architecture_mode
             )
+            # Release any implicit read-only DB transaction opened during context loading
+            # before entering the long-running LLM decomposition pipeline so no DB connection
+            # is held IDLE IN TRANSACTION across LLM calls. (Any preliminary-feasibility
+            # drift writes in verify_or_refresh_preliminary_feasibility_for_gate were
+            # already committed inside their own AsyncUnitOfWork block.)
+            if hasattr(self._uow, "rollback"):
+                await self._uow.rollback()
+
             if effective_arch_mode == "milestone_scoped":
+                runtime_settings = get_settings()
+                max_concurrency = min(
+                    int(getattr(runtime_settings, "ai_decomposer_max_concurrency", 4)),
+                    int(getattr(runtime_settings, "ai_max_concurrent_llm_requests", 4)),
+                )
                 scoped_decomposer = MilestoneScopedTaskDecomposer(
                     llm_provider=self._llm,
                     knowledge_base=self._kb,
@@ -655,9 +676,7 @@ class ExecuteScheduleProposalGenerationUseCase:
                     user_id=user_id,
                     goal_id=roadmap.goal_id,
                     roadmap_id=roadmap_id,
-                    max_concurrency=int(
-                        getattr(get_settings(), "ai_decomposer_max_concurrency", 4)
-                    ),
+                    max_concurrency=max_concurrency,
                     checkpoint_store=self._checkpoint_store,
                     quota=self._quota_facade,
                     reservation_id=reservation_id,
@@ -1024,17 +1043,41 @@ class ExecuteScheduleProposalGenerationUseCase:
                 if isinstance(exc, ProposalValidationGateError)
                 else []
             )
+            failed_data: dict[str, Any] = {
+                "stage": "FAILED",
+                "progress": 100,
+                "error": error_message,
+                "error_code": error_code,
+                "violations": violations,
+            }
+            if isinstance(exc, (TimeoutError, asyncio.TimeoutError)):
+                completed_attr = getattr(exc, "completed_milestones", None)
+                total_attr = getattr(exc, "total_milestones", None)
+                resumable_attr = getattr(exc, "resumable", None)
+                completed_count = (
+                    int(completed_attr) if completed_attr is not None else last_completed_milestones
+                )
+                total_count = int(total_attr) if total_attr is not None else total_milestones_count
+                store_is_durable = self._checkpoint_store is not None and bool(
+                    getattr(self._checkpoint_store, "is_durable", False)
+                )
+                is_resumable = (
+                    (bool(resumable_attr) and store_is_durable)
+                    if resumable_attr is not None
+                    else (completed_count > 0 and store_is_durable)
+                )
+                failed_data["completed_milestones"] = completed_count
+                failed_data["total_milestones"] = total_count
+                failed_data["resumable"] = is_resumable
+                failed_seq_attr = getattr(exc, "failed_milestone_sequence", None)
+                if failed_seq_attr is not None:
+                    failed_data["failed_milestone_sequence"] = int(failed_seq_attr)
+
             await self._sse.append_event(
                 job_id=job_id,
                 event="failed",
                 status="FAILED",
-                data={
-                    "stage": "FAILED",
-                    "progress": 100,
-                    "error": error_message,
-                    "error_code": error_code,
-                    "violations": violations,
-                },
+                data=failed_data,
             )
             raise
         finally:

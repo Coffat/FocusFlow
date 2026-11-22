@@ -59,7 +59,6 @@ from src.planning.application.services.validation_gate import (
 from src.planning.application.use_cases.proposal_generation_use_cases import (
     normalize_proposal_task_ids_and_dependencies,
 )
-from src.planning.domain.events.planning_events import MilestoneApprovedEvent
 from src.planning.domain.exceptions.planning_exceptions import (
     FreshCalendarConflictDetectedError,
     JudgeReviewConfirmationRequiredError,
@@ -1994,19 +1993,7 @@ class SaveManualRoadmapPlanUseCase:
 
         async with self._uow:
             await self._milestone_repo.save_many(roadmap_id, active_milestones)
-            approved_ms = await self._milestone_repo.approve_all_for_roadmap(
-                roadmap_id, effective_now
-            )
-            roadmap.add_domain_event(
-                MilestoneApprovedEvent(
-                    aggregate_id=roadmap.id,
-                    user_id=user_id,
-                    roadmap_id=roadmap.id,
-                    milestone_count=len(approved_ms),
-                    occurred_at=effective_now,
-                )
-            )
-            self._uow.collect_events_from(roadmap)
+            await self._milestone_repo.approve_all_for_roadmap(roadmap_id, effective_now)
             await self._proposal_repo.discard_existing_drafts(roadmap_id, effective_now)
             saved_proposal = await self._proposal_repo.save(proposal)
             await self._uow.commit()

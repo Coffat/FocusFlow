@@ -6,7 +6,13 @@ from src.shared_kernel.domain.events import DomainEvent
 
 @dataclass(frozen=True, kw_only=True)
 class MilestoneApprovedEvent(DomainEvent):
-    """Published when a learner approves Level-1 Milestones for a Roadmap (UC-07)."""
+    """DEPRECATED for Outbox emission (preserved for import compatibility & historical rows).
+
+    Per SRS v1.3 (`FR-PLAN-001` / `UC-07`), approving Level-1 Milestones has no prescribed
+    cross-context downstream side effects (no task unlocking, auto-scheduling, analytics
+    mutation, or notifications). Use cases MUST NOT enqueue this event into `outbox_events`
+    to prevent orphaned `PENDING` outbox rows with no subscribers.
+    """
 
     user_id: UUID
     roadmap_id: UUID

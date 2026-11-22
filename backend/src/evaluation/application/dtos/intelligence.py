@@ -122,6 +122,21 @@ class MilestoneProofResponseDTO(BaseModel):
     answer_evidence: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class LatestMilestoneProofResponseDTO(BaseModel):
+    id: UUID
+    milestone_id: UUID
+    status: str
+    score: int | None = None
+    confidence: float | None = None
+    corrective_action: str | None = None
+    is_verified: bool = False
+    calibration_error: float | None = None
+    questions: list[dict[str, Any]] = Field(default_factory=list)
+    answer_evidence: list[dict[str, Any]] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime
+
+
 class GenerateWeeklyReviewRequestDTO(BaseModel):
     roadmap_id: UUID
     period_start: date

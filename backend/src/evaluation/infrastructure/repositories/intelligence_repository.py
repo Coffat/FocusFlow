@@ -42,16 +42,8 @@ class SqlAlchemyEvaluationIntelligenceRepository(EvaluationIntelligenceRepositor
             created_at=proof.created_at,
         )
 
-    async def get_owned_proof(self, proof_id: UUID, user_id: UUID) -> MilestoneProof | None:
-        result = await self._session.execute(
-            select(MilestoneProofORM).where(
-                MilestoneProofORM.id == proof_id,
-                MilestoneProofORM.user_id == user_id,
-            )
-        )
-        row = result.scalar_one_or_none()
-        if row is None:
-            return None
+    @staticmethod
+    def _to_milestone_proof(row: MilestoneProofORM) -> MilestoneProof:
         return MilestoneProof(
             id=row.id,
             milestone_id=row.milestone_id,
@@ -65,6 +57,35 @@ class SqlAlchemyEvaluationIntelligenceRepository(EvaluationIntelligenceRepositor
             created_at=row.created_at,
             submitted_at=row.submitted_at,
         )
+
+    async def get_owned_proof(self, proof_id: UUID, user_id: UUID) -> MilestoneProof | None:
+        result = await self._session.execute(
+            select(MilestoneProofORM).where(
+                MilestoneProofORM.id == proof_id,
+                MilestoneProofORM.user_id == user_id,
+            )
+        )
+        row = result.scalar_one_or_none()
+        if row is None:
+            return None
+        return self._to_milestone_proof(row)
+
+    async def get_latest_milestone_proof(
+        self, milestone_id: UUID, user_id: UUID
+    ) -> MilestoneProof | None:
+        result = await self._session.execute(
+            select(MilestoneProofORM)
+            .where(
+                MilestoneProofORM.milestone_id == milestone_id,
+                MilestoneProofORM.user_id == user_id,
+            )
+            .order_by(MilestoneProofORM.created_at.desc())
+            .limit(1)
+        )
+        row = result.scalar_one_or_none()
+        if row is None:
+            return None
+        return self._to_milestone_proof(row)
 
     async def save_proof(self, proof: MilestoneProof) -> None:
         row = await self._session.get(MilestoneProofORM, proof.id)

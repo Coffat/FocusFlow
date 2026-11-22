@@ -15,7 +15,7 @@ from src.planning.application.services.milestone_scoped_decomposer import (
 
 @pytest.mark.parametrize(
     ("milestone_count", "expected_workers"),
-    [(1, 1), (3, 2), (6, 3), (7, 4)],
+    [(1, 1), (3, 3), (4, 4), (6, 4), (7, 4)],
 )
 def test_dynamic_subjob_concurrency_scales_with_milestone_count(
     milestone_count: int,

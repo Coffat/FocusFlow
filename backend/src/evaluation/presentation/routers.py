@@ -3,13 +3,16 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import JSONResponse
 
+from src.account.public_api import QuotaExceededError
 from src.evaluation.application.dtos.dashboard_dtos import (
     DashboardSummaryResponseDTO,
 )
 from src.evaluation.application.dtos.intelligence import (
     GenerateProofResponseDTO,
     GenerateWeeklyReviewRequestDTO,
+    LatestMilestoneProofResponseDTO,
     MilestoneProofResponseDTO,
     SubmitProofRequestDTO,
     WeeklyReviewResponseDTO,
@@ -28,8 +31,13 @@ from src.evaluation.application.use_cases.intelligence import (
     EvaluationResourceNotFoundError,
     GenerateMilestoneProofUseCase,
     GenerateWeeklyReviewUseCase,
+    GetLatestMilestoneProofUseCase,
     GetLatestWeeklyReviewUseCase,
     SubmitMilestoneProofUseCase,
+)
+from src.evaluation.domain.exceptions import (
+    ProofAlreadyGradedError,
+    ProveGradingUnavailableError,
 )
 from src.evaluation.presentation.deps import (
     get_analytics_summary_use_case,
@@ -37,6 +45,7 @@ from src.evaluation.presentation.deps import (
     get_dashboard_summary_use_case,
     get_generate_proof_use_case,
     get_generate_weekly_review_use_case,
+    get_latest_milestone_proof_use_case,
     get_latest_weekly_review_use_case,
     get_submit_proof_use_case,
     get_weekly_analytics_use_case,
@@ -66,6 +75,22 @@ async def get_dashboard_summary(
     return await use_case.execute(user_id)
 
 
+@router.get(
+    "/milestones/{milestone_id}/proofs/latest",
+    response_model=LatestMilestoneProofResponseDTO | None,
+    status_code=status.HTTP_200_OK,
+)
+async def get_latest_milestone_proof(
+    milestone_id: UUID,
+    user_id: UUID = Depends(get_current_evaluation_learner_id),
+    use_case: GetLatestMilestoneProofUseCase = Depends(get_latest_milestone_proof_use_case),
+) -> LatestMilestoneProofResponseDTO | None:
+    try:
+        return await use_case.execute(user_id, milestone_id)
+    except EvaluationResourceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Milestone not found") from exc
+
+
 @router.post(
     "/milestones/{milestone_id}/proofs/generate-jobs",
     response_model=GenerateProofResponseDTO,
@@ -75,9 +100,14 @@ async def generate_milestone_proof(
     milestone_id: UUID,
     user_id: UUID = Depends(get_current_evaluation_learner_id),
     use_case: GenerateMilestoneProofUseCase = Depends(get_generate_proof_use_case),
-) -> GenerateProofResponseDTO:
+) -> GenerateProofResponseDTO | JSONResponse:
     try:
         return await use_case.execute(user_id, milestone_id)
+    except QuotaExceededError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content={"code": exc.code, "message": exc.message, "detail": exc.message},
+        )
     except EvaluationResourceNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Milestone not found") from exc
 
@@ -92,11 +122,31 @@ async def submit_milestone_proof(
     request: SubmitProofRequestDTO,
     user_id: UUID = Depends(get_current_evaluation_learner_id),
     use_case: SubmitMilestoneProofUseCase = Depends(get_submit_proof_use_case),
-) -> MilestoneProofResponseDTO:
+) -> MilestoneProofResponseDTO | JSONResponse:
     try:
         return await use_case.execute(user_id, milestone_id, proof_id, request)
+    except QuotaExceededError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content={"code": exc.code, "message": exc.message, "detail": exc.message},
+        )
+    except ProofAlreadyGradedError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={"code": exc.code, "detail": exc.message},
+        )
+    except ProveGradingUnavailableError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"code": exc.code, "detail": exc.message},
+        )
     except EvaluationResourceNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Proof not found") from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
 
 
 @router.post(
@@ -108,9 +158,14 @@ async def generate_weekly_review(
     request: GenerateWeeklyReviewRequestDTO,
     user_id: UUID = Depends(get_current_evaluation_learner_id),
     use_case: GenerateWeeklyReviewUseCase = Depends(get_generate_weekly_review_use_case),
-) -> WeeklyReviewResponseDTO:
+) -> WeeklyReviewResponseDTO | JSONResponse:
     try:
         return await use_case.execute(user_id, request)
+    except QuotaExceededError as exc:
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content={"code": exc.code, "message": exc.message, "detail": exc.message},
+        )
     except DuplicateWeeklyReviewConflictError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

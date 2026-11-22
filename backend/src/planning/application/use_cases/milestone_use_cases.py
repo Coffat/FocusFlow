@@ -71,7 +71,6 @@ from src.planning.application.services.validation_gate import (
     DEFAULT_MAX_RETRIES,
     ProposalValidationGateOrchestrator,
 )
-from src.planning.domain.events.planning_events import MilestoneApprovedEvent
 from src.planning.domain.exceptions.planning_exceptions import (
     InsufficientCapacityError,
     ProposalValidationGateError,
@@ -317,6 +316,11 @@ class ExecuteMilestoneGenerationUseCase:
             )
             validated_items: list[dict[str, Any]] = []
             last_violations = []
+
+            # End the pure read-only DB transaction before entering external LLM calls
+            # so connections are not held IDLE IN TRANSACTION during inference.
+            if hasattr(self._uow, "rollback"):
+                await self._uow.rollback()
 
             for attempt in range(1, max_attempts + 1):
                 remaining_seconds = pipeline_deadline - asyncio.get_running_loop().time()
@@ -1172,7 +1176,7 @@ class UpdateMilestonesUseCase:
 
 
 class ApproveMilestonesUseCase:
-    """Approve Level-1 Milestones of a Roadmap (enforcing versioned FIT_CAPACITY approval) and emit MilestoneApprovedEvent."""
+    """Approve Level-1 Milestones of a Roadmap (enforcing versioned FIT_CAPACITY approval)."""
 
     def __init__(
         self,
@@ -1392,19 +1396,6 @@ class ApproveMilestonesUseCase:
                         roadmap_id, current_milestones
                     )
                     await self._roadmap_repo.save(locked_roadmap)
-                    approved_count = sum(
-                        1 for m in saved_milestones if m.status != MilestoneStatus.PENDING
-                    )
-                    locked_roadmap.add_domain_event(
-                        MilestoneApprovedEvent(
-                            aggregate_id=locked_roadmap.id,
-                            user_id=user_id,
-                            roadmap_id=locked_roadmap.id,
-                            milestone_count=approved_count,
-                            occurred_at=effective_now,
-                        )
-                    )
-                    self._uow.collect_events_from(locked_roadmap)
                     await self._uow.commit()
                 return saved_milestones
 
@@ -1443,16 +1434,6 @@ class ApproveMilestonesUseCase:
             approved = await self._milestone_repo.approve_all_for_roadmap(roadmap_id, effective_now)
             if locked_roadmap.planning_metadata:
                 await self._roadmap_repo.save(locked_roadmap)
-            locked_roadmap.add_domain_event(
-                MilestoneApprovedEvent(
-                    aggregate_id=locked_roadmap.id,
-                    user_id=user_id,
-                    roadmap_id=locked_roadmap.id,
-                    milestone_count=len(approved),
-                    occurred_at=effective_now,
-                )
-            )
-            self._uow.collect_events_from(locked_roadmap)
             await self._uow.commit()
 
         return approved

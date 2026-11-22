@@ -100,6 +100,11 @@ def outcome_from_json(
 class MilestoneCheckpointStorePort(Protocol):
     """Port for persisting and retrieving milestone decomposition checkpoints."""
 
+    @property
+    def is_durable(self) -> bool:
+        """Return True only when checkpoints are persisted durably across job/process boundaries."""
+        ...
+
     async def get_checkpoint(self, key: str) -> dict[str, Any] | None:
         """Retrieve a cached checkpoint payload by its deterministic key, or None if not found."""
         ...
@@ -116,8 +121,14 @@ class MilestoneCheckpointStorePort(Protocol):
 class InMemoryMilestoneCheckpointStore:
     """Thread-safe / async-safe in-memory checkpoint store for tests and runtime caching."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, durable: bool = False) -> None:
         self._store: dict[str, dict[str, Any]] = {}
+        self._durable = bool(durable)
+
+    @property
+    def is_durable(self) -> bool:
+        """Ephemeral in-process memory is non-durable unless explicitly opted in by a test fake."""
+        return self._durable
 
     async def get_checkpoint(self, key: str) -> dict[str, Any] | None:
         payload = self._store.get(key)
@@ -192,10 +203,21 @@ class RedisMilestoneCheckpointStore:
         self._ttl_seconds = ttl_seconds
         self._memory_fallback = InMemoryMilestoneCheckpointStore()
         self._redis_failed = False
+        self._redis_degraded = False
+        self._last_save_durable = False
+        self._durable_hits = 0
         self._lock = asyncio.Lock()
+
+    @property
+    def is_durable(self) -> bool:
+        """Return True only when Redis is healthy and checkpoints were durably persisted/loaded."""
+        if self._redis_failed or self._redis_degraded:
+            return False
+        return self._last_save_durable or self._durable_hits > 0
 
     async def _get_client(self) -> Any | None:
         if self._redis_failed:
+            self._redis_degraded = True
             return None
         if self._client is not None:
             return self._client
@@ -203,6 +225,7 @@ class RedisMilestoneCheckpointStore:
             if self._client is not None:
                 return self._client
             if self._redis_failed:
+                self._redis_degraded = True
                 return None
             try:
                 import redis.asyncio as aioredis
@@ -220,6 +243,7 @@ class RedisMilestoneCheckpointStore:
                     exc,
                 )
                 self._redis_failed = True
+                self._redis_degraded = True
                 return None
 
     async def get_checkpoint(self, key: str) -> dict[str, Any] | None:
@@ -232,6 +256,7 @@ class RedisMilestoneCheckpointStore:
                 if raw is not None:
                     if isinstance(raw, bytes):
                         raw = raw.decode("utf-8")
+                    self._durable_hits += 1
                     return json.loads(raw)  # type: ignore[no-any-return]
                 return None
             except Exception as exc:
@@ -239,6 +264,7 @@ class RedisMilestoneCheckpointStore:
                     "redis_checkpoint_get_error: %s. Falling back to in-memory store.",
                     exc,
                 )
+                self._redis_degraded = True
         return await self._memory_fallback.get_checkpoint(key)
 
     async def set_checkpoint(
@@ -260,6 +286,7 @@ class RedisMilestoneCheckpointStore:
             try:
                 full_key = f"{self._key_prefix}{key}"
                 await client.set(full_key, json_str, ex=self._ttl_seconds)
+                self._last_save_durable = True
                 # Mirror in memory fallback so fallback has consistent state
                 await self._memory_fallback.set_checkpoint(key, serialized)
                 return
@@ -268,6 +295,11 @@ class RedisMilestoneCheckpointStore:
                     "redis_checkpoint_set_error: %s. Falling back to in-memory store.",
                     exc,
                 )
+                self._last_save_durable = False
+                self._redis_degraded = True
+        else:
+            self._last_save_durable = False
+            self._redis_degraded = True
         await self._memory_fallback.set_checkpoint(key, serialized)
 
     async def get_outcome(
@@ -300,6 +332,8 @@ class RedisMilestoneCheckpointStore:
             except Exception:
                 pass
         self._memory_fallback.clear()
+        self._last_save_durable = False
+        self._durable_hits = 0
 
     async def close(self) -> None:
         """Close the underlying Redis client connection if opened."""
