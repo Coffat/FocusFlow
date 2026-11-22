@@ -24,12 +24,15 @@ __all__ = [
     "ExecutionTodayTaskDTO",
     "ExistingScheduledTaskDTO",
     "ExistingTaskDependencyDTO",
+    "ExportStudySessionDTO",
+    "ExportTaskDTO",
     "ExternalCalendarBusyUpdatedEvent",
     "NotificationServicePort",
     "OverdueTaskAlertEvent",
     "ProposedDependencySyncItemDTO",
     "ProposedTaskSyncItemDTO",
     "ScheduleSyncResultDTO",
+    "SrlSessionFactsDTO",
     "StudyExecutionQueryPort",
     "StudyExecutionStatsDTO",
     "StudySessionAbandonedEvent",
@@ -523,6 +526,48 @@ class AnalyticsWeeklyQueryDTO:
     daily_breakdown: tuple[AnalyticsDailyMetricDTO, ...] = ()
 
 
+@dataclass(frozen=True, slots=True)
+class SrlSessionFactsDTO:
+    """Persisted execution facts used to aggregate Zimmerman SRL LearnerProfile."""
+
+    total_completed_sessions: int
+    completed_durations_mins: tuple[int, ...] = ()
+    estimation_ratios: tuple[float, ...] = ()
+    session_start_datetimes_utc: tuple[datetime, ...] = ()
+    weekly_completion_rate: float = 0.0
+
+
+@dataclass(frozen=True, slots=True)
+class ExportStudySessionDTO:
+    """Read-only StudySession snapshot exposed for GDPR data export (FE-MOCK-03)."""
+
+    id: UUID
+    roadmap_id: UUID
+    session_mode: str
+    status: str
+    planned_minutes: int
+    actual_minutes: int
+    started_at: datetime
+    ended_at: datetime | None
+    created_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class ExportTaskDTO:
+    """Read-only Task snapshot exposed for GDPR data export (FE-MOCK-03)."""
+
+    id: UUID
+    roadmap_id: UUID
+    milestone_id: UUID
+    title: str
+    description: str | None
+    estimated_minutes: int
+    scheduled_date: date | None
+    status: str
+    completed_at: datetime | None
+    created_at: datetime
+
+
 class ExecutionDashboardQueryPort(Protocol):
     async def get_today_queue(
         self,
@@ -567,6 +612,22 @@ class ExecutionDashboardQueryPort(Protocol):
         user_timezone: str | None = None,
         now: datetime | None = None,
     ) -> AnalyticsWeeklyQueryDTO: ...
+
+    async def get_srl_session_facts(self, user_id: UUID) -> SrlSessionFactsDTO: ...
+
+    async def get_user_export_sessions(
+        self,
+        user_id: UUID,
+        *,
+        limit: int = 500,
+    ) -> tuple[int, list[ExportStudySessionDTO]]: ...
+
+    async def get_user_export_tasks(
+        self,
+        user_id: UUID,
+        *,
+        limit: int = 1000,
+    ) -> tuple[int, list[ExportTaskDTO]]: ...
 
 
 _execution_dashboard_factory: object = None

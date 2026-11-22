@@ -1,18 +1,39 @@
+from unittest.mock import AsyncMock
+
+import pytest
 from fastapi.testclient import TestClient
 
+import src.main as main_mod
 from src.main import app
 
 client = TestClient(app)
 
 
-def test_health_check() -> None:
+def test_health_check_healthy(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(main_mod, "check_database_health", AsyncMock(return_value=True))
+    monkeypatch.setattr(main_mod, "check_redis_health", AsyncMock(return_value=True))
+
     response = client.get("/api/health")
     assert response.status_code == 200
     assert "X-Correlation-ID" in response.headers
-    data = response.json()
-    assert data["status"] == "healthy"
-    assert "FocusFlow" in data["service"]
-    assert "Hexagonal (Ports & Adapters)" in data["architecture"]
+    assert response.json() == {
+        "status": "healthy",
+        "database": "ok",
+        "redis": "ok",
+    }
+
+
+def test_health_check_degraded_returns_503(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(main_mod, "check_database_health", AsyncMock(return_value=False))
+    monkeypatch.setattr(main_mod, "check_redis_health", AsyncMock(return_value=True))
+
+    response = client.get("/api/health")
+    assert response.status_code == 503
+    assert response.json() == {
+        "status": "degraded",
+        "database": "error",
+        "redis": "ok",
+    }
 
 
 def test_bounded_contexts_mounted() -> None:

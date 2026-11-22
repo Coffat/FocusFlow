@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Literal, Protocol, runtime_checkable
@@ -292,6 +293,8 @@ class UserQueryPort(Protocol):
     async def get_user_by_id(self, user_id: UUID) -> UserSnapshotDTO | None: ...
 
     async def get_user_by_email(self, email: str) -> UserSnapshotDTO | None: ...
+
+    async def get_users_by_ids(self, user_ids: Sequence[UUID]) -> dict[UUID, UserSnapshotDTO]: ...
 
 
 @dataclass(frozen=True)

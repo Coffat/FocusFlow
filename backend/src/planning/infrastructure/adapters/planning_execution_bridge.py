@@ -6,7 +6,7 @@ from typing import Any
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid6 import uuid7
 
@@ -127,6 +127,67 @@ class PlanningExecutionBridgeAdapter(PlanningExecutionBridgePort):
             )
             for r in roadmaps
         ]
+
+    async def get_roadmaps_context_by_ids(
+        self,
+        roadmap_ids: Sequence[UUID],
+    ) -> dict[UUID, RoadmapExecutionContextDTO]:
+        if not roadmap_ids:
+            return {}
+        unique_ids = list(dict.fromkeys(roadmap_ids))
+        stmt = select(RoadmapORM).where(RoadmapORM.id.in_(unique_ids))
+        roadmaps = list((await self._session.execute(stmt)).scalars().all())
+        if not roadmaps:
+            return {}
+
+        rids = [r.id for r in roadmaps]
+        sched_stmt = select(OfficialScheduleORM.roadmap_id, OfficialScheduleORM.id).where(
+            OfficialScheduleORM.roadmap_id.in_(rids)
+        )
+        sched_map = {row[0]: row[1] for row in (await self._session.execute(sched_stmt)).all()}
+
+        return {
+            r.id: RoadmapExecutionContextDTO(
+                roadmap_id=r.id,
+                user_id=r.user_id,
+                title=r.title,
+                status=r.status,
+                target_date=r.target_date,
+                official_schedule_id=sched_map.get(r.id),
+                weekly_reschedule_budget=int(r.weekly_reschedule_budget),
+                weekly_reschedule_used=int(r.weekly_reschedule_used),
+                budget_week_start=r.budget_week_start,
+            )
+            for r in roadmaps
+        }
+
+    async def reset_weekly_reschedule_budgets(
+        self,
+        roadmap_ids: Sequence[UUID],
+        current_monday: date,
+        now: datetime,
+    ) -> int:
+        if not roadmap_ids:
+            return 0
+        unique_ids = list(dict.fromkeys(roadmap_ids))
+        stmt = select(RoadmapORM).where(
+            RoadmapORM.id.in_(unique_ids),
+            or_(
+                RoadmapORM.budget_week_start.is_(None),
+                RoadmapORM.budget_week_start < current_monday,
+            ),
+        )
+        roadmaps = list((await self._session.execute(stmt)).scalars().all())
+        reset_count = 0
+        for roadmap in roadmaps:
+            if roadmap.budget_week_start is None or roadmap.budget_week_start < current_monday:
+                roadmap.weekly_reschedule_used = 0
+                roadmap.budget_week_start = current_monday
+                roadmap.updated_at = now
+                reset_count += 1
+        if reset_count > 0:
+            await self._session.flush()
+        return reset_count
 
     async def get_milestone_sequences(
         self,

@@ -1,4 +1,4 @@
-from collections.abc import MutableMapping
+from collections.abc import Mapping, MutableMapping
 from contextvars import ContextVar
 from typing import Any
 
@@ -19,18 +19,51 @@ SENSITIVE_KEYS = frozenset(
         "gemini_api_key",
         "oauth_refresh_token_enc",
         "note_content",
+        "email",
+        "to_email",
+        "otp_code",
+        "authorization",
+        "cookie",
+        "fernet_key",
+        "calendar_encryption_key",
+        "google_client_secret",
+        "payment_webhook_secret",
     }
 )
+
+_MAX_REDACTION_DEPTH = 16
+
+
+def _redact_value(value: Any, *, _depth: int = 0) -> Any:
+    """Recursively redact sensitive keys in nested mappings, lists, and tuples."""
+    if _depth >= _MAX_REDACTION_DEPTH:
+        return "[REDACTED_DEPTH_LIMIT]"
+    if isinstance(value, Mapping):
+        return {
+            k: (
+                "[REDACTED]"
+                if isinstance(k, str) and k.lower() in SENSITIVE_KEYS
+                else _redact_value(v, _depth=_depth + 1)
+            )
+            for k, v in value.items()
+        }
+    if isinstance(value, list):
+        return [_redact_value(item, _depth=_depth + 1) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_redact_value(item, _depth=_depth + 1) for item in value)
+    return value
 
 
 def redact_pii_processor(
     logger: Any, method_name: str, event_dict: MutableMapping[str, Any]
 ) -> MutableMapping[str, Any]:
-    """Redact PII and sensitive secrets from structured logs."""
+    """Redact PII and sensitive secrets recursively from structured logs."""
     event_dict["correlation_id"] = correlation_id_ctx.get()
     for key in list(event_dict.keys()):
-        if key.lower() in SENSITIVE_KEYS:
+        if isinstance(key, str) and key.lower() in SENSITIVE_KEYS:
             event_dict[key] = "[REDACTED]"
+        else:
+            event_dict[key] = _redact_value(event_dict[key])
     return event_dict
 
 

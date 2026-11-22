@@ -1,15 +1,24 @@
-import json
+import asyncio
+import contextlib
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
-from typing import Any
 
+import redis.asyncio as aioredis
 import structlog
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
 from uuid6 import uuid7
 
 from src.account.presentation.auth_router import router as auth_router
-from src.account.presentation.calendar_router import router as calendar_router
+from src.account.presentation.billing_router import router as billing_router
+from src.account.presentation.calendar_router import (
+    feeds_router,
+)
+from src.account.presentation.calendar_router import (
+    router as calendar_router,
+)
 from src.account.presentation.routers import (
     availabilities_router,
 )
@@ -37,14 +46,60 @@ from src.planning.presentation.routers import (
     router as planning_router,
 )
 from src.shared_kernel.config import get_settings
+from src.shared_kernel.infrastructure.database.session import engine
+from src.shared_kernel.infrastructure.external_ai.circuit_breaker import (
+    AIServiceUnavailableError,
+)
 from src.shared_kernel.infrastructure.external_ai.litellm_adapter import (
     CobhubCapabilityProbeResult,
     probe_cobhub_capabilities,
+)
+from src.shared_kernel.infrastructure.security.csrf_middleware import (
+    CSRFProtectionMiddleware,
+)
+from src.shared_kernel.infrastructure.security.rate_limiter import (
+    RateLimiterUnavailableError,
+    RateLimitExceededError,
 )
 from src.shared_kernel.infrastructure.worker.broker import broker
 from src.shared_kernel.logging import configure_logging, correlation_id_ctx
 
 _logger = structlog.get_logger(__name__)
+
+_HEALTH_CHECK_TIMEOUT_SECONDS = 2.0
+
+
+async def check_database_health(timeout_seconds: float = _HEALTH_CHECK_TIMEOUT_SECONDS) -> bool:
+    """Perform a lightweight SELECT 1 connectivity check against PostgreSQL."""
+
+    async def _ping_db() -> None:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+
+    try:
+        await asyncio.wait_for(_ping_db(), timeout=timeout_seconds)
+        return True
+    except Exception:
+        return False
+
+
+async def check_redis_health(timeout_seconds: float = _HEALTH_CHECK_TIMEOUT_SECONDS) -> bool:
+    """Perform a lightweight PING connectivity check against Redis."""
+    settings = get_settings()
+    client = aioredis.from_url(
+        settings.redis_url,
+        decode_responses=True,
+        socket_connect_timeout=timeout_seconds,
+        socket_timeout=timeout_seconds,
+    )
+    try:
+        res = await asyncio.wait_for(client.ping(), timeout=timeout_seconds)
+        return bool(res)
+    except Exception:
+        return False
+    finally:
+        with contextlib.suppress(Exception):
+            await client.aclose()
 
 
 async def run_startup_ai_probe(app: FastAPI | None = None) -> CobhubCapabilityProbeResult | None:
@@ -75,6 +130,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     yield
     if not broker.is_worker_process:
         await broker.shutdown()
+    await engine.dispose()
 
 
 def create_app() -> FastAPI:
@@ -91,22 +147,29 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    if settings.backend_cors_origins.startswith("["):
-        origins = json.loads(settings.backend_cors_origins)
-    else:
-        origins = [
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-            "http://localhost:4200",
-            "http://127.0.0.1:4200",
-        ]
+    origins = settings.cors_origins
+
+    # Middleware stack (outermost to innermost):
+    # correlation_id_middleware -> CORSMiddleware -> CSRFProtectionMiddleware -> Router
+    app.add_middleware(CSRFProtectionMiddleware)
 
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+        allow_headers=[
+            "Accept",
+            "Accept-Language",
+            "Authorization",
+            "Cache-Control",
+            "Content-Language",
+            "Content-Type",
+            "Last-Event-ID",
+            "X-Correlation-ID",
+            "X-Requested-With",
+        ],
+        expose_headers=["X-Correlation-ID", "Content-Disposition"],
     )
 
     @app.middleware("http")
@@ -122,10 +185,52 @@ def create_app() -> FastAPI:
         finally:
             correlation_id_ctx.reset(token)
 
+    @app.exception_handler(RateLimitExceededError)
+    async def rate_limit_exceeded_handler(
+        _request: Request, exc: RateLimitExceededError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content={
+                "code": "RATE_LIMIT_EXCEEDED",
+                "detail": "Quá nhiều yêu cầu. Vui lòng thử lại sau.",
+            },
+            headers=exc.decision.to_headers(),
+        )
+
+    @app.exception_handler(RateLimiterUnavailableError)
+    async def rate_limiter_unavailable_handler(
+        _request: Request, _exc: RateLimiterUnavailableError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "code": "RATE_LIMITER_UNAVAILABLE",
+                "detail": "Dịch vụ kiểm soát lưu lượng tạm thời không khả dụng.",
+            },
+        )
+
+    @app.exception_handler(AIServiceUnavailableError)
+    async def ai_service_unavailable_handler(
+        _request: Request, exc: AIServiceUnavailableError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "code": "AI_SERVICE_UNAVAILABLE",
+                "detail": (
+                    str(exc)
+                    or "Dịch vụ AI đang tạm bảo trì. Vui lòng thử lại hoặc lập kế hoạch thủ công."
+                ),
+            },
+        )
+
     app.include_router(account_router)
     app.include_router(availabilities_router)
     app.include_router(auth_router)
+    app.include_router(billing_router)
     app.include_router(calendar_router)
+    app.include_router(feeds_router)
     app.include_router(webhook_router)
     app.include_router(planning_router)
     app.include_router(roadmaps_router)
@@ -136,43 +241,21 @@ def create_app() -> FastAPI:
     app.include_router(analytics_router)
 
     @app.get("/api/health", tags=["System"])
-    async def health_check(probe_ai: bool = False) -> dict[str, Any]:
-        current_settings = get_settings()
-        readiness = (
-            current_settings.staging_readiness_summary()
-            if hasattr(current_settings, "staging_readiness_summary")
-            else settings.staging_readiness_summary()
+    async def health_check() -> JSONResponse:
+        db_ok, redis_ok = await asyncio.gather(
+            check_database_health(),
+            check_redis_health(),
         )
-        payload: dict[str, Any] = {
-            "status": "healthy",
-            "service": "FocusFlow Backend API",
-            "version": "2.0.0",
-            "architecture": "Context-First Modular Monolith + Hexagonal (Ports & Adapters)",
-            "environment": getattr(current_settings, "environment", settings.environment),
-            "debug": getattr(current_settings, "debug", settings.debug),
-            "readiness": readiness,
+        all_ok = db_ok and redis_ok
+        payload = {
+            "status": "healthy" if all_ok else "degraded",
+            "database": "ok" if db_ok else "error",
+            "redis": "ok" if redis_ok else "error",
         }
-        if probe_ai:
-            try:
-                probe_res = await probe_cobhub_capabilities(get_settings())
-                app.state.ai_gateway_probe = probe_res
-                payload["ai_gateway"] = probe_res.to_dict()
-            except Exception as exc:  # pragma: no cover - defensive health guard
-                payload["ai_gateway"] = {
-                    "status": "degraded",
-                    "probe_succeeded": False,
-                    "error": f"{type(exc).__name__}: {str(exc)[:200]}",
-                }
-        else:
-            cached_probe = getattr(app.state, "ai_gateway_probe", None)
-            if cached_probe is not None and hasattr(cached_probe, "to_dict"):
-                payload["ai_gateway"] = cached_probe.to_dict()
-            else:
-                payload["ai_gateway"] = {
-                    "status": "not_probed",
-                    "configured": bool((get_settings().llm_base_url or "").strip()),
-                }
-        return payload
+        return JSONResponse(
+            status_code=status.HTTP_200_OK if all_ok else status.HTTP_503_SERVICE_UNAVAILABLE,
+            content=payload,
+        )
 
     return app
 

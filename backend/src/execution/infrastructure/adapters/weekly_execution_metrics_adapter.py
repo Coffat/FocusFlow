@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, date, datetime, time, timedelta
 from uuid import UUID
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.execution.infrastructure.orm.session_orm import StudySessionORM
@@ -13,6 +13,7 @@ from src.execution.public_api import (
     WeeklyExecutionMetricsQueryPort,
     register_weekly_execution_metrics_factory,
 )
+from src.planning.public_api import get_latest_applied_proposal_data
 
 _TASK_TYPES: tuple[str, ...] = ("THEORY", "PRACTICE", "REVIEW", "PROJECT")
 
@@ -27,26 +28,14 @@ class WeeklyExecutionMetricsAdapter(WeeklyExecutionMetricsQueryPort):
         self,
         roadmap_id: UUID,
     ) -> tuple[dict[str, str], dict[str, str]]:
-        prop_stmt = text(
-            """
-            SELECT proposal_data
-            FROM schedule_proposals
-            WHERE roadmap_id = :r_id
-              AND status IN ('APPLIED', 'DRAFT')
-            ORDER BY
-                CASE WHEN status = 'APPLIED' THEN 0 ELSE 1 END,
-                applied_at DESC NULLS LAST,
-                updated_at DESC
-            LIMIT 3
-            """
+        proposals = await get_latest_applied_proposal_data(
+            self._session,
+            roadmap_id,
+            limit=3,
         )
-        rows = (await self._session.execute(prop_stmt, {"r_id": roadmap_id})).fetchall()
         by_id: dict[str, str] = {}
         by_title: dict[str, str] = {}
-        for row in rows:
-            proposal_data = row[0]
-            if not isinstance(proposal_data, dict):
-                continue
+        for proposal_data in proposals:
             raw_tasks = proposal_data.get("tasks")
             if not isinstance(raw_tasks, list):
                 continue

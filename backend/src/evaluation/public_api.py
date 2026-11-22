@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Protocol
 from uuid import UUID
 
@@ -10,9 +10,13 @@ __all__ = [
     "DominoShiftRequestedEvent",
     "EvaluationMetricsDTO",
     "EvaluationMetricsQueryPort",
+    "PauseRecordDTO",
+    "PauseRecordPort",
     "ScheduleChangeLogEntryDTO",
     "ScheduleChangeLogPort",
+    "create_pause_record_port",
     "create_schedule_change_log_port",
+    "register_pause_record_factory",
     "register_schedule_change_log_factory",
 ]
 
@@ -111,4 +115,61 @@ def create_schedule_change_log_port(session: Any) -> ScheduleChangeLogPort:
 
         importlib.import_module("src.evaluation.infrastructure.adapters")
     res: ScheduleChangeLogPort = _schedule_change_log_factory(session)
+    return res
+
+
+@dataclass(frozen=True, slots=True)
+class PauseRecordDTO:
+    """Immutable DTO representing a persisted `pause_records` lifecycle row."""
+
+    id: UUID
+    roadmap_id: UUID
+    pause_start_date: date
+    pause_end_date: date
+    shifted_days: int
+    reason: str | None
+    status: str
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class PauseRecordPort(Protocol):
+    """Cross-context port exposed by Evaluation to Planning for atomic pause_records lifecycle."""
+
+    async def get_active_pause(self, roadmap_id: UUID) -> PauseRecordDTO | None: ...
+
+    async def create_active_pause(
+        self,
+        *,
+        roadmap_id: UUID,
+        pause_start_date: date,
+        pause_end_date: date | None = None,
+        reason: str | None = None,
+        now: datetime | None = None,
+    ) -> PauseRecordDTO: ...
+
+    async def complete_active_pause(
+        self,
+        *,
+        roadmap_id: UUID,
+        actual_end_date: date,
+        shifted_days: int | None = None,
+        now: datetime | None = None,
+    ) -> PauseRecordDTO | None: ...
+
+
+_pause_record_factory: Any = None
+
+
+def register_pause_record_factory(factory: Any) -> None:
+    global _pause_record_factory
+    _pause_record_factory = factory
+
+
+def create_pause_record_port(session: Any) -> PauseRecordPort:
+    if _pause_record_factory is None:
+        import importlib
+
+        importlib.import_module("src.evaluation.infrastructure.adapters")
+    res: PauseRecordPort = _pause_record_factory(session)
     return res
