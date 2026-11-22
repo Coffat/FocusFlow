@@ -6,10 +6,6 @@ export const API_ENDPOINTS = {
     LOGOUT: '/api/v1/auth/logout',
     ME: '/api/v1/auth/me',
   },
-  BILLING: {
-    CHECKOUT: '/api/v1/billing/checkout',
-    WEBHOOK: '/api/v1/billing/webhook',
-  },
   ROADMAPS: {
     BASE: '/api/v1/roadmaps',
     DETAIL: (id: string) => `/api/v1/roadmaps/${id}`,
@@ -25,10 +21,6 @@ export const API_ENDPOINTS = {
     PROPOSAL_APPLY: (roadmapId: string, proposalId: string) =>
       `/api/v1/roadmaps/${roadmapId}/proposals/${proposalId}/apply`,
     JOB_STREAM: (jobId: string) => `/api/v1/roadmaps/jobs/${jobId}/stream`,
-    GENERATE_JOB: '/api/v1/roadmaps/generate-jobs',
-    STREAM_JOB: (jobId: string) => `/api/v1/roadmaps/jobs/${jobId}/stream`,
-    ACTIVE: '/api/v1/roadmaps/active',
-    APPLY: (id: string) => `/api/v1/roadmaps/${id}/apply`,
     PAUSE: (id: string) => `/api/v1/roadmaps/${id}/pause`,
     RESUME: (id: string) => `/api/v1/roadmaps/${id}/resume`,
     OVERDUE_REVISE: (id: string) => `/api/v1/roadmaps/${id}/overdue-revise-jobs`,
@@ -72,6 +64,9 @@ export const API_ENDPOINTS = {
     GOOGLE_CALLBACK: '/api/v1/account/calendar/google/callback',
     STATUS: '/api/v1/account/calendar/status',
     DISCONNECT: '/api/v1/account/calendar/disconnect',
+    WEBCAL_STATUS: '/api/v1/account/calendar/webcal',
+    WEBCAL_ROTATE: '/api/v1/account/calendar/webcal/rotate',
+    WEBCAL_REVOKE: '/api/v1/account/calendar/webcal',
   },
   ANALYTICS: {
     SUMMARY: '/api/v1/analytics/summary',
@@ -81,15 +76,33 @@ export const API_ENDPOINTS = {
     DASHBOARD_SUMMARY: '/api/v1/evaluation/dashboard-summary',
     WEEKLY_REVIEWS_LATEST: '/api/v1/evaluation/weekly-reviews/latest',
     WEEKLY_REVIEWS_GENERATE: '/api/v1/evaluation/weekly-reviews/generate-jobs',
+    MILESTONE_PROOF_LATEST: (milestoneId: string) =>
+      `/api/v1/evaluation/milestones/${milestoneId}/proofs/latest`,
+    MILESTONE_PROOF_GENERATE: (milestoneId: string) =>
+      `/api/v1/evaluation/milestones/${milestoneId}/proofs/generate-jobs`,
+    MILESTONE_PROOF_SUBMIT: (milestoneId: string, proofId: string) =>
+      `/api/v1/evaluation/milestones/${milestoneId}/proofs/${proofId}/submit`,
   },
   SETTINGS: {
-    PROFILE: '/api/v1/users/profile',
+    PROFILE: '/api/v1/account/profile',
     AVAILABILITY: '/api/v1/availabilities/me',
-    QUOTA: '/api/v1/users/quota',
+    QUOTA: '/api/v1/account/quota',
+    ADMIN_STATUS: '/api/v1/account/admin/status',
+    EXPORT: '/api/v1/account/export',
+    CHANGE_PASSWORD: '/api/v1/account/change-password',
+    LEARNER_MEMORY: '/api/v1/account/learner-memory',
+    LEARNER_MEMORY_DETAIL: (id: string) => `/api/v1/account/learner-memory/${id}`,
+    LEARNER_MEMORY_RESET: '/api/v1/account/learner-memory/reset',
   },
-  ADMIN: {
-    USERS: '/api/v1/admin/users',
-    USER_QUOTA: (userId: string) => `/api/v1/admin/users/${userId}/quota`,
-    AI_MONITORING: '/api/v1/admin/monitoring/ai-telemetry',
+  NOTIFICATIONS: {
+    LIST: '/api/v1/account/notifications',
+    MARK_READ: (id: string) => `/api/v1/account/notifications/${id}/read`,
+    READ_ALL: '/api/v1/account/notifications/read-all',
+  },
+  ACCOUNT_BILLING: {
+    CONFIG: '/api/v1/account/billing/config',
+    CHECKOUT: '/api/v1/account/billing/checkout',
+    TRANSACTIONS: '/api/v1/account/billing/transactions',
+    MOCK_CONFIRM: (id: string) => `/api/v1/account/billing/mock-confirm/${id}`,
   },
 } as const;

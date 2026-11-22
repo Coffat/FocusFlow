@@ -1,12 +1,22 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   computed,
   inject,
   signal,
 } from '@angular/core';
+import { DatePipe, DecimalPipe } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { AuthService } from '../../core/services/auth.service';
+import {
+  BillingConfigResponseDTO,
+  BillingService,
+  BillingWebhookResponseDTO,
+  CheckoutResponseDTO,
+} from '../../core/services/billing.service';
 import { FloatingNavbarComponent } from '../../shared/components/floating-navbar/floating-navbar.component';
 import { LandingFooterComponent } from '../../shared/components/landing-footer/landing-footer.component';
 
@@ -31,44 +41,123 @@ export interface PricingFaqItem {
   answer: string;
 }
 
+const DEFAULT_BILLING_CONFIG: BillingConfigResponseDTO = {
+  release_mode: 'FREE_BETA',
+  checkout_enabled: false,
+  mock_confirm_enabled: false,
+  provider: 'none',
+  status_message: 'FocusFlow đang trong giai đoạn Free Beta — gói Premium sẽ sớm mở bán.',
+  plans: [
+    {
+      plan_code: 'PREMIUM_MONTHLY',
+      name: 'Premium Hàng Tháng',
+      amount_vnd: 99000,
+      currency: 'VND',
+      billing_cycle: 'MONTHLY',
+      ai_monthly_limit: 300,
+      max_active_roadmaps: 15,
+    },
+    {
+      plan_code: 'PREMIUM_YEARLY',
+      name: 'Premium Hàng Năm',
+      amount_vnd: 990000,
+      currency: 'VND',
+      billing_cycle: 'YEARLY',
+      ai_monthly_limit: 300,
+      max_active_roadmaps: 15,
+    },
+  ],
+};
+
 @Component({
   selector: 'app-pricing',
   standalone: true,
-  imports: [FloatingNavbarComponent, LandingFooterComponent],
+  imports: [DatePipe, DecimalPipe, FloatingNavbarComponent, LandingFooterComponent],
   templateUrl: './pricing.component.html',
   styleUrl: './pricing.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class PricingComponent {
   protected readonly authService = inject(AuthService);
+  private readonly billingService = inject(BillingService);
   private readonly router = inject(Router);
+  private readonly destroyRef = inject(DestroyRef);
+
+  // Server-owned Billing Release Config (P1C)
+  readonly billingConfig = signal<BillingConfigResponseDTO>(DEFAULT_BILLING_CONFIG);
+  readonly releaseMode = computed(() => this.billingConfig().release_mode);
+  readonly checkoutEnabled = computed(() => this.billingConfig().checkout_enabled);
+  readonly mockConfirmEnabled = computed(() => this.billingConfig().mock_confirm_enabled);
+  readonly billingStatusMessage = computed(() => this.billingConfig().status_message);
+
+  readonly monthlyPlan = computed(
+    () => this.billingConfig().plans.find((p) => p.plan_code === 'PREMIUM_MONTHLY') ?? null,
+  );
+  readonly yearlyPlan = computed(
+    () => this.billingConfig().plans.find((p) => p.plan_code === 'PREMIUM_YEARLY') ?? null,
+  );
+  readonly premiumAiMonthlyLimit = computed(
+    () => this.monthlyPlan()?.ai_monthly_limit ?? this.yearlyPlan()?.ai_monthly_limit ?? 300,
+  );
+  readonly premiumMaxActiveRoadmaps = computed(
+    () => this.monthlyPlan()?.max_active_roadmaps ?? this.yearlyPlan()?.max_active_roadmaps ?? 15,
+  );
 
   // Billing Cycle Signal
   readonly billingCycle = signal<BillingCycle>('monthly');
 
-  // Computed Pricing Labels
-  readonly premiumMonthlyPrice = computed(() =>
-    this.billingCycle() === 'monthly' ? '199.000đ' : '165.000đ'
-  );
+  // Checkout Modal State (FE-API-05)
+  readonly checkoutModalOpen = signal<boolean>(false);
+  readonly checkoutLoading = signal<boolean>(false);
+  readonly checkoutError = signal<string | null>(null);
+  readonly checkoutData = signal<CheckoutResponseDTO | null>(null);
+  readonly mockConfirmLoading = signal<boolean>(false);
+  readonly mockConfirmSuccess = signal<BillingWebhookResponseDTO | null>(null);
 
-  readonly premiumBillingNote = computed(() =>
-    this.billingCycle() === 'monthly'
+  constructor() {
+    if (!this.authService.isAuthenticated()) {
+      this.authService.checkSession().pipe(takeUntilDestroyed(this.destroyRef)).subscribe();
+    }
+    this.billingService
+      .getBillingConfig()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (config) => this.billingConfig.set(config),
+        error: () => {
+          // Fail-closed to honest FREE_BETA defaults if billing config endpoint is unreachable.
+        },
+      });
+  }
+
+  // Computed Pricing Labels (server-owned amounts with SRS v1.3 fallback defaults)
+  readonly premiumMonthlyPrice = computed(() => {
+    const monthlyAmount = this.monthlyPlan()?.amount_vnd ?? 99000;
+    const yearlyAmount = this.yearlyPlan()?.amount_vnd ?? 990000;
+    if (this.billingCycle() === 'monthly') {
+      return this.formatVnd(monthlyAmount);
+    }
+    return this.formatVnd(Math.round(yearlyAmount / 12));
+  });
+
+  readonly premiumBillingNote = computed(() => {
+    const yearlyAmount = this.yearlyPlan()?.amount_vnd ?? 990000;
+    return this.billingCycle() === 'monthly'
       ? '/ tháng (thanh toán từng tháng)'
-      : '/ tháng (thanh toán 1.990.000đ / năm)'
-  );
+      : `/ tháng (thanh toán ${this.formatVnd(yearlyAmount)} / năm)`;
+  });
 
   // Mini-FAQ accordion state
   readonly faqOpenIndex = signal<number | null>(null);
 
-  // 4 Feature Categories in Capability Matrix (SRS v1.3)
-  readonly capabilityMatrix: readonly MatrixCategory[] = [
+  // 4 Feature Categories in Capability Matrix (SRS v1.3 / OS-02)
+  readonly capabilityMatrix = computed<readonly MatrixCategory[]>(() => [
     {
       title: 'Không gian Học tập cốt lõi (Core Experience)',
       rows: [
         {
           name: 'Số lộ trình học tập đồng thời (ACTIVE)',
           freeValue: 'Tối đa 3 lộ trình',
-          premiumValue: 'Không giới hạn',
+          premiumValue: `Tối đa ${this.premiumMaxActiveRoadmaps()} lộ trình ACTIVE`,
         },
         {
           name: 'Study Workspace Studio & Pomodoro Zen',
@@ -93,7 +182,7 @@ export class PricingComponent {
         {
           name: 'Hạn ngạch AI phân rã & cố vấn hàng tháng',
           freeValue: '30 lượt / tháng',
-          premiumValue: '300 lượt / tháng',
+          premiumValue: `${this.premiumAiMonthlyLimit()} lượt / tháng`,
         },
         {
           name: 'Mô hình suy luận & 2-Stage SSE Streaming',
@@ -154,33 +243,33 @@ export class PricingComponent {
         {
           name: 'Kênh giải đáp kỹ thuật & hỗ trợ học thuật',
           freeValue: 'Cộng đồng Discord sinh viên',
-          premiumValue: 'Hỗ trợ ưu tiên 1-on-1 trong 4h',
+          premiumValue: 'Hỗ trợ ưu tiên qua email & tài liệu chuyên sâu',
         },
       ],
     },
-  ];
+  ]);
 
   // Mini-FAQ Data
   readonly miniFaqItems: readonly PricingFaqItem[] = [
     {
-      question: 'Tôi có thể chuyển đổi giữa gói tháng và gói năm bất kỳ lúc nào không?',
+      question: 'FocusFlow hiện đang ở giai đoạn Free Beta nghĩa là gì?',
       answer:
-        'Hoàn toàn có thể. Khi bạn nâng cấp từ gói tháng lên gói năm, số tiền dư của tháng hiện tại sẽ được tự động quy đổi thành số ngày tương ứng trong gói năm. Bạn cũng có thể quay lại gói tháng khi chu kỳ năm kết thúc.',
+        'Trong giai đoạn Free Beta, toàn bộ tính năng cốt lõi của gói Miễn Phí (3 lộ trình ACTIVE, 30 lượt AI / tháng, Study Workspace, Domino Shift và xuất dữ liệu JSON) hoạt động hoàn toàn miễn phí. Cổng thanh toán gói Premium sẽ được mở khi hoàn tất giai đoạn thử nghiệm.',
     },
     {
-      question: 'Điều gì xảy ra khi chu kỳ sử dụng kết thúc hoặc tôi muốn hủy gói Premium?',
+      question: 'Tôi có thể chuyển đổi giữa gói tháng và gói năm khi Premium mở bán không?',
       answer:
-        'Bạn có thể hủy đăng ký bất kỳ lúc nào chỉ với một cú nhấp chuột trong Cài đặt tài khoản. Tài khoản của bạn vẫn giữ trọn vẹn quyền lợi Premium cho đến ngày cuối cùng của chu kỳ đã thanh toán, sau đó tự động chuyển về Gói Miễn Phí mà không mất mát bất kỳ dữ liệu nào.',
+        'Có. Khi cổng thanh toán gói Premium được kích hoạt, bạn có thể lựa chọn thanh toán linh hoạt theo tháng (99.000đ / tháng) hoặc theo năm (990.000đ / năm — tiết kiệm 2 tháng) và không bị ràng buộc gia hạn ẩn.',
     },
     {
-      question: 'FocusFlow có chính sách ưu đãi cho sinh viên và giảng viên không?',
+      question: 'Dữ liệu học tập của tôi có bị mất khi thay đổi gói sử dụng không?',
       answer:
-        'Có. Sinh viên và giảng viên đăng ký bằng email có đuôi trường học (.edu.vn hoặc tương đương) sẽ nhận được ưu đãi giảm thêm 35% trên mức giá niêm yết cho gói Premium sau khi xác thực danh tính học thuật.',
+        'Không. Mọi lộ trình, ghi chú phiên học, lịch sử Pomodoro và dữ liệu tiến độ luôn thuộc quyền sở hữu của bạn. Bạn cũng có thể tải về toàn bộ bản sao lưu JSON bất kỳ lúc nào trong mục Cài đặt → Tài khoản & Bảo mật.',
     },
     {
-      question: 'Chính sách hoàn tiền 14 ngày hoạt động như thế nào?',
+      question: 'Hạn ngạch AI hàng tháng và giới hạn lộ trình ACTIVE được tính như thế nào?',
       answer:
-        'Nếu trong 14 ngày đầu tiên sử dụng FocusFlow Premium bạn cảm thấy phương pháp điều phối thích ứng không phù hợp với nhịp học tập của mình, chỉ cần nhấn nút "Yêu cầu hoàn tiền" trong trang cài đặt hoặc gửi email cho chúng tôi. 100% học phí sẽ được hoàn trả nguyên vẹn không cần giải trình lý do.',
+        'Gói Miễn Phí cung cấp 30 lượt gọi AI / tháng và tối đa 3 lộ trình ACTIVE đồng thời. Gói Premium nâng lên 300 lượt gọi AI / tháng và tối đa 15 lộ trình ACTIVE (theo chuẩn SRS v1.3). Các thao tác dời lịch tất định Domino Shift không tiêu tốn hạn ngạch AI.',
     },
   ];
 
@@ -201,16 +290,103 @@ export class PricingComponent {
 
     if (plan === 'free') {
       if (isAuthed) {
-        this.router.navigate(['/dashboard']);
+        void this.router.navigate(['/dashboard']);
       } else {
-        this.router.navigate(['/sign-up']);
+        void this.router.navigate(['/sign-up']);
       }
+      return;
+    }
+
+    if (!this.checkoutEnabled()) {
+      return;
+    }
+
+    if (isAuthed) {
+      this.openPremiumCheckout();
     } else {
-      if (isAuthed) {
-        this.router.navigate(['/settings']);
-      } else {
-        this.router.navigate(['/sign-up'], { queryParams: { plan: 'premium' } });
+      void this.router.navigate(['/sign-up'], { queryParams: { plan: 'premium' } });
+    }
+  }
+
+  openPremiumCheckout(): void {
+    if (!this.checkoutEnabled()) {
+      return;
+    }
+
+    const planCode = this.billingCycle() === 'annual' ? 'PREMIUM_YEARLY' : 'PREMIUM_MONTHLY';
+    this.checkoutModalOpen.set(true);
+    this.checkoutLoading.set(true);
+    this.checkoutError.set(null);
+    this.checkoutData.set(null);
+    this.mockConfirmSuccess.set(null);
+
+    this.billingService
+      .createCheckout(planCode)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (res) => {
+          this.checkoutData.set(res);
+          this.checkoutLoading.set(false);
+        },
+        error: (err: unknown) => {
+          this.checkoutLoading.set(false);
+          this.checkoutData.set(null);
+          this.checkoutError.set(this.extractCheckoutError(err));
+        },
+      });
+  }
+
+  confirmMockPayment(): void {
+    const current = this.checkoutData();
+    if (
+      !current ||
+      !current.is_mock_provider ||
+      !this.mockConfirmEnabled() ||
+      this.mockConfirmLoading()
+    ) {
+      return;
+    }
+
+    this.mockConfirmLoading.set(true);
+    this.checkoutError.set(null);
+
+    this.billingService
+      .confirmMockCheckout(current.transaction_id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (settlement) => {
+          this.mockConfirmLoading.set(false);
+          this.mockConfirmSuccess.set(settlement);
+          this.checkoutData.set({ ...current, status: settlement.status });
+          this.authService.checkSession().pipe(takeUntilDestroyed(this.destroyRef)).subscribe();
+        },
+        error: (err: unknown) => {
+          this.mockConfirmLoading.set(false);
+          this.checkoutError.set(this.extractCheckoutError(err));
+        },
+      });
+  }
+
+  closeCheckoutModal(): void {
+    this.checkoutModalOpen.set(false);
+  }
+
+  private formatVnd(amount: number): string {
+    return `${Math.round(amount)
+      .toString()
+      .replace(/\B(?=(\d{3})+(?!\d))/g, '.')}đ`;
+  }
+
+  private extractCheckoutError(err: unknown): string {
+    if (err instanceof HttpErrorResponse) {
+      const payload = err.error as { detail?: unknown; message?: unknown } | null;
+      if (typeof payload?.detail === 'string' && payload.detail.trim()) {
+        return payload.detail;
+      }
+      if (typeof payload?.message === 'string' && payload.message.trim()) {
+        return payload.message;
       }
     }
+    return 'Cổng thanh toán trực tuyến hiện chưa sẵn sàng. Vui lòng thử lại sau.';
   }
 }

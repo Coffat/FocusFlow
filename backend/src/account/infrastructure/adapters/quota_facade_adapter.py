@@ -47,8 +47,11 @@ _ACTION_TYPE_ALIASES: dict[str, str] = {
     "PROPOSAL_GEN": "SCHEDULE_PROPOSAL",
     "SCHEDULE_GEN": "SCHEDULE_PROPOSAL",
     "WEEKLY_REVIEW": "AI_REVIEW_WEEKLY",
+    "WEEKLY_REVIEW_SRL": "AI_REVIEW_WEEKLY",
     "CRITIC_REVIEW": "AI_REVIEW_WEEKLY",
     "MILESTONE_REVIEW": "AI_REVIEW_MILESTONE",
+    "PROVE_MODE_GENERATION": "AI_REVIEW_MILESTONE",
+    "PROVE_MODE_ASSESSMENT": "AI_REVIEW_MILESTONE",
     "VALIDATION_JUDGE": "AI_REVIEW_MILESTONE",
     "CLARIFICATION": "GOAL_CLARIFICATION",
 }
@@ -441,6 +444,7 @@ class QuotaFacadeAdapter(QuotaFacadePort):
                 AIQuotaReservationORM.status == "RESERVED",
                 AIQuotaReservationORM.expires_at <= current_time,
             )
+            .order_by(AIQuotaReservationORM.quota_id.asc(), AIQuotaReservationORM.id.asc())
             .with_for_update(skip_locked=True)
         )
         stale_rows = list((await self._session.execute(stmt)).scalars().all())
