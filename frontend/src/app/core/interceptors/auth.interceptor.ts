@@ -1,11 +1,17 @@
-import { HttpInterceptorFn, HttpErrorResponse } from '@angular/common/http';
+import { HttpContextToken, HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
-import { BehaviorSubject, catchError, filter, switchMap, take, throwError } from 'rxjs';
+import { Subject, catchError, finalize, switchMap, take, throwError } from 'rxjs';
 import { AuthService } from '../services/auth.service';
 import { API_BASE_URL } from '../../constant/api.constant';
 
+/**
+ * Retry-once guard so a request that already retried after a refresh
+ * never triggers a second refresh cycle if it still receives 401.
+ */
+export const AUTH_RETRY_ATTEMPTED = new HttpContextToken<boolean>(() => false);
+
 let isRefreshing = false;
-const refreshTokenSubject = new BehaviorSubject<string | null>(null);
+const refreshResultSubject = new Subject<boolean>();
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const authService = inject(AuthService);
@@ -17,27 +23,25 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
     req.url.startsWith('http://localhost:8000') ||
     req.url.startsWith('http://127.0.0.1:8000');
 
-  const token = localStorage.getItem('access_token') || '';
-  const headers: Record<string, string> = {};
-
-  if (token.length > 0 && isApiRequest) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
   const targetUrl = isRelativeApi ? `${API_BASE_URL}${req.url.slice('/api/v1'.length)}` : req.url;
 
-  // Always attach credentials for SameSite HttpOnly cookie authentication (ADR-008)
+  // Always rely on SameSite HttpOnly cookies for API authentication (ADR-008)
   const authReq = req.clone({
     url: targetUrl,
     withCredentials: isApiRequest,
-    setHeaders: headers,
   });
+
+  const buildRetryReq = () =>
+    authReq.clone({
+      context: authReq.context.set(AUTH_RETRY_ATTEMPTED, true),
+    });
 
   return next(authReq).pipe(
     catchError((error: HttpErrorResponse) => {
       // Avoid infinite loop or public session-probe redirect when refresh/login/me/logout returns 401
       if (
         error.status === 401 &&
+        !req.context.get(AUTH_RETRY_ATTEMPTED) &&
         !req.url.includes('/api/v1/auth/refresh') &&
         !req.url.includes('/api/v1/auth/login') &&
         !req.url.includes('/api/v1/auth/me') &&
@@ -45,41 +49,34 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
       ) {
         if (!isRefreshing) {
           isRefreshing = true;
-          refreshTokenSubject.next(null);
+          let settled = false;
 
           return authService.refreshToken().pipe(
-            switchMap((response) => {
+            switchMap(() => {
+              settled = true;
               isRefreshing = false;
-              const newToken = response?.accessToken || localStorage.getItem('access_token') || '';
-              refreshTokenSubject.next(newToken);
-
-              const retryHeaders: Record<string, string> = {};
-              if (newToken.length > 0) {
-                retryHeaders['Authorization'] = `Bearer ${newToken}`;
-              }
-              const retriedReq = authReq.clone({ setHeaders: retryHeaders });
-              return next(retriedReq);
+              refreshResultSubject.next(true);
+              return next(buildRetryReq());
             }),
             catchError((refreshErr) => {
+              settled = true;
               isRefreshing = false;
-              refreshTokenSubject.next(null);
+              refreshResultSubject.next(false);
               authService.handleSessionExpired();
               return throwError(() => refreshErr);
+            }),
+            finalize(() => {
+              if (!settled && isRefreshing) {
+                isRefreshing = false;
+                refreshResultSubject.next(false);
+              }
             })
           );
         } else {
-          // Concurrent request: wait for ongoing refresh to complete then retry with new token
-          return refreshTokenSubject.pipe(
-            filter((newToken) => newToken !== null),
+          // Concurrent request: wait for ongoing refresh result, then retry once or fail cleanly
+          return refreshResultSubject.pipe(
             take(1),
-            switchMap((newToken) => {
-              const retryHeaders: Record<string, string> = {};
-              if (newToken && newToken.length > 0) {
-                retryHeaders['Authorization'] = `Bearer ${newToken}`;
-              }
-              const retriedReq = authReq.clone({ setHeaders: retryHeaders });
-              return next(retriedReq);
-            })
+            switchMap((refreshed) => (refreshed ? next(buildRetryReq()) : throwError(() => error)))
           );
         }
       }
@@ -87,5 +84,3 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
     })
   );
 };
-
-

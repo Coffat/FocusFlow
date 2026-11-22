@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
+import { registerUserWithOtp } from './helpers/otp-auth.helper';
 
-const BACKEND_URL = process.env['BACKEND_API_URL'] || 'http://localhost:8000/api/v1';
+const BACKEND_URL = process.env['BACKEND_API_URL'] || 'http://127.0.0.1:3000/api/v1';
 const MAILPIT_API_URL = process.env['MAILPIT_API_URL'] || 'http://localhost:8025/api/v1';
 
 /**
@@ -142,7 +143,8 @@ test.describe('FocusFlow Authentication E2E Suite (Duẩn UI + Mailpit + Argon2i
   });
 
   test('4. Quên mật khẩu & đặt lại mật khẩu mới qua OTP Mailpit rồi đăng nhập lại thành công', async ({
-    page
+    page,
+    request
   }) => {
     const resetUser = {
       fullName: 'Learner Reset Test',
@@ -151,17 +153,15 @@ test.describe('FocusFlow Authentication E2E Suite (Duẩn UI + Mailpit + Argon2i
       newPassword: 'NewSecurePassword123!'
     };
 
-    // Tạo sẵn tài khoản người học để test luồng quên mật khẩu độc lập
-    const regRes = await fetch(`${BACKEND_URL}/auth/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        full_name: resetUser.fullName,
-        email: resetUser.email,
-        password: resetUser.initialPassword
-      })
+    // Tạo sẵn tài khoản người học qua luồng OTP thực tế để test quên mật khẩu độc lập
+    const regRes = await registerUserWithOtp(request, {
+      fullName: resetUser.fullName,
+      email: resetUser.email,
+      password: resetUser.initialPassword,
+      backendApiUrl: BACKEND_URL,
+      mailpitApiUrl: MAILPIT_API_URL
     });
-    expect(regRes.status).toBe(201);
+    expect(regRes.status()).toBe(201);
 
     // 1. Bấm link quên mật khẩu từ trang Sign-in
     await page.goto('/sign-in');

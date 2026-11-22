@@ -1,6 +1,7 @@
 import { test, expect, Page, APIRequestContext } from '@playwright/test';
+import { registerUserWithOtp } from './helpers/otp-auth.helper';
 
-const BACKEND_API_URL = process.env['BACKEND_API_URL'] || 'http://localhost:8000/api/v1';
+const BACKEND_API_URL = process.env['BACKEND_API_URL'] || 'http://127.0.0.1:3000/api/v1';
 
 interface MockAvailabilityState {
   id: string | null;
@@ -44,7 +45,6 @@ function buildDefaultWeeklySchedule() {
 async function setupLearnerSession(page: Page, request: APIRequestContext): Promise<void> {
   const uniqueEmail = `e2e.avail.${Date.now()}.${Math.floor(Math.random() * 10000)}@focusflow.vn`;
   const password = 'Password123!';
-  let accessToken = 'e2e-fallback-jwt-token';
   let userProfile = {
     id: '00000000-0000-0000-0000-000000000099',
     email: uniqueEmail,
@@ -56,24 +56,20 @@ async function setupLearnerSession(page: Page, request: APIRequestContext): Prom
   let backendAvailable = false;
 
   try {
-    const regRes = await request.post(`${BACKEND_API_URL}/auth/register`, {
-      data: {
-        full_name: 'E2E Learner',
-        email: uniqueEmail,
-        password
-      },
-      timeout: 3000
+    const regRes = await registerUserWithOtp(request, {
+      fullName: 'E2E Learner',
+      email: uniqueEmail,
+      password,
+      backendApiUrl: BACKEND_API_URL,
+      requestTimeoutMs: 5000
     });
 
     if (regRes.ok()) {
       const body = await regRes.json();
-      if (body.access_token) {
-        accessToken = body.access_token;
-        userProfile = body.user || userProfile;
-        backendAvailable = true;
-        const storageState = await request.storageState();
-        await page.context().addCookies(storageState.cookies);
-      }
+      userProfile = body.user || userProfile;
+      backendAvailable = true;
+      const storageState = await request.storageState();
+      await page.context().addCookies(storageState.cookies);
     }
   } catch {
     backendAvailable = false;
@@ -145,13 +141,6 @@ async function setupLearnerSession(page: Page, request: APIRequestContext): Prom
       }
     });
   }
-
-  await page.addInitScript(
-    ({ token }) => {
-      window.localStorage.setItem('access_token', token);
-    },
-    { token: accessToken }
-  );
 }
 
 test.describe('FR-AVAIL v2.0 — Hybrid Availability End-to-End Verification (E2E-PW-01..05)', () => {
