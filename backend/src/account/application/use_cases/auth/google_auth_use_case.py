@@ -55,8 +55,7 @@ class GoogleAuthUseCase:
         if not email:
             raise InvalidCredentialsError("Google account does not provide an email address.")
 
-        email_verified = payload.get("email_verified", True)
-        if not email_verified:
+        if payload.get("email_verified") is not True:
             raise InvalidCredentialsError("Google email has not been verified.")
 
         name = payload.get("name", "").strip() or email.split("@")[0]

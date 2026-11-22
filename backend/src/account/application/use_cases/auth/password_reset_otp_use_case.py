@@ -9,6 +9,7 @@ from src.account.application.dtos.auth import (
 from src.account.application.ports.auth_ports import (
     EmailServicePort,
     OtpRepositoryPort,
+    RefreshTokenRepositoryPort,
 )
 from src.account.application.ports.user_repository_port import UserRepositoryPort
 from src.account.domain.exceptions.auth_exceptions import (
@@ -17,6 +18,10 @@ from src.account.domain.exceptions.auth_exceptions import (
 )
 from src.account.domain.services.password_hasher import PasswordHasher
 from src.shared_kernel.application.uow import AsyncUnitOfWork
+
+_PASSWORD_RESET_GENERIC_MESSAGE = (
+    "Nếu email tồn tại trong hệ thống, mã xác thực OTP đã được gửi đến hòm thư của bạn."
+)
 
 
 class RequestPasswordResetOtpUseCase:
@@ -35,28 +40,29 @@ class RequestPasswordResetOtpUseCase:
     async def execute(self, cmd: RequestPasswordResetOtpCommand) -> str:
         clean_email = cmd.email.lower().strip()
 
-        # 1. Look up user (Anti-Enumeration: do not leak whether account exists)
-        user = await self.user_repo.find_by_email(clean_email)
-        if user is None:
-            return (
-                "Nếu email tồn tại trong hệ thống, mã xác thực OTP đã được gửi đến hòm thư của bạn."
-            )
-
-        # 2. Check rate limit cooldown (60s)
+        # 1. Enforce rate-limit cooldown uniformly BEFORE user lookup (Anti-Enumeration)
         cooldown = await self.otp_repo.get_cooldown_remaining("reset_password", clean_email)
         if cooldown and cooldown > 0:
             raise RateLimitError(f"Vui lòng đợi {cooldown} giây trước khi yêu cầu gửi lại mã OTP.")
 
+        # 2. Look up user (Anti-Enumeration: identical response & cooldown for missing accounts)
+        user = await self.user_repo.find_by_email(clean_email)
+        if user is None:
+            set_cooldown = getattr(self.otp_repo, "set_cooldown", None)
+            if callable(set_cooldown):
+                await set_cooldown("reset_password", clean_email)
+            return _PASSWORD_RESET_GENERIC_MESSAGE
+
         # 3. Generate 6-digit CSPRNG OTP
         otp_code = self.otp_repo.generate_otp()
 
-        # 4. Save in Redis with TTL
+        # 4. Save in Redis with TTL and cooldown
         await self.otp_repo.save_otp("reset_password", clean_email, otp_code)
 
         # 5. Dispatch email via SMTP/Console
         await self.email_service.send_otp_email(clean_email, otp_code, "reset_password")
 
-        return "Mã xác thực đặt lại mật khẩu đã được gửi đến email của bạn."
+        return _PASSWORD_RESET_GENERIC_MESSAGE
 
 
 class VerifyPasswordResetOtpUseCase:
@@ -96,17 +102,20 @@ class VerifyPasswordResetOtpUseCase:
 
 
 class ConfirmPasswordResetUseCase:
-    """Step 3: Verifies reset_token (or direct otp_code), hashes new password, updates PostgreSQL."""
+    """Step 3: Verifies reset_token (or direct otp_code), hashes new password, updates PostgreSQL,
+    and revokes all active refresh token sessions."""
 
     def __init__(
         self,
         user_repo: UserRepositoryPort,
         otp_repo: OtpRepositoryPort,
         uow: AsyncUnitOfWork,
+        refresh_token_repo: RefreshTokenRepositoryPort | None = None,
     ) -> None:
         self.user_repo = user_repo
         self.otp_repo = otp_repo
         self.uow = uow
+        self.refresh_token_repo = refresh_token_repo
 
     async def execute(self, cmd: ConfirmPasswordResetCommand) -> str:
         clean_email = cmd.email.lower().strip()
@@ -140,5 +149,15 @@ class ConfirmPasswordResetUseCase:
         async with self.uow:
             await self.user_repo.update_password(user.id, new_password_hash)
             await self.uow.commit()
+
+        # Revoke all active Redis refresh token sessions (matching ChangePasswordUseCase).
+        # Residual window: existing short-lived stateless JWT access tokens (15m TTL)
+        # expire naturally because no token_version column exists in the current schema.
+        if self.refresh_token_repo is not None:
+            try:
+                await self.refresh_token_repo.revoke_all_for_user(str(user.id))
+            except Exception:
+                # Non-blocking if Redis is unreachable in disconnected test mode
+                pass
 
         return "Mật khẩu đã được cập nhật thành công. Vui lòng đăng nhập lại."

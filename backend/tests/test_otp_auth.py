@@ -11,7 +11,11 @@ from src.main import app
 @pytest.mark.asyncio
 async def test_otp_registration_and_password_reset_workflow() -> None:
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Origin": "http://localhost:3000"},
+    ) as client:
         redis = get_redis_client()
         random_str = uuid.uuid4().hex[:8]
         email = f"learner_{random_str}@focusflow.vn"
@@ -62,6 +66,8 @@ async def test_otp_registration_and_password_reset_workflow() -> None:
         verify_data = good_verify.json()
         assert "access_token" in verify_data
         assert verify_data["user"]["email"] == email
+        pre_reset_refresh_token = good_verify.cookies.get("refresh_token")
+        assert pre_reset_refresh_token is not None
 
         # Ensure OTP key was deleted from Redis (Anti-Replay)
         deleted_key = await redis.get(f"otp:register:{email}")
@@ -96,6 +102,13 @@ async def test_otp_registration_and_password_reset_workflow() -> None:
             json={"email": email, "reset_token": reset_token, "new_password": new_password},
         )
         assert confirm_resp.status_code == 200
+
+        # 7c. Old refresh token issued before password reset MUST be revoked (401)
+        revoked_refresh = await client.post(
+            "/api/v1/auth/refresh",
+            json={"refresh_token": pre_reset_refresh_token},
+        )
+        assert revoked_refresh.status_code == 401, revoked_refresh.text
 
         # 8. Login with old password -> 401
         old_login = await client.post(

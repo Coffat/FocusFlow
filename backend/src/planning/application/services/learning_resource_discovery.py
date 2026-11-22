@@ -7,9 +7,7 @@ import re
 import time
 from collections.abc import Sequence
 from typing import Any
-from urllib.parse import urljoin, urlsplit
-
-import httpx
+from urllib.parse import urlsplit
 
 from src.planning.application.knowledge.safe_url_fetcher import SafeUrlFetcher, UnsafeUrlError
 from src.planning.domain.models.knowledge_concept import LearningResource
@@ -218,41 +216,12 @@ async def verify_official_url_live(
     if cached is not None and (now_mono - cached[0]) < _URL_HEALTH_CACHE_TTL_SECONDS:
         return cached[1]
 
-    ok = False
-    try:
-        current = url
-        async with httpx.AsyncClient(
-            timeout=httpx.Timeout(timeout_seconds),
-            follow_redirects=False,
-        ) as client:
-            for _ in range(3):
-                if not validate_official_resource_url(current):
-                    ok = False
-                    break
-                await SafeUrlFetcher._validate_public_destination(current)
-                resp = await client.head(
-                    current,
-                    headers={"User-Agent": "FocusFlow-ResourceCheck/1.0"},
-                )
-                if resp.status_code == 405:
-                    resp = await client.get(
-                        current,
-                        headers={
-                            "User-Agent": "FocusFlow-ResourceCheck/1.0",
-                            "Range": "bytes=0-0",
-                        },
-                    )
-                if resp.status_code in {301, 302, 303, 307, 308}:
-                    location = resp.headers.get("location")
-                    if not location:
-                        ok = False
-                        break
-                    current = urljoin(current, location)
-                    continue
-                ok = 200 <= resp.status_code < 400
-                break
-    except (TimeoutError, UnsafeUrlError, httpx.HTTPError, ValueError, OSError):
-        ok = False
+    fetcher = SafeUrlFetcher(timeout_seconds=timeout_seconds, max_redirects=2)
+    ok = await fetcher.probe_reachable(
+        url,
+        url_validator=validate_official_resource_url,
+        user_agent="FocusFlow-ResourceCheck/1.0",
+    )
 
     if len(_URL_HEALTH_CACHE) >= 512:
         _URL_HEALTH_CACHE.clear()

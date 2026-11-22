@@ -11,7 +11,11 @@ from src.main import app
 @pytest.mark.asyncio
 async def test_google_auth_new_user_provisioning() -> None:
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Origin": "http://localhost:3000"},
+    ) as client:
         unique_suffix = uuid.uuid4().hex[:8]
         test_email = f"google_user_{unique_suffix}@gmail.com"
         mock_payload = {
@@ -57,7 +61,11 @@ async def test_google_auth_new_user_provisioning() -> None:
 @pytest.mark.asyncio
 async def test_google_auth_with_access_token() -> None:
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Origin": "http://localhost:3000"},
+    ) as client:
         unique_suffix = uuid.uuid4().hex[:8]
         test_email = f"oauth_user_{unique_suffix}@gmail.com"
         mock_payload = {
@@ -83,7 +91,11 @@ async def test_google_auth_with_access_token() -> None:
 @pytest.mark.asyncio
 async def test_google_auth_missing_token() -> None:
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Origin": "http://localhost:3000"},
+    ) as client:
         response = await client.post("/api/v1/auth/google", json={})
         assert response.status_code == 400
         assert "Google token is required" in response.json()["detail"]
@@ -92,7 +104,11 @@ async def test_google_auth_missing_token() -> None:
 @pytest.mark.asyncio
 async def test_google_auth_invalid_token() -> None:
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Origin": "http://localhost:3000"},
+    ) as client:
         with patch(
             "src.account.infrastructure.security.google_auth_service.google_auth_service.verify_id_token"
         ) as mock_verify:
@@ -103,3 +119,31 @@ async def test_google_auth_invalid_token() -> None:
             )
             assert response.status_code == 401
             assert "Invalid Google ID token signature" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_google_auth_rejects_unverified_or_missing_email_verified() -> None:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        headers={"Origin": "http://localhost:3000"},
+    ) as client:
+        for payload in (
+            {"sub": "sub_missing_flag", "email": "missing_flag@gmail.com", "name": "Missing"},
+            {
+                "sub": "sub_unverified",
+                "email": "unverified@gmail.com",
+                "name": "Unverified",
+                "email_verified": False,
+            },
+        ):
+            with patch(
+                "src.account.infrastructure.security.google_auth_service.google_auth_service.verify_id_token",
+                return_value=payload,
+            ):
+                response = await client.post(
+                    "/api/v1/auth/google", json={"credential": "mock_token"}
+                )
+                assert response.status_code == 401
+                assert "verified" in response.json()["detail"].lower()

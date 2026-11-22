@@ -218,6 +218,8 @@ async def list_tasks(
     use_case: ListTasksUseCaseDep,
     roadmap_id: Annotated[UUID | None, Query()] = None,
     status_filter: Annotated[str | None, Query(alias="status")] = None,
+    limit: Annotated[int | None, Query(ge=1, le=500)] = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[TaskResponse] | JSONResponse:
     try:
         views = await use_case.execute(
@@ -225,7 +227,8 @@ async def list_tasks(
             roadmap_id=roadmap_id,
             status=status_filter,
         )
-        return [_to_task_response(v) for v in views]
+        sliced = views[offset : offset + limit] if limit is not None else views[offset:]
+        return [_to_task_response(v) for v in sliced]
     except DomainError as exc:
         return _handle_execution_error(exc)
 
@@ -271,10 +274,13 @@ async def list_backlog_tasks(
     user_id: CurrentExecutionLearnerIdDep,
     use_case: GetBacklogTasksUseCaseDep,
     roadmap_id: Annotated[UUID | None, Query()] = None,
+    limit: Annotated[int | None, Query(ge=1, le=500)] = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[TaskResponse] | JSONResponse:
     try:
         views = await use_case.execute(user_id=user_id, roadmap_id=roadmap_id)
-        return [_to_task_response(v) for v in views]
+        sliced = views[offset : offset + limit] if limit is not None else views[offset:]
+        return [_to_task_response(v) for v in sliced]
     except DomainError as exc:
         return _handle_execution_error(exc)
 

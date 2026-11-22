@@ -278,6 +278,10 @@ class StartStudySessionUseCase:
 
             ordered_tasks = [task_map[tid] for tid in unique_ids]
             roadmap_ids = {t.roadmap_id for t in ordered_tasks}
+            owned_roadmaps = await self._bridge.get_user_roadmaps_context(user_id)
+            owned_roadmap_ids = {r.roadmap_id for r in owned_roadmaps}
+            if not roadmap_ids.issubset(owned_roadmap_ids):
+                raise TaskNotFoundError()
             if len(roadmap_ids) != 1:
                 raise InvalidSessionStateError(
                     "Các nhiệm vụ trong cùng một phiên học phải thuộc cùng một lộ trình."
@@ -741,9 +745,13 @@ class CreateStickyNoteUseCase:
         *,
         session_repo: StudySessionRepositoryPort,
         uow: AsyncUnitOfWork,
+        task_repo: TaskRepositoryPort | None = None,
+        planning_bridge: PlanningExecutionBridgePort | None = None,
     ) -> None:
         self._session_repo = session_repo
         self._uow = uow
+        self._task_repo = task_repo
+        self._bridge = planning_bridge
 
     async def execute(
         self,
@@ -786,6 +794,26 @@ class CreateStickyNoteUseCase:
             updated_at=effective_now,
         )
         async with self._uow:
+            if task_id is not None:
+                if self._task_repo is None or self._bridge is None:
+                    raise TaskNotFoundError()
+                task = await self._task_repo.get_by_id(task_id)
+                if task is None:
+                    raise TaskNotFoundError()
+                owned_roadmaps = await self._bridge.get_user_roadmaps_context(
+                    user_id,
+                    roadmap_id=task.roadmap_id,
+                )
+                if not owned_roadmaps:
+                    raise TaskNotFoundError()
+            if origin_session_id is not None and origin_session_id.strip():
+                try:
+                    origin_uuid = UUID(origin_session_id.strip())
+                except ValueError as exc:
+                    raise SessionNotFoundError() from exc
+                origin_session = await self._session_repo.get_by_id(origin_uuid)
+                if origin_session is None or origin_session.user_id != user_id:
+                    raise SessionNotFoundError()
             saved = await self._session_repo.upsert_study_note(note)
             await self._uow.commit()
         return _to_sticky_note_view(saved)
